@@ -3321,6 +3321,7 @@ impl TerrainWindowCore {
                 ToolParamSpec { name: "min_scale", description: "Minimum half-window radius in cells (default 1).", required: false },
                 ToolParamSpec { name: "max_scale", description: "Maximum half-window radius in cells (default 100).", required: false },
                 ToolParamSpec { name: "step_size", description: "Scale increment in cells (default 1). Alias: step.", required: false },
+                ToolParamSpec { name: "min_vertical", description: "Minimum local standard deviation threshold; weaker-relief responses are suppressed (default 0.0).", required: false },
                 ToolParamSpec { name: "output", description: "Optional output path for DEVmax magnitude raster.", required: false },
                 ToolParamSpec { name: "output_scale", description: "Optional output path for raster storing scale of max response.", required: false },
             ],
@@ -3420,12 +3421,14 @@ impl TerrainWindowCore {
         defaults.insert("min_scale".to_string(), json!(1));
         defaults.insert("max_scale".to_string(), json!(100));
         defaults.insert("step_size".to_string(), json!(1));
+        defaults.insert("min_vertical".to_string(), json!(0.0));
 
         let mut example_args = ToolArgs::new();
         example_args.insert("input".to_string(), json!("dem.tif"));
         example_args.insert("min_scale".to_string(), json!(1));
         example_args.insert("max_scale".to_string(), json!(100));
         example_args.insert("step_size".to_string(), json!(1));
+        example_args.insert("min_vertical".to_string(), json!(0.0));
         example_args.insert("output".to_string(), json!("max_elevation_deviation.tif"));
         example_args.insert("output_scale".to_string(), json!("max_elevation_deviation_scale.tif"));
 
@@ -3440,6 +3443,7 @@ impl TerrainWindowCore {
                 ToolParamDescriptor { name: "min_scale".to_string(), description: "Minimum half-window radius in cells (default 1).".to_string(), required: false },
                 ToolParamDescriptor { name: "max_scale".to_string(), description: "Maximum half-window radius in cells (default 100).".to_string(), required: false },
                 ToolParamDescriptor { name: "step_size".to_string(), description: "Scale increment in cells (default 1). Alias: step.".to_string(), required: false },
+                ToolParamDescriptor { name: "min_vertical".to_string(), description: "Minimum local standard deviation threshold; weaker-relief responses are suppressed (default 0.0).".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Optional output path for DEVmax magnitude raster.".to_string(), required: false },
                 ToolParamDescriptor { name: "output_scale".to_string(), description: "Optional output path for raster storing scale of max response.".to_string(), required: false },
             ],
@@ -3921,7 +3925,7 @@ impl TerrainWindowCore {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "input", description: "Input DEM raster path or typed raster object.", required: true },
-                ToolParamSpec { name: "min_scale", description: "Minimum half-window radius in cells (default 1).", required: false },
+                ToolParamSpec { name: "min_scale", description: "Minimum half-window radius in cells (default 4).", required: false },
                 ToolParamSpec { name: "step", description: "Base step size in cells used by nonlinear scale schedule (default 1).", required: false },
                 ToolParamSpec { name: "num_steps", description: "Number of sampled scales (default 10).", required: false },
                 ToolParamSpec { name: "step_nonlinearity", description: "Nonlinearity exponent for scale schedule (default 1.0).", required: false },
@@ -3935,7 +3939,7 @@ impl TerrainWindowCore {
     fn multiscale_std_dev_normals_manifest() -> ToolManifest {
         let mut defaults = ToolArgs::new();
         defaults.insert("input".to_string(), json!("dem.tif"));
-        defaults.insert("min_scale".to_string(), json!(1));
+        defaults.insert("min_scale".to_string(), json!(4));
         defaults.insert("step".to_string(), json!(1));
         defaults.insert("num_steps".to_string(), json!(10));
         defaults.insert("step_nonlinearity".to_string(), json!(1.0));
@@ -3943,7 +3947,7 @@ impl TerrainWindowCore {
 
         let mut example_args = ToolArgs::new();
         example_args.insert("input".to_string(), json!("dem.tif"));
-        example_args.insert("min_scale".to_string(), json!(1));
+        example_args.insert("min_scale".to_string(), json!(4));
         example_args.insert("step".to_string(), json!(2));
         example_args.insert("num_steps".to_string(), json!(20));
         example_args.insert("step_nonlinearity".to_string(), json!(1.5));
@@ -3958,7 +3962,7 @@ impl TerrainWindowCore {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Input DEM raster path or typed raster object.".to_string(), required: true },
-                ToolParamDescriptor { name: "min_scale".to_string(), description: "Minimum half-window radius in cells (default 1).".to_string(), required: false },
+                ToolParamDescriptor { name: "min_scale".to_string(), description: "Minimum half-window radius in cells (default 4).".to_string(), required: false },
                 ToolParamDescriptor { name: "step".to_string(), description: "Base step size in cells used by nonlinear scale schedule (default 1).".to_string(), required: false },
                 ToolParamDescriptor { name: "num_steps".to_string(), description: "Number of sampled scales (default 10).".to_string(), required: false },
                 ToolParamDescriptor { name: "step_nonlinearity".to_string(), description: "Nonlinearity exponent for scale schedule (default 1.0).".to_string(), required: false },
@@ -3983,7 +3987,7 @@ impl TerrainWindowCore {
             params: vec![
                 ToolParamSpec { name: "input", description: "Input DEM raster path.", required: true },
                 ToolParamSpec { name: "points", description: "Input vector point or multipoint file path.", required: true },
-                ToolParamSpec { name: "min_scale", description: "Minimum half-window radius in cells (default 1).", required: false },
+                ToolParamSpec { name: "min_scale", description: "Minimum half-window radius in cells (default 4).", required: false },
                 ToolParamSpec { name: "step", description: "Base step size in cells used by nonlinear scale schedule (default 1).", required: false },
                 ToolParamSpec { name: "num_steps", description: "Number of sampled scales (default 10).", required: false },
                 ToolParamSpec { name: "step_nonlinearity", description: "Nonlinearity exponent for scale schedule (default 1.0).", required: false },
@@ -3997,7 +4001,7 @@ impl TerrainWindowCore {
         let mut defaults = ToolArgs::new();
         defaults.insert("input".to_string(), json!("dem.tif"));
         defaults.insert("points".to_string(), json!("sites.geojson"));
-        defaults.insert("min_scale".to_string(), json!(1));
+        defaults.insert("min_scale".to_string(), json!(4));
         defaults.insert("step".to_string(), json!(1));
         defaults.insert("num_steps".to_string(), json!(10));
         defaults.insert("step_nonlinearity".to_string(), json!(1.0));
@@ -4006,7 +4010,7 @@ impl TerrainWindowCore {
         let mut example_args = ToolArgs::new();
         example_args.insert("input".to_string(), json!("dem.tif"));
         example_args.insert("points".to_string(), json!("sites.geojson"));
-        example_args.insert("min_scale".to_string(), json!(1));
+        example_args.insert("min_scale".to_string(), json!(4));
         example_args.insert("step".to_string(), json!(2));
         example_args.insert("num_steps".to_string(), json!(20));
         example_args.insert("step_nonlinearity".to_string(), json!(1.5));
@@ -4021,7 +4025,7 @@ impl TerrainWindowCore {
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Input DEM raster path.".to_string(), required: true },
                 ToolParamDescriptor { name: "points".to_string(), description: "Input vector point or multipoint file path.".to_string(), required: true },
-                ToolParamDescriptor { name: "min_scale".to_string(), description: "Minimum half-window radius in cells (default 1).".to_string(), required: false },
+                ToolParamDescriptor { name: "min_scale".to_string(), description: "Minimum half-window radius in cells (default 4).".to_string(), required: false },
                 ToolParamDescriptor { name: "step".to_string(), description: "Base step size in cells used by nonlinear scale schedule (default 1).".to_string(), required: false },
                 ToolParamDescriptor { name: "num_steps".to_string(), description: "Number of sampled scales (default 10).".to_string(), required: false },
                 ToolParamDescriptor { name: "step_nonlinearity".to_string(), description: "Nonlinearity exponent for scale schedule (default 1.0).".to_string(), required: false },
@@ -5057,6 +5061,7 @@ impl TerrainWindowCore {
         let output_path = parse_optional_output_path(args, "output")?;
         let output_scale_path = parse_optional_output_path(args, "output_scale")?;
         let (min_scale, max_scale, step_size) = Self::parse_scale_settings(args);
+        let min_vertical = Self::arg_f64(args, "min_vertical", 0.0).max(0.0);
 
         let input = Self::load_raster(&input_path)?;
         let mut output_mag = input.clone();
@@ -5071,16 +5076,8 @@ impl TerrainWindowCore {
             ctx.progress.info("running max_elevation_deviation");
 
             let (sum, sum_sq, count) = Self::build_integrals(&input, band);
-
-            for r in 0..rows {
-                let fill = vec![nodata; cols];
-                output_mag.set_row_slice(band, r as isize, &fill).map_err(|e| {
-                    ToolError::Execution(format!("failed initializing magnitude row {}: {}", r, e))
-                })?;
-                output_scale.set_row_slice(band, r as isize, &fill).map_err(|e| {
-                    ToolError::Execution(format!("failed initializing scale row {}: {}", r, e))
-                })?;
-            }
+            let mut mag_data = vec![nodata; rows * cols];
+            let mut scale_data = vec![nodata; rows * cols];
 
             let mut scales = Vec::new();
             let mut s = min_scale;
@@ -5119,7 +5116,7 @@ impl TerrainWindowCore {
                             let mean = local_sum / n_f;
                             let variance = ((local_sum_sq - (local_sum * local_sum) / n_f) / n_f).max(0.0);
                             let std_dev = variance.sqrt();
-                            row_out[c] = if std_dev > 0.0 { (z - mean) / std_dev } else { 0.0 };
+                            row_out[c] = if std_dev > min_vertical { (z - mean) / std_dev } else { 0.0 };
                         }
                         row_out
                     })
@@ -5131,20 +5128,36 @@ impl TerrainWindowCore {
                         if z2 == nodata {
                             continue;
                         }
-                        let z1 = output_mag.get(band, r as isize, c as isize);
+                        let idx = r * cols + c;
+                        let z1 = mag_data[idx];
                         if z1 == nodata || z2 * z2 > z1 * z1 {
-                            output_mag.set(band, r as isize, c as isize, z2).map_err(|e| {
-                                ToolError::Execution(format!("failed writing max deviation at row {} col {}: {}", r, c, e))
-                            })?;
-                            output_scale
-                                .set(band, r as isize, c as isize, midpoint as f64)
-                                .map_err(|e| {
-                                    ToolError::Execution(format!("failed writing scale at row {} col {}: {}", r, c, e))
-                                })?;
+                            mag_data[idx] = z2;
+                            scale_data[idx] = midpoint as f64;
                         }
                     }
                 }
                 coalescer.emit_unit_fraction(ctx.progress, (loop_idx + 1) as f64 / scales.len() as f64);
+            }
+
+            for r in 0..rows {
+                let start = r * cols;
+                let end = start + cols;
+                output_mag
+                    .set_row_slice(band, r as isize, &mag_data[start..end])
+                    .map_err(|e| {
+                        ToolError::Execution(format!(
+                            "failed writing max deviation row {}: {}",
+                            r, e
+                        ))
+                    })?;
+                output_scale
+                    .set_row_slice(band, r as isize, &scale_data[start..end])
+                    .map_err(|e| {
+                        ToolError::Execution(format!(
+                            "failed writing scale row {}: {}",
+                            r, e
+                        ))
+                    })?;
             }
         }
 
@@ -6111,7 +6124,7 @@ impl TerrainWindowCore {
 
         let mut scales = Vec::new();
         let mut s = min_scale;
-        while s <= max_scale {
+        while s < max_scale {
             scales.push(s);
             if let Some(next) = s.checked_add(step_size) {
                 s = next;
@@ -6362,6 +6375,51 @@ impl TerrainWindowCore {
             None
         } else {
             Some([n[0] / mag, n[1] / mag, n[2] / mag])
+        }
+    }
+
+    fn unit_normal_from_band_data(
+        data: &[f64],
+        rows: usize,
+        cols: usize,
+        nodata: f64,
+        cell_size_x: f64,
+        row: usize,
+        col: usize,
+        z_factor: f64,
+    ) -> Option<[f64; 3]> {
+        let idx = Self::idx(row, col, cols);
+        let z = data[idx];
+        if z == nodata {
+            return None;
+        }
+        let center = z * z_factor;
+
+        let sample = |rr: isize, cc: isize| -> f64 {
+            if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
+                return center;
+            }
+            let v = data[Self::idx(rr as usize, cc as usize, cols)];
+            if v == nodata { center } else { v * z_factor }
+        };
+
+        let n0 = sample(row as isize - 1, col as isize - 1);
+        let n1 = sample(row as isize - 1, col as isize);
+        let n2 = sample(row as isize - 1, col as isize + 1);
+        let n3 = sample(row as isize, col as isize + 1);
+        let n4 = sample(row as isize + 1, col as isize + 1);
+        let n5 = sample(row as isize + 1, col as isize);
+        let n6 = sample(row as isize + 1, col as isize - 1);
+        let n7 = sample(row as isize, col as isize - 1);
+        let c = 8.0 * cell_size_x.abs().max(f64::EPSILON);
+
+        let a = -(n2 - n4 + 2.0 * (n1 - n5) + n0 - n6);
+        let b = -(n6 - n4 + 2.0 * (n7 - n3) + n0 - n2);
+        let mag = (a * a + b * b + c * c).sqrt();
+        if mag <= 0.0 {
+            None
+        } else {
+            Some([a / mag, b / mag, c / mag])
         }
     }
 
@@ -6947,6 +7005,59 @@ impl TerrainWindowCore {
         (sum_x, sum_y, sum_z, count)
     }
 
+    fn build_unit_normal_component_integrals_from_band_data(
+        data: &[f64],
+        rows: usize,
+        cols: usize,
+        nodata: f64,
+        cell_size_x: f64,
+        z_factor: f64,
+    ) -> (Vec<f64>, Vec<f64>, Vec<f64>, Vec<i64>) {
+        let mut sum_x = vec![0.0; rows * cols];
+        let mut sum_y = vec![0.0; rows * cols];
+        let mut sum_z = vec![0.0; rows * cols];
+        let mut count = vec![0i64; rows * cols];
+
+        for row in 0..rows {
+            let mut row_sum_x = 0.0;
+            let mut row_sum_y = 0.0;
+            let mut row_sum_z = 0.0;
+            let mut row_count = 0i64;
+            for col in 0..cols {
+                if let Some(n) = Self::unit_normal_from_band_data(
+                    data,
+                    rows,
+                    cols,
+                    nodata,
+                    cell_size_x,
+                    row,
+                    col,
+                    z_factor,
+                ) {
+                    row_sum_x += n[0];
+                    row_sum_y += n[1];
+                    row_sum_z += n[2];
+                    row_count += 1;
+                }
+                let idx = Self::idx(row, col, cols);
+                if row > 0 {
+                    let above = Self::idx(row - 1, col, cols);
+                    sum_x[idx] = row_sum_x + sum_x[above];
+                    sum_y[idx] = row_sum_y + sum_y[above];
+                    sum_z[idx] = row_sum_z + sum_z[above];
+                    count[idx] = row_count + count[above];
+                } else {
+                    sum_x[idx] = row_sum_x;
+                    sum_y[idx] = row_sum_y;
+                    sum_z[idx] = row_sum_z;
+                    count[idx] = row_count;
+                }
+            }
+        }
+
+        (sum_x, sum_y, sum_z, count)
+    }
+
     fn run_multiscale_roughness(
         args: &ToolArgs,
         ctx: &ToolContext,
@@ -6990,7 +7101,7 @@ impl TerrainWindowCore {
 
         let mut scales = Vec::new();
         let mut s = min_scale;
-        while s <= max_scale {
+        while s < max_scale {
             scales.push(s);
             if let Some(next) = s.checked_add(step_size) {
                 s = next;
@@ -7015,12 +7126,13 @@ impl TerrainWindowCore {
                 }
             }
 
+            let fill = vec![nodata; cols];
             for r in 0..rows {
                 output_mag
-                    .set_row_slice(band, r as isize, &vec![nodata; cols])
+                    .set_row_slice(band, r as isize, &fill)
                     .map_err(|e| ToolError::Execution(format!("failed initializing magnitude row {}: {}", r, e)))?;
                 output_scale
-                    .set_row_slice(band, r as isize, &vec![nodata; cols])
+                    .set_row_slice(band, r as isize, &fill)
                     .map_err(|e| ToolError::Execution(format!("failed initializing scale row {}: {}", r, e)))?;
             }
 
@@ -7030,11 +7142,12 @@ impl TerrainWindowCore {
                     break;
                 }
 
-                let smoothed_rows: Vec<Vec<f64>> = (0..rows)
-                    .into_par_iter()
-                    .map(|r| {
-                        let mut out = vec![nodata; cols];
-                        for (c, out_cell) in out.iter_mut().enumerate().take(cols) {
+                let mut smooth_vec = vec![nodata; rows * cols];
+                smooth_vec
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .for_each(|(r, out_row)| {
+                        for (c, out_cell) in out_row.iter_mut().enumerate().take(cols) {
                             let z = input.get(band, r as isize, c as isize);
                             if input.is_nodata(z) {
                                 continue;
@@ -7049,22 +7162,23 @@ impl TerrainWindowCore {
                                 *out_cell = local_sum / n as f64;
                             }
                         }
-                        out
-                    })
-                    .collect();
+                    });
 
                 let mut smooth = input.clone();
-                for (r, row) in smoothed_rows.iter().enumerate() {
+                for r in 0..rows {
+                    let start = r * cols;
+                    let end = start + cols;
                     smooth
-                        .set_row_slice(band, r as isize, row)
+                        .set_row_slice(band, r as isize, &smooth_vec[start..end])
                         .map_err(|e| ToolError::Execution(format!("failed writing smoothed row {}: {}", r, e)))?;
                 }
 
-                let diff_rows: Vec<Vec<f64>> = (0..rows)
-                    .into_par_iter()
-                    .map(|r| {
-                        let mut out = vec![0.0; cols];
-                        for (c, out_cell) in out.iter_mut().enumerate().take(cols) {
+                let mut diff_vec = vec![0.0; rows * cols];
+                diff_vec
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .for_each(|(r, out_row)| {
+                        for (c, out_cell) in out_row.iter_mut().enumerate().take(cols) {
                             let idx = Self::idx(r, c, cols);
                             let base = match base_normals[idx] {
                                 Some(v) => v,
@@ -7080,23 +7194,24 @@ impl TerrainWindowCore {
                                 *out_cell = Self::angle_between_normals(base, smooth_n);
                             }
                         }
-                        out
-                    })
-                    .collect();
+                    });
 
                 let mut diff_raster = input.clone();
-                for (r, row) in diff_rows.iter().enumerate() {
+                for r in 0..rows {
+                    let start = r * cols;
+                    let end = start + cols;
                     diff_raster
-                        .set_row_slice(band, r as isize, row)
+                        .set_row_slice(band, r as isize, &diff_vec[start..end])
                         .map_err(|e| ToolError::Execution(format!("failed writing roughness row {}: {}", r, e)))?;
                 }
                 let (diff_sum, _, diff_count) = Self::build_integrals(&diff_raster, band);
 
-                let avg_rows: Vec<Vec<f64>> = (0..rows)
-                    .into_par_iter()
-                    .map(|r| {
-                        let mut out = vec![nodata; cols];
-                        for (c, out_cell) in out.iter_mut().enumerate().take(cols) {
+                let mut avg_vec = vec![nodata; rows * cols];
+                avg_vec
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .for_each(|(r, out_row)| {
+                        for (c, out_cell) in out_row.iter_mut().enumerate().take(cols) {
                             let z = input.get(band, r as isize, c as isize);
                             if input.is_nodata(z) {
                                 continue;
@@ -7111,12 +7226,12 @@ impl TerrainWindowCore {
                                 *out_cell = local_sum / n as f64;
                             }
                         }
-                        out
-                    })
-                    .collect();
+                    });
 
-                for (r, row) in avg_rows.iter().enumerate() {
-                    for (c, v2) in row.iter().enumerate().take(cols) {
+                for r in 0..rows {
+                    let start = r * cols;
+                    let end = start + cols;
+                    for (c, v2) in avg_vec[start..end].iter().enumerate().take(cols) {
                         let v2 = *v2;
                         if v2 == nodata {
                             continue;
@@ -7394,7 +7509,7 @@ impl TerrainWindowCore {
             .get("min_scale")
             .and_then(|v| v.as_u64())
             .map(|v| v as usize)
-            .unwrap_or(1)
+            .unwrap_or(4)
             .max(1);
         let max_scale = args
             .get("max_scale")
@@ -7825,11 +7940,12 @@ impl TerrainWindowCore {
         let mut site_values: Vec<Vec<(f64, f64)>> = vec![Vec::new(); sites.len()];
         for (scale_idx, midpoint) in scales.iter().enumerate() {
             let midpoint = *midpoint;
-            let smoothed_rows: Vec<Vec<f64>> = (0..rows)
-                .into_par_iter()
-                .map(|r| {
-                    let mut out = vec![input.nodata; cols];
-                    for (c, out_cell) in out.iter_mut().enumerate().take(cols) {
+            let mut smooth_vec = vec![input.nodata; rows * cols];
+            smooth_vec
+                .par_chunks_mut(cols)
+                .enumerate()
+                .for_each(|(r, out_row)| {
+                    for (c, out_cell) in out_row.iter_mut().enumerate().take(cols) {
                         let z = input.get(0, r as isize, c as isize);
                         if input.is_nodata(z) {
                             continue;
@@ -7844,22 +7960,23 @@ impl TerrainWindowCore {
                             *out_cell = local_sum / n as f64;
                         }
                     }
-                    out
-                })
-                .collect();
+                });
 
             let mut smooth = input.clone();
-            for (r, row) in smoothed_rows.iter().enumerate() {
+            for r in 0..rows {
+                let start = r * cols;
+                let end = start + cols;
                 smooth
-                    .set_row_slice(0, r as isize, row)
+                    .set_row_slice(0, r as isize, &smooth_vec[start..end])
                     .map_err(|e| ToolError::Execution(format!("failed writing smoothed row {}: {}", r, e)))?;
             }
 
-            let diff_rows: Vec<Vec<f64>> = (0..rows)
-                .into_par_iter()
-                .map(|r| {
-                    let mut out = vec![0.0; cols];
-                    for (c, out_cell) in out.iter_mut().enumerate().take(cols) {
+            let mut diff_vec = vec![0.0; rows * cols];
+            diff_vec
+                .par_chunks_mut(cols)
+                .enumerate()
+                .for_each(|(r, out_row)| {
+                    for (c, out_cell) in out_row.iter_mut().enumerate().take(cols) {
                         let idx = Self::idx(r, c, cols);
                         let base = match base_normals[idx] {
                             Some(v) => v,
@@ -7875,14 +7992,14 @@ impl TerrainWindowCore {
                             *out_cell = Self::angle_between_normals(base, smooth_n);
                         }
                     }
-                    out
-                })
-                .collect();
+                });
 
             let mut diff_raster = input.clone();
-            for (r, row) in diff_rows.iter().enumerate() {
+            for r in 0..rows {
+                let start = r * cols;
+                let end = start + cols;
                 diff_raster
-                    .set_row_slice(0, r as isize, row)
+                    .set_row_slice(0, r as isize, &diff_vec[start..end])
                     .map_err(|e| ToolError::Execution(format!("failed writing roughness row {}: {}", r, e)))?;
             }
             let (diff_sum, _, diff_count) = Self::build_integrals(&diff_raster, 0);
@@ -7981,14 +8098,35 @@ impl TerrainWindowCore {
 
         for band_idx in 0..bands {
             let band = band_idx as isize;
-            let (sum, _, count) = Self::build_integrals(&input, band);
+            let mut src = vec![nodata; rows * cols];
+            for row in 0..rows {
+                for col in 0..cols {
+                    src[Self::idx(row, col, cols)] = input.get(band, row as isize, col as isize);
+                }
+            }
+            let mut i_n = vec![0u32; rows * cols];
+            for row in 0..rows {
+                let mut row_sum = 0u32;
+                for col in 0..cols {
+                    let idx = Self::idx(row, col, cols);
+                    if src[idx] != nodata {
+                        row_sum += 1;
+                    }
+                    i_n[idx] = if row > 0 {
+                        row_sum + i_n[Self::idx(row - 1, col, cols)]
+                    } else {
+                        row_sum
+                    };
+                }
+            }
 
+            let fill = vec![nodata; cols];
             for r in 0..rows {
                 output_mag
-                    .set_row_slice(band, r as isize, &vec![nodata; cols])
+                    .set_row_slice(band, r as isize, &fill)
                     .map_err(|e| ToolError::Execution(format!("failed initializing magnitude row {}: {}", r, e)))?;
                 output_scale
-                    .set_row_slice(band, r as isize, &vec![nodata; cols])
+                    .set_row_slice(band, r as isize, &fill)
                     .map_err(|e| ToolError::Execution(format!("failed initializing scale row {}: {}", r, e)))?;
             }
 
@@ -7998,44 +8136,25 @@ impl TerrainWindowCore {
                     continue;
                 }
 
-                let smoothed_rows: Vec<Vec<f64>> = (0..rows)
-                    .into_par_iter()
-                    .map(|r| {
-                        let mut out = vec![nodata; cols];
-                        for (c, out_cell) in out.iter_mut().enumerate().take(cols) {
-                            let z = input.get(band, r as isize, c as isize);
-                            if input.is_nodata(z) {
-                                continue;
-                            }
-                            let y1 = r.saturating_sub(midpoint);
-                            let x1 = c.saturating_sub(midpoint);
-                            let y2 = (r + midpoint).min(rows - 1);
-                            let x2 = (c + midpoint).min(cols - 1);
-                            let n = Self::rect_count(&count, cols, y1, x1, y2, x2);
-                            if n > 0 {
-                                let local_sum = Self::rect_sum(&sum, cols, y1, x1, y2, x2);
-                                *out_cell = local_sum / n as f64;
-                            }
-                        }
-                        out
-                    })
-                    .collect();
-
+                let smooth_vec = Self::gss_smooth_band(&src, &i_n, rows, cols, nodata, midpoint);
                 let mut smooth = input.clone();
-                for (r, row) in smoothed_rows.iter().enumerate() {
+                for r in 0..rows {
+                    let start = r * cols;
+                    let end = start + cols;
                     smooth
-                        .set_row_slice(band, r as isize, row)
+                        .set_row_slice(band, r as isize, &smooth_vec[start..end])
                         .map_err(|e| ToolError::Execution(format!("failed writing smoothed row {}: {}", r, e)))?;
                 }
 
                 let (sum_x, sum_y, sum_z, count_n) =
                     Self::build_unit_normal_component_integrals(&smooth, band, z_factor);
 
-                let row_data: Vec<Vec<f64>> = (0..rows)
-                    .into_par_iter()
-                    .map(|r| {
-                        let mut out = vec![nodata; cols];
-                        for (c, out_cell) in out.iter_mut().enumerate().take(cols) {
+                let mut stddev_vec = vec![nodata; rows * cols];
+                stddev_vec
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .for_each(|(r, out_row)| {
+                        for (c, out_cell) in out_row.iter_mut().enumerate().take(cols) {
                             let z = input.get(band, r as isize, c as isize);
                             if input.is_nodata(z) {
                                 continue;
@@ -8056,12 +8175,12 @@ impl TerrainWindowCore {
                                 *out_cell = 0.0;
                             }
                         }
-                        out
-                    })
-                    .collect();
+                    });
 
-                for (r, row) in row_data.iter().enumerate() {
-                    for (c, v2) in row.iter().enumerate().take(cols) {
+                for r in 0..rows {
+                    let start = r * cols;
+                    let end = start + cols;
+                    for (c, v2) in stddev_vec[start..end].iter().enumerate().take(cols) {
                         let v2 = *v2;
                         if v2 == nodata {
                             continue;
@@ -8107,7 +8226,7 @@ impl TerrainWindowCore {
             .get("min_scale")
             .and_then(|v| v.as_u64())
             .map(|v| v as usize)
-            .unwrap_or(1)
+            .unwrap_or(4)
             .max(1);
         let step = args
             .get("step")
@@ -8149,7 +8268,28 @@ impl TerrainWindowCore {
 
         let rows = input.rows;
         let cols = input.cols;
-        let (sum, _, count) = Self::build_integrals(&input, 0);
+        let nodata = input.nodata;
+        let mut src = vec![nodata; rows * cols];
+        for row in 0..rows {
+            for col in 0..cols {
+                src[Self::idx(row, col, cols)] = input.get(0, row as isize, col as isize);
+            }
+        }
+        let mut i_n = vec![0u32; rows * cols];
+        for row in 0..rows {
+            let mut row_sum = 0u32;
+            for col in 0..cols {
+                let idx = Self::idx(row, col, cols);
+                if src[idx] != nodata {
+                    row_sum += 1;
+                }
+                i_n[idx] = if row > 0 {
+                    row_sum + i_n[Self::idx(row - 1, col, cols)]
+                } else {
+                    row_sum
+                };
+            }
+        }
         let scales = Self::make_nonlinear_scales(min_scale, step, num_steps, step_nonlinearity);
         let mut site_values: Vec<Vec<(f64, f64)>> = vec![Vec::new(); sites.len()];
 
@@ -8159,38 +8299,16 @@ impl TerrainWindowCore {
                 continue;
             }
 
-            let smoothed_rows: Vec<Vec<f64>> = (0..rows)
-                .into_par_iter()
-                .map(|r| {
-                    let mut out = vec![input.nodata; cols];
-                    for (c, out_cell) in out.iter_mut().enumerate().take(cols) {
-                        let z = input.get(0, r as isize, c as isize);
-                        if input.is_nodata(z) {
-                            continue;
-                        }
-                        let y1 = r.saturating_sub(midpoint);
-                        let x1 = c.saturating_sub(midpoint);
-                        let y2 = (r + midpoint).min(rows - 1);
-                        let x2 = (c + midpoint).min(cols - 1);
-                        let n = Self::rect_count(&count, cols, y1, x1, y2, x2);
-                        if n > 0 {
-                            let local_sum = Self::rect_sum(&sum, cols, y1, x1, y2, x2);
-                            *out_cell = local_sum / n as f64;
-                        }
-                    }
-                    out
-                })
-                .collect();
-
-            let mut smooth = input.clone();
-            for (r, row) in smoothed_rows.iter().enumerate() {
-                smooth
-                    .set_row_slice(0, r as isize, row)
-                    .map_err(|e| ToolError::Execution(format!("failed writing smoothed row {}: {}", r, e)))?;
-            }
-
+            let smooth_vec = Self::gss_smooth_band(&src, &i_n, rows, cols, nodata, midpoint);
             let (sum_x, sum_y, sum_z, count_n) =
-                Self::build_unit_normal_component_integrals(&smooth, 0, z_factor);
+                Self::build_unit_normal_component_integrals_from_band_data(
+                    &smooth_vec,
+                    rows,
+                    cols,
+                    nodata,
+                    input.cell_size_x,
+                    z_factor,
+                );
 
             for (site_idx, (_sid, row, col)) in sites.iter().enumerate() {
                 let z = input.get(0, *row as isize, *col as isize);
@@ -8307,6 +8425,16 @@ impl Tool for MaxElevationDeviationTool {
         let _ = TerrainWindowCore::parse_input(args)?;
         let _ = parse_optional_output_path(args, "output")?;
         let _ = parse_optional_output_path(args, "output_scale")?;
+        if let Some(value) = args.get("min_vertical") {
+            let min_vertical = value.as_f64().ok_or_else(|| {
+                ToolError::Validation("parameter 'min_vertical' must be a number".to_string())
+            })?;
+            if !min_vertical.is_finite() || min_vertical < 0.0 {
+                return Err(ToolError::Validation(
+                    "parameter 'min_vertical' must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
         Ok(())
     }
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {

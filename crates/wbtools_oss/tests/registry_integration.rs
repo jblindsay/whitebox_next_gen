@@ -10388,6 +10388,89 @@ fn interpolation_tools_match_exact_sample_values_at_point_cells() {
 }
 
 #[test]
+fn modified_shepard_quadratic_basis_changes_output_surface() {
+    use wbvector::{FieldDef, FieldType, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+
+    let tag = unique_tag("wbtools_oss_ms_quad_toggle");
+    let points_path = std::env::temp_dir().join(format!("{tag}_points.geojson"));
+    let false_path = std::env::temp_dir().join(format!("{tag}_ms_false.tif"));
+    let true_path = std::env::temp_dir().join(format!("{tag}_ms_true.tif"));
+
+    // A smooth quadratic-like sample field where local polynomial correction should matter.
+    let mut points = Layer::new("points").with_geom_type(wbvector::GeometryType::Point);
+    points.add_field(FieldDef::new("VALUE", FieldType::Float));
+    for (x, y, z) in [
+        (0.0, 0.0, 0.0),
+        (1.0, 0.0, 1.0),
+        (2.0, 0.0, 4.0),
+        (0.0, 1.0, 1.0),
+        (1.0, 1.0, 2.0),
+        (2.0, 1.0, 5.0),
+        (0.0, 2.0, 4.0),
+        (1.0, 2.0, 5.0),
+        (2.0, 2.0, 8.0),
+    ] {
+        points
+            .add_feature(Some(Geometry::point(x, y)), &[("VALUE", z.into())])
+            .expect("add point sample");
+    }
+    wbvector::write(&points, &points_path, VectorFormat::GeoJson).expect("write points");
+
+    let caps = OpenOnly;
+
+    let mut args_false = ToolArgs::new();
+    args_false.insert("points".to_string(), json!(points_path.to_string_lossy().to_string()));
+    args_false.insert("field_name".to_string(), json!("VALUE"));
+    args_false.insert("weight".to_string(), json!(2.0));
+    args_false.insert("radius".to_string(), json!(0.0));
+    args_false.insert("min_points".to_string(), json!(8));
+    args_false.insert("cell_size".to_string(), json!(0.5));
+    args_false.insert("use_data_hull".to_string(), json!(false));
+    args_false.insert("use_quadratic_basis".to_string(), json!(false));
+    args_false.insert("output".to_string(), json!(false_path.to_string_lossy().to_string()));
+    registry
+        .run("modified_shepard_interpolation", &args_false, &context(&caps))
+        .expect("modified_shepard_interpolation (quadratic=false) should run");
+
+    let mut args_true = args_false.clone();
+    args_true.insert("use_quadratic_basis".to_string(), json!(true));
+    args_true.insert("output".to_string(), json!(true_path.to_string_lossy().to_string()));
+    registry
+        .run("modified_shepard_interpolation", &args_true, &context(&caps))
+        .expect("modified_shepard_interpolation (quadratic=true) should run");
+
+    let out_false = Raster::read(&false_path).expect("read quadratic=false output");
+    let out_true = Raster::read(&true_path).expect("read quadratic=true output");
+
+    assert_eq!(out_false.rows, out_true.rows);
+    assert_eq!(out_false.cols, out_true.cols);
+
+    let mut max_abs_diff = 0.0;
+    for row in 0..out_false.rows as isize {
+        for col in 0..out_false.cols as isize {
+            let a = out_false.get(0, row, col);
+            let b = out_true.get(0, row, col);
+            if out_false.is_nodata(a) || out_true.is_nodata(b) {
+                continue;
+            }
+            max_abs_diff = max_abs_diff.max((a - b).abs());
+        }
+    }
+
+    assert!(
+        max_abs_diff > 1.0e-6,
+        "quadratic basis toggle should affect at least one output cell"
+    );
+
+    let _ = std::fs::remove_file(&points_path);
+    let _ = std::fs::remove_file(&false_path);
+    let _ = std::fs::remove_file(&true_path);
+}
+
+#[test]
 fn gis_utility_tools_run_end_to_end() {
     use wbvector::{FieldDef, FieldType, Geometry, Layer, VectorFormat};
 

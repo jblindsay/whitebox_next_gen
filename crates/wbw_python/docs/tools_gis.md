@@ -552,7 +552,7 @@ Parameters:
 ### radial_basis_function_interpolation
 
 ```
-radial_basis_function_interpolation(points, field_name="FID", use_z=False, radius=0.0, min_points=16, cell_size=None, base_raster=None, func_type="thinplatespline", poly_order="none", weight=0.1, output_path=None, callback=None)
+radial_basis_function_interpolation(points, field_name="FID", use_z=False, radius=0.0, min_points=16, cell_size=None, base_raster=None, func_type="thinplatespline", poly_order="none", weight=0.1, approximate_mode=True, output_path=None, callback=None)
 ```
 
 Interpolates a raster from point samples using local radial-basis similarity weighting.
@@ -568,6 +568,7 @@ Parameters:
 - `func_type`: Basis type (`thinplatespline`, `polyharmonic`, `gaussian`, `multiquadric`, `inversemultiquadric`).
 - `poly_order`: Polynomial order hint (`none`, `constant`, `quadratic`).
 - `weight`: Basis shape/exponent parameter.
+- `approximate_mode`: If `True`, uses the NG approximate local neighborhood strategy; if `False`, uses legacy-style exhaustive evaluation.
 - `output_path`: Optional output path. If omitted, returns an in-memory raster.
 - `callback`: Optional progress callback receiving JSON events.
 
@@ -1680,7 +1681,20 @@ Parameters:
 narrowness_index(input, output_path=None, callback=None)
 ```
 
-Computes narrowness index and appends `NARROWNESS`.
+Computes raster narrowness index from each cell's local neighborhood.
+
+Parameters:
+- `input`: Input raster.
+- `output_path`: Optional output path. If omitted, returns an in-memory raster.
+- `callback`: Optional progress callback receiving JSON events.
+
+### narrowness_index_vector
+
+```
+narrowness_index_vector(input, output_path=None, callback=None)
+```
+
+Computes narrowness index for polygon features and appends `NARROWNESS`.
 
 Parameters:
 - `input`: Input polygon vector layer.

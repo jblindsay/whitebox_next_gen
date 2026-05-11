@@ -9,6 +9,7 @@ default = []
 
 [dependencies]
 wbcore = { path = "../wbcore" }
+serde.workspace = true
 serde_json.workspace = true
 wbraster = { path = "../wbraster" }
 wbgeotiff = { path = "../wbgeotiff" }
@@ -24,7 +25,8 @@ image = "0.25"
 kdtree = "0.8.0"
 evalexpr = "13.1.0"
 nalgebra = "0.34.1"
-smartcore = "0.4.9"
+smartcore = { version = "0.4.9", features = ["serde"] }
+bincode = { version = "2", features = ["serde"] }
 rustfft = "6.2"
 
 [dev-dependencies]

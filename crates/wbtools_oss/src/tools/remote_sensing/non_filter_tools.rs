@@ -5,6 +5,7 @@ use image::{ImageBuffer, Rgba};
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use smartcore::ensemble::random_forest_classifier::{
     RandomForestClassifier,
@@ -31,6 +32,8 @@ use wbraster::{rgb_to_hsi_norm, hsi_to_rgb_norm, value2i, DataType, Raster, Rast
 use wbvector::Geometry as VectorGeometry;
 
 use crate::memory_store;
+use crate::palettes::LegacyPalette;
+use crate::rendering::{BoxAndWhiskerPlot, LineGraph};
 use crate::tools::raster_stack_validator::{
     align_and_validate_raster_stack, parse_resample_method as parse_stack_resample_method,
     RasterStackConfig,
@@ -1490,16 +1493,7 @@ impl FlipImageTool {
 
             let out_values: Vec<f64> = (0..rows * cols)
                 .into_par_iter()
-                .map(|idx| {
-                    let r = (idx / cols) as isize;
-                    let c = (idx % cols) as isize;
-                    let z = input.get(band, r, c);
-                    if input.is_nodata(z) {
-                        input.nodata
-                    } else {
-                        integral[idx]
-                    }
-                })
+                .map(|idx| integral[idx])
                 .collect();
 
             for (idx, v) in out_values.into_iter().enumerate() {
@@ -5151,8 +5145,28 @@ impl Tool for ImageSliderTool {
                     required: false,
                 },
                 ToolParamSpec {
+                    name: "left_palette",
+                    description: "Palette for left non-RGB image (default grey).",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "left_reverse_palette",
+                    description: "Reverse the left palette.",
+                    required: false,
+                },
+                ToolParamSpec {
                     name: "label2",
                     description: "Optional label shown for right image.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "right_palette",
+                    description: "Palette for right non-RGB image (default grey).",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "right_reverse_palette",
+                    description: "Reverse the right palette.",
                     required: false,
                 },
                 ToolParamSpec {
@@ -5174,6 +5188,10 @@ impl Tool for ImageSliderTool {
         let mut defaults = ToolArgs::new();
         defaults.insert("input1".to_string(), json!("left.tif"));
         defaults.insert("input2".to_string(), json!("right.tif"));
+        defaults.insert("left_palette".to_string(), json!("grey"));
+        defaults.insert("left_reverse_palette".to_string(), json!(false));
+        defaults.insert("right_palette".to_string(), json!("grey"));
+        defaults.insert("right_reverse_palette".to_string(), json!(false));
         defaults.insert("height".to_string(), json!(600));
 
         let mut example = ToolArgs::new();
@@ -5181,6 +5199,10 @@ impl Tool for ImageSliderTool {
         example.insert("input2".to_string(), json!("right.tif"));
         example.insert("label1".to_string(), json!("Before"));
         example.insert("label2".to_string(), json!("After"));
+        example.insert("left_palette".to_string(), json!("grey"));
+        example.insert("left_reverse_palette".to_string(), json!(false));
+        example.insert("right_palette".to_string(), json!("grey"));
+        example.insert("right_reverse_palette".to_string(), json!(false));
         example.insert("height".to_string(), json!(600));
         example.insert("output".to_string(), json!("image_slider.html"));
 
@@ -5218,6 +5240,8 @@ impl Tool for ImageSliderTool {
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = parse_raster_path_arg(args, "input1")?;
         let _ = parse_raster_path_arg(args, "input2")?;
+        let _ = parse_legacy_palette_arg(args, "left_palette", LegacyPalette::Grey)?;
+        let _ = parse_legacy_palette_arg(args, "right_palette", LegacyPalette::Grey)?;
         if let Some(h) = args.get("height").and_then(|v| v.as_u64()) {
             if h < 50 {
                 return Err(ToolError::Validation(
@@ -5243,6 +5267,16 @@ impl Tool for ImageSliderTool {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
+        let left_palette = parse_legacy_palette_arg(args, "left_palette", LegacyPalette::Grey)?;
+        let right_palette = parse_legacy_palette_arg(args, "right_palette", LegacyPalette::Grey)?;
+        let left_reverse_palette = args
+            .get("left_reverse_palette")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let right_reverse_palette = args
+            .get("right_reverse_palette")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let height = args
             .get("height")
             .and_then(|v| v.as_u64())
@@ -5264,6 +5298,10 @@ impl Tool for ImageSliderTool {
             &output_path,
             &label1,
             &label2,
+            left_palette,
+            right_palette,
+            left_reverse_palette,
+            right_reverse_palette,
             height,
         )?;
 
@@ -5960,7 +5998,21 @@ fn run_generalize_classified_raster(
     Ok(output)
 }
 
-fn raster_to_rgba_image(input: &Raster) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+fn parse_legacy_palette_arg(args: &ToolArgs, key: &str, default: LegacyPalette) -> Result<LegacyPalette, ToolError> {
+    let Some(name) = args.get(key).and_then(|v| v.as_str()) else {
+        return Ok(default);
+    };
+    LegacyPalette::from_name(name).ok_or_else(|| {
+        ToolError::Validation(format!(
+            "unsupported palette '{}' for {}; supported values include: {}",
+            name,
+            key,
+            LegacyPalette::supported_names().join(", ")
+        ))
+    })
+}
+
+fn raster_to_rgba_image(input: &Raster, palette: LegacyPalette, reverse_palette: bool) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
     let rows = input.rows as isize;
     let cols = input.cols as isize;
     let mut imgbuf: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::new(cols as u32, rows as u32);
@@ -5972,6 +6024,10 @@ fn raster_to_rgba_image(input: &Raster) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
     let stats = input.statistics();
     let min_v = stats.min;
     let range_v = (stats.max - stats.min).max(1e-12);
+    let mut palette_vals = palette.get_palette();
+    if reverse_palette {
+        palette_vals.reverse();
+    }
 
     let pixels: Vec<Rgba<u8>> = (0..n)
         .into_par_iter()
@@ -5986,8 +6042,22 @@ fn raster_to_rgba_image(input: &Raster) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
                 Rgba([rv as u8, gv as u8, bv as u8, 255])
             } else {
                 let p = ((z - min_v) / range_v).clamp(0.0, 1.0);
-                let v = (p * 255.0).round().clamp(0.0, 255.0) as u8;
-                Rgba([v, v, v, 255])
+                if palette_vals.len() < 2 {
+                    let v = (p * 255.0).round().clamp(0.0, 255.0) as u8;
+                    Rgba([v, v, v, 255])
+                } else {
+                    let n = palette_vals.len() - 1;
+                    let idxf = p * n as f64;
+                    let i0 = idxf.floor().clamp(0.0, n as f64) as usize;
+                    let i1 = (i0 + 1).min(n);
+                    let t = (idxf - i0 as f64).clamp(0.0, 1.0) as f32;
+                    let c0 = palette_vals[i0];
+                    let c1 = palette_vals[i1];
+                    let rr = (c0.0 + t * (c1.0 - c0.0)).round().clamp(0.0, 255.0) as u8;
+                    let gg = (c0.1 + t * (c1.1 - c0.1)).round().clamp(0.0, 255.0) as u8;
+                    let bb = (c0.2 + t * (c1.2 - c0.2)).round().clamp(0.0, 255.0) as u8;
+                    Rgba([rr, gg, bb, 255])
+                }
             }
         })
         .collect();
@@ -6007,6 +6077,10 @@ fn run_image_slider_html(
     html_output_path: &std::path::Path,
     label1: &str,
     label2: &str,
+    left_palette: LegacyPalette,
+    right_palette: LegacyPalette,
+    left_reverse_palette: bool,
+    right_reverse_palette: bool,
     height_px: usize,
 ) -> Result<String, ToolError> {
     if input1.rows != input2.rows || input1.cols != input2.cols {
@@ -6036,8 +6110,8 @@ fn run_image_slider_html(
     let left_png = parent.join(&left_png_name);
     let right_png = parent.join(&right_png_name);
 
-    let left_img = raster_to_rgba_image(input1);
-    let right_img = raster_to_rgba_image(input2);
+    let left_img = raster_to_rgba_image(input1, left_palette, left_reverse_palette);
+    let right_img = raster_to_rgba_image(input2, right_palette, right_reverse_palette);
     left_img.save(&left_png).map_err(|e| {
         ToolError::Execution(format!("failed writing slider left image '{}': {}", left_png.display(), e))
     })?;
@@ -6351,7 +6425,7 @@ fn run_mosaic(inputs: &[Raster], method: ResampleMethod) -> Result<Raster, ToolE
                 let x = out_x_min + (col as f64 + 0.5) * cell_size_x;
 
                 let mut chosen = None;
-                for input in inputs.iter().rev() {
+                for input in inputs.iter() {
                     let rowf = (input.y_max() - y) / input.cell_size_y;
                     let colf = (x - input.x_min) / input.cell_size_x;
                     if let Some(v) = sample_value(input, band, rowf, colf, method) {
@@ -7140,20 +7214,22 @@ fn write_cluster_html_report(
 
     let xdata = vec![(1..=result.change_history.len()).map(|v| v as f64).collect::<Vec<f64>>()];
     let ydata = vec![result.change_history.clone()];
+    let graph = LineGraph {
+        parent_id: "graph".to_string(),
+        width: 500.0,
+        height: 450.0,
+        data_x: xdata,
+        data_y: ydata,
+        series_labels: vec!["Line 1".to_string()],
+        x_axis_label: "Iteration".to_string(),
+        y_axis_label: "Cells with class values changed (%)".to_string(),
+        draw_points: true,
+        draw_gridlines: true,
+        draw_legend: false,
+        draw_grey_background: false,
+    };
     html.push_str("<br><br><h2>Convergence Plot</h2>");
-    html.push_str(&render_wbw_line_graph_svg(
-        "graph",
-        500.0,
-        450.0,
-        &xdata,
-        &ydata,
-        &["Line 1".to_string()],
-        "Iteration",
-        "Cells with class values changed (%)",
-        true,
-        true,
-        false,
-    ));
+    html.push_str(&format!("<div id='graph' align=\"center\">{}</div>", graph.get_svg()));
 
     html.push_str("</body></html>");
 
@@ -7478,19 +7554,21 @@ fn write_image_stack_profile_html(
     }
     html.push_str("</p>");
 
-    html.push_str(&render_wbw_line_graph_svg(
-        "graph",
-        700.0,
-        500.0,
-        &xdata,
-        profiles,
-        &series_names,
-        "Image",
-        "Value",
-        false,
-        true,
-        multiples,
-    ));
+    let graph = LineGraph {
+        parent_id: "graph".to_string(),
+        width: 700.0,
+        height: 500.0,
+        data_x: xdata,
+        data_y: profiles.to_vec(),
+        series_labels: series_names,
+        x_axis_label: "Image".to_string(),
+        y_axis_label: "Value".to_string(),
+        draw_points: false,
+        draw_gridlines: true,
+        draw_legend: multiples,
+        draw_grey_background: false,
+    };
+    html.push_str(&format!("<div id='graph' align=\"center\">{}</div>", graph.get_svg()));
 
     html.push_str("<p><table><caption>Profile Data Table</caption><tr><th>Image</th>");
     for pidx in 0..num_points {
@@ -7579,224 +7657,6 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
-}
-
-fn render_wbw_line_graph_svg(
-    parent_id: &str,
-    width: f64,
-    height: f64,
-    data_x: &[Vec<f64>],
-    data_y: &[Vec<f64>],
-    series_labels: &[String],
-    x_axis_label: &str,
-    y_axis_label: &str,
-    draw_points: bool,
-    draw_gridlines: bool,
-    draw_legend: bool,
-) -> String {
-    if data_y.is_empty() {
-        return format!("<div id='{}' align=\"center\"><p>No graph data.</p></div>", html_escape(parent_id));
-    }
-
-    let max_series_label_len = series_labels.iter().map(|s| s.len()).max().unwrap_or(0) as f64;
-    let left_margin = 70.0;
-    let right_margin = if draw_legend { 65.0 + max_series_label_len * 7.0 } else { 50.0 };
-    let bottom_margin = 70.0;
-    let top_margin = 40.0;
-    let plot_w = (width - left_margin - right_margin).max(10.0);
-    let plot_h = (height - top_margin - bottom_margin).max(10.0);
-
-    let mut x_min = f64::INFINITY;
-    let mut x_max = f64::NEG_INFINITY;
-    let mut y_min = f64::INFINITY;
-    let mut y_max = f64::NEG_INFINITY;
-
-    for (sidx, ys) in data_y.iter().enumerate() {
-        let xs = data_x.get(sidx);
-        for (i, y) in ys.iter().enumerate() {
-            if !y.is_finite() {
-                continue;
-            }
-            let x = xs.and_then(|v| v.get(i)).copied().unwrap_or((i + 1) as f64);
-            if !x.is_finite() {
-                continue;
-            }
-            x_min = x_min.min(x);
-            x_max = x_max.max(x);
-            y_min = y_min.min(*y);
-            y_max = y_max.max(*y);
-        }
-    }
-
-    if !x_min.is_finite() || !y_min.is_finite() {
-        return format!("<div id='{}' align=\"center\"><p>No finite graph data.</p></div>", html_escape(parent_id));
-    }
-
-    let x_pad = ((x_max - x_min).abs() * 0.05).max(1e-9);
-    let y_pad = ((y_max - y_min).abs() * 0.05).max(1e-9);
-    x_min -= x_pad;
-    x_max += x_pad;
-    y_min -= y_pad;
-    y_max += y_pad;
-
-    let x_range = (x_max - x_min).max(1e-12);
-    let y_range = (y_max - y_min).max(1e-12);
-
-    let to_px = |x: f64, y: f64| -> (f64, f64) {
-        let px = left_margin + (x - x_min) / x_range * plot_w;
-        let py = top_margin + plot_h - (y - y_min) / y_range * plot_h;
-        (px, py)
-    };
-
-    let palette = [
-        "rgb(31,119,180)",
-        "rgb(255,127,14)",
-        "rgb(44,160,44)",
-        "rgb(214,39,40)",
-        "rgb(148,103,189)",
-        "rgb(140,86,75)",
-        "rgb(227,119,194)",
-        "rgb(127,127,127)",
-        "rgb(188,189,34)",
-        "rgb(23,190,207)",
-    ];
-
-    let mut svg = String::new();
-    svg.push_str(&format!(
-        "<div id='{}' align=\"center\"><svg width=\"{}\" height=\"{}\" xmlns=\"http://www.w3.org/2000/svg\">",
-        html_escape(parent_id), width, height
-    ));
-    svg.push_str("<rect x=\"0\" y=\"0\" width=\"100%\" height=\"100%\" fill=\"white\"/>");
-    svg.push_str(&format!(
-        "<rect x=\"{:.3}\" y=\"{:.3}\" width=\"{:.3}\" height=\"{:.3}\" fill=\"rgb(255,255,255)\" stroke=\"black\" stroke-width=\"0.5\"/>",
-        left_margin, top_margin, plot_w, plot_h
-    ));
-
-    let tick_count = 10usize;
-    for t in 0..=tick_count {
-        let frac = t as f64 / tick_count as f64;
-        let x = left_margin + frac * plot_w;
-        let y = top_margin + frac * plot_h;
-        if draw_gridlines && t > 0 && t < tick_count {
-            svg.push_str(&format!(
-                "<line x1=\"{:.3}\" y1=\"{:.3}\" x2=\"{:.3}\" y2=\"{:.3}\" stroke=\"#EEE\" stroke-width=\"0.8\"/>",
-                x,
-                top_margin,
-                x,
-                top_margin + plot_h
-            ));
-            svg.push_str(&format!(
-                "<line x1=\"{:.3}\" y1=\"{:.3}\" x2=\"{:.3}\" y2=\"{:.3}\" stroke=\"#EEE\" stroke-width=\"0.8\"/>",
-                left_margin,
-                y,
-                left_margin + plot_w,
-                y
-            ));
-        }
-
-        let x_val = x_min + frac * x_range;
-        let y_val = y_max - frac * y_range;
-        svg.push_str(&format!(
-            "<line x1=\"{:.3}\" y1=\"{:.3}\" x2=\"{:.3}\" y2=\"{:.3}\" stroke=\"black\" stroke-width=\"0.5\"/>",
-            x,
-            top_margin + plot_h,
-            x,
-            top_margin + plot_h + 8.0
-        ));
-        svg.push_str(&format!(
-            "<line x1=\"{:.3}\" y1=\"{:.3}\" x2=\"{:.3}\" y2=\"{:.3}\" stroke=\"black\" stroke-width=\"0.5\"/>",
-            left_margin - 8.0,
-            y,
-            left_margin,
-            y
-        ));
-        svg.push_str(&format!(
-            "<text x=\"{:.3}\" y=\"{:.3}\" text-anchor=\"middle\" dominant-baseline=\"hanging\" font-family=\"Sans,Arial\" font-size=\"85%\">{:.3}</text>",
-            x,
-            top_margin + plot_h + 12.0,
-            x_val
-        ));
-        svg.push_str(&format!(
-            "<text x=\"{:.3}\" y=\"{:.3}\" text-anchor=\"end\" dominant-baseline=\"middle\" font-family=\"Sans,Arial\" font-size=\"85%\">{:.3}</text>",
-            left_margin - 10.0,
-            y,
-            y_val
-        ));
-    }
-
-    svg.push_str(&format!(
-        "<text x=\"{:.3}\" y=\"{:.3}\" text-anchor=\"middle\" font-family=\"Sans,Arial\" font-size=\"90%\">{}</text>",
-        left_margin + plot_w / 2.0,
-        height - 20.0,
-        html_escape(x_axis_label)
-    ));
-    svg.push_str(&format!(
-        "<text x=\"22\" y=\"{:.3}\" text-anchor=\"middle\" transform=\"rotate(-90,22,{:.3})\" font-family=\"Sans,Arial\" font-size=\"90%\">{}</text>",
-        top_margin + plot_h / 2.0,
-        top_margin + plot_h / 2.0,
-        html_escape(y_axis_label)
-    ));
-
-    for (sidx, ys) in data_y.iter().enumerate() {
-        let clr = palette[sidx % palette.len()];
-        let xs = data_x.get(sidx);
-        let mut points = String::new();
-        let mut finite_points = Vec::new();
-        for (i, y) in ys.iter().enumerate() {
-            if !y.is_finite() {
-                continue;
-            }
-            let x = xs.and_then(|v| v.get(i)).copied().unwrap_or((i + 1) as f64);
-            if !x.is_finite() {
-                continue;
-            }
-            let (px, py) = to_px(x, *y);
-            points.push_str(&format!("{:.3},{:.3} ", px, py));
-            finite_points.push((px, py));
-        }
-
-        if finite_points.len() >= 2 {
-            svg.push_str(&format!(
-                "<polyline fill=\"none\" stroke=\"{}\" stroke-width=\"1.5\" points=\"{}\"/>",
-                clr,
-                points.trim()
-            ));
-        }
-        if draw_points {
-            for (px, py) in finite_points {
-                svg.push_str(&format!(
-                    "<circle cx=\"{:.3}\" cy=\"{:.3}\" r=\"2.8\" fill=\"{}\"/>",
-                    px, py, clr
-                ));
-            }
-        }
-    }
-
-    if draw_legend && !series_labels.is_empty() {
-        let lx = left_margin + plot_w + 16.0;
-        let mut ly = top_margin + 14.0;
-        for (sidx, label) in series_labels.iter().enumerate() {
-            let clr = palette[sidx % palette.len()];
-            svg.push_str(&format!(
-                "<line x1=\"{:.3}\" y1=\"{:.3}\" x2=\"{:.3}\" y2=\"{:.3}\" stroke=\"{}\" stroke-width=\"2\"/>",
-                lx,
-                ly,
-                lx + 16.0,
-                ly,
-                clr
-            ));
-            svg.push_str(&format!(
-                "<text x=\"{:.3}\" y=\"{:.3}\" dominant-baseline=\"middle\" font-family=\"Sans,Arial\" font-size=\"85%\">{}</text>",
-                lx + 22.0,
-                ly,
-                html_escape(label)
-            ));
-            ly += 18.0;
-        }
-    }
-
-    svg.push_str("</svg></div>");
-    svg
 }
 
 fn build_ms_packed_from_bands(red: &Raster, green: &Raster, blue: &Raster) -> Result<Raster, ToolError> {
@@ -8890,25 +8750,35 @@ impl Tool for CannyEdgeDetectionTool {
         // ── Stage 1: Gaussian filter → `g` ──────────────────────────────────
         let g_nd = nodata;
         let mut g_data = vec![g_nd; (rows * cols_count) as usize];
-        for row in 0..rows {
-            for col in 0..cols_count {
-                let z = get_intensity(&input, row, col);
-                if z == nodata { continue; }
-                let mut sum = 0.0f64;
-                let mut acc = 0.0f64;
-                for k in 0..kn {
-                    let nr = row + kernel_dy[k];
-                    let nc = col + kernel_dx[k];
-                    if nr < 0 || nr >= rows || nc < 0 || nc >= cols_count { continue; }
-                    let zn = get_intensity(&input, nr, nc);
-                    if zn != nodata {
-                        sum += kernel_weights[k];
-                        acc += kernel_weights[k] * zn;
+        g_data
+            .par_chunks_mut(cols_count as usize)
+            .enumerate()
+            .for_each(|(row, row_vals)| {
+                let row = row as isize;
+                for col in 0..cols_count {
+                    let z = get_intensity(&input, row, col);
+                    if z == nodata {
+                        continue;
+                    }
+                    let mut sum = 0.0f64;
+                    let mut acc = 0.0f64;
+                    for k in 0..kn {
+                        let nr = row + kernel_dy[k];
+                        let nc = col + kernel_dx[k];
+                        if nr < 0 || nr >= rows || nc < 0 || nc >= cols_count {
+                            continue;
+                        }
+                        let zn = get_intensity(&input, nr, nc);
+                        if zn != nodata {
+                            sum += kernel_weights[k];
+                            acc += kernel_weights[k] * zn;
+                        }
+                    }
+                    if sum > 0.0 {
+                        row_vals[col as usize] = acc / sum;
                     }
                 }
-                if sum > 0.0 { g_data[(row * cols_count + col) as usize] = acc / sum; }
-            }
-        }
+            });
         coalescer.emit_unit_fraction(ctx.progress, 0.25);
 
         // ── Stage 2: Sobel gradient magnitude + angle ────────────────────────
@@ -8921,25 +8791,45 @@ impl Tool for CannyEdgeDetectionTool {
         let sobel_mx = [1.0f64, 2.0, 1.0, 0.0, -1.0, -2.0, -1.0, 0.0];
         let sobel_my = [1.0f64, 0.0, -1.0, -2.0, -1.0, 0.0, 1.0, 2.0];
 
+        let sobel_rows: Vec<(Vec<f64>, Vec<f64>, f64)> = (0..rows)
+            .into_par_iter()
+            .map(|row| {
+                let mut row_mag = vec![g_nd; cols_count as usize];
+                let mut row_theta = vec![g_nd; cols_count as usize];
+                let mut row_max = 0.0f64;
+                for col in 0..cols_count {
+                    let z = gget(row, col);
+                    if z == g_nd {
+                        continue;
+                    }
+                    let mut sx = 0.0f64;
+                    let mut sy = 0.0f64;
+                    for i in 0..8 {
+                        let zn = gget(row + sobel_dy[i], col + sobel_dx[i]);
+                        let zn = if zn == g_nd { z } else { zn };
+                        sx += zn * sobel_mx[i];
+                        sy += zn * sobel_my[i];
+                    }
+                    let mag = sx.hypot(sy);
+                    row_mag[col as usize] = mag;
+                    row_theta[col as usize] = sy.atan2(sx);
+                    if mag > row_max {
+                        row_max = mag;
+                    }
+                }
+                (row_mag, row_theta, row_max)
+            })
+            .collect();
         let mut slope_mag = vec![g_nd; (rows * cols_count) as usize];
         let mut theta_data = vec![g_nd; (rows * cols_count) as usize];
         let mut max_slope = 0.0f64;
-        for row in 0..rows {
-            for col in 0..cols_count {
-                let z = gget(row, col);
-                if z == g_nd { continue; }
-                let mut sx = 0.0f64;
-                let mut sy = 0.0f64;
-                for i in 0..8 {
-                    let zn = gget(row + sobel_dy[i], col + sobel_dx[i]);
-                    let zn = if zn == g_nd { z } else { zn };
-                    sx += zn * sobel_mx[i];
-                    sy += zn * sobel_my[i];
-                }
-                let mag = sx.hypot(sy);
-                slope_mag[(row * cols_count + col) as usize] = mag;
-                theta_data[(row * cols_count + col) as usize] = sy.atan2(sx);
-                if mag > max_slope { max_slope = mag; }
+        for (row, (row_mag, row_theta, row_max)) in sobel_rows.into_iter().enumerate() {
+            let start = row * cols_count as usize;
+            let end = start + cols_count as usize;
+            slope_mag[start..end].copy_from_slice(&row_mag);
+            theta_data[start..end].copy_from_slice(&row_theta);
+            if row_max > max_slope {
+                max_slope = row_max;
             }
         }
         // Normalise magnitude to 0–255.
@@ -8951,31 +8841,52 @@ impl Tool for CannyEdgeDetectionTool {
         coalescer.emit_unit_fraction(ctx.progress, 0.50);
 
         // ── Stage 3: Non-maximum suppression ─────────────────────────────────
-        let smget = |row: isize, col: isize| -> f64 {
-            if row < 0 || row >= rows || col < 0 || col >= cols_count { return 255.0; }
-            slope_mag[(row * cols_count + col) as usize]
-        };
+        let nms_rows: Vec<(Vec<f64>, f64)> = (0..rows)
+            .into_par_iter()
+            .map(|row| {
+                let mut row_nms = vec![0.0f64; cols_count as usize];
+                let mut row_max = 0.0f64;
+                for col in 0..cols_count {
+                    let v = slope_mag[(row * cols_count + col) as usize];
+                    if v == g_nd {
+                        continue;
+                    }
+                    let angle = theta_data[(row * cols_count + col) as usize] * 180.0 / std::f64::consts::PI;
+                    let angle = if angle < 0.0 { angle + 180.0 } else { angle };
+                    let smget = |rr: isize, cc: isize| -> f64 {
+                        if rr < 0 || rr >= rows || cc < 0 || cc >= cols_count {
+                            255.0
+                        } else {
+                            slope_mag[(rr * cols_count + cc) as usize]
+                        }
+                    };
+                    let (q, r) = if (0.0 <= angle && angle < 22.5) || (157.5 <= angle && angle <= 180.0) {
+                        (smget(row, col + 1), smget(row, col - 1))
+                    } else if 22.5 <= angle && angle < 67.5 {
+                        (smget(row + 1, col - 1), smget(row - 1, col + 1))
+                    } else if 67.5 <= angle && angle < 112.5 {
+                        (smget(row + 1, col), smget(row - 1, col))
+                    } else {
+                        (smget(row - 1, col - 1), smget(row + 1, col + 1))
+                    };
+                    if v >= q && v >= r {
+                        row_nms[col as usize] = v;
+                        if v > row_max {
+                            row_max = v;
+                        }
+                    }
+                }
+                (row_nms, row_max)
+            })
+            .collect();
         let mut max_nms = 0.0f64;
         let mut nms = vec![0.0f64; (rows * cols_count) as usize];
-        for row in 0..rows {
-            for col in 0..cols_count {
-                let v = slope_mag[(row * cols_count + col) as usize];
-                if v == g_nd { continue; }
-                let angle = theta_data[(row * cols_count + col) as usize] * 180.0 / std::f64::consts::PI;
-                let angle = if angle < 0.0 { angle + 180.0 } else { angle };
-                let (q, r) = if (0.0 <= angle && angle < 22.5) || (157.5 <= angle && angle <= 180.0) {
-                    (smget(row, col + 1), smget(row, col - 1))
-                } else if 22.5 <= angle && angle < 67.5 {
-                    (smget(row + 1, col - 1), smget(row - 1, col + 1))
-                } else if 67.5 <= angle && angle < 112.5 {
-                    (smget(row + 1, col), smget(row - 1, col))
-                } else {
-                    (smget(row - 1, col - 1), smget(row + 1, col + 1))
-                };
-                if v >= q && v >= r {
-                    nms[(row * cols_count + col) as usize] = v;
-                    if v > max_nms { max_nms = v; }
-                }
+        for (row, (row_nms, row_max)) in nms_rows.into_iter().enumerate() {
+            let start = row * cols_count as usize;
+            let end = start + cols_count as usize;
+            nms[start..end].copy_from_slice(&row_nms);
+            if row_max > max_nms {
+                max_nms = row_max;
             }
         }
         drop(slope_mag);
@@ -9024,46 +8935,49 @@ impl Tool for CannyEdgeDetectionTool {
             metadata: vec![],
         });
 
-        let out_vals: Vec<f64> = (0..(rows * cols_count) as usize)
+        let out_rows: Vec<Vec<f64>> = (0..rows)
             .into_par_iter()
-            .map(|idx| {
-                let row = (idx as isize) / cols_count;
-                let col = (idx as isize) % cols_count;
-                let v = thresh[idx];
-                let iz = get_intensity(&input, row, col);
-                if iz == nodata {
-                    out_nodata
-                } else if v == WEAK {
-                    // Hysteresis: promote weak pixels that are 8-connected to a strong pixel.
-                    let strong_nbr = tget(row + 1, col - 1) == STRONG
-                        || tget(row + 1, col) == STRONG
-                        || tget(row + 1, col + 1) == STRONG
-                        || tget(row, col - 1) == STRONG
-                        || tget(row, col + 1) == STRONG
-                        || tget(row - 1, col - 1) == STRONG
-                        || tget(row - 1, col) == STRONG
-                        || tget(row - 1, col + 1) == STRONG;
-                    if !add_back {
-                        if strong_nbr { STRONG } else { 0.0 }
-                    } else if strong_nbr {
+            .map(|row| {
+                let mut row_out = vec![out_nodata; cols_count as usize];
+                for col in 0..cols_count {
+                    let idx = (row * cols_count + col) as usize;
+                    let v = thresh[idx];
+                    let iz = get_intensity(&input, row, col);
+                    row_out[col as usize] = if iz == nodata {
+                        out_nodata
+                    } else if v == WEAK {
+                        // Hysteresis: promote weak pixels that are 8-connected to a strong pixel.
+                        let strong_nbr = tget(row + 1, col - 1) == STRONG
+                            || tget(row + 1, col) == STRONG
+                            || tget(row + 1, col + 1) == STRONG
+                            || tget(row, col - 1) == STRONG
+                            || tget(row, col + 1) == STRONG
+                            || tget(row - 1, col - 1) == STRONG
+                            || tget(row - 1, col) == STRONG
+                            || tget(row - 1, col + 1) == STRONG;
+                        if !add_back {
+                            if strong_nbr { STRONG } else { 0.0 }
+                        } else if strong_nbr {
+                            0.0
+                        } else {
+                            iz
+                        }
+                    } else if v == STRONG {
+                        if !add_back { STRONG } else { 0.0 }
+                    } else if !add_back {
                         0.0
                     } else {
                         iz
-                    }
-                } else if v == STRONG {
-                    if !add_back { STRONG } else { 0.0 }
-                } else if !add_back {
-                    0.0
-                } else {
-                    iz
+                    };
                 }
+                row_out
             })
             .collect();
 
-        for (idx, out_val) in out_vals.into_iter().enumerate() {
-            let row = (idx as isize) / cols_count;
-            let col = (idx as isize) % cols_count;
-            let _ = output.set(0, row, col, out_val);
+        for (r, row) in out_rows.iter().enumerate() {
+            output
+                .set_row_slice(0, r as isize, row)
+                .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
         }
 
         ctx.progress.progress(1.0);
@@ -9305,6 +9219,67 @@ impl Tool for EvaluateTrainingSitesTool {
         html.push_str(&format!("<strong>Num. bands</strong>: {}<br>", bands.len()));
         html.push_str("</p>");
 
+        let band_shortnames: Vec<String> = band_paths
+            .iter()
+            .map(|p| {
+                std::path::Path::new(p)
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| p.clone())
+            })
+            .collect();
+
+        html.push_str("<h2>Box-and-Whisker Plots</h2><table>");
+        for b in 0..bands.len() {
+            let mut plot_data: Vec<Vec<f64>> = Vec::with_capacity(class_names.len());
+            for (cidx, _) in class_names.iter().enumerate() {
+                let mut vals: Vec<f64> = class_pixels[cidx].iter().map(|v| v[b]).collect();
+                let (min, q1, med, q3, max, _, _) = values_to_box_row(&mut vals);
+                plot_data.push(vec![min, q1, med, q3, max]);
+            }
+
+            let graph = BoxAndWhiskerPlot {
+                parent_id: format!("graph{}", b + 1),
+                width: 600.0,
+                data: plot_data,
+                series_labels: class_names.clone(),
+                x_axis_label: "Reflectance Value".to_string(),
+                draw_gridlines: true,
+                draw_legend: true,
+                draw_grey_background: false,
+                bar_width: 25.0,
+                bar_gap: 15.0,
+                title: band_shortnames
+                    .get(b)
+                    .cloned()
+                    .unwrap_or_else(|| format!("Band {}", b + 1)),
+                show_title: true,
+            };
+
+            if b % 2 == 0 && b < bands.len() - 1 {
+                html.push_str(&format!(
+                    "<tr class=\"bareTr\"><td class=\"bareTd\" id='graph{}'>{}</td>",
+                    b + 1,
+                    graph.get_svg()
+                ));
+            } else if b % 2 == 1 {
+                html.push_str(&format!(
+                    "<td class=\"bareTd\" id='graph{}'>{}</td></tr>",
+                    b + 1,
+                    graph.get_svg()
+                ));
+            } else {
+                html.push_str(&format!(
+                    "<tr class=\"bareTr\"><td class=\"bareTd\" id='graph{}'>{}</td></tr>",
+                    b + 1,
+                    graph.get_svg()
+                ));
+            }
+            coalescer.emit_unit_fraction(ctx.progress, 0.15 + 0.35 * ((b + 1) as f64 / bands.len() as f64));
+        }
+        html.push_str("</table>");
+
         for b in 0..bands.len() {
             html.push_str(&format!("<h2>Band {}</h2>", b + 1));
             html.push_str("<table><tr><th>Class</th><th>Samples</th><th>Min</th><th>Q1</th><th>Median</th><th>Q3</th><th>Max</th><th>Mean</th><th>Std. Dev.</th></tr>");
@@ -9318,7 +9293,7 @@ impl Tool for EvaluateTrainingSitesTool {
                 ));
             }
             html.push_str("</table>");
-            coalescer.emit_unit_fraction(ctx.progress, 0.20 + 0.75 * ((b + 1) as f64 / bands.len() as f64));
+            coalescer.emit_unit_fraction(ctx.progress, 0.50 + 0.49 * ((b + 1) as f64 / bands.len() as f64));
         }
         html.push_str("</body></html>");
 
@@ -10031,6 +10006,53 @@ enum ScalingMode {
     None,
     Normalize,
     Standardize,
+}
+
+type RfClassifierModel = RandomForestClassifier<f64, u32, DenseMatrix<f64>, Vec<u32>>;
+type RfRegressorModel = RandomForestRegressor<f64, f64, DenseMatrix<f64>, Vec<f64>>;
+
+#[derive(Serialize, Deserialize)]
+struct RfClassificationModelBundle {
+    kind: String,
+    version: u8,
+    scaling: String,
+    scalers: Vec<(f64, f64)>,
+    model: RfClassifierModel,
+}
+
+#[derive(Serialize, Deserialize)]
+struct RfRegressionModelBundle {
+    kind: String,
+    version: u8,
+    scaling: String,
+    scalers: Vec<(f64, f64)>,
+    model: RfRegressorModel,
+}
+
+fn parse_model_bytes_arg(args: &ToolArgs) -> Result<Vec<u8>, ToolError> {
+    let model_bytes_arr = args
+        .get("model_bytes")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| {
+            ToolError::Validation(
+                "parameter 'model_bytes' is required and must be a list of bytes".to_string(),
+            )
+        })?;
+
+    let mut model_bytes = Vec::<u8>::with_capacity(model_bytes_arr.len());
+    for v in model_bytes_arr {
+        let b = v.as_u64().ok_or_else(|| {
+            ToolError::Validation("model_bytes must contain integer values in [0,255]".to_string())
+        })?;
+        if b > 255 {
+            return Err(ToolError::Validation(
+                "model_bytes must contain integer values in [0,255]".to_string(),
+            ));
+        }
+        model_bytes.push(b as u8);
+    }
+
+    Ok(model_bytes)
 }
 
 fn parse_scaling_mode(args: &ToolArgs) -> ScalingMode {
@@ -11402,17 +11424,23 @@ impl Tool for RandomForestClassificationFitTool {
         }
         let y_train: Vec<u32> = y_train_raw.into_iter().map(|v| v as u32).collect();
 
-        let mut payload = serde_json::Map::new();
-        payload.insert("kind".to_string(), json!("rf_classification_v1"));
-        payload.insert("scaling".to_string(), json!(scaling_mode_name(mode)));
-        payload.insert("n_trees".to_string(), json!(n_trees));
-        payload.insert("min_samples_leaf".to_string(), json!(min_samples_leaf));
-        payload.insert("min_samples_split".to_string(), json!(min_samples_split));
-        payload.insert("x_train".to_string(), json!(x_train));
-        payload.insert("y_train".to_string(), json!(y_train));
+        let x_train_matrix = dense_matrix_from_2d(&x_train, "training features")?;
+        let params = RandomForestClassifierParameters::default()
+            .with_n_trees(n_trees)
+            .with_min_samples_leaf(min_samples_leaf)
+            .with_min_samples_split(min_samples_split);
+        let model = RandomForestClassifier::fit(&x_train_matrix, &y_train, params)
+            .map_err(|e| ToolError::Execution(format!("random forest classification fit failed: {e}")))?;
 
-        let model_bytes = serde_json::to_vec(&serde_json::Value::Object(payload))
-            .map_err(|e| ToolError::Execution(format!("failed to serialize model payload: {e}")))?;
+        let bundle = RfClassificationModelBundle {
+            kind: "rf_classification_v2".to_string(),
+            version: 2,
+            scaling: scaling_mode_name(mode).to_string(),
+            scalers,
+            model,
+        };
+        let model_bytes = bincode::serde::encode_to_vec(&bundle, bincode::config::standard())
+            .map_err(|e| ToolError::Execution(format!("failed to serialize random forest model: {e}")))?;
 
         let mut outputs = BTreeMap::new();
         outputs.insert("model_bytes".to_string(), json!(model_bytes));
@@ -11452,75 +11480,112 @@ impl Tool for RandomForestClassificationPredictTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
     let coalescer = PercentCoalescer::new(1, 99);
         let output_path = parse_optional_output_path(args, "output")?;
-
-        let model_bytes_arr = args
-            .get("model_bytes")
-            .and_then(|v| v.as_array())
-            .ok_or_else(|| ToolError::Validation("parameter 'model_bytes' is required and must be a list of bytes".to_string()))?;
-        let mut model_bytes = Vec::<u8>::with_capacity(model_bytes_arr.len());
-        for v in model_bytes_arr {
-            let b = v.as_u64().ok_or_else(|| {
-                ToolError::Validation("model_bytes must contain integer values in [0,255]".to_string())
-            })?;
-            if b > 255 {
-                return Err(ToolError::Validation("model_bytes must contain integer values in [0,255]".to_string()));
-            }
-            model_bytes.push(b as u8);
-        }
-
-        let payload: serde_json::Value = serde_json::from_slice(&model_bytes)
-            .map_err(|e| ToolError::Validation(format!("failed to parse model_bytes payload: {e}")))?;
-        let kind = payload
-            .get("kind")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        if kind != "rf_classification_v1" {
-            return Err(ToolError::Validation("model_bytes payload kind is not rf_classification_v1".to_string()));
-        }
-        let mode = parse_scaling_mode_str(
-            payload
-                .get("scaling")
-                .and_then(|v| v.as_str())
-                .unwrap_or("none"),
-        );
-        let n_trees = payload
-            .get("n_trees")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(200) as u16;
-        let min_samples_leaf = payload
-            .get("min_samples_leaf")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1) as usize;
-        let min_samples_split = payload
-            .get("min_samples_split")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(2) as usize;
-
-        let x_train: Vec<Vec<f64>> = serde_json::from_value(
-            payload
-                .get("x_train")
-                .cloned()
-                .ok_or_else(|| ToolError::Validation("model_bytes payload missing x_train".to_string()))?,
-        )
-        .map_err(|e| ToolError::Validation(format!("invalid x_train in model payload: {e}")))?;
-        let y_train: Vec<u32> = serde_json::from_value(
-            payload
-                .get("y_train")
-                .cloned()
-                .ok_or_else(|| ToolError::Validation("model_bytes payload missing y_train".to_string()))?,
-        )
-        .map_err(|e| ToolError::Validation(format!("invalid y_train in model payload: {e}")))?;
-
-        let x_train_matrix = dense_matrix_from_2d(&x_train, "training features")?;
-        let params = RandomForestClassifierParameters::default()
-            .with_n_trees(n_trees.max(1))
-            .with_min_samples_leaf(min_samples_leaf.max(1))
-            .with_min_samples_split(min_samples_split.max(2));
-        let model = RandomForestClassifier::fit(&x_train_matrix, &y_train, params)
-            .map_err(|e| ToolError::Execution(format!("random forest classification model reconstruction failed: {e}")))?;
-
+        let model_bytes = parse_model_bytes_arg(args)?;
         let rasters = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
-        let scalers = build_scalers(&rasters, mode);
+
+        let (mode, scalers, model): (ScalingMode, Vec<(f64, f64)>, RfClassifierModel) =
+            match bincode::serde::decode_from_slice::<RfClassificationModelBundle, _>(
+                &model_bytes,
+                bincode::config::standard(),
+            ) {
+                Ok((bundle, _)) => {
+                    if bundle.kind != "rf_classification_v2" {
+                        return Err(ToolError::Validation(
+                            "model_bytes bundle kind is not rf_classification_v2".to_string(),
+                        ));
+                    }
+                    if bundle.scalers.len() != rasters.len() {
+                        return Err(ToolError::Validation(format!(
+                            "model expects {} predictors but inputs contains {} rasters",
+                            bundle.scalers.len(),
+                            rasters.len()
+                        )));
+                    }
+                    (
+                        parse_scaling_mode_str(&bundle.scaling),
+                        bundle.scalers,
+                        bundle.model,
+                    )
+                }
+                Err(_) => {
+                    // Backward compatibility: accept v1 payloads that stored training data.
+                    let payload: serde_json::Value = serde_json::from_slice(&model_bytes)
+                        .map_err(|e| {
+                            ToolError::Validation(format!(
+                                "failed to parse model_bytes as current or legacy payload: {e}"
+                            ))
+                        })?;
+                    let kind = payload
+                        .get("kind")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    if kind != "rf_classification_v1" {
+                        return Err(ToolError::Validation(
+                            "model_bytes payload kind is not rf_classification_v1".to_string(),
+                        ));
+                    }
+
+                    let mode = parse_scaling_mode_str(
+                        payload
+                            .get("scaling")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("none"),
+                    );
+                    let n_trees = payload
+                        .get("n_trees")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(200) as u16;
+                    let min_samples_leaf = payload
+                        .get("min_samples_leaf")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(1) as usize;
+                    let min_samples_split = payload
+                        .get("min_samples_split")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(2) as usize;
+
+                    let x_train: Vec<Vec<f64>> = serde_json::from_value(
+                        payload
+                            .get("x_train")
+                            .cloned()
+                            .ok_or_else(|| {
+                                ToolError::Validation(
+                                    "model_bytes payload missing x_train".to_string(),
+                                )
+                            })?,
+                    )
+                    .map_err(|e| {
+                        ToolError::Validation(format!("invalid x_train in model payload: {e}"))
+                    })?;
+                    let y_train: Vec<u32> = serde_json::from_value(
+                        payload
+                            .get("y_train")
+                            .cloned()
+                            .ok_or_else(|| {
+                                ToolError::Validation(
+                                    "model_bytes payload missing y_train".to_string(),
+                                )
+                            })?,
+                    )
+                    .map_err(|e| {
+                        ToolError::Validation(format!("invalid y_train in model payload: {e}"))
+                    })?;
+
+                    let x_train_matrix = dense_matrix_from_2d(&x_train, "training features")?;
+                    let params = RandomForestClassifierParameters::default()
+                        .with_n_trees(n_trees.max(1))
+                        .with_min_samples_leaf(min_samples_leaf.max(1))
+                        .with_min_samples_split(min_samples_split.max(2));
+                    let model = RandomForestClassifier::fit(&x_train_matrix, &y_train, params)
+                        .map_err(|e| {
+                            ToolError::Execution(format!(
+                                "random forest classification model reconstruction failed: {e}"
+                            ))
+                        })?;
+                    let scalers = build_scalers(&rasters, mode);
+                    (mode, scalers, model)
+                }
+            };
 
         let rows = rasters[0].rows as isize;
         let cols = rasters[0].cols as isize;
@@ -11626,17 +11691,23 @@ impl Tool for RandomForestRegressionFitTool {
             return Err(ToolError::Validation("no training samples extracted".to_string()));
         }
 
-        let mut payload = serde_json::Map::new();
-        payload.insert("kind".to_string(), json!("rf_regression_v1"));
-        payload.insert("scaling".to_string(), json!(scaling_mode_name(mode)));
-        payload.insert("n_trees".to_string(), json!(n_trees));
-        payload.insert("min_samples_leaf".to_string(), json!(min_samples_leaf));
-        payload.insert("min_samples_split".to_string(), json!(min_samples_split));
-        payload.insert("x_train".to_string(), json!(x_train));
-        payload.insert("y_train".to_string(), json!(y_train));
+        let x_train_matrix = dense_matrix_from_2d(&x_train, "training features")?;
+        let params = RandomForestRegressorParameters::default()
+            .with_n_trees(n_trees)
+            .with_min_samples_leaf(min_samples_leaf)
+            .with_min_samples_split(min_samples_split);
+        let model = RandomForestRegressor::fit(&x_train_matrix, &y_train, params)
+            .map_err(|e| ToolError::Execution(format!("random forest regression fit failed: {e}")))?;
 
-        let model_bytes = serde_json::to_vec(&serde_json::Value::Object(payload))
-            .map_err(|e| ToolError::Execution(format!("failed to serialize model payload: {e}")))?;
+        let bundle = RfRegressionModelBundle {
+            kind: "rf_regression_v2".to_string(),
+            version: 2,
+            scaling: scaling_mode_name(mode).to_string(),
+            scalers,
+            model,
+        };
+        let model_bytes = bincode::serde::encode_to_vec(&bundle, bincode::config::standard())
+            .map_err(|e| ToolError::Execution(format!("failed to serialize random forest model: {e}")))?;
 
         let mut outputs = BTreeMap::new();
         outputs.insert("model_bytes".to_string(), json!(model_bytes));
@@ -11676,75 +11747,112 @@ impl Tool for RandomForestRegressionPredictTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
     let coalescer = PercentCoalescer::new(1, 99);
         let output_path = parse_optional_output_path(args, "output")?;
-
-        let model_bytes_arr = args
-            .get("model_bytes")
-            .and_then(|v| v.as_array())
-            .ok_or_else(|| ToolError::Validation("parameter 'model_bytes' is required and must be a list of bytes".to_string()))?;
-        let mut model_bytes = Vec::<u8>::with_capacity(model_bytes_arr.len());
-        for v in model_bytes_arr {
-            let b = v.as_u64().ok_or_else(|| {
-                ToolError::Validation("model_bytes must contain integer values in [0,255]".to_string())
-            })?;
-            if b > 255 {
-                return Err(ToolError::Validation("model_bytes must contain integer values in [0,255]".to_string()));
-            }
-            model_bytes.push(b as u8);
-        }
-
-        let payload: serde_json::Value = serde_json::from_slice(&model_bytes)
-            .map_err(|e| ToolError::Validation(format!("failed to parse model_bytes payload: {e}")))?;
-        let kind = payload
-            .get("kind")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        if kind != "rf_regression_v1" {
-            return Err(ToolError::Validation("model_bytes payload kind is not rf_regression_v1".to_string()));
-        }
-        let mode = parse_scaling_mode_str(
-            payload
-                .get("scaling")
-                .and_then(|v| v.as_str())
-                .unwrap_or("none"),
-        );
-        let n_trees = payload
-            .get("n_trees")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(200) as usize;
-        let min_samples_leaf = payload
-            .get("min_samples_leaf")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1) as usize;
-        let min_samples_split = payload
-            .get("min_samples_split")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(2) as usize;
-
-        let x_train: Vec<Vec<f64>> = serde_json::from_value(
-            payload
-                .get("x_train")
-                .cloned()
-                .ok_or_else(|| ToolError::Validation("model_bytes payload missing x_train".to_string()))?,
-        )
-        .map_err(|e| ToolError::Validation(format!("invalid x_train in model payload: {e}")))?;
-        let y_train: Vec<f64> = serde_json::from_value(
-            payload
-                .get("y_train")
-                .cloned()
-                .ok_or_else(|| ToolError::Validation("model_bytes payload missing y_train".to_string()))?,
-        )
-        .map_err(|e| ToolError::Validation(format!("invalid y_train in model payload: {e}")))?;
-
-        let x_train_matrix = dense_matrix_from_2d(&x_train, "training features")?;
-        let params = RandomForestRegressorParameters::default()
-            .with_n_trees(n_trees.max(1))
-            .with_min_samples_leaf(min_samples_leaf.max(1))
-            .with_min_samples_split(min_samples_split.max(2));
-        let model = RandomForestRegressor::fit(&x_train_matrix, &y_train, params)
-            .map_err(|e| ToolError::Execution(format!("random forest regression model reconstruction failed: {e}")))?;
-
+        let model_bytes = parse_model_bytes_arg(args)?;
         let rasters = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
-        let scalers = build_scalers(&rasters, mode);
+
+        let (mode, scalers, model): (ScalingMode, Vec<(f64, f64)>, RfRegressorModel) =
+            match bincode::serde::decode_from_slice::<RfRegressionModelBundle, _>(
+                &model_bytes,
+                bincode::config::standard(),
+            ) {
+                Ok((bundle, _)) => {
+                    if bundle.kind != "rf_regression_v2" {
+                        return Err(ToolError::Validation(
+                            "model_bytes bundle kind is not rf_regression_v2".to_string(),
+                        ));
+                    }
+                    if bundle.scalers.len() != rasters.len() {
+                        return Err(ToolError::Validation(format!(
+                            "model expects {} predictors but inputs contains {} rasters",
+                            bundle.scalers.len(),
+                            rasters.len()
+                        )));
+                    }
+                    (
+                        parse_scaling_mode_str(&bundle.scaling),
+                        bundle.scalers,
+                        bundle.model,
+                    )
+                }
+                Err(_) => {
+                    // Backward compatibility: accept v1 payloads that stored training data.
+                    let payload: serde_json::Value = serde_json::from_slice(&model_bytes)
+                        .map_err(|e| {
+                            ToolError::Validation(format!(
+                                "failed to parse model_bytes as current or legacy payload: {e}"
+                            ))
+                        })?;
+                    let kind = payload
+                        .get("kind")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    if kind != "rf_regression_v1" {
+                        return Err(ToolError::Validation(
+                            "model_bytes payload kind is not rf_regression_v1".to_string(),
+                        ));
+                    }
+
+                    let mode = parse_scaling_mode_str(
+                        payload
+                            .get("scaling")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("none"),
+                    );
+                    let n_trees = payload
+                        .get("n_trees")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(200) as usize;
+                    let min_samples_leaf = payload
+                        .get("min_samples_leaf")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(1) as usize;
+                    let min_samples_split = payload
+                        .get("min_samples_split")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(2) as usize;
+
+                    let x_train: Vec<Vec<f64>> = serde_json::from_value(
+                        payload
+                            .get("x_train")
+                            .cloned()
+                            .ok_or_else(|| {
+                                ToolError::Validation(
+                                    "model_bytes payload missing x_train".to_string(),
+                                )
+                            })?,
+                    )
+                    .map_err(|e| {
+                        ToolError::Validation(format!("invalid x_train in model payload: {e}"))
+                    })?;
+                    let y_train: Vec<f64> = serde_json::from_value(
+                        payload
+                            .get("y_train")
+                            .cloned()
+                            .ok_or_else(|| {
+                                ToolError::Validation(
+                                    "model_bytes payload missing y_train".to_string(),
+                                )
+                            })?,
+                    )
+                    .map_err(|e| {
+                        ToolError::Validation(format!("invalid y_train in model payload: {e}"))
+                    })?;
+
+                    let x_train_matrix = dense_matrix_from_2d(&x_train, "training features")?;
+                    let params = RandomForestRegressorParameters::default()
+                        .with_n_trees(n_trees.max(1))
+                        .with_min_samples_leaf(min_samples_leaf.max(1))
+                        .with_min_samples_split(min_samples_split.max(2));
+                    let model = RandomForestRegressor::fit(&x_train_matrix, &y_train, params)
+                        .map_err(|e| {
+                            ToolError::Execution(format!(
+                                "random forest regression model reconstruction failed: {e}"
+                            ))
+                        })?;
+                    let scalers = build_scalers(&rasters, mode);
+                    (mode, scalers, model)
+                }
+            };
 
         let rows = rasters[0].rows as isize;
         let cols = rasters[0].cols as isize;

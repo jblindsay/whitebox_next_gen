@@ -16,9 +16,11 @@ use wbcore::{
     ToolArgs, ToolCategory, ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata,
     ToolParamDescriptor, ToolParamSpec, ToolRunResult, ToolStability,
 };
-use wbraster::{DataType, Raster, RasterConfig, RasterFormat};
+use wbraster::{DataType, NodataPolicy, Raster, RasterConfig, RasterFormat, ResampleMethod};
 
 use crate::memory_store;
+use crate::rendering::html::get_css;
+use crate::rendering::{Histogram, Scattergram};
 use crate::tools::raster_stack_validator::{
     align_and_validate_raster_stack, parse_resample_method, RasterStackConfig,
 };
@@ -141,6 +143,70 @@ fn write_or_store_output(output: Raster, output_path: Option<std::path::PathBuf>
     } else {
         let id = memory_store::put_raster(output);
         Ok(memory_store::make_raster_memory_path(&id))
+    }
+}
+
+fn parse_optional_html_report_path(args: &ToolArgs) -> Result<Option<String>, ToolError> {
+    let path_opt = args
+        .get("output")
+        .or_else(|| args.get("output_html_file"))
+        .or_else(|| args.get("output_html"));
+
+    match path_opt {
+        None => Ok(None),
+        Some(value) => {
+            let path = value
+                .as_str()
+                .ok_or_else(|| {
+                    ToolError::Validation(
+                        "HTML output path must be a string for 'output', 'output_html_file', or 'output_html'".to_string(),
+                    )
+                })?
+                .trim();
+
+            if path.is_empty() {
+                return Err(ToolError::Validation("HTML output path cannot be empty".to_string()));
+            }
+
+            if path.to_lowercase().ends_with(".html") {
+                Ok(Some(path.to_string()))
+            } else {
+                Ok(Some(format!("{path}.html")))
+            }
+        }
+    }
+}
+
+fn write_html_report(path: &str, html: &str) -> Result<String, ToolError> {
+    let output_path = std::path::Path::new(path);
+    if let Some(parent) = output_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| ToolError::Execution(format!("failed creating HTML output directory: {e}")))?;
+        }
+    }
+
+    std::fs::write(output_path, html)
+        .map_err(|e| ToolError::Execution(format!("failed writing HTML report: {e}")))?;
+
+    Ok(output_path.to_string_lossy().to_string())
+}
+
+fn html_document(title: &str, body: &str) -> String {
+    format!(
+        "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n<head>\n<meta content=\"text/html; charset=UTF-8\" http-equiv=\"content-type\">\n<title>{title}</title>{}\n</head>\n<body>\n{}\n</body>",
+        get_css(),
+        body
+    )
+}
+
+fn anova_p_string(p: f64) -> String {
+    if p == 0.0 {
+        "< .0001".to_string()
+    } else if p > 0.01 {
+        format!("{p:.4}")
+    } else {
+        format!("{p:.4e}")
     }
 }
 
@@ -555,29 +621,6 @@ where
     Ok(ToolRunResult { outputs })
 }
 
-fn collect_numeric_field_values(layer: &wbvector::Layer, field_name: &str) -> Result<Vec<f64>, ToolError> {
-    let idx = layer
-        .schema
-        .field_index(field_name)
-        .ok_or_else(|| ToolError::Validation(format!("field '{}' not found", field_name)))?;
-
-    let field_type = layer.schema.fields()[idx].field_type;
-    if !matches!(field_type, wbvector::FieldType::Integer | wbvector::FieldType::Float) {
-        return Err(ToolError::Validation(format!(
-            "field '{}' must be numeric",
-            field_name
-        )));
-    }
-
-    let mut values = Vec::<f64>::new();
-    for feat in &layer.features {
-        if let Some(v) = feat.attributes.get(idx).and_then(|v| v.as_f64()) {
-            values.push(v);
-        }
-    }
-    Ok(values)
-}
-
 fn normal_cdf(x: f64) -> f64 {
     let z = x.abs();
     let t = 1.0 / (1.0 + 0.231_641_9 * z);
@@ -832,6 +875,40 @@ fn spearman_from_pairs(x: &[f64], y: &[f64]) -> Option<(f64, usize, usize)> {
     Some((rho, n, tx + ty))
 }
 
+fn pearson_from_column_pair(columns: &[Vec<f64>], a: usize, b: usize) -> f64 {
+    let mut n = 0.0f64;
+    let mut mean_x = 0.0f64;
+    let mut mean_y = 0.0f64;
+    let mut m2_x = 0.0f64;
+    let mut m2_y = 0.0f64;
+    let mut c_xy = 0.0f64;
+
+    for i in 0..columns[a].len() {
+        let x = columns[a][i];
+        let y = columns[b][i];
+        if !x.is_finite() || !y.is_finite() {
+            continue;
+        }
+
+        let next_n = n + 1.0;
+        let dx = x - mean_x;
+        mean_x += dx / next_n;
+        let dy = y - mean_y;
+        mean_y += dy / next_n;
+
+        m2_x += dx * (x - mean_x);
+        m2_y += dy * (y - mean_y);
+        c_xy += dx * (y - mean_y);
+        n = next_n;
+    }
+
+    if n < 2.0 || m2_x <= 0.0 || m2_y <= 0.0 {
+        f64::NAN
+    } else {
+        c_xy / (m2_x * m2_y).sqrt()
+    }
+}
+
 fn kendall_tau_b_from_pairs(x: &[f64], y: &[f64]) -> Option<(f64, usize)> {
     if x.len() != y.len() || x.len() < 3 {
         return None;
@@ -1013,8 +1090,13 @@ impl Tool for RasterHistogramTool {
                     required: true,
                 },
                 ToolParamSpec {
+                    name: "output",
+                    description: "Optional HTML report output path (alias: output_html_file).",
+                    required: false,
+                },
+                ToolParamSpec {
                     name: "bins",
-                    description: "Number of histogram bins (default 256).",
+                    description: "Number of histogram bins (default log2(rows*cols)+1).",
                     required: false,
                 },
             ],
@@ -1024,11 +1106,11 @@ impl Tool for RasterHistogramTool {
     fn manifest(&self) -> ToolManifest {
         let mut defaults = ToolArgs::new();
         defaults.insert("input".to_string(), json!("input.tif"));
-        defaults.insert("bins".to_string(), json!(256));
+        defaults.insert("bins".to_string(), json!(0));
 
         let mut example = ToolArgs::new();
         example.insert("input".to_string(), json!("image.tif"));
-        example.insert("bins".to_string(), json!(256));
+        example.insert("output".to_string(), json!("raster_histogram.html"));
 
         ToolManifest {
             id: "raster_histogram".to_string(),
@@ -1043,8 +1125,13 @@ impl Tool for RasterHistogramTool {
                     required: true,
                 },
                 ToolParamDescriptor {
+                    name: "output".to_string(),
+                    description: "Optional HTML report output path (alias: output_html_file).".to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
                     name: "bins".to_string(),
-                    description: "Number of histogram bins (default 256).".to_string(),
+                    description: "Number of histogram bins (default log2(rows*cols)+1).".to_string(),
                     required: false,
                 },
             ],
@@ -1061,18 +1148,22 @@ impl Tool for RasterHistogramTool {
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = parse_raster_path_arg(args, "input")?;
+        let _ = parse_optional_html_report_path(args)?;
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_raster_path_arg(args, "input")?;
+        let html_output_path = parse_optional_html_report_path(args)?;
+        let input = load_raster(&input_path, "input")?;
+
+        let default_bins = ((input.rows * input.cols) as f64).log2().ceil() as usize + 1;
         let bins = args
             .get("bins")
             .and_then(|v| v.as_u64())
-            .map(|v| v as usize)
-            .unwrap_or(256)
+            .map(|v| if v == 0 { default_bins } else { v as usize })
+            .unwrap_or(default_bins)
             .max(2);
-        let input = load_raster(&input_path, "input")?;
 
         let values = collect_valid_values(&input);
 
@@ -1114,15 +1205,40 @@ impl Tool for RasterHistogramTool {
             );
 
         let report = json!({
+            "input": input_path,
             "min": min_val,
             "max": max_val,
             "bins": bins,
+            "bin_width": range / bins as f64,
             "counts": counts,
         })
         .to_string();
 
         let mut outputs = BTreeMap::new();
         outputs.insert("report".to_string(), json!(report));
+
+        if let Some(path) = html_output_path {
+            let histo = Histogram {
+                parent_id: "histo".to_string(),
+                width: 700.0,
+                height: 500.0,
+                freq_data: counts.clone(),
+                min_bin_val: min_val,
+                bin_width: range / bins as f64,
+                x_axis_label: "Image Value (X)".to_string(),
+                cumulative: false,
+            };
+
+            let body = format!(
+                "<h1>Histogram Analysis</h1><p><strong>Image</strong>: {}</p><div id='histo' align=\"center\">{}</div>",
+                input_path,
+                histo.get_svg()
+            );
+            let html = html_document("Histogram Analysis", &body);
+            let written = write_html_report(&path, &html)?;
+            outputs.insert("report_html".to_string(), json!(written));
+        }
+
         Ok(ToolRunResult { outputs })
     }
 }
@@ -1132,7 +1248,7 @@ impl Tool for ListUniqueValuesRasterTool {
         ToolMetadata {
             id: "list_unique_values_raster",
             display_name: "List Unique Values (Raster)",
-            summary: "Lists unique valid values in a raster (capped to protect memory).",
+            summary: "Lists unique valid raster categories and their frequencies.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1142,8 +1258,13 @@ impl Tool for ListUniqueValuesRasterTool {
                     required: true,
                 },
                 ToolParamSpec {
+                    name: "strict_parity",
+                    description: "When true, return complete category-frequency output (default true).",
+                    required: false,
+                },
+                ToolParamSpec {
                     name: "max_values",
-                    description: "Maximum unique values to include in output (default 10000).",
+                    description: "Maximum unique values to include when strict_parity is false (default 10000).",
                     required: false,
                 },
             ],
@@ -1153,16 +1274,17 @@ impl Tool for ListUniqueValuesRasterTool {
     fn manifest(&self) -> ToolManifest {
         let mut defaults = ToolArgs::new();
         defaults.insert("input".to_string(), json!("input.tif"));
+        defaults.insert("strict_parity".to_string(), json!(true));
         defaults.insert("max_values".to_string(), json!(10000));
 
         let mut example = ToolArgs::new();
         example.insert("input".to_string(), json!("classified.tif"));
-        example.insert("max_values".to_string(), json!(5000));
+        example.insert("strict_parity".to_string(), json!(true));
 
         ToolManifest {
             id: "list_unique_values_raster".to_string(),
             display_name: "List Unique Values (Raster)".to_string(),
-            summary: "Lists unique valid values in a raster (capped to protect memory).".to_string(),
+            summary: "Lists unique valid raster categories and their frequencies.".to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1172,8 +1294,13 @@ impl Tool for ListUniqueValuesRasterTool {
                     required: true,
                 },
                 ToolParamDescriptor {
+                    name: "strict_parity".to_string(),
+                    description: "When true, return complete category-frequency output (default true).".to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
                     name: "max_values".to_string(),
-                    description: "Maximum unique values to include in output (default 10000).".to_string(),
+                    description: "Maximum unique values to include when strict_parity is false (default 10000).".to_string(),
                     required: false,
                 },
             ],
@@ -1195,6 +1322,10 @@ impl Tool for ListUniqueValuesRasterTool {
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_raster_path_arg(args, "input")?;
+        let strict_parity = args
+            .get("strict_parity")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
         let max_values = args
             .get("max_values")
             .and_then(|v| v.as_u64())
@@ -1203,13 +1334,63 @@ impl Tool for ListUniqueValuesRasterTool {
             .max(1);
         let input = load_raster(&input_path, "input")?;
 
+        let mut outputs = BTreeMap::new();
+
+        if strict_parity {
+            let freqs_hash = (0..input.data.len())
+                .into_par_iter()
+                .fold(
+                    HashMap::<i64, usize>::new,
+                    |mut local, i| {
+                        let z = input.data.get_f64(i);
+                        if !input.is_nodata(z) {
+                            let category = z as i64;
+                            *local.entry(category).or_insert(0) += 1;
+                        }
+                        local
+                    },
+                )
+                .reduce(
+                    HashMap::<i64, usize>::new,
+                    |mut acc, local| {
+                        for (k, v) in local {
+                            *acc.entry(k).or_insert(0) += v;
+                        }
+                        acc
+                    },
+                );
+
+            let mut freqs = BTreeMap::<i64, usize>::new();
+            for (k, v) in freqs_hash {
+                freqs.insert(k, v);
+            }
+
+            let frequencies: Vec<(i64, usize)> = freqs.iter().map(|(k, v)| (*k, *v)).collect();
+            let mut table_csv = String::from("Category,Frequency\n");
+            for (category, count) in &frequencies {
+                table_csv.push_str(&format!("{},{}\n", category, count));
+            }
+
+            let report = json!({
+                "mode": "strict_parity",
+                "count": frequencies.len(),
+                "frequencies": frequencies,
+                "truncated": false,
+            })
+            .to_string();
+
+            outputs.insert("report".to_string(), json!(report));
+            outputs.insert("table_csv".to_string(), json!(table_csv));
+            return Ok(ToolRunResult { outputs });
+        }
+
         let mut set = BTreeSet::<i64>::new();
         for i in 0..input.data.len() {
             let z = input.data.get_f64(i);
             if input.is_nodata(z) {
                 continue;
             }
-            set.insert(z.round() as i64);
+            set.insert(z as i64);
             if set.len() >= max_values {
                 break;
             }
@@ -1217,13 +1398,13 @@ impl Tool for ListUniqueValuesRasterTool {
 
         let values: Vec<i64> = set.into_iter().collect();
         let report = json!({
+            "mode": "capped_values",
             "count": values.len(),
             "values": values,
             "truncated": values.len() >= max_values,
         })
         .to_string();
 
-        let mut outputs = BTreeMap::new();
         outputs.insert("report".to_string(), json!(report));
         Ok(ToolRunResult { outputs })
     }
@@ -2150,6 +2331,7 @@ impl Tool for CrispnessIndexTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "input", description: "Input raster path.", required: true },
+                ToolParamSpec { name: "output", description: "Optional HTML report output path.", required: false },
             ],
         }
     }
@@ -2160,6 +2342,7 @@ impl Tool for CrispnessIndexTool {
 
         let mut example = ToolArgs::new();
         example.insert("input".to_string(), json!("membership.tif"));
+        example.insert("output".to_string(), json!("crispness_report.html"));
 
         ToolManifest {
             id: "crispness_index".to_string(),
@@ -2171,6 +2354,10 @@ impl Tool for CrispnessIndexTool {
                 name: "input".to_string(),
                 description: "Input raster path.".to_string(),
                 required: true,
+            }, ToolParamDescriptor {
+                name: "output".to_string(),
+                description: "Optional HTML report output path (alias: output_html_file).".to_string(),
+                required: false,
             }],
             defaults,
             examples: vec![ToolExample {
@@ -2185,11 +2372,13 @@ impl Tool for CrispnessIndexTool {
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = parse_raster_path_arg(args, "input")?;
+        let _ = parse_optional_html_report_path(args)?;
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_raster_path_arg(args, "input")?;
+        let html_output_path = parse_optional_html_report_path(args)?;
         let input = load_raster(&input_path, "input")?;
 
         let (count, sum, warning) = (0..input.data.len())
@@ -2240,6 +2429,26 @@ impl Tool for CrispnessIndexTool {
 
         let mut outputs = BTreeMap::new();
         outputs.insert("report".to_string(), json!(report));
+
+        if let Some(path) = html_output_path {
+            let warning_html = if warning {
+                "<p><strong>WARNING</strong>: This tool is intended to be applied to membership probability (MP) rasters, with probability values ranging from 0-1. The input image contains values outside this range. <em>Therefore, it is unlikely that the results are meaningful</em>.</p>"
+            } else {
+                ""
+            };
+            let body = format!(
+                "<h1>Crispness Index Report</h1>\n<p><strong>Input file</strong>: {}</p>\n{}\n<br><table align=\"center\">\n<tr><td><em>SS<sub>mp</sub></em></td><td class=\"numberCell\">{:.4}</td></tr>\n<tr><td><em>SS<sub>B</sub></em></td><td class=\"numberCell\">{:.4}</td></tr>\n<tr><td><em>C</em></td><td class=\"numberCell\">{:.4}</td></tr>\n</table>",
+                input_path,
+                warning_html,
+                ss_mp,
+                ss_b,
+                crispness
+            );
+            let html = html_document("Crispness Index", &body);
+            let written = write_html_report(&path, &html)?;
+            outputs.insert("report_html".to_string(), json!(written));
+        }
+
         Ok(ToolRunResult { outputs })
     }
 }
@@ -2255,6 +2464,7 @@ impl Tool for KsNormalityTestTool {
             params: vec![
                 ToolParamSpec { name: "input", description: "Input raster path.", required: true },
                 ToolParamSpec { name: "num_samples", description: "Optional random sample size. Omit to use all valid cells.", required: false },
+                ToolParamSpec { name: "output", description: "Optional HTML report output path (alias: output_html_file).", required: false },
             ],
         }
     }
@@ -2276,6 +2486,7 @@ impl Tool for KsNormalityTestTool {
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Input raster path.".to_string(), required: true },
                 ToolParamDescriptor { name: "num_samples".to_string(), description: "Optional random sample size. Omit to use all valid cells.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Optional HTML report output path (alias: output_html_file).".to_string(), required: false },
             ],
             defaults,
             examples: vec![ToolExample {
@@ -2290,11 +2501,13 @@ impl Tool for KsNormalityTestTool {
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = parse_raster_path_arg(args, "input")?;
+        let _ = parse_optional_html_report_path(args)?;
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_raster_path_arg(args, "input")?;
+        let html_output_path = parse_optional_html_report_path(args)?;
         let requested_samples = args.get("num_samples").and_then(|v| v.as_u64()).map(|v| v as usize);
         let input = load_raster(&input_path, "input")?;
 
@@ -2403,6 +2616,64 @@ impl Tool for KsNormalityTestTool {
 
         let mut outputs = BTreeMap::new();
         outputs.insert("report".to_string(), json!(report));
+
+        if let Some(path) = html_output_path {
+            let fd_num_bins = ((values.len() as f64).log2().ceil() as usize + 1).max(2);
+            let value_range = (max_value - min_value).max(1.0e-9);
+            let fd_bin_width = value_range / fd_num_bins as f64;
+            let mut freq_data = vec![0usize; fd_num_bins];
+            for z in &values {
+                let idx = (((*z - min_value) / fd_bin_width).floor() as isize)
+                    .clamp(0, fd_num_bins as isize - 1) as usize;
+                freq_data[idx] += 1;
+            }
+
+            let p_value_str = if p_value > 0.001 {
+                format!("{p_value:.4}")
+            } else {
+                "&lt;0.001".to_string()
+            };
+
+            let result_str = if p_value < 0.05 {
+                "The test <strong>rejects</strong> the null hypothesis that the values come from a normal distribution."
+            } else {
+                "The test <strong>fails to reject</strong> the null hypothesis that the values come from a normal distribution."
+            };
+
+            let histo = Histogram {
+                parent_id: "histo".to_string(),
+                width: 700.0,
+                height: 500.0,
+                freq_data,
+                min_bin_val: min_value,
+                bin_width: fd_bin_width,
+                x_axis_label: "Value".to_string(),
+                cumulative: true,
+            };
+
+            let body = format!(
+                "<h1>Kolmogorov-Smirnov (K-S) Test for Normality Report</h1>\
+                 <p><strong>Input image</strong>: {}<br>\
+                 <strong>Sample size (N)</strong>: {:.0}<br>\
+                 <strong>Test Statistic (D<sub>max</sub>)</strong>: {:.4}<br>\
+                 <strong>Significance (p-value)</strong>: {}<br>\
+                 <strong>Result</strong>: {}\
+                 </p>\
+                 <p><strong>Caveat</strong>: Given a sufficiently large sample, extremely small and non-notable differences can be found to be statistically significant, and statistical significance says nothing about the practical significance of a difference.</p>\
+                 <div id='histo' align=\"center\">{}</div>",
+                input_path,
+                n,
+                dmax,
+                p_value_str,
+                result_str,
+                histo.get_svg()
+            );
+
+            let html = html_document("K-S Test for Normality", &body);
+            let written = write_html_report(&path, &html)?;
+            outputs.insert("report_html".to_string(), json!(written));
+        }
+
         Ok(ToolRunResult { outputs })
     }
 }
@@ -2624,6 +2895,7 @@ impl Tool for AttributeHistogramTool {
             params: vec![
                 ToolParamSpec { name: "input", description: "Input vector path.", required: true },
                 ToolParamSpec { name: "field", description: "Numeric attribute field name.", required: true },
+                ToolParamSpec { name: "output", description: "Optional HTML report output path.", required: false },
             ],
         }
     }
@@ -2635,6 +2907,7 @@ impl Tool for AttributeHistogramTool {
         let mut example = ToolArgs::new();
         example.insert("input".to_string(), json!("lakes.shp"));
         example.insert("field".to_string(), json!("HEIGHT"));
+        example.insert("output".to_string(), json!("attribute_histogram.html"));
         ToolManifest {
             id: "attribute_histogram".to_string(),
             display_name: "Attribute Histogram".to_string(),
@@ -2644,6 +2917,7 @@ impl Tool for AttributeHistogramTool {
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Input vector path.".to_string(), required: true },
                 ToolParamDescriptor { name: "field".to_string(), description: "Numeric attribute field name.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Optional HTML report output path (alias: output_html_file).".to_string(), required: false },
             ],
             defaults,
             examples: vec![ToolExample {
@@ -2662,30 +2936,50 @@ impl Tool for AttributeHistogramTool {
             .get("field")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::Validation("parameter 'field' is required".to_string()))?;
+        let _ = parse_optional_html_report_path(args)?;
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_vector_path_arg(args, "input")?;
+        let html_output_path = parse_optional_html_report_path(args)?;
         let field = args
             .get("field")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::Validation("parameter 'field' is required".to_string()))?;
 
         let layer = load_vector(&input_path, "input")?;
-        let values = collect_numeric_field_values(&layer, field)?;
-        if values.is_empty() {
+        let field_idx = layer
+            .schema
+            .field_index(field)
+            .ok_or_else(|| ToolError::Validation(format!("field '{}' not found", field)))?;
+        let field_type = layer.schema.fields()[field_idx].field_type;
+        if !matches!(field_type, wbvector::FieldType::Integer | wbvector::FieldType::Float) {
+            return Err(ToolError::Validation(format!("field '{}' must be numeric", field)));
+        }
+
+        let mut min = f64::INFINITY;
+        let mut max = f64::NEG_INFINITY;
+        let mut valid_count = 0usize;
+        for feat in &layer.features {
+            if let Some(v) = feat.attributes.get(field_idx).and_then(|v| v.as_f64()) {
+                min = min.min(v);
+                max = max.max(v);
+                valid_count += 1;
+            }
+        }
+        if valid_count == 0 {
             return Err(ToolError::Validation("field contains no numeric values".to_string()));
         }
 
-        let min = values.iter().copied().fold(f64::INFINITY, |a, b| a.min(b));
-        let max = values.iter().copied().fold(f64::NEG_INFINITY, |a, b| a.max(b));
-        let num_bins = (values.len() as f64).log2().ceil().max(1.0) as usize + 1;
+        let num_bins = (valid_count as f64).log2().ceil().max(1.0) as usize + 1;
         let width = (max - min + 1.0e-5) / num_bins as f64;
         let mut counts = vec![0usize; num_bins];
-        for v in values {
-            let idx = (((v - min) / width).floor() as isize).clamp(0, num_bins as isize - 1) as usize;
-            counts[idx] += 1;
+        for feat in &layer.features {
+            if let Some(v) = feat.attributes.get(field_idx).and_then(|v| v.as_f64()) {
+                let idx = (((v - min) / width).floor() as isize).clamp(0, num_bins as isize - 1) as usize;
+                counts[idx] += 1;
+            }
         }
 
         let report = json!({
@@ -2701,6 +2995,29 @@ impl Tool for AttributeHistogramTool {
 
         let mut outputs = BTreeMap::new();
         outputs.insert("report".to_string(), json!(report));
+
+        if let Some(path) = html_output_path {
+            let histo = Histogram {
+                parent_id: "histo".to_string(),
+                width: 700.0,
+                height: 500.0,
+                freq_data: counts,
+                min_bin_val: min,
+                bin_width: width,
+                x_axis_label: field.to_string(),
+                cumulative: false,
+            };
+            let body = format!(
+                "<h1>Histogram Analysis</h1>\n<p><strong>Input</strong>: {}</p>\n<p><strong>Field Name</strong>: {}</p>\n<div id='histo' align=\"center\">{}</div>",
+                input_path,
+                field,
+                histo.get_svg()
+            );
+            let html = html_document("Histogram Analysis", &body);
+            let written = write_html_report(&path, &html)?;
+            outputs.insert("report_html".to_string(), json!(written));
+        }
+
         Ok(ToolRunResult { outputs })
     }
 }
@@ -2718,6 +3035,7 @@ impl Tool for AttributeScattergramTool {
                 ToolParamSpec { name: "fieldx", description: "Numeric x-axis field name.", required: true },
                 ToolParamSpec { name: "fieldy", description: "Numeric y-axis field name.", required: true },
                 ToolParamSpec { name: "trendline", description: "Include trendline summary (default false).", required: false },
+                ToolParamSpec { name: "output", description: "Optional HTML report output path.", required: false },
             ],
         }
     }
@@ -2733,6 +3051,7 @@ impl Tool for AttributeScattergramTool {
         example.insert("fieldx".to_string(), json!("HEIGHT"));
         example.insert("fieldy".to_string(), json!("AREA"));
         example.insert("trendline".to_string(), json!(true));
+        example.insert("output".to_string(), json!("attribute_scattergram.html"));
         ToolManifest {
             id: "attribute_scattergram".to_string(),
             display_name: "Attribute Scattergram".to_string(),
@@ -2744,6 +3063,7 @@ impl Tool for AttributeScattergramTool {
                 ToolParamDescriptor { name: "fieldx".to_string(), description: "Numeric x-axis field name.".to_string(), required: true },
                 ToolParamDescriptor { name: "fieldy".to_string(), description: "Numeric y-axis field name.".to_string(), required: true },
                 ToolParamDescriptor { name: "trendline".to_string(), description: "Include trendline summary (default false).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Optional HTML report output path (alias: output_html_file).".to_string(), required: false },
             ],
             defaults,
             examples: vec![ToolExample {
@@ -2760,11 +3080,13 @@ impl Tool for AttributeScattergramTool {
         let _ = parse_vector_path_arg(args, "input")?;
         let _ = args.get("fieldx").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'fieldx' is required".to_string()))?;
         let _ = args.get("fieldy").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'fieldy' is required".to_string()))?;
+        let _ = parse_optional_html_report_path(args)?;
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_vector_path_arg(args, "input")?;
+        let html_output_path = parse_optional_html_report_path(args)?;
         let fieldx = args.get("fieldx").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'fieldx' is required".to_string()))?;
         let fieldy = args.get("fieldy").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'fieldy' is required".to_string()))?;
         let trendline = args.get("trendline").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -2800,26 +3122,48 @@ impl Tool for AttributeScattergramTool {
             return Err(ToolError::Validation("no valid paired numeric values found".to_string()));
         }
 
-        let n = xs.len() as f64;
-        let (sum_x, sum_y) = xs
-            .par_iter()
-            .zip(ys.par_iter())
-            .map(|(x, y)| (*x, *y))
-            .reduce(|| (0.0f64, 0.0f64), |a, b| (a.0 + b.0, a.1 + b.1));
-        let mean_x = sum_x / n;
-        let mean_y = sum_y / n;
-        let (sxx, syy, sxy) = xs
+        let (n, sum_x, sum_y, sum_x2, sum_y2, sum_xy, x_min, x_max, y_min, y_max) = xs
             .par_iter()
             .zip(ys.par_iter())
             .map(|(x, y)| {
-                let dx = *x - mean_x;
-                let dy = *y - mean_y;
-                (dx * dx, dy * dy, dx * dy)
+                (1usize, *x, *y, *x * *x, *y * *y, *x * *y, *x, *x, *y, *y)
             })
             .reduce(
-                || (0.0f64, 0.0f64, 0.0f64),
-                |a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2),
+                || {
+                    (
+                        0usize,
+                        0.0f64,
+                        0.0f64,
+                        0.0f64,
+                        0.0f64,
+                        0.0f64,
+                        f64::INFINITY,
+                        f64::NEG_INFINITY,
+                        f64::INFINITY,
+                        f64::NEG_INFINITY,
+                    )
+                },
+                |a, b| {
+                    (
+                        a.0 + b.0,
+                        a.1 + b.1,
+                        a.2 + b.2,
+                        a.3 + b.3,
+                        a.4 + b.4,
+                        a.5 + b.5,
+                        a.6.min(b.6),
+                        a.7.max(b.7),
+                        a.8.min(b.8),
+                        a.9.max(b.9),
+                    )
+                },
             );
+        let n_f64 = n as f64;
+        let mean_x = sum_x / n_f64;
+        let mean_y = sum_y / n_f64;
+        let sxx = sum_x2 - (sum_x * sum_x) / n_f64;
+        let syy = sum_y2 - (sum_y * sum_y) / n_f64;
+        let sxy = sum_xy - (sum_x * sum_y) / n_f64;
         let correlation = if sxx > 0.0 && syy > 0.0 {
             sxy / (sxx * syy).sqrt()
         } else {
@@ -2832,23 +3176,6 @@ impl Tool for AttributeScattergramTool {
         } else {
             (None, None)
         };
-
-        let (x_min, x_max) = xs
-            .par_iter()
-            .copied()
-            .map(|v| (v, v))
-            .reduce(
-                || (f64::INFINITY, f64::NEG_INFINITY),
-                |a, b| (a.0.min(b.0), a.1.max(b.1)),
-            );
-        let (y_min, y_max) = ys
-            .par_iter()
-            .copied()
-            .map(|v| (v, v))
-            .reduce(
-                || (f64::INFINITY, f64::NEG_INFINITY),
-                |a, b| (a.0.min(b.0), a.1.max(b.1)),
-            );
 
         let report = json!({
             "input": input_path,
@@ -2868,6 +3195,35 @@ impl Tool for AttributeScattergramTool {
 
         let mut outputs = BTreeMap::new();
         outputs.insert("report".to_string(), json!(report));
+
+        if let Some(path) = html_output_path {
+            let graph = Scattergram {
+                parent_id: "graph".to_string(),
+                width: 700.0,
+                height: 500.0,
+                data_x: vec![xs],
+                data_y: vec![ys],
+                series_labels: vec![format!("Series {} - {}", fieldx, fieldy)],
+                x_axis_label: fieldx.to_string(),
+                y_axis_label: fieldy.to_string(),
+                draw_trendline: trendline,
+                draw_gridlines: true,
+                draw_legend: false,
+                draw_grey_background: false,
+            };
+
+            let body = format!(
+                "<h1>Scatergram Analysis</h1>\n<p><strong>Input</strong>: {}</p>\n<p><strong>X Field Name</strong>: {}</p>\n<p><strong>Y Field Name</strong>: {}</p>\n<div id='graph' align=\"center\">{}</div>",
+                input_path,
+                fieldx,
+                fieldy,
+                graph.get_svg()
+            );
+            let html = html_document("Scattergram Analysis", &body);
+            let written = write_html_report(&path, &html)?;
+            outputs.insert("report_html".to_string(), json!(written));
+        }
+
         Ok(ToolRunResult { outputs })
     }
 }
@@ -2884,6 +3240,10 @@ impl Tool for AttributeCorrelationTool {
                 name: "input",
                 description: "Input vector path.",
                 required: true,
+            }, ToolParamSpec {
+                name: "output",
+                description: "Optional HTML report output path.",
+                required: false,
             }],
         }
     }
@@ -2893,6 +3253,7 @@ impl Tool for AttributeCorrelationTool {
         defaults.insert("input".to_string(), json!("data.shp"));
         let mut example = ToolArgs::new();
         example.insert("input".to_string(), json!("data.shp"));
+        example.insert("output".to_string(), json!("attribute_correlation.html"));
         ToolManifest {
             id: "attribute_correlation".to_string(),
             display_name: "Attribute Correlation".to_string(),
@@ -2903,6 +3264,10 @@ impl Tool for AttributeCorrelationTool {
                 name: "input".to_string(),
                 description: "Input vector path.".to_string(),
                 required: true,
+            }, ToolParamDescriptor {
+                name: "output".to_string(),
+                description: "Optional HTML report output path (alias: output_html_file).".to_string(),
+                required: false,
             }],
             defaults,
             examples: vec![ToolExample {
@@ -2917,11 +3282,13 @@ impl Tool for AttributeCorrelationTool {
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = parse_vector_path_arg(args, "input")?;
+        let _ = parse_optional_html_report_path(args)?;
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_vector_path_arg(args, "input")?;
+        let html_output_path = parse_optional_html_report_path(args)?;
         let layer = load_vector(&input_path, "input")?;
 
         let mut numeric_indices = Vec::<usize>::new();
@@ -2950,20 +3317,7 @@ impl Tool for AttributeCorrelationTool {
             .map(|a| {
                 let mut local = Vec::with_capacity(a);
                 for b in 0..a {
-                    let mut xs = Vec::new();
-                    let mut ys = Vec::new();
-                    for i in 0..columns[a].len() {
-                        let x = columns[a][i];
-                        let y = columns[b][i];
-                        if x.is_finite() && y.is_finite() {
-                            xs.push(x);
-                            ys.push(y);
-                        }
-                    }
-
-                    let corr = pearson_from_pairs(&xs, &ys)
-                        .map(|(r, _)| r)
-                        .unwrap_or(f64::NAN);
+                    let corr = pearson_from_column_pair(&columns, a, b);
 
                     local.push((a, b, corr));
                 }
@@ -2988,6 +3342,42 @@ impl Tool for AttributeCorrelationTool {
 
         let mut outputs = BTreeMap::new();
         outputs.insert("report".to_string(), json!(report));
+
+        if let Some(path) = html_output_path {
+            let mut attributes = String::new();
+            for (i, name) in field_names.iter().enumerate() {
+                attributes.push_str(&format!("<strong>Field {}</strong>: {}<br>", i + 1, name));
+            }
+
+            let mut table = String::from("<table align=\"center\"><caption>Pearson correlation matrix</caption><tr><th></th>");
+            for i in 0..field_names.len() {
+                table.push_str(&format!("<th>Field {}</th>", i + 1));
+            }
+            table.push_str("</tr>");
+
+            for (row_idx, row) in matrix.iter().enumerate() {
+                table.push_str(&format!("<tr><td><strong>Field {}</strong></td>", row_idx + 1));
+                for value in row {
+                    if value.is_finite() {
+                        table.push_str(&format!("<td>{:.4}</td>", value));
+                    } else {
+                        table.push_str("<td></td>");
+                    }
+                }
+                table.push_str("</tr>");
+            }
+            table.push_str("</table>");
+
+            let body = format!(
+                "<h1>Attributes Correlation Report</h1>\n<p><strong>Attributes</strong>:<br>{}</p>\n<br>{}",
+                attributes,
+                table
+            );
+            let html = html_document("Attribute Correlation", &body);
+            let written = write_html_report(&path, &html)?;
+            outputs.insert("report_html".to_string(), json!(written));
+        }
+
         Ok(ToolRunResult { outputs })
     }
 }
@@ -3003,6 +3393,7 @@ impl Tool for CrossTabulationTool {
             params: vec![
                 ToolParamSpec { name: "input1", description: "Input raster 1 path.", required: true },
                 ToolParamSpec { name: "input2", description: "Input raster 2 path.", required: true },
+                ToolParamSpec { name: "output", description: "Optional HTML report output path.", required: false },
             ],
         }
     }
@@ -3014,6 +3405,7 @@ impl Tool for CrossTabulationTool {
         let mut example = ToolArgs::new();
         example.insert("input1".to_string(), json!("class_2000.tif"));
         example.insert("input2".to_string(), json!("class_2020.tif"));
+        example.insert("output".to_string(), json!("cross_tabulation.html"));
         ToolManifest {
             id: "cross_tabulation".to_string(),
             display_name: "Cross Tabulation".to_string(),
@@ -3023,6 +3415,7 @@ impl Tool for CrossTabulationTool {
             params: vec![
                 ToolParamDescriptor { name: "input1".to_string(), description: "Input raster 1 path.".to_string(), required: true },
                 ToolParamDescriptor { name: "input2".to_string(), description: "Input raster 2 path.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Optional HTML report output path (alias: output_html_file).".to_string(), required: false },
             ],
             defaults,
             examples: vec![ToolExample {
@@ -3038,12 +3431,14 @@ impl Tool for CrossTabulationTool {
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = parse_raster_path_arg(args, "input1")?;
         let _ = parse_raster_path_arg(args, "input2")?;
+        let _ = parse_optional_html_report_path(args)?;
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input1_path = parse_raster_path_arg(args, "input1")?;
         let input2_path = parse_raster_path_arg(args, "input2")?;
+        let html_output_path = parse_optional_html_report_path(args)?;
 
         let in1 = load_raster(&input1_path, "input1")?;
         let in2 = load_raster(&input2_path, "input2")?;
@@ -3106,6 +3501,34 @@ impl Tool for CrossTabulationTool {
 
         let mut outputs = BTreeMap::new();
         outputs.insert("report".to_string(), json!(report));
+
+        if let Some(path) = html_output_path {
+            let mut table_html = String::from("<div><table align=\"center\"><caption>Cross Tabulation Results</caption><tr><td></td>");
+            for class in &cols {
+                table_html.push_str(&format!("<td class=\"header\">{}</td>", class));
+            }
+            table_html.push_str("</tr>");
+
+            for (ri, row_class) in rows.iter().enumerate() {
+                table_html.push_str(&format!("<tr><td class=\"header\">{}</td>", row_class));
+                for value in &table[ri] {
+                    table_html.push_str(&format!("<td class=\"numberCell\">{}</td>", value));
+                }
+                table_html.push_str("</tr>");
+            }
+            table_html.push_str("</table></div>");
+
+            let body = format!(
+                "<h1>Cross Tabulation Report</h1>\n<p><strong>Image 1</strong> (columns): {}</p>\n<p><strong>Image 2</strong> (rows): {}</p>\n{}",
+                input1_path,
+                input2_path,
+                table_html
+            );
+            let html = html_document("Cross Tabulation", &body);
+            let written = write_html_report(&path, &html)?;
+            outputs.insert("report_html".to_string(), json!(written));
+        }
+
         Ok(ToolRunResult { outputs })
     }
 }
@@ -3121,6 +3544,7 @@ impl Tool for AnovaTool {
             params: vec![
                 ToolParamSpec { name: "input", description: "Measurement raster path.", required: true },
                 ToolParamSpec { name: "features", description: "Class/category raster path.", required: true },
+                ToolParamSpec { name: "output", description: "Optional HTML report output path.", required: false },
             ],
         }
     }
@@ -3132,6 +3556,7 @@ impl Tool for AnovaTool {
         let mut example = ToolArgs::new();
         example.insert("input".to_string(), json!("data.tif"));
         example.insert("features".to_string(), json!("classes.tif"));
+        example.insert("output".to_string(), json!("anova.html"));
 
         ToolManifest {
             id: "anova".to_string(),
@@ -3142,6 +3567,7 @@ impl Tool for AnovaTool {
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Measurement raster path.".to_string(), required: true },
                 ToolParamDescriptor { name: "features".to_string(), description: "Class/category raster path.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Optional HTML report output path (alias: output_html_file).".to_string(), required: false },
             ],
             defaults,
             examples: vec![ToolExample {
@@ -3157,12 +3583,14 @@ impl Tool for AnovaTool {
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = parse_raster_path_arg(args, "input")?;
         let _ = parse_raster_path_arg(args, "features")?;
+        let _ = parse_optional_html_report_path(args)?;
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_raster_path_arg(args, "input")?;
         let feature_path = parse_raster_path_arg(args, "features")?;
+        let html_output_path = parse_optional_html_report_path(args)?;
 
         let input = load_raster(&input_path, "input")?;
         let features = load_raster(&feature_path, "features")?;
@@ -3229,6 +3657,7 @@ impl Tool for AnovaTool {
         let mut ss_b = 0.0f64;
         let mut ss_w = overall_sum_sqr;
         let mut groups_json = Vec::new();
+        let mut group_rows = Vec::new();
         for (class_id, (n, sum, sum_sqr)) in &class_stats {
             let mean = *sum / *n as f64;
             let variance = if *n > 1 {
@@ -3246,6 +3675,7 @@ impl Tool for AnovaTool {
                 "mean": mean,
                 "std_dev": variance.max(0.0).sqrt(),
             }));
+            group_rows.push((*class_id, *n, mean, variance.max(0.0).sqrt()));
         }
 
         let num_classes = class_stats.len();
@@ -3287,6 +3717,76 @@ impl Tool for AnovaTool {
 
         let mut outputs = BTreeMap::new();
         outputs.insert("report".to_string(), json!(report));
+
+        if let Some(path) = html_output_path {
+            let mut group_summary = String::from(
+                "<br><table align=\"center\"><caption>Group Summaries</caption><tr><th class=\"headerCell\">Group</th><th class=\"headerCell\">N</th><th class=\"headerCell\">Mean</th><th class=\"headerCell\">St. Dev.</th></tr>",
+            );
+            for (class_id, n, mean, std_dev) in &group_rows {
+                group_summary.push_str(&format!(
+                    "<tr><td class=\"numberCell\">{}</td><td class=\"numberCell\">{}</td><td class=\"numberCell\">{:.4}</td><td class=\"numberCell\">{:.4}</td></tr>",
+                    class_id,
+                    n,
+                    mean,
+                    std_dev
+                ));
+            }
+            group_summary.push_str(&format!(
+                "<tr><td class=\"numberCell\">Overall</td><td class=\"numberCell\">{}</td><td class=\"numberCell\">{:.4}</td><td class=\"numberCell\">{:.4}</td></tr></table>",
+                overall_n,
+                overall_mean,
+                overall_variance.max(0.0).sqrt()
+            ));
+
+            let p_str = anova_p_string(p_value);
+            let anova_table = format!(
+                "<br><br><table align=\"center\"><caption>ANOVA Table</caption><tr><th class=\"headerCell\">Source of<br>Variation</th><th class=\"headerCell\">Sum of<br>Squares</th><th class=\"headerCell\">df</th><th class=\"headerCell\">Mean Square<br>Variance</th><th class=\"headerCell\">F</th><th class=\"headerCell\">p</th></tr><tr><td class=\"numberCell\">Between groups</td><td class=\"numberCell\">{:.3}</td><td class=\"numberCell\">{}</td><td class=\"numberCell\">{:.3}</td><td class=\"numberCell\">{:.3}</td><td class=\"numberCell\">{}</td></tr><tr><td class=\"numberCell\">Within groups</td><td class=\"numberCell\">{:.3}</td><td class=\"numberCell\">{}</td><td class=\"numberCell\">{:.3}</td><td class=\"numberCell\"></td><td class=\"numberCell\"></td></tr><tr><td class=\"numberCell\">Total variation</td><td class=\"numberCell\">{:.3}</td><td class=\"numberCell\">{}</td><td class=\"numberCell\"></td><td class=\"numberCell\"></td><td class=\"numberCell\"></td></tr></table>",
+                ss_b,
+                df_b,
+                ms_b,
+                f_stat,
+                p_str,
+                ss_w,
+                df_w,
+                ms_w,
+                ss_t,
+                df_t,
+            );
+
+            let interpretation = if p_value < 0.05 {
+                format!(
+                    "<br><br><h3>Interpretation:</h3><p>The null hypothesis states that the means of the measurement variable are the same for the different categories of data; the alternative hypothesis states that they are not all the same. The analysis showed that the category means were significantly heterogeneous (one-way anova, F<sub>&alpha;=0.05, df1={}, df2={}</sub>={:.3}, p{}), i.e. using an &alpha; of 0.05 the null hypothesis should be <strong>rejected</strong>.</p><p>Caveat: Given a sufficiently large sample, extremely small and non-notable differences can be found to be statistically significant and statistical significance says nothing about the practical significance of a difference.</p>",
+                    df_b,
+                    df_w,
+                    f_stat,
+                    if p_value > 0.0001 { format!("={:.5}", p_value) } else { "< 0.0001".to_string() }
+                )
+            } else {
+                format!(
+                    "<br><br><h3>Interpretation:</h3><p>The null hypothesis states that the means of the measurement variable are the same for the different categories of data; the alternative hypothesis states that they are not all the same. The analysis showed that the category means were not significantly different (one-way anova, F<sub>&alpha;=0.05, df1={}, df2={}</sub>={:.3}, p={:.3}), i.e. using an &alpha; of 0.05 the null hypothesis should be <strong>accepted</strong>.</p><p>Caveat: Given a sufficiently large sample, extremely small and non-notable differences can be found to be statistically significant and statistical significance says nothing about the practical significance of a difference.</p>",
+                    df_b,
+                    df_w,
+                    f_stat,
+                    p_value
+                )
+            };
+
+            let assumptions = "<h3>Assumptions:</h3><p>The ANOVA test has important assumptions that must be satisfied in order for the associated p-value to be valid:</p><ol><li>The samples are independent.</li><li>Each sample is from a normally distributed population.</li><li>The population standard deviations of the groups are all equal. This property is known as homoscedasticity.</li></ol>";
+
+            let body = format!(
+                "<h1>One-way ANOVA test</h1><p><strong>Measurement variable:</strong> {}</p><p><strong>Nominal variable:</strong> {}</p>{}{}{}{}",
+                input_path,
+                feature_path,
+                group_summary,
+                anova_table,
+                interpretation,
+                assumptions
+            );
+            let html = html_document("ANOVA", &body);
+            let written = write_html_report(&path, &html)?;
+            outputs.insert("report_html".to_string(), json!(written));
+        }
+
         Ok(ToolRunResult { outputs })
     }
 }
@@ -3302,6 +3802,7 @@ impl Tool for PhiCoefficientTool {
             params: vec![
                 ToolParamSpec { name: "input1", description: "First binary raster path.", required: true },
                 ToolParamSpec { name: "input2", description: "Second binary raster path.", required: true },
+                ToolParamSpec { name: "output", description: "Optional HTML report output path (alias: output_html_file).", required: false },
             ],
         }
     }
@@ -3323,6 +3824,7 @@ impl Tool for PhiCoefficientTool {
             params: vec![
                 ToolParamDescriptor { name: "input1".to_string(), description: "First binary raster path.".to_string(), required: true },
                 ToolParamDescriptor { name: "input2".to_string(), description: "Second binary raster path.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Optional HTML report output path (alias: output_html_file).".to_string(), required: false },
             ],
             defaults,
             examples: vec![ToolExample {
@@ -3338,12 +3840,14 @@ impl Tool for PhiCoefficientTool {
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = parse_raster_path_arg(args, "input1")?;
         let _ = parse_raster_path_arg(args, "input2")?;
+        let _ = parse_optional_html_report_path(args)?;
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input1_path = parse_raster_path_arg(args, "input1")?;
         let input2_path = parse_raster_path_arg(args, "input2")?;
+        let html_output_path = parse_optional_html_report_path(args)?;
 
         let in1 = load_raster(&input1_path, "input1")?;
         let in2 = load_raster(&input2_path, "input2")?;
@@ -3414,6 +3918,55 @@ impl Tool for PhiCoefficientTool {
 
         let mut outputs = BTreeMap::new();
         outputs.insert("report".to_string(), json!(report));
+
+        if let Some(path) = html_output_path {
+            let n11 = a;
+            let n10 = b;
+            let n01 = c;
+            let n00 = d;
+            let n1dot = n11 + n10;
+            let n0dot = n01 + n00;
+            let ndot1 = n11 + n01;
+            let ndot0 = n10 + n00;
+
+            let body = format!(
+                "<h1>Phi Coefficient Analysis</h1>\
+                 <p><strong>Inputs</strong>:<br>Image 'x': {}<br>Image 'y': {}</p>\
+                 <p>The input images have been interpreted as binary (Boolean) rasters, containing only 0's and 1's. All non-zero non-nodata values are considered to be valued 1. NoData values in either of the two input rasters are ignored during the analysis.</p>\
+                 <br><h2>Confusion Matrix</h2>\
+                 <table align=\"center\">\
+                 <tr><th></th><th>y = 1</th><th>y = 0</th><th>Total</th></tr>\
+                 <tr><th>x = 1</th><td class=\"numberCell\">{}</td><td class=\"numberCell\">{}</td><td class=\"numberCell\">{}</td></tr>\
+                 <tr><th>x = 0</th><td class=\"numberCell\">{}</td><td class=\"numberCell\">{}</td><td class=\"numberCell\">{}</td></tr>\
+                 <tr><th>Total</th><td class=\"numberCell\">{}</td><td class=\"numberCell\">{}</td><td class=\"numberCell\">{}</td></tr>\
+                 </table>\
+                 <br><p><strong>phi</strong> = {:.4}</p>\
+                 <p><strong>overall accuracy</strong> = {:.4}</p>\
+                 <p><strong>precision</strong> = {:.4}</p>\
+                 <p><strong>recall</strong> = {:.4}</p>\
+                 <p>Note: The phi coefficient is a measure of association between two binary variables and is similar to the Pearson correlation coefficient in interpretation. It varies from -1.0 to 1.0.</p>",
+                input1_path,
+                input2_path,
+                n11,
+                n10,
+                n1dot,
+                n01,
+                n00,
+                n0dot,
+                ndot1,
+                ndot0,
+                n,
+                phi,
+                overall_accuracy,
+                precision,
+                recall,
+            );
+
+            let html = html_document("Phi Coefficient Analysis", &body);
+            let written = write_html_report(&path, &html)?;
+            outputs.insert("report_html".to_string(), json!(written));
+        }
+
         Ok(ToolRunResult { outputs })
     }
 }
@@ -4975,6 +5528,7 @@ impl Tool for KappaIndexTool {
             params: vec![
                 ToolParamSpec { name: "input1", description: "Input classification raster path.", required: true },
                 ToolParamSpec { name: "input2", description: "Input reference raster path.", required: true },
+                ToolParamSpec { name: "output", description: "Optional HTML report output path (alias: output_html_file).", required: false },
             ],
         }
     }
@@ -4986,6 +5540,7 @@ impl Tool for KappaIndexTool {
         let mut example = ToolArgs::new();
         example.insert("input1".to_string(), json!("class.tif"));
         example.insert("input2".to_string(), json!("reference.tif"));
+        example.insert("output".to_string(), json!("kappa_index.html"));
         ToolManifest {
             id: "kappa_index".to_string(),
             display_name: "Kappa Index".to_string(),
@@ -4995,6 +5550,7 @@ impl Tool for KappaIndexTool {
             params: vec![
                 ToolParamDescriptor { name: "input1".to_string(), description: "Input classification raster path.".to_string(), required: true },
                 ToolParamDescriptor { name: "input2".to_string(), description: "Input reference raster path.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Optional HTML report output path (alias: output_html_file).".to_string(), required: false },
             ],
             defaults,
             examples: vec![ToolExample {
@@ -5010,12 +5566,14 @@ impl Tool for KappaIndexTool {
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = parse_raster_path_arg(args, "input1")?;
         let _ = parse_raster_path_arg(args, "input2")?;
+        let _ = parse_optional_html_report_path(args)?;
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input1_path = parse_raster_path_arg(args, "input1")?;
         let input2_path = parse_raster_path_arg(args, "input2")?;
+        let html_output_path = parse_optional_html_report_path(args)?;
 
         let in1 = load_raster(&input1_path, "input1")?;
         let in2 = load_raster(&input2_path, "input2")?;
@@ -5126,17 +5684,68 @@ impl Tool for KappaIndexTool {
         let report = json!({
             "input1": input1_path,
             "input2": input2_path,
-            "classes": classes,
-            "matrix": matrix,
+            "classes": classes.clone(),
+            "matrix": matrix.clone(),
             "overall_accuracy": diag as f64 / total as f64,
             "kappa_index": kappa,
-            "producers_accuracy": producers_accuracy,
-            "users_accuracy": users_accuracy,
+            "producers_accuracy": producers_accuracy.clone(),
+            "users_accuracy": users_accuracy.clone(),
         })
         .to_string();
 
         let mut outputs = BTreeMap::new();
         outputs.insert("report".to_string(), json!(report));
+
+        if let Some(path) = html_output_path {
+            let mut table_html = String::from("<table align=\"center\"><caption>Contingency Table</caption><tr><th class=\"headerCell\">Class Data \\ Reference Data</th>");
+            for class in &classes {
+                table_html.push_str(&format!("<th class=\"headerCell\">{}</th>", class));
+            }
+            table_html.push_str("<th class=\"headerCell\">Row Total</th><th class=\"headerCell\">User's Accuracy</th></tr>");
+
+            for (ri, class) in classes.iter().enumerate() {
+                table_html.push_str(&format!("<tr><th class=\"headerCell\">{}</th>", class));
+                for value in &matrix[ri] {
+                    table_html.push_str(&format!("<td class=\"numberCell\">{}</td>", value));
+                }
+                table_html.push_str(&format!("<td class=\"numberCell\">{}</td>", row_totals[ri]));
+                if users_accuracy[ri].is_finite() {
+                    table_html.push_str(&format!("<td class=\"numberCell\">{:.2}%</td>", users_accuracy[ri] * 100.0));
+                } else {
+                    table_html.push_str("<td class=\"numberCell\"></td>");
+                }
+                table_html.push_str("</tr>");
+            }
+
+            table_html.push_str("<tr><th class=\"headerCell\">Column Totals</th>");
+            for value in &col_totals {
+                table_html.push_str(&format!("<td class=\"numberCell\">{}</td>", value));
+            }
+            table_html.push_str(&format!("<td class=\"numberCell\">{}</td><td class=\"numberCell\"></td></tr>", total));
+
+            table_html.push_str("<tr><th class=\"headerCell\">Producer's Accuracy</th>");
+            for acc in &producers_accuracy {
+                if acc.is_finite() {
+                    table_html.push_str(&format!("<td class=\"numberCell\">{:.2}%</td>", acc * 100.0));
+                } else {
+                    table_html.push_str("<td class=\"numberCell\"></td>");
+                }
+            }
+            table_html.push_str("<td class=\"numberCell\"></td><td class=\"numberCell\"></td></tr></table>");
+
+            let body = format!(
+                "<h1>Kappa Index of Agreement</h1><p><strong>Classification Data</strong>: {}</p><p><strong>Reference Data</strong>: {}</p>{}<p><strong>Overall Accuracy</strong>: {:.2}%</p><p><strong>Kappa</strong>: {:.4}</p>",
+                input1_path,
+                input2_path,
+                table_html,
+                (diag as f64 / total as f64) * 100.0,
+                kappa
+            );
+            let html = html_document("Kappa Index of Agreement", &body);
+            let written = write_html_report(&path, &html)?;
+            outputs.insert("report_html".to_string(), json!(written));
+        }
+
         Ok(ToolRunResult { outputs })
     }
 }
@@ -5153,6 +5762,7 @@ impl Tool for PairedSampleTTestTool {
                 ToolParamSpec { name: "input1", description: "First input raster path.", required: true },
                 ToolParamSpec { name: "input2", description: "Second input raster path.", required: true },
                 ToolParamSpec { name: "num_samples", description: "Optional sample size with replacement.", required: false },
+                ToolParamSpec { name: "output", description: "Optional HTML report output path (alias: output_html_file).", required: false },
             ],
         }
     }
@@ -5166,6 +5776,7 @@ impl Tool for PairedSampleTTestTool {
         example.insert("input1".to_string(), json!("before.tif"));
         example.insert("input2".to_string(), json!("after.tif"));
         example.insert("num_samples".to_string(), json!(1000));
+        example.insert("output".to_string(), json!("paired_sample_t_test.html"));
 
         ToolManifest {
             id: "paired_sample_t_test".to_string(),
@@ -5177,6 +5788,7 @@ impl Tool for PairedSampleTTestTool {
                 ToolParamDescriptor { name: "input1".to_string(), description: "First input raster path.".to_string(), required: true },
                 ToolParamDescriptor { name: "input2".to_string(), description: "Second input raster path.".to_string(), required: true },
                 ToolParamDescriptor { name: "num_samples".to_string(), description: "Optional sample size with replacement.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Optional HTML report output path (alias: output_html_file).".to_string(), required: false },
             ],
             defaults,
             examples: vec![ToolExample {
@@ -5192,6 +5804,7 @@ impl Tool for PairedSampleTTestTool {
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = parse_raster_path_arg(args, "input1")?;
         let _ = parse_raster_path_arg(args, "input2")?;
+        let _ = parse_optional_html_report_path(args)?;
         Ok(())
     }
 
@@ -5199,6 +5812,7 @@ impl Tool for PairedSampleTTestTool {
         let input1_path = parse_raster_path_arg(args, "input1")?;
         let input2_path = parse_raster_path_arg(args, "input2")?;
         let requested_samples = args.get("num_samples").and_then(|v| v.as_u64()).map(|v| v as usize);
+        let html_output_path = parse_optional_html_report_path(args)?;
 
         let in1 = load_raster(&input1_path, "input1")?;
         let in2 = load_raster(&input2_path, "input2")?;
@@ -5251,6 +5865,66 @@ impl Tool for PairedSampleTTestTool {
 
         let mut outputs = BTreeMap::new();
         outputs.insert("report".to_string(), json!(report));
+
+        if let Some(path) = html_output_path {
+            let mut sorted_diffs = diffs.clone();
+            sorted_diffs.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let num_bins = 100usize;
+            let min_val = *sorted_diffs.first().unwrap_or(&0.0);
+            let max_val = *sorted_diffs.last().unwrap_or(&0.0);
+            let mut range = max_val - min_val;
+            if range.abs() < 1.0e-12 {
+                range = 1.0;
+            }
+            let bin_width = range / num_bins as f64;
+            let mut freq_data = vec![0usize; num_bins];
+            for value in &sorted_diffs {
+                let idx = (((*value - min_val) / bin_width).floor() as isize)
+                    .clamp(0, num_bins as isize - 1) as usize;
+                freq_data[idx] += 1;
+            }
+
+            let histo = Histogram {
+                parent_id: "paired_diffs_cdf".to_string(),
+                width: 700.0,
+                height: 500.0,
+                freq_data,
+                min_bin_val: min_val,
+                bin_width,
+                x_axis_label: "Paired Difference".to_string(),
+                cumulative: true,
+            };
+
+            let p_value_str = if p_value > 0.001 {
+                format!("{p_value:.4}")
+            } else {
+                "&lt;0.001".to_string()
+            };
+            let result_str = if p_value < 0.05 {
+                "The test <strong>rejects</strong> the null hypothesis that the paired mean difference equals zero."
+            } else {
+                "The test <strong>fails to reject</strong> the null hypothesis that the paired mean difference equals zero."
+            };
+
+            let body = format!(
+                "<h1>Paired-Samples <em>t</em>-Test Report</h1><p><strong>Image 1</strong>: {}<br><strong>Image 2</strong>: {}<br><strong>Sample size (N)</strong>: {}<br><strong>Mean of differences</strong>: {:.4}<br><strong>Std. Dev. of differences</strong>: {:.4}<br><strong>Estimated standard error</strong>: {:.4}<br><strong>Test Statistic (<em>t</em>)</strong>: {:.4}<br><strong>Two-tailed Significance (<em>p</em>-value)</strong>: {}<br><strong>Result</strong>: {}</p><p><strong>Caveat</strong>: Given a sufficiently large sample, extremely small and non-notable differences can be found to be statistically significant, and statistical significance says nothing about the practical significance of a difference.</p><div id='paired_diffs_cdf' align=\"center\">{}</div>",
+                input1_path,
+                input2_path,
+                n,
+                mean,
+                std_dev,
+                std_err,
+                t_value,
+                p_value_str,
+                result_str,
+                histo.get_svg()
+            );
+
+            let html = html_document("Paired-Samples t-Test", &body);
+            let written = write_html_report(&path, &html)?;
+            outputs.insert("report_html".to_string(), json!(written));
+        }
+
         Ok(ToolRunResult { outputs })
     }
 }
@@ -6085,11 +6759,13 @@ impl Tool for RootMeanSquareErrorTool {
                         }
                         let x = input.col_center_x(col);
                         let y = input.row_center_y(row_i);
-                        if let Some((bcol, brow)) = base.world_to_pixel(x, y) {
-                            let z2 = base.get(0, brow, bcol);
-                            if base.is_nodata(z2) {
-                                continue;
-                            }
+                        if let Some(z2) = base.sample_world(
+                            0,
+                            x,
+                            y,
+                            ResampleMethod::Bilinear,
+                            NodataPolicy::PartialKernel,
+                        ) {
                             local.push(z2 - z1);
                         }
                     }
@@ -6129,7 +6805,7 @@ impl Tool for RootMeanSquareErrorTool {
             "accuracy_95_percent": rmse * 1.96,
             "le90": le90,
             "num_cells": diffs.len(),
-            "resampling": if same_grid { "none" } else { "nearest" },
+            "resampling": if same_grid { "none" } else { "bilinear" },
         })
         .to_string();
 
@@ -7330,14 +8006,10 @@ impl Tool for PrincipalComponentAnalysisTool {
         let eigenvalues = eig.eigenvalues.as_slice().to_vec();
         let evec_flat = eig.eigenvectors.as_slice().to_vec(); // column-major: col pc = eigenvector pc
 
-        let total_ev: f64 = eigenvalues
-            .par_iter()
-            .map(|v| v.abs())
-            .sum::<f64>()
-            .max(1.0e-15);
+        let total_ev: f64 = eigenvalues.par_iter().copied().sum::<f64>().max(1.0e-15);
         let explained: Vec<f64> = eigenvalues
             .par_iter()
-            .map(|&e| 100.0 * e.abs() / total_ev)
+            .map(|&e| 100.0 * e / total_ev)
             .collect();
 
         // Sort by descending explained variance
@@ -7357,14 +8029,14 @@ impl Tool for PrincipalComponentAnalysisTool {
                 for k in 0..num_images {
                     let pc = component_order[k];
                     row[k] = if !standardized {
-                        let cov_jj = covariances[j][j].abs().sqrt();
+                        let cov_jj = covariances[j][j].sqrt();
                         if cov_jj > 1.0e-15 {
-                            evec_flat[pc * num_images + j] * eigenvalues[pc].abs().sqrt() / cov_jj
+                            evec_flat[pc * num_images + j] * eigenvalues[pc].sqrt() / cov_jj
                         } else {
                             0.0
                         }
                     } else {
-                        evec_flat[pc * num_images + j] * eigenvalues[pc].abs().sqrt()
+                        evec_flat[pc * num_images + j] * eigenvalues[pc].sqrt()
                     };
                 }
             });

@@ -203,6 +203,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Creates a binary buffer zone around non-zero, non-NoData raster cells within a specified distance.
     run_tool("buffer_raster", list(...))
   }
+  session$buffer_vector <- function(...) {
+    # Creates polygon buffers around point, line, and polygon vector geometries with configurable cap and join styles.
+    run_tool("buffer_vector", list(...))
+  }
   session$build_object_hierarchy_multiscale <- function(...) {
     # Builds parent-child relationships between fine and coarse object segmentations.
     run_tool("build_object_hierarchy_multiscale", list(...))
@@ -312,7 +316,7 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("colourize_based_on_point_returns", list(...))
   }
   session$compactness_ratio <- function(...) {
-    # Computes compactness ratio (perimeter of equivalent circle / actual perimeter) for polygon features.
+    # Computes compactness ratio (area / perimeter) for polygon features.
     run_tool("compactness_ratio", list(...))
   }
   session$concave_hull <- function(...) {
@@ -623,10 +627,6 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Computes 2 raised to the power of each raster cell.
     run_tool("exp2", list(...))
   }
-  session$fft_random_field <- function(...) {
-    # Creates a spatially-autocorrelated random field using FFT spectral synthesis.
-    run_tool("fft_random_field", list(...))
-  }
   session$export_table_to_csv <- function(...) {
     # Exports a vector attribute table to a CSV file.
     run_tool("export_table_to_csv", list(...))
@@ -687,6 +687,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Computes upwind distance to the first topographic obstacle along a specified azimuth.
     run_tool("fetch_analysis", list(...))
   }
+  session$fft_random_field <- function(...) {
+    # Creates a spatially-autocorrelated random field using FFT spectral synthesis.
+    run_tool("fft_random_field", list(...))
+  }
   session$field_calculator <- function(...) {
     # Calculates a field value from an expression using feature attributes and geometry variables.
     run_tool("field_calculator", list(...))
@@ -696,7 +700,7 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("fill_burn", list(...))
   }
   session$fill_depressions <- function(...) {
-    # Fills depressions in a DEM using a priority-flood strategy with optional flat resolution.
+    # Fills depressions in a DEM using a priority-flood strategy with Garbrecht-Martz flat resolution by default and optional legacy natural-path flat resolution.
     run_tool("fill_depressions", list(...))
   }
   session$fill_depressions_planchon_and_darboux <- function(...) {
@@ -867,6 +871,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Tests whether the first raster is greater than the second on a cell-by-cell basis.
     run_tool("greater_than", list(...))
   }
+  session$greater_than_or_equal_to <- function(...) {
+    # Tests whether the first raster is greater than or equal to the second on a cell-by-cell basis.
+    run_tool("greater_than_or_equal_to", list(...))
+  }
   session$guided_filter <- function(...) {
     # Performs edge-preserving guided filtering using local linear models.
     run_tool("guided_filter", list(...))
@@ -963,6 +971,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Creates a Swiss-style terrain rendering by blending multi-azimuth hillshade with hypsometric tinting and optional atmospheric haze.
     run_tool("hypsometrically_tinted_hillshade", list(...))
   }
+  session$identity <- function(...) {
+    # Preserves all input features; portions overlapping the identity layer also acquire identity attributes.
+    run_tool("identity", list(...))
+  }
   session$idw_interpolation <- function(...) {
     # Interpolates a raster from point samples using inverse-distance weighting.
     run_tool("idw_interpolation", list(...))
@@ -1046,10 +1058,6 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$integral_image_transform <- function(...) {
     # Computes a summed-area (integral image) transform for each band.
     run_tool("integral_image_transform", list(...))
-  }
-  session$identity <- function(...) {
-    # Overlays input polygons with overlay polygons and preserves all input regions while attaching overlay attributes where overlaps occur.
-    run_tool("identity", list(...))
   }
   session$intersect <- function(...) {
     # Intersects input and overlay polygons using topology-based overlay and tracks source feature IDs.
@@ -1147,6 +1155,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Tests whether the first raster is less than the second on a cell-by-cell basis.
     run_tool("less_than", list(...))
   }
+  session$less_than_or_equal_to <- function(...) {
+    # Tests whether the first raster is less than or equal to the second on a cell-by-cell basis.
+    run_tool("less_than_or_equal_to", list(...))
+  }
   session$lidar_block_maximum <- function(...) {
     # Creates a raster by assigning each cell the maximum value of included LiDAR points.
     run_tool("lidar_block_maximum", list(...))
@@ -1192,7 +1204,7 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("lidar_hex_bin", list(...))
   }
   session$lidar_hillshade <- function(...) {
-    # Creates a hillshade raster from LiDAR elevations using local block maxima as surface input.
+    # Computes per-point hillshade intensity from local plane normals and stores grayscale RGB in LiDAR output.
     run_tool("lidar_hillshade", list(...))
   }
   session$lidar_histogram <- function(...) {
@@ -1304,7 +1316,7 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("line_thinning", list(...))
   }
   session$linearity_index <- function(...) {
-    # Computes linearity index (straight-line distance / actual length) for line and polygon features.
+    # Computes linearity index (regression r-squared) for polygon features.
     run_tool("linearity_index", list(...))
   }
   session$lines_to_polygons <- function(...) {
@@ -1316,7 +1328,7 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("list_unique_values", list(...))
   }
   session$list_unique_values_raster <- function(...) {
-    # Lists unique valid values in a raster (capped to protect memory).
+    # Lists unique valid raster categories and their frequencies.
     run_tool("list_unique_values_raster", list(...))
   }
   session$ln <- function(...) {
@@ -1616,8 +1628,12 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("multiscale_topographic_position_image", list(...))
   }
   session$narrowness_index <- function(...) {
-    # Computes narrowness index (perimeter / sqrt(area)) for polygon features.
+    # Calculates raster patch narrowness index as area divided by area of the largest contained circle based on maximum distance-to-edge.
     run_tool("narrowness_index", list(...))
+  }
+  session$narrowness_index_vector <- function(...) {
+    # Computes narrowness index (perimeter / sqrt(area)) for polygon features.
+    run_tool("narrowness_index_vector", list(...))
   }
   session$natural_neighbour_interpolation <- function(...) {
     # Interpolates a raster from point samples using a Delaunay-neighbour weighted scheme.
@@ -1868,7 +1884,7 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("polygon_short_axis", list(...))
   }
   session$polygonize <- function(...) {
-    # Creates polygons from closed input linework rings.
+    # Creates polygons from input linework, including intersecting/open segments where enclosed faces can be formed.
     run_tool("polygonize", list(...))
   }
   session$polygons_to_lines <- function(...) {
@@ -2543,10 +2559,6 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Dissolves combined input and overlay polygons into a unified polygon coverage.
     run_tool("union", list(...))
   }
-  session$update <- function(...) {
-    # Replaces overlapping portions of input polygons with overlay polygons while retaining non-overlapping input regions.
-    run_tool("update", list(...))
-  }
   session$unnest_basins <- function(...) {
     # Creates one basin raster per pour-point nesting level from a D8 pointer grid.
     run_tool("unnest_basins", list(...))
@@ -2558,6 +2570,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$unsphericity <- function(...) {
     # Calculates the unsphericity curvature (half the difference of principal curvatures) from a DEM.
     run_tool("unsphericity", list(...))
+  }
+  session$update <- function(...) {
+    # Replaces input features with update features where they overlap; input features outside the update layer are preserved.
+    run_tool("update", list(...))
   }
   session$update_nodata_cells <- function(...) {
     # Assigns NoData cells in input1 from corresponding valid cells in input2.
@@ -3152,6 +3168,18 @@ wbw_buffer_raster <- function(...) {
   session$buffer_raster(...)
 }
 
+buffer_vector <- function(...) {
+  # Creates polygon buffers around point, line, and polygon vector geometries with configurable cap and join styles.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$buffer_vector(...)
+}
+
+wbw_buffer_vector <- function(...) {
+  # Creates polygon buffers around point, line, and polygon vector geometries with configurable cap and join styles.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$buffer_vector(...)
+}
+
 build_object_hierarchy_multiscale <- function(...) {
   # Builds parent-child relationships between fine and coarse object segmentations.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
@@ -3477,13 +3505,13 @@ wbw_colourize_based_on_point_returns <- function(...) {
 }
 
 compactness_ratio <- function(...) {
-  # Computes compactness ratio (perimeter of equivalent circle / actual perimeter) for polygon features.
+  # Computes compactness ratio (area / perimeter) for polygon features.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$compactness_ratio(...)
 }
 
 wbw_compactness_ratio <- function(...) {
-  # Computes compactness ratio (perimeter of equivalent circle / actual perimeter) for polygon features.
+  # Computes compactness ratio (area / perimeter) for polygon features.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$compactness_ratio(...)
 }
@@ -4412,18 +4440,6 @@ wbw_exp2 <- function(...) {
   session$exp2(...)
 }
 
-fft_random_field <- function(...) {
-  # Creates a spatially-autocorrelated random field using FFT spectral synthesis.
-  session <- wbw_make_session(include_pro = FALSE, tier = "open")
-  session$fft_random_field(...)
-}
-
-wbw_fft_random_field <- function(...) {
-  # Creates a spatially-autocorrelated random field using FFT spectral synthesis.
-  session <- wbw_make_session(include_pro = FALSE, tier = "open")
-  session$fft_random_field(...)
-}
-
 export_table_to_csv <- function(...) {
   # Exports a vector attribute table to a CSV file.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
@@ -4604,6 +4620,18 @@ wbw_fetch_analysis <- function(...) {
   session$fetch_analysis(...)
 }
 
+fft_random_field <- function(...) {
+  # Creates a spatially-autocorrelated random field using FFT spectral synthesis.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$fft_random_field(...)
+}
+
+wbw_fft_random_field <- function(...) {
+  # Creates a spatially-autocorrelated random field using FFT spectral synthesis.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$fft_random_field(...)
+}
+
 field_calculator <- function(...) {
   # Calculates a field value from an expression using feature attributes and geometry variables.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
@@ -4629,13 +4657,13 @@ wbw_fill_burn <- function(...) {
 }
 
 fill_depressions <- function(...) {
-  # Fills depressions in a DEM using a priority-flood strategy with optional flat resolution.
+  # Fills depressions in a DEM using a priority-flood strategy with Garbrecht-Martz flat resolution by default and optional legacy natural-path flat resolution.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$fill_depressions(...)
 }
 
 wbw_fill_depressions <- function(...) {
-  # Fills depressions in a DEM using a priority-flood strategy with optional flat resolution.
+  # Fills depressions in a DEM using a priority-flood strategy with Garbrecht-Martz flat resolution by default and optional legacy natural-path flat resolution.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$fill_depressions(...)
 }
@@ -5144,6 +5172,18 @@ wbw_greater_than <- function(...) {
   session$greater_than(...)
 }
 
+greater_than_or_equal_to <- function(...) {
+  # Tests whether the first raster is greater than or equal to the second on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$greater_than_or_equal_to(...)
+}
+
+wbw_greater_than_or_equal_to <- function(...) {
+  # Tests whether the first raster is greater than or equal to the second on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$greater_than_or_equal_to(...)
+}
+
 guided_filter <- function(...) {
   # Performs edge-preserving guided filtering using local linear models.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
@@ -5432,6 +5472,18 @@ wbw_hypsometrically_tinted_hillshade <- function(...) {
   session$hypsometrically_tinted_hillshade(...)
 }
 
+identity <- function(...) {
+  # Preserves all input features; portions overlapping the identity layer also acquire identity attributes.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$identity(...)
+}
+
+wbw_identity <- function(...) {
+  # Preserves all input features; portions overlapping the identity layer also acquire identity attributes.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$identity(...)
+}
+
 idw_interpolation <- function(...) {
   # Interpolates a raster from point samples using inverse-distance weighting.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
@@ -5682,18 +5734,6 @@ wbw_integral_image_transform <- function(...) {
   # Computes a summed-area (integral image) transform for each band.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$integral_image_transform(...)
-}
-
-identity <- function(...) {
-  # Overlays input polygons with overlay polygons and preserves all input regions while attaching overlay attributes where overlaps occur.
-  session <- wbw_make_session(include_pro = FALSE, tier = "open")
-  session$identity(...)
-}
-
-wbw_identity <- function(...) {
-  # Overlays input polygons with overlay polygons and preserves all input regions while attaching overlay attributes where overlaps occur.
-  session <- wbw_make_session(include_pro = FALSE, tier = "open")
-  session$identity(...)
 }
 
 intersect <- function(...) {
@@ -5984,6 +6024,18 @@ wbw_less_than <- function(...) {
   session$less_than(...)
 }
 
+less_than_or_equal_to <- function(...) {
+  # Tests whether the first raster is less than or equal to the second on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$less_than_or_equal_to(...)
+}
+
+wbw_less_than_or_equal_to <- function(...) {
+  # Tests whether the first raster is less than or equal to the second on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$less_than_or_equal_to(...)
+}
+
 lidar_block_maximum <- function(...) {
   # Creates a raster by assigning each cell the maximum value of included LiDAR points.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
@@ -6117,13 +6169,13 @@ wbw_lidar_hex_bin <- function(...) {
 }
 
 lidar_hillshade <- function(...) {
-  # Creates a hillshade raster from LiDAR elevations using local block maxima as surface input.
+  # Computes per-point hillshade intensity from local plane normals and stores grayscale RGB in LiDAR output.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$lidar_hillshade(...)
 }
 
 wbw_lidar_hillshade <- function(...) {
-  # Creates a hillshade raster from LiDAR elevations using local block maxima as surface input.
+  # Computes per-point hillshade intensity from local plane normals and stores grayscale RGB in LiDAR output.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$lidar_hillshade(...)
 }
@@ -6453,13 +6505,13 @@ wbw_line_thinning <- function(...) {
 }
 
 linearity_index <- function(...) {
-  # Computes linearity index (straight-line distance / actual length) for line and polygon features.
+  # Computes linearity index (regression r-squared) for polygon features.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$linearity_index(...)
 }
 
 wbw_linearity_index <- function(...) {
-  # Computes linearity index (straight-line distance / actual length) for line and polygon features.
+  # Computes linearity index (regression r-squared) for polygon features.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$linearity_index(...)
 }
@@ -6489,13 +6541,13 @@ wbw_list_unique_values <- function(...) {
 }
 
 list_unique_values_raster <- function(...) {
-  # Lists unique valid values in a raster (capped to protect memory).
+  # Lists unique valid raster categories and their frequencies.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$list_unique_values_raster(...)
 }
 
 wbw_list_unique_values_raster <- function(...) {
-  # Lists unique valid values in a raster (capped to protect memory).
+  # Lists unique valid raster categories and their frequencies.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$list_unique_values_raster(...)
 }
@@ -7389,15 +7441,27 @@ wbw_multiscale_topographic_position_image <- function(...) {
 }
 
 narrowness_index <- function(...) {
-  # Computes narrowness index (perimeter / sqrt(area)) for polygon features.
+  # Calculates raster patch narrowness index as area divided by area of the largest contained circle based on maximum distance-to-edge.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$narrowness_index(...)
 }
 
 wbw_narrowness_index <- function(...) {
-  # Computes narrowness index (perimeter / sqrt(area)) for polygon features.
+  # Calculates raster patch narrowness index as area divided by area of the largest contained circle based on maximum distance-to-edge.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$narrowness_index(...)
+}
+
+narrowness_index_vector <- function(...) {
+  # Computes narrowness index (perimeter / sqrt(area)) for polygon features.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$narrowness_index_vector(...)
+}
+
+wbw_narrowness_index_vector <- function(...) {
+  # Computes narrowness index (perimeter / sqrt(area)) for polygon features.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$narrowness_index_vector(...)
 }
 
 natural_neighbour_interpolation <- function(...) {
@@ -8145,13 +8209,13 @@ wbw_polygon_short_axis <- function(...) {
 }
 
 polygonize <- function(...) {
-  # Creates polygons from closed input linework rings.
+  # Creates polygons from input linework, including intersecting/open segments where enclosed faces can be formed.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$polygonize(...)
 }
 
 wbw_polygonize <- function(...) {
-  # Creates polygons from closed input linework rings.
+  # Creates polygons from input linework, including intersecting/open segments where enclosed faces can be formed.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$polygonize(...)
 }
@@ -10172,18 +10236,6 @@ wbw_union <- function(...) {
   session$union(...)
 }
 
-update <- function(...) {
-  # Replaces overlapping portions of input polygons with overlay polygons while retaining non-overlapping input regions.
-  session <- wbw_make_session(include_pro = FALSE, tier = "open")
-  session$update(...)
-}
-
-wbw_update <- function(...) {
-  # Replaces overlapping portions of input polygons with overlay polygons while retaining non-overlapping input regions.
-  session <- wbw_make_session(include_pro = FALSE, tier = "open")
-  session$update(...)
-}
-
 unnest_basins <- function(...) {
   # Creates one basin raster per pour-point nesting level from a D8 pointer grid.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
@@ -10218,6 +10270,18 @@ wbw_unsphericity <- function(...) {
   # Calculates the unsphericity curvature (half the difference of principal curvatures) from a DEM.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$unsphericity(...)
+}
+
+update <- function(...) {
+  # Replaces input features with update features where they overlap; input features outside the update layer are preserved.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$update(...)
+}
+
+wbw_update <- function(...) {
+  # Replaces input features with update features where they overlap; input features outside the update layer are preserved.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$update(...)
 }
 
 update_nodata_cells <- function(...) {

@@ -511,6 +511,7 @@ pub use gis::MinAbsoluteOverlayTool;
 pub use gis::MinOverlayTool;
 pub use gis::MultiplyOverlayTool;
 pub use gis::NarrownessIndexTool;
+pub use gis::NarrownessIndexVectorTool;
 pub use gis::PercentEqualToTool;
 pub use gis::PercentGreaterThanTool;
 pub use gis::PercentLessThanTool;

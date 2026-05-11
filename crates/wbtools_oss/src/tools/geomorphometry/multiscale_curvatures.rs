@@ -117,7 +117,7 @@ impl MultiscaleCurvaturesTool {
         let min_scale = args
             .get("min_scale")
             .and_then(|v| v.as_i64())
-            .unwrap_or(1)
+            .unwrap_or(4)
             .max(0) as isize;
         let step = args
             .get("step")
@@ -138,7 +138,7 @@ impl MultiscaleCurvaturesTool {
             .get("log_transform")
             .or_else(|| args.get("log"))
             .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+            .unwrap_or(true);
         let standardize = args
             .get("standardize")
             .and_then(|v| v.as_bool())
@@ -270,11 +270,14 @@ impl MultiscaleCurvaturesTool {
         let cols = input.cols as isize;
         if radius <= 0 {
             let mut out = vec![nodata; (rows * cols) as usize];
-            for r in 0..rows {
-                for c in 0..cols {
-                    out[(r * cols + c) as usize] = input.get(band, r, c);
-                }
-            }
+            out.par_chunks_mut(cols as usize)
+                .enumerate()
+                .for_each(|(r, row_out)| {
+                    let rr = r as isize;
+                    for c in 0..cols {
+                        row_out[c as usize] = input.get(band, rr, c);
+                    }
+                });
             return out;
         }
 
@@ -282,50 +285,219 @@ impl MultiscaleCurvaturesTool {
         let kernel = Self::build_gaussian_kernel_1d(radius, sigma);
 
         let mut tmp = vec![nodata; (rows * cols) as usize];
-        for r in 0..rows {
-            for c in 0..cols {
-                let z = input.get(band, r, c);
-                if input.is_nodata(z) {
-                    continue;
-                }
-                let mut wsum = 0.0;
-                let mut ssum = 0.0;
-                for (k, w) in (-radius..=radius).zip(kernel.iter().copied()) {
-                    let v = input.get(band, r, c + k);
-                    if !input.is_nodata(v) {
-                        wsum += w;
-                        ssum += w * v;
+        tmp.par_chunks_mut(cols as usize)
+            .enumerate()
+            .for_each(|(r, row_tmp)| {
+                let rr = r as isize;
+                for c in 0..cols {
+                    let z = input.get(band, rr, c);
+                    if input.is_nodata(z) {
+                        continue;
+                    }
+                    let mut wsum = 0.0;
+                    let mut ssum = 0.0;
+                    for (k, w) in (-radius..=radius).zip(kernel.iter().copied()) {
+                        let v = input.get(band, rr, c + k);
+                        if !input.is_nodata(v) {
+                            wsum += w;
+                            ssum += w * v;
+                        }
+                    }
+                    if wsum > 0.0 {
+                        row_tmp[c as usize] = ssum / wsum;
                     }
                 }
-                if wsum > 0.0 {
-                    tmp[(r * cols + c) as usize] = ssum / wsum;
-                }
-            }
-        }
+            });
 
         let mut out = vec![nodata; (rows * cols) as usize];
-        for r in 0..rows {
-            for c in 0..cols {
-                let z = tmp[(r * cols + c) as usize];
-                if z == nodata {
-                    continue;
-                }
-                let mut wsum = 0.0;
-                let mut ssum = 0.0;
-                for (k, w) in (-radius..=radius).zip(kernel.iter().copied()) {
-                    let rr = (r + k).clamp(0, rows - 1);
-                    let v = tmp[(rr * cols + c) as usize];
-                    if v != nodata {
-                        wsum += w;
-                        ssum += w * v;
+        out.par_chunks_mut(cols as usize)
+            .enumerate()
+            .for_each(|(r, row_out)| {
+                let rr = r as isize;
+                for c in 0..cols {
+                    let z = tmp[(rr * cols + c) as usize];
+                    if z == nodata {
+                        continue;
+                    }
+                    let mut wsum = 0.0;
+                    let mut ssum = 0.0;
+                    for (k, w) in (-radius..=radius).zip(kernel.iter().copied()) {
+                        let r2 = (rr + k).clamp(0, rows - 1);
+                        let v = tmp[(r2 * cols + c) as usize];
+                        if v != nodata {
+                            wsum += w;
+                            ssum += w * v;
+                        }
+                    }
+                    if wsum > 0.0 {
+                        row_out[c as usize] = ssum / wsum;
                     }
                 }
-                if wsum > 0.0 {
-                    out[(r * cols + c) as usize] = ssum / wsum;
+            });
+
+        out
+    }
+
+    fn box_blur_pass_horizontal(
+        data: &[f64],
+        rows: isize,
+        cols: isize,
+        radius: isize,
+        nodata: f64,
+    ) -> Vec<f64> {
+        if radius <= 0 {
+            return data.to_vec();
+        }
+        let mut out = vec![nodata; (rows * cols) as usize];
+        out.par_chunks_mut(cols as usize)
+            .enumerate()
+            .for_each(|(r, row_out)| {
+                let rr = r as isize;
+                let mut sum = vec![0.0f64; cols as usize + 1];
+                let mut cnt = vec![0usize; cols as usize + 1];
+                for c in 0..cols {
+                    let idx = (rr * cols + c) as usize;
+                    let v = data[idx];
+                    sum[c as usize + 1] = sum[c as usize];
+                    cnt[c as usize + 1] = cnt[c as usize];
+                    if v.is_finite() && v != nodata {
+                        sum[c as usize + 1] += v;
+                        cnt[c as usize + 1] += 1;
+                    }
                 }
+
+                for c in 0..cols {
+                    let idx = c as usize;
+                    let center = data[(rr * cols + c) as usize];
+                    if !(center.is_finite() && center != nodata) {
+                        continue;
+                    }
+                    let x1 = (c - radius).max(0) as usize;
+                    let x2 = (c + radius).min(cols - 1) as usize;
+                    let s = sum[x2 + 1] - sum[x1];
+                    let n = cnt[x2 + 1] - cnt[x1];
+                    if n > 0 {
+                        row_out[idx] = s / n as f64;
+                    }
+                }
+            });
+        out
+    }
+
+    fn box_blur_pass_vertical(
+        data: &[f64],
+        rows: isize,
+        cols: isize,
+        radius: isize,
+        nodata: f64,
+    ) -> Vec<f64> {
+        if radius <= 0 {
+            return data.to_vec();
+        }
+        let col_results: Vec<Vec<f64>> = (0..cols)
+            .into_par_iter()
+            .map(|c| {
+                let mut col_out = vec![nodata; rows as usize];
+                let mut sum = vec![0.0f64; rows as usize + 1];
+                let mut cnt = vec![0usize; rows as usize + 1];
+                for r in 0..rows {
+                    let idx = (r * cols + c) as usize;
+                    let v = data[idx];
+                    sum[r as usize + 1] = sum[r as usize];
+                    cnt[r as usize + 1] = cnt[r as usize];
+                    if v.is_finite() && v != nodata {
+                        sum[r as usize + 1] += v;
+                        cnt[r as usize + 1] += 1;
+                    }
+                }
+
+                for r in 0..rows {
+                    let idx = (r * cols + c) as usize;
+                    let center = data[idx];
+                    if !(center.is_finite() && center != nodata) {
+                        continue;
+                    }
+                    let y1 = (r - radius).max(0) as usize;
+                    let y2 = (r + radius).min(rows - 1) as usize;
+                    let s = sum[y2 + 1] - sum[y1];
+                    let n = cnt[y2 + 1] - cnt[y1];
+                    if n > 0 {
+                        col_out[r as usize] = s / n as f64;
+                    }
+                }
+                col_out
+            })
+            .collect();
+
+        let mut out = vec![nodata; (rows * cols) as usize];
+        for c in 0..cols {
+            let col_out = &col_results[c as usize];
+            for r in 0..rows {
+                out[(r * cols + c) as usize] = col_out[r as usize];
             }
         }
+        out
+    }
 
+    fn almost_gaussian_box_widths(sigma: f64, n: usize) -> Vec<isize> {
+        if n == 0 || sigma <= f64::EPSILON {
+            return Vec::new();
+        }
+        let w_ideal = (12.0 * sigma * sigma / n as f64 + 1.0).sqrt();
+        let mut wl = w_ideal.floor() as isize;
+        if wl % 2 == 0 {
+            wl -= 1;
+        }
+        wl = wl.max(1);
+        let wu = wl + 2;
+        let m = ((12.0 * sigma * sigma
+            - (n as isize * wl * wl) as f64
+            - (4 * n as isize * wl) as f64
+            - (3 * n as isize) as f64)
+            / (-4 * wl - 4) as f64)
+            .round()
+            .clamp(0.0, n as f64) as usize;
+
+        let mut widths = vec![wu; n];
+        for w in widths.iter_mut().take(m) {
+            *w = wl;
+        }
+        widths
+    }
+
+    fn smooth_band_legacy_like(input: &Raster, band: isize, radius: isize, nodata: f64) -> Vec<f64> {
+        let rows = input.rows as isize;
+        let cols = input.cols as isize;
+        let mut base = vec![nodata; (rows * cols) as usize];
+        base.par_chunks_mut(cols as usize)
+            .enumerate()
+            .for_each(|(r, row_out)| {
+                let rr = r as isize;
+                for c in 0..cols {
+                    row_out[c as usize] = input.get(band, rr, c);
+                }
+            });
+
+        if radius <= 0 {
+            return base;
+        }
+
+        let filter_size = radius * 2 + 1;
+        if filter_size <= 3 {
+            return base;
+        }
+
+        let sigma = (radius as f64 + 0.5) / 3.0;
+        if sigma < 1.8 {
+            return Self::gaussian_blur_band(input, band, radius, nodata);
+        }
+
+        let mut out = base;
+        for width in Self::almost_gaussian_box_widths(sigma, 4) {
+            let rad = ((width as f64) / 2.0).floor() as isize;
+            let tmp = Self::box_blur_pass_horizontal(&out, rows, cols, rad, nodata);
+            out = Self::box_blur_pass_vertical(&tmp, rows, cols, rad, nodata);
+        }
         out
     }
 
@@ -753,7 +925,7 @@ impl MultiscaleCurvaturesTool {
 
             for s in 0..cfg.num_steps {
                 let radius = Self::radius_for_step(cfg, s);
-                let smoothed = Self::gaussian_blur_band(&input, band, radius, nodata);
+                let smoothed = Self::smooth_band_legacy_like(&input, band, radius, nodata);
 
                 let mut curv = vec![nodata; (rows * cols) as usize];
                 curv.par_chunks_mut(cols as usize)
@@ -793,47 +965,51 @@ impl MultiscaleCurvaturesTool {
                     });
 
                 if cfg.standardize {
-                    let (sum, count) = curv
-                        .iter()
-                        .filter(|v| **v != nodata)
-                        .fold((0.0f64, 0usize), |(acc, n), v| (acc + *v, n + 1));
+                    let (sum, sum_sq, count) = curv.iter().fold(
+                        (0.0f64, 0.0f64, 0usize),
+                        |(acc, acc_sq, n), v| {
+                            if *v == nodata {
+                                (acc, acc_sq, n)
+                            } else {
+                                (acc + *v, acc_sq + *v * *v, n + 1)
+                            }
+                        },
+                    );
+
                     if count > 0 {
                         let mean = sum / count as f64;
-                        let sq_sum = curv
-                            .iter()
-                            .filter(|v| **v != nodata)
-                            .map(|v| {
-                                let d = *v - mean;
-                                d * d
-                            })
-                            .sum::<f64>();
-                        let std = (sq_sum / count as f64).sqrt();
+                        let std = (sum_sq / count as f64 - mean * mean).max(0.0).sqrt();
                         if std > f64::EPSILON {
-                            for v in &mut curv {
-                                if *v != nodata {
-                                    *v = (*v - mean) / std;
+                            for idx in 0..curv.len() {
+                                let v = curv[idx];
+                                if v == nodata {
+                                    continue;
+                                }
+                                let z = (v - mean) / std;
+                                if best_mag[idx] == nodata || z.abs() > best_mag[idx].abs() {
+                                    best_mag[idx] = z;
+                                    best_scale[idx] = radius as f64;
                                 }
                             }
                         } else {
-                            for v in &mut curv {
-                                if *v != nodata {
-                                    *v = 0.0;
+                            for idx in 0..curv.len() {
+                                if curv[idx] != nodata && best_mag[idx] == nodata {
+                                    best_mag[idx] = 0.0;
+                                    best_scale[idx] = radius as f64;
                                 }
                             }
                         }
                     }
-                }
-
-                for idx in 0..curv.len() {
-                    let v = curv[idx];
-                    if v == nodata {
-                        best_mag[idx] = nodata;
-                        best_scale[idx] = -32768.0;
-                        continue;
-                    }
-                    if best_mag[idx] == nodata || v.abs() > best_mag[idx].abs() {
-                        best_mag[idx] = v;
-                        best_scale[idx] = radius as f64;
+                } else {
+                    for idx in 0..curv.len() {
+                        let v = curv[idx];
+                        if v == nodata {
+                            continue;
+                        }
+                        if best_mag[idx] == nodata || v.abs() > best_mag[idx].abs() {
+                            best_mag[idx] = v;
+                            best_scale[idx] = radius as f64;
+                        }
                     }
                 }
 
@@ -901,7 +1077,7 @@ impl Tool for MultiscaleCurvaturesTool {
                 },
                 ToolParamSpec {
                     name: "min_scale",
-                    description: "Minimum search-neighbourhood radius in grid cells (default 1).",
+                    description: "Minimum search-neighbourhood radius in grid cells (default 4).",
                     required: false,
                 },
                 ToolParamSpec {
@@ -921,7 +1097,7 @@ impl Tool for MultiscaleCurvaturesTool {
                 },
                 ToolParamSpec {
                     name: "log_transform",
-                    description: "Apply signed log transform to output values. Alias: log.",
+                    description: "Apply signed log transform to output values (default true). Alias: log.",
                     required: false,
                 },
                 ToolParamSpec {
@@ -937,11 +1113,11 @@ impl Tool for MultiscaleCurvaturesTool {
         let mut defaults = ToolArgs::new();
         defaults.insert("input".to_string(), json!("dem.tif"));
         defaults.insert("curv_type".to_string(), json!("profile"));
-        defaults.insert("min_scale".to_string(), json!(1));
+        defaults.insert("min_scale".to_string(), json!(4));
         defaults.insert("step".to_string(), json!(1));
         defaults.insert("num_steps".to_string(), json!(10));
         defaults.insert("step_nonlinearity".to_string(), json!(1.0));
-        defaults.insert("log_transform".to_string(), json!(false));
+        defaults.insert("log_transform".to_string(), json!(true));
         defaults.insert("standardize".to_string(), json!(false));
 
         let mut example_args = ToolArgs::new();
@@ -949,7 +1125,7 @@ impl Tool for MultiscaleCurvaturesTool {
         example_args.insert("curv_type".to_string(), json!("unsphericity"));
         example_args.insert("out_mag".to_string(), json!("multiscale_mag.tif"));
         example_args.insert("out_scale".to_string(), json!("multiscale_scale.tif"));
-        example_args.insert("min_scale".to_string(), json!(1));
+        example_args.insert("min_scale".to_string(), json!(4));
         example_args.insert("step".to_string(), json!(1));
         example_args.insert("num_steps".to_string(), json!(20));
         example_args.insert("step_nonlinearity".to_string(), json!(1.0));
@@ -1105,5 +1281,30 @@ mod tests {
         let out = memory_store::get_raster_by_id(out_id).unwrap();
 
         assert!(out.get(0, 16, 16).abs() < 1e-10);
+    }
+
+    #[test]
+    fn multiscale_curvatures_large_scale_legacy_smoother_branch_is_active() {
+        let mut raster = make_constant_raster(24, 24, 0.0);
+        for r in 8..16 {
+            for c in 8..16 {
+                raster.set(0, r, c, 10.0).unwrap();
+            }
+        }
+
+        let legacy_like = MultiscaleCurvaturesTool::smooth_band_legacy_like(&raster, 0, 6, -9999.0);
+        let gaussian = MultiscaleCurvaturesTool::gaussian_blur_band(&raster, 0, 6, -9999.0);
+
+        let mut differs = false;
+        for i in 0..legacy_like.len() {
+            let a = legacy_like[i];
+            let b = gaussian[i];
+            if a.is_finite() && b.is_finite() && (a - b).abs() > 1e-9 {
+                differs = true;
+                break;
+            }
+        }
+
+        assert!(differs, "expected legacy-like large-scale smoothing to differ from direct Gaussian smoothing");
     }
 }

@@ -2490,7 +2490,8 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("multiscale_std_dev_normals_signature", "terrain", "multiscale_signatures"),
     ("multiscale_topographic_position_class", "terrain", "landform_indices"),
     ("multiscale_topographic_position_image", "terrain", "multiscale_signatures"),
-    ("narrowness_index", "vector", "shape_metrics"),
+    ("narrowness_index", "raster", "general"),
+    ("narrowness_index_vector", "vector", "shape_metrics"),
     ("natural_neighbour_interpolation", "raster", "local_neighborhood"),
     ("near", "vector", "overlay_analysis"),
     ("nearest_neighbour_interpolation", "raster", "local_neighborhood"),
@@ -26164,7 +26165,7 @@ impl WbEnvironment {
     }
 
     #[pyo3(signature = (input, output_path=None, callback=None))]
-    fn narrowness_index(
+    fn narrowness_index_vector(
         &self,
         input: &Vector,
         output_path: Option<&str>,
@@ -26173,14 +26174,14 @@ impl WbEnvironment {
         let output = self
             .resolve_output_path_for_wd(output_path)
             .unwrap_or_else(|| {
-                derived_output_path(&input.file_path, "narrowness_index")
+                derived_output_path(&input.file_path, "narrowness_index_vector")
                     .to_string_lossy()
                     .to_string()
             });
         let mut args = serde_json::Map::new();
         args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
         args.insert("output".to_string(), json!(output));
-        self._run_vector_tool_with_args("narrowness_index", args, callback)
+        self._run_vector_tool_with_args("narrowness_index_vector", args, callback)
     }
 
     #[pyo3(signature = (input, output_path=None, callback=None))]
@@ -28155,7 +28156,7 @@ impl WbEnvironment {
         self._run_raster_tool_with_args("modified_shepard_interpolation", args, 0, callback)
     }
 
-    #[pyo3(signature = (points, field_name="FID", use_z=false, radius=0.0, min_points=16, cell_size=None, base_raster=None, func_type="thinplatespline", poly_order="none", weight=0.1, output_path=None, callback=None))]
+    #[pyo3(signature = (points, field_name="FID", use_z=false, radius=0.0, min_points=16, cell_size=None, base_raster=None, func_type="thinplatespline", poly_order="none", weight=0.1, approximate_mode=true, output_path=None, callback=None))]
     fn radial_basis_function_interpolation(
         &self,
         points: &Vector,
@@ -28168,6 +28169,7 @@ impl WbEnvironment {
         func_type: &str,
         poly_order: &str,
         weight: f64,
+        approximate_mode: bool,
         output_path: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Raster> {
@@ -28180,6 +28182,7 @@ impl WbEnvironment {
         args.insert("func_type".to_string(), json!(func_type));
         args.insert("poly_order".to_string(), json!(poly_order));
         args.insert("weight".to_string(), json!(weight));
+        args.insert("approximate_mode".to_string(), json!(approximate_mode));
         if let Some(v) = cell_size {
             args.insert("cell_size".to_string(), json!(v));
         }
@@ -28221,6 +28224,21 @@ impl WbEnvironment {
             args.insert("output".to_string(), json!(out));
         }
         self._run_raster_tool_with_args("tin_interpolation", args, 0, callback)
+    }
+
+    #[pyo3(signature = (input, output_path=None, callback=None))]
+    fn narrowness_index(
+        &self,
+        input: &Raster,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Raster> {
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        self._run_raster_tool_with_args("narrowness_index", args, input.active_band, callback)
     }
 
     #[pyo3(signature = (input, buffer_size, grid_cell_units=false, output_path=None, callback=None))]

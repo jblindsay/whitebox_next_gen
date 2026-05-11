@@ -3,6 +3,7 @@ use wbcore::*;
 
 pub mod memory_store;
 pub mod palettes;
+pub mod rendering;
 pub mod tools;
 
 pub struct ToolRegistry {
@@ -444,6 +445,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::MinOverlayTool));
     registry.register(Box::new(tools::MultiplyOverlayTool));
     registry.register(Box::new(tools::NarrownessIndexTool));
+    registry.register(Box::new(tools::NarrownessIndexVectorTool));
     registry.register(Box::new(tools::PercentEqualToTool));
     registry.register(Box::new(tools::PercentGreaterThanTool));
     registry.register(Box::new(tools::PercentLessThanTool));

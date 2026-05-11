@@ -367,7 +367,6 @@
       "category": "vector",
       "subcategory": "geometry_processing",
       "tools": [
-        "buffer_vector",
         "centroid_vector",
         "concave_hull",
         "densify_features",
@@ -395,7 +394,7 @@
         "elongation_ratio",
         "hole_proportion",
         "linearity_index",
-        "narrowness_index",
+        "narrowness_index_vector",
         "patch_orientation",
         "perimeter_area_ratio",
         "polygon_area",
@@ -779,6 +778,7 @@
         "max",
         "min",
         "modified_shepard_interpolation",
+        "narrowness_index",
         "negate",
         "nibble",
         "not_equal_to",
@@ -1176,10 +1176,6 @@
       "source_crate": "wbtools_oss"
     },
     "buffer_raster": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "buffer_vector": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
@@ -2672,6 +2668,10 @@
       "source_crate": "wbtools_oss"
     },
     "narrowness_index": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "narrowness_index_vector": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },

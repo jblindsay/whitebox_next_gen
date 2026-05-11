@@ -23,6 +23,7 @@ fn max_distance_squared(
 use evalexpr::{build_operator_tree, ContextWithMutableVariables, HashMapContext, Value};
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
+use nalgebra::{DMatrix, DVector, Matrix5, RowVector5, Vector5};
 use rayon::prelude::*;
 use serde_json::json;
 use wbcore::{PercentCoalescer,
@@ -42,7 +43,8 @@ use wbtopology::{
     geometry_length, intersects, is_within_distance, overlaps,
     polygon_difference, simplify_geometry, touches, within,
     delaunay_triangulation,
-    polygonize_closed_linestrings, polygonize_linework, PolygonizeOptions,
+    PreparedSibsonInterpolator,
+    polygonize_linework, PolygonizeOptions,
     polygon_intersection, polygon_unary_dissolve, polygon_unary_union_with_options,
     UnaryDissolveOptions, UnaryDissolveStrategy,
     voronoi_diagram,
@@ -143,6 +145,7 @@ pub struct HeatMapTool;
 pub struct HoleProportionTool;
 pub struct LinearityIndexTool;
 pub struct NarrownessIndexTool;
+pub struct NarrownessIndexVectorTool;
 pub struct PatchOrientationTool;
 pub struct PerimeterAreaRatioTool;
 pub struct RadiusOfGyrationTool;
@@ -3537,6 +3540,76 @@ fn samples_bbox_diagonal(samples: &[(f64, f64, f64)]) -> f64 {
     (max_x - min_x).hypot(max_y - min_y)
 }
 
+// Local quadratic correction used by modified Shepard interpolation.
+#[derive(Clone, Copy, Debug, Default)]
+struct Quadratic2d {
+    a: f64,
+    b: f64,
+    c: f64,
+    d: f64,
+    e: f64,
+}
+
+impl Quadratic2d {
+    fn from_points(relative_points: &[(f64, f64)], relative_values: &[f64]) -> Self {
+        if relative_points.len() != relative_values.len() || relative_points.is_empty() {
+            return Self::default();
+        }
+
+        let mut zx2 = 0.0;
+        let mut zy2 = 0.0;
+        let mut zxy = 0.0;
+        let mut zx = 0.0;
+        let mut zy = 0.0;
+        let mut x2 = 0.0;
+        let mut x2y2 = 0.0;
+        let mut x4 = 0.0;
+
+        for (i, (x, y)) in relative_points.iter().enumerate() {
+            let z = relative_values[i];
+            let xx = x * x;
+            let yy = y * y;
+            zx2 += z * xx;
+            zy2 += z * yy;
+            zxy += z * x * y;
+            zx += z * x;
+            zy += z * y;
+            x2 += xx;
+            x2y2 += xx * yy;
+            x4 += xx * xx;
+        }
+
+        let a = Matrix5::from_rows(&[
+            RowVector5::new(x4, x2y2, 0.0, 0.0, 0.0),
+            RowVector5::new(x2y2, x4, 0.0, 0.0, 0.0),
+            RowVector5::new(0.0, 0.0, x2y2, 0.0, 0.0),
+            RowVector5::new(0.0, 0.0, 0.0, x2, 0.0),
+            RowVector5::new(0.0, 0.0, 0.0, 0.0, x2),
+        ]);
+        let b = Vector5::new(zx2, zy2, zxy, zx, zy);
+        let lu = a.lu();
+        if !lu.is_invertible() {
+            return Self::default();
+        }
+
+        if let Some(solution) = lu.solve(&b) {
+            Self {
+                a: solution[0],
+                b: solution[1],
+                c: solution[2],
+                d: solution[3],
+                e: solution[4],
+            }
+        } else {
+            Self::default()
+        }
+    }
+
+    fn solve(&self, x: f64, y: f64) -> f64 {
+        self.a * x * x + self.b * y * y + self.c * x * y + self.d * x + self.e * y
+    }
+}
+
 #[derive(Clone, Copy)]
 enum RbfBasisType {
     ThinPlateSpline,
@@ -3561,6 +3634,102 @@ impl RbfBasisType {
             Self::InverseMultiQuadric
         }
     }
+}
+
+#[derive(Clone, Copy)]
+enum RbfPolyOrder {
+    None,
+    Constant,
+    Quadratic,
+}
+
+impl RbfPolyOrder {
+    fn parse(value: Option<&str>) -> Self {
+        let text = value.unwrap_or("none").trim().to_ascii_lowercase();
+        if text.contains("const") {
+            Self::Constant
+        } else if text.contains("quad") {
+            Self::Quadratic
+        } else {
+            Self::None
+        }
+    }
+}
+
+fn rbf_kernel_value(dist: f64, basis: RbfBasisType, weight: f64) -> f64 {
+    let eps = weight.abs().max(1.0e-12);
+    let r = dist.max(1.0e-12);
+    match basis {
+        RbfBasisType::ThinPlateSpline => {
+            let re = eps * r;
+            re * re * re.ln()
+        }
+        RbfBasisType::PolyHarmonic => r.powf(weight.abs().max(1.0)),
+        RbfBasisType::Gaussian => (-(eps * r).powi(2)).exp(),
+        RbfBasisType::MultiQuadric => (1.0 + (eps * r).powi(2)).sqrt(),
+        RbfBasisType::InverseMultiQuadric => 1.0 / (1.0 + (eps * r).powi(2)).sqrt(),
+    }
+}
+
+fn rbf_poly_terms(x: f64, y: f64, order: RbfPolyOrder) -> Vec<f64> {
+    match order {
+        RbfPolyOrder::None => Vec::new(),
+        RbfPolyOrder::Constant => vec![1.0],
+        RbfPolyOrder::Quadratic => vec![1.0, x, y, x * x, x * y, y * y],
+    }
+}
+
+fn solve_local_rbf(
+    local_samples: &[(f64, f64, f64)],
+    query_x: f64,
+    query_y: f64,
+    basis: RbfBasisType,
+    poly_order: RbfPolyOrder,
+    weight: f64,
+) -> Option<f64> {
+    let n = local_samples.len();
+    if n == 0 {
+        return None;
+    }
+    let p = rbf_poly_terms(query_x, query_y, poly_order).len();
+    let dim = n + p;
+
+    let mut system = DMatrix::<f64>::zeros(dim, dim);
+    let mut rhs = DVector::<f64>::zeros(dim);
+
+    for i in 0..n {
+        let (xi, yi, zi) = local_samples[i];
+        rhs[i] = zi;
+        for j in 0..n {
+            let (xj, yj, _) = local_samples[j];
+            let d = (xi - xj).hypot(yi - yj);
+            system[(i, j)] = rbf_kernel_value(d, basis, weight);
+        }
+
+        if p > 0 {
+            let terms = rbf_poly_terms(xi, yi, poly_order);
+            for (k, term) in terms.iter().enumerate() {
+                system[(i, n + k)] = *term;
+                system[(n + k, i)] = *term;
+            }
+        }
+    }
+
+    let lu = system.lu();
+    let coeffs = lu.solve(&rhs)?;
+    let mut estimate = 0.0;
+
+    for i in 0..n {
+        let d = (query_x - local_samples[i].0).hypot(query_y - local_samples[i].1);
+        estimate += coeffs[i] * rbf_kernel_value(d, basis, weight);
+    }
+    if p > 0 {
+        let q_terms = rbf_poly_terms(query_x, query_y, poly_order);
+        for (k, term) in q_terms.iter().enumerate() {
+            estimate += coeffs[n + k] * *term;
+        }
+    }
+    Some(estimate)
 }
 
 fn rbf_similarity_weight(dist: f64, basis: RbfBasisType, weight: f64) -> f64 {
@@ -4353,25 +4522,66 @@ fn run_block_extrema(args: &ToolArgs, ctx: &ToolContext, take_max: bool) -> Resu
         })
     };
 
-    for (index, value) in (0..output.data.len()).map(|i| (i, output.nodata)) {
-        output.data.set_f64(index, value);
-    }
+    coalescer.emit_unit_fraction(ctx.progress, 0.2);
 
     ctx.progress.info("assigning point values to raster blocks");
-    for (sample_index, (x, y, value)) in samples.iter().enumerate() {
-        if let Some((col, row)) = output.world_to_pixel(*x, *y) {
-            let idx = output.index(0, row, col).ok_or_else(|| ToolError::Execution("computed block cell is out of bounds".to_string()))?;
-            let current = output.data.get_f64(idx);
-            let next = if output.is_nodata(current) {
-                *value
-            } else if take_max {
-                current.max(*value)
-            } else {
-                current.min(*value)
-            };
-            output.data.set_f64(idx, next);
-        }
-        coalescer.emit_unit_fraction(ctx.progress, (sample_index + 1) as f64 / samples.len().max(1) as f64);
+    let extrema_by_cell = samples
+        .par_iter()
+        .fold(
+            HashMap::<usize, f64>::new,
+            |mut local_map, (x, y, value)| {
+                if let Some((col, row)) = output.world_to_pixel(*x, *y) {
+                    if let Some(idx) = output.index(0, row, col) {
+                        match local_map.get_mut(&idx) {
+                            Some(current) => {
+                                if take_max {
+                                    if *value > *current {
+                                        *current = *value;
+                                    }
+                                } else if *value < *current {
+                                    *current = *value;
+                                }
+                            }
+                            None => {
+                                local_map.insert(idx, *value);
+                            }
+                        }
+                    }
+                }
+                local_map
+            },
+        )
+        .reduce(
+            HashMap::<usize, f64>::new,
+            |mut a, b| {
+                for (idx, value) in b {
+                    match a.get_mut(&idx) {
+                        Some(current) => {
+                            if take_max {
+                                if value > *current {
+                                    *current = value;
+                                }
+                            } else if value < *current {
+                                *current = value;
+                            }
+                        }
+                        None => {
+                            a.insert(idx, value);
+                        }
+                    }
+                }
+                a
+            },
+        );
+    coalescer.emit_unit_fraction(ctx.progress, 0.8);
+
+    let total_cells = extrema_by_cell.len().max(1) as f64;
+    for (written, (idx, value)) in extrema_by_cell.into_iter().enumerate() {
+        output.data.set_f64(idx, value);
+        coalescer.emit_unit_fraction(
+            ctx.progress,
+            0.8 + 0.19 * ((written + 1) as f64 / total_cells),
+        );
     }
 
     let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
@@ -4965,7 +5175,7 @@ impl Tool for NaturalNeighbourInterpolationTool {
         ToolMetadata {
             id: "natural_neighbour_interpolation",
             display_name: "Natural Neighbour Interpolation",
-            summary: "Interpolates a raster from point samples using a Delaunay-neighbour weighted scheme.",
+            summary: "Interpolates a raster from point samples using true Sibson natural-neighbour area weighting.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4992,7 +5202,7 @@ impl Tool for NaturalNeighbourInterpolationTool {
         ToolManifest {
             id: "natural_neighbour_interpolation".to_string(),
             display_name: "Natural Neighbour Interpolation".to_string(),
-            summary: "Interpolates a raster from point samples using a Delaunay-neighbour weighted scheme.".to_string(),
+            summary: "Interpolates a raster from point samples using true Sibson natural-neighbour area weighting.".to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -5007,7 +5217,7 @@ impl Tool for NaturalNeighbourInterpolationTool {
             defaults,
             examples: vec![ToolExample {
                 name: "natural_neighbour_interpolation_basic".to_string(),
-                description: "Interpolates point attributes using Delaunay-neighbour weighting.".to_string(),
+                description: "Interpolates point attributes using true Sibson natural-neighbour weighting.".to_string(),
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "interpolation".to_string(), "natural-neighbour".to_string(), "legacy-port".to_string()],
@@ -5052,21 +5262,11 @@ impl Tool for NaturalNeighbourInterpolationTool {
             .iter()
             .map(|(x, y, _)| TopoCoord::xy(*x, *y))
             .collect();
-        let triangulation = delaunay_triangulation(&topo_points, 1.0e-12);
-        if triangulation.triangles.is_empty() {
+        let interpolator = PreparedSibsonInterpolator::new(&topo_points, 1.0e-12);
+        if interpolator.triangles.is_empty() {
             return Err(ToolError::Execution(
                 "failed to build triangulation from input points".to_string(),
             ));
-        }
-
-        let mut adjacency: Vec<HashSet<usize>> = vec![HashSet::new(); triangulation.points.len()];
-        for tri in &triangulation.triangles {
-            adjacency[tri[0]].insert(tri[1]);
-            adjacency[tri[0]].insert(tri[2]);
-            adjacency[tri[1]].insert(tri[0]);
-            adjacency[tri[1]].insert(tri[2]);
-            adjacency[tri[2]].insert(tri[0]);
-            adjacency[tri[2]].insert(tri[1]);
         }
 
         let mut value_lookup = HashMap::with_capacity(samples.len());
@@ -5074,15 +5274,28 @@ impl Tool for NaturalNeighbourInterpolationTool {
             value_lookup.entry(point_key_bits(*x, *y)).or_insert(*value);
         }
 
-        let mut tree = KdTree::new(2);
-        for (idx, p) in triangulation.points.iter().enumerate() {
-            tree.add([p.x, p.y], idx)
-                .map_err(|e| ToolError::Execution(format!("failed building interpolation index: {e}")))?;
-        }
+        let values: Vec<f64> = interpolator
+            .points
+            .iter()
+            .map(|p| {
+                value_lookup
+                    .get(&point_key_bits(p.x, p.y))
+                    .copied()
+                    .ok_or_else(|| {
+                        ToolError::Execution(
+                            "prepared Sibson point value lookup failed".to_string(),
+                        )
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         let hull = if clip_to_hull {
             Some(convex_hull_2d(
-                &triangulation.points.iter().map(|p| (p.x, p.y)).collect::<Vec<_>>(),
+                &interpolator
+                    .points
+                    .iter()
+                    .map(|p| (p.x, p.y))
+                    .collect::<Vec<_>>(),
             ))
         } else {
             None
@@ -5096,6 +5309,7 @@ impl Tool for NaturalNeighbourInterpolationTool {
         let cell_x = output.cell_size_x;
         let cell_y = output.cell_size_y;
         let mut out_values = vec![nodata; output.data.len()];
+        let mut scratch = interpolator.new_scratch();
 
         for row in 0..rows {
             for col in 0..cols {
@@ -5108,38 +5322,12 @@ impl Tool for NaturalNeighbourInterpolationTool {
                     }
                 }
 
-                let nearest = tree
-                    .nearest(&[x, y], 1, &squared_euclidean)
-                    .map_err(|e| ToolError::Execution(format!("nearest-neighbour search failed: {e}")))?;
-                let Some((_, nearest_idx_ref)) = nearest.first() else {
-                    continue;
-                };
-                let nearest_idx = **nearest_idx_ref;
-
-                let mut weighted_sum = 0.0;
-                let mut sum_w = 0.0;
-                let mut candidates = Vec::with_capacity(adjacency[nearest_idx].len() + 1);
-                candidates.push(nearest_idx);
-                candidates.extend(adjacency[nearest_idx].iter().copied());
-
-                for idx in candidates {
-                    let p = triangulation.points[idx];
-                    let value = *value_lookup
-                        .get(&point_key_bits(p.x, p.y))
-                        .ok_or_else(|| ToolError::Execution("point value lookup failed".to_string()))?;
-                    let dist2 = (x - p.x).powi(2) + (y - p.y).powi(2);
-                    if dist2 <= f64::EPSILON {
-                        weighted_sum = value;
-                        sum_w = 1.0;
-                        break;
-                    }
-                    let w = 1.0 / dist2.max(1.0e-12);
-                    weighted_sum += value * w;
-                    sum_w += w;
-                }
-
-                if sum_w > 0.0 {
-                    out_values[row * cols + col] = weighted_sum / sum_w;
+                if let Some(z) = interpolator.interpolate_with_scratch(
+                    TopoCoord::xy(x, y),
+                    &values,
+                    &mut scratch,
+                ) {
+                    out_values[row * cols + col] = z;
                 }
             }
             coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.99);
@@ -5170,7 +5358,7 @@ impl Tool for ModifiedShepardInterpolationTool {
                 ToolParamSpec { name: "weight", description: "Shepard weight exponent; defaults to 2.0.", required: false },
                 ToolParamSpec { name: "radius", description: "Optional neighbourhood radius in map units.", required: false },
                 ToolParamSpec { name: "min_points", description: "Minimum number of neighbours; defaults to 8.", required: false },
-                ToolParamSpec { name: "use_quadratic_basis", description: "Optional local quadratic basis flag (reserved for future parity refinement).", required: false },
+                ToolParamSpec { name: "use_quadratic_basis", description: "Apply local quadratic basis corrections (legacy-compatible mode).", required: false },
                 ToolParamSpec { name: "cell_size", description: "Output cell size when base_raster is not provided.", required: false },
                 ToolParamSpec { name: "base_raster", description: "Optional base raster controlling output geometry.", required: false },
                 ToolParamSpec { name: "use_data_hull", description: "Limit interpolation to the convex hull of points.", required: false },
@@ -5187,7 +5375,7 @@ impl Tool for ModifiedShepardInterpolationTool {
         defaults.insert("weight".to_string(), json!(2.0));
         defaults.insert("radius".to_string(), json!(0.0));
         defaults.insert("min_points".to_string(), json!(8));
-        defaults.insert("use_quadratic_basis".to_string(), json!(false));
+        defaults.insert("use_quadratic_basis".to_string(), json!(true));
         defaults.insert("cell_size".to_string(), json!(1.0));
         defaults.insert("use_data_hull".to_string(), json!(false));
         let mut example_args = defaults.clone();
@@ -5205,7 +5393,7 @@ impl Tool for ModifiedShepardInterpolationTool {
                 ToolParamDescriptor { name: "weight".to_string(), description: "Shepard weight exponent; defaults to 2.0.".to_string(), required: false },
                 ToolParamDescriptor { name: "radius".to_string(), description: "Optional neighbourhood radius in map units.".to_string(), required: false },
                 ToolParamDescriptor { name: "min_points".to_string(), description: "Minimum number of neighbours; defaults to 8.".to_string(), required: false },
-                ToolParamDescriptor { name: "use_quadratic_basis".to_string(), description: "Optional local quadratic basis flag (reserved for future parity refinement).".to_string(), required: false },
+                ToolParamDescriptor { name: "use_quadratic_basis".to_string(), description: "Apply local quadratic basis corrections (legacy-compatible mode).".to_string(), required: false },
                 ToolParamDescriptor { name: "cell_size".to_string(), description: "Output cell size when base_raster is not provided.".to_string(), required: false },
                 ToolParamDescriptor { name: "base_raster".to_string(), description: "Optional base raster controlling output geometry.".to_string(), required: false },
                 ToolParamDescriptor { name: "use_data_hull".to_string(), description: "Limit interpolation to the convex hull of points.".to_string(), required: false },
@@ -5256,10 +5444,10 @@ impl Tool for ModifiedShepardInterpolationTool {
         let weight = args.get("weight").and_then(|v| v.as_f64()).unwrap_or(2.0);
         let radius = args.get("radius").and_then(|v| v.as_f64()).unwrap_or(0.0);
         let min_points = args.get("min_points").and_then(|v| v.as_u64()).unwrap_or(8) as usize;
-        let _use_quadratic_basis = args
+        let use_quadratic_basis = args
             .get("use_quadratic_basis")
             .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+            .unwrap_or(true);
         let cell_size = args.get("cell_size").and_then(|v| v.as_f64());
         let base_raster = load_optional_raster_arg(args, "base_raster")?;
         let use_data_hull = args.get("use_data_hull").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -5270,8 +5458,8 @@ impl Tool for ModifiedShepardInterpolationTool {
         let mut output = build_point_interpolation_output(&points, &samples, cell_size, base_raster, DataType::F64)?;
 
         let mut tree = KdTree::new(2);
-        for (x, y, value) in &samples {
-            tree.add([*x, *y], *value)
+        for (sample_idx, (x, y, _)) in samples.iter().enumerate() {
+            tree.add([*x, *y], sample_idx)
                 .map_err(|e| ToolError::Execution(format!("failed building interpolation index: {e}")))?;
         }
 
@@ -5290,6 +5478,40 @@ impl Tool for ModifiedShepardInterpolationTool {
         };
         let radius_sq = radius * radius;
         let k = min_points.max(8).min(samples.len());
+        let mut basis_fns = vec![Quadratic2d::default(); samples.len()];
+
+        if use_quadratic_basis {
+            for sample_idx in 0..samples.len() {
+                let (sx, sy, sz) = samples[sample_idx];
+                let mut neighbours = if radius > 0.0 {
+                    tree.within(&[sx, sy], radius_sq, &squared_euclidean).map_err(|e| {
+                        ToolError::Execution(format!("modified shepard basis neighbourhood search failed: {e}"))
+                    })?
+                } else {
+                    Vec::new()
+                };
+
+                if neighbours.len() < k {
+                    neighbours = tree.nearest(&[sx, sy], k, &squared_euclidean).map_err(|e| {
+                        ToolError::Execution(format!("modified shepard basis nearest-neighbour search failed: {e}"))
+                    })?;
+                }
+
+                if neighbours.is_empty() {
+                    continue;
+                }
+
+                let mut relative_points = Vec::with_capacity(neighbours.len());
+                let mut relative_values = Vec::with_capacity(neighbours.len());
+                for (_, neighbour_idx) in neighbours {
+                    let idx = *neighbour_idx;
+                    let (nx, ny, nz) = samples[idx];
+                    relative_points.push((nx - sx, ny - sy));
+                    relative_values.push(nz - sz);
+                }
+                basis_fns[sample_idx] = Quadratic2d::from_points(&relative_points, &relative_values);
+            }
+        }
 
         let rows = output.rows;
         let cols = output.cols;
@@ -5331,9 +5553,17 @@ impl Tool for ModifiedShepardInterpolationTool {
                 let mut val = 0.0;
                 let mut sum_weights = 0.0;
                 let mut assigned = false;
-                for (dist2, z) in neighbours {
+                for (dist2, sample_idx_ref) in neighbours {
+                    let sample_idx = *sample_idx_ref;
+                    let (sx, sy, sz) = samples[sample_idx];
+                    let zn = if use_quadratic_basis {
+                        basis_fns[sample_idx].solve(x - sx, y - sy) + sz
+                    } else {
+                        sz
+                    };
+
                     if dist2 <= f64::EPSILON {
-                        out_values[row * cols + col] = *z;
+                        out_values[row * cols + col] = zn;
                         assigned = true;
                         break;
                     }
@@ -5342,7 +5572,7 @@ impl Tool for ModifiedShepardInterpolationTool {
                     let w = ((max_radius - dist).max(0.0) / denom).powf(weight);
                     if w > 0.0 && w.is_finite() {
                         sum_weights += w;
-                        val += *z * w;
+                        val += zn * w;
                     }
                 }
 
@@ -5375,6 +5605,7 @@ impl Tool for RadialBasisFunctionInterpolationTool {
                 ToolParamSpec { name: "points", description: "Input points vector layer.", required: true },
                 ToolParamSpec { name: "field_name", description: "Optional numeric attribute field; defaults to FID fallback.", required: false },
                 ToolParamSpec { name: "use_z", description: "Use Z values from point geometry instead of attributes.", required: false },
+                ToolParamSpec { name: "approximate_mode", description: "If true, use NG fast approximate weighting; if false, solve local RBF systems (legacy-style).", required: false },
                 ToolParamSpec { name: "radius", description: "Optional neighbourhood radius in map units.", required: false },
                 ToolParamSpec { name: "min_points", description: "Minimum number of neighbours to use.", required: false },
                 ToolParamSpec { name: "cell_size", description: "Output cell size when base_raster is not provided.", required: false },
@@ -5392,6 +5623,7 @@ impl Tool for RadialBasisFunctionInterpolationTool {
         defaults.insert("points".to_string(), json!("points.geojson"));
         defaults.insert("field_name".to_string(), json!("FID"));
         defaults.insert("use_z".to_string(), json!(false));
+        defaults.insert("approximate_mode".to_string(), json!(true));
         defaults.insert("radius".to_string(), json!(0.0));
         defaults.insert("min_points".to_string(), json!(16));
         defaults.insert("cell_size".to_string(), json!(1.0));
@@ -5410,6 +5642,7 @@ impl Tool for RadialBasisFunctionInterpolationTool {
                 ToolParamDescriptor { name: "points".to_string(), description: "Input points vector layer.".to_string(), required: true },
                 ToolParamDescriptor { name: "field_name".to_string(), description: "Optional numeric attribute field; defaults to FID fallback.".to_string(), required: false },
                 ToolParamDescriptor { name: "use_z".to_string(), description: "Use Z values from point geometry instead of attributes.".to_string(), required: false },
+                ToolParamDescriptor { name: "approximate_mode".to_string(), description: "If true, use NG fast approximate weighting; if false, solve local RBF systems (legacy-style).".to_string(), required: false },
                 ToolParamDescriptor { name: "radius".to_string(), description: "Optional neighbourhood radius in map units.".to_string(), required: false },
                 ToolParamDescriptor { name: "min_points".to_string(), description: "Minimum number of neighbours to use.".to_string(), required: false },
                 ToolParamDescriptor { name: "cell_size".to_string(), description: "Output cell size when base_raster is not provided.".to_string(), required: false },
@@ -5456,16 +5689,18 @@ impl Tool for RadialBasisFunctionInterpolationTool {
         let points = load_vector_arg(args, "points")?;
         let field_name = args.get("field_name").and_then(|v| v.as_str());
         let use_z = args.get("use_z").and_then(|v| v.as_bool()).unwrap_or(false);
+        let approximate_mode = args
+            .get("approximate_mode")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
         let radius = args.get("radius").and_then(|v| v.as_f64()).unwrap_or(0.0);
         let min_points = args.get("min_points").and_then(|v| v.as_u64()).unwrap_or(16) as usize;
         let cell_size = args.get("cell_size").and_then(|v| v.as_f64());
         let base_raster = load_optional_raster_arg(args, "base_raster")?;
         let basis = RbfBasisType::parse(args.get("func_type").and_then(|v| v.as_str()));
-        let _poly_order = args
+        let poly_order = RbfPolyOrder::parse(args
             .get("poly_order")
-            .and_then(|v| v.as_str())
-            .unwrap_or("none")
-            .to_ascii_lowercase();
+            .and_then(|v| v.as_str()));
         let shape_weight = args.get("weight").and_then(|v| v.as_f64()).unwrap_or(0.1);
         let output_path = parse_optional_output_path(args, "output")?;
 
@@ -5474,8 +5709,8 @@ impl Tool for RadialBasisFunctionInterpolationTool {
         let mut output = build_point_interpolation_output(&points, &samples, cell_size, base_raster, DataType::F64)?;
 
         let mut tree = KdTree::new(2);
-        for (x, y, value) in &samples {
-            tree.add([*x, *y], *value)
+        for (sample_idx, (x, y, _)) in samples.iter().enumerate() {
+            tree.add([*x, *y], sample_idx)
                 .map_err(|e| ToolError::Execution(format!("failed building interpolation index: {e}")))?;
         }
 
@@ -5519,22 +5754,47 @@ impl Tool for RadialBasisFunctionInterpolationTool {
                 let mut weighted_sum = 0.0;
                 let mut sum_w = 0.0;
                 let mut assigned = false;
-                for (dist2, z) in neighbours {
+                let mut local_samples = Vec::<(f64, f64, f64)>::with_capacity(neighbours.len());
+                for (dist2, sample_idx_ref) in neighbours {
+                    let sample_idx = *sample_idx_ref;
+                    let (sx, sy, sz) = samples[sample_idx];
                     if dist2 <= f64::EPSILON {
-                        out_values[row * cols + col] = *z;
+                        out_values[row * cols + col] = sz;
                         assigned = true;
                         break;
                     }
-                    let dist = dist2.sqrt();
-                    let w = rbf_similarity_weight(dist, basis, shape_weight);
-                    if w.is_finite() && w > 0.0 {
-                        weighted_sum += *z * w;
-                        sum_w += w;
+
+                    if approximate_mode {
+                        let dist = dist2.sqrt();
+                        let w = rbf_similarity_weight(dist, basis, shape_weight);
+                        if w.is_finite() && w > 0.0 {
+                            weighted_sum += sz * w;
+                            sum_w += w;
+                        }
+                    } else {
+                        local_samples.push((sx, sy, sz));
                     }
                 }
 
-                if !assigned && sum_w > 0.0 {
-                    out_values[row * cols + col] = weighted_sum / sum_w;
+                if assigned {
+                    continue;
+                }
+
+                if approximate_mode {
+                    if sum_w > 0.0 {
+                        out_values[row * cols + col] = weighted_sum / sum_w;
+                    }
+                } else if let Some(interp) = solve_local_rbf(
+                    &local_samples,
+                    x,
+                    y,
+                    basis,
+                    poly_order,
+                    shape_weight,
+                ) {
+                    if interp.is_finite() {
+                        out_values[row * cols + col] = interp;
+                    }
                 }
             }
             coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.99);
@@ -7381,37 +7641,35 @@ impl Tool for CentroidRasterTool {
 
         let rows = input.rows;
         let cols = input.cols;
-        let (sums, count) = (0..rows * cols)
+        let sums = (0..rows * cols)
             .into_par_iter()
             .fold(
-                || (HashMap::<i64, (usize, usize, usize)>::new(), HashMap::<i64, usize>::new()),
-                |(mut sums, mut counts), cell_idx| {
+                || HashMap::<i64, (usize, usize, usize)>::new(),
+                |mut sums, cell_idx| {
                     let row = cell_idx / cols;
                     let col = cell_idx % cols;
                     let value = input.get(0, row as isize, col as isize);
                     if input.is_nodata(value) || value <= 0.0 {
-                        return (sums, counts);
+                        return sums;
                     }
                     let key = value as i64;
                     let entry = sums.entry(key).or_insert((0, 0, 0));
                     entry.0 += row;
                     entry.1 += col;
                     entry.2 += 1;
-                    *counts.entry(key).or_insert(0) += 1;
-                    (sums, counts)
+                    sums
                 },
             )
             .reduce(
-                || (HashMap::new(), HashMap::new()),
-                |(mut sums_a, mut counts_a), (sums_b, counts_b)| {
+                || HashMap::new(),
+                |mut sums_a, sums_b| {
                     for (key, (sum_row, sum_col, cnt)) in sums_b {
                         let entry = sums_a.entry(key).or_insert((0, 0, 0));
                         entry.0 += sum_row;
                         entry.1 += sum_col;
                         entry.2 += cnt;
-                        *counts_a.entry(key).or_insert(0) += cnt;
                     }
-                    (sums_a, counts_a)
+                    sums_a
                 },
             );
         coalescer.emit_unit_fraction(ctx.progress, 0.5);
@@ -7429,24 +7687,21 @@ impl Tool for CentroidRasterTool {
             crs: input.crs.clone(),
             metadata: input.metadata.clone(),
         });
-        for row in 0..rows {
-            for col in 0..cols {
-                let v = input.get(0, row as isize, col as isize);
-                output
-                    .set(0, row as isize, col as isize, if input.is_nodata(v) { input.nodata } else { 0.0 })
-                    .map_err(|e| ToolError::Execution(format!("failed initializing centroid output raster: {e}")))?;
-            }
-        }
 
         let mut report = String::from("Patch Centroid\nPatch ID\tColumn\tRow\n");
-        for (patch_id, (sum_row, sum_col, count)) in &sums {
+        let mut patch_ids: Vec<i64> = sums.keys().copied().collect();
+        patch_ids.sort_unstable();
+        for patch_id in patch_ids {
+            let Some((sum_row, sum_col, count)) = sums.get(&patch_id) else {
+                continue;
+            };
             if *count == 0 {
                 continue;
             }
             let centroid_row = (sum_row / count) as isize;
             let centroid_col = (sum_col / count) as isize;
             output
-                .set(0, centroid_row, centroid_col, *patch_id as f64)
+                .set(0, centroid_row, centroid_col, patch_id as f64)
                 .map_err(|e| ToolError::Execution(format!("failed writing patch centroid cell: {e}")))?;
             let mean_col = *sum_col as f64 / *count as f64;
             let mean_row = *sum_row as f64 / *count as f64;
@@ -14702,7 +14957,7 @@ impl Tool for PolygonizeTool {
         ToolMetadata {
             id: "polygonize",
             display_name: "Polygonize",
-            summary: "Creates polygons from closed input linework rings.",
+            summary: "Creates polygons from input linework, including intersecting/open segments where enclosed faces can be formed.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -14742,7 +14997,7 @@ impl Tool for PolygonizeTool {
         ToolManifest {
             id: "polygonize".to_string(),
             display_name: "Polygonize".to_string(),
-            summary: "Creates polygons from closed input linework rings.".to_string(),
+            summary: "Creates polygons from input linework, including intersecting/open segments where enclosed faces can be formed.".to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -14770,7 +15025,7 @@ impl Tool for PolygonizeTool {
             defaults,
             examples: vec![ToolExample {
                 name: "polygonize_basic".to_string(),
-                description: "Polygonizes closed input linework.".to_string(),
+                description: "Polygonizes input linework into enclosed polygon faces.".to_string(),
                 args: example_args,
             }],
             tags: vec![
@@ -14834,15 +15089,12 @@ impl Tool for PolygonizeTool {
             let layer_lines: Vec<TopoLineString> = linework
                 .par_iter()
                 .filter_map(|line| {
-                    if line.coords.len() < 3 {
+                    if line.coords.len() < 2 {
                         return None;
                     }
                     let mut coords = line.coords.clone();
                     dedup_coords_eps(&mut coords, eps);
-                    if coords.len() < 3 {
-                        return None;
-                    }
-                    if !coord_eq_eps(&coords[0], &coords[coords.len() - 1], eps) {
+                    if coords.len() < 2 {
                         return None;
                     }
                     Some(TopoLineString::new(coords.iter().map(to_topo_coord).collect()))
@@ -14851,7 +15103,14 @@ impl Tool for PolygonizeTool {
             lines.extend(layer_lines);
         }
 
-        let polygons = polygonize_closed_linestrings(&lines, eps);
+        let polygonized = polygonize_linework(
+            &lines,
+            PolygonizeOptions {
+                epsilon: eps,
+                ..PolygonizeOptions::default()
+            },
+        );
+        let polygons = polygonized.polygons;
         let mut output = wbvector::Layer::new("polygonize");
         output.geom_type = Some(wbvector::GeometryType::Polygon);
         output.crs = layers.first().and_then(|layer| layer.crs.clone());
@@ -15104,43 +15363,6 @@ fn get_polygon_perimeter(geom: &wbvector::Geometry) -> Option<f64> {
                 for interior in interiors {
                     total_perim += polygon_perimeter(interior.coords());
                 }
-            }
-            Some(total_perim)
-        }
-        _ => None,
-    }
-}
-
-fn get_linestring_length(coords: &[wbvector::Coord]) -> f64 {
-    let mut length = 0.0;
-    for i in 0..coords.len() {
-        let j = i + 1;
-        if j < coords.len() {
-            let dx = coords[j].x - coords[i].x;
-            let dy = coords[j].y - coords[i].y;
-            length += (dx * dx + dy * dy).sqrt();
-        }
-    }
-    length
-}
-
-fn get_geometry_length(geom: &wbvector::Geometry) -> Option<f64> {
-    match geom {
-        wbvector::Geometry::LineString(coords) => Some(get_linestring_length(coords)),
-        wbvector::Geometry::MultiLineString(lines) => {
-            let mut total_length = 0.0;
-            for line in lines {
-                total_length += get_linestring_length(line);
-            }
-            Some(total_length)
-        }
-        wbvector::Geometry::Polygon { exterior, .. } => {
-            Some(polygon_perimeter(exterior.coords()))
-        }
-        wbvector::Geometry::MultiPolygon(parts) => {
-            let mut total_perim = 0.0;
-            for (exterior, _) in parts {
-                total_perim += polygon_perimeter(exterior.coords());
             }
             Some(total_perim)
         }
@@ -16626,7 +16848,7 @@ impl Tool for PolygonShortAxisTool {
             .enumerate()
             .map(|(index, feature)| {
                 let out = if let Some(geometry) = &feature.geometry {
-                    let axis = polygon_axis_line_from_geometry(geometry, true)?;
+                    let axis = polygon_axis_line_from_geometry(geometry, false)?;
                     Some(wbvector::Feature {
                         fid: if feature.fid == 0 { (index + 1) as u64 } else { feature.fid },
                         geometry: Some(wbvector::Geometry::LineString(axis)),
@@ -16730,7 +16952,7 @@ impl Tool for PolygonLongAxisTool {
             .enumerate()
             .map(|(index, feature)| {
                 let out = if let Some(geometry) = &feature.geometry {
-                    let axis = polygon_axis_line_from_geometry(geometry, false)?;
+                    let axis = polygon_axis_line_from_geometry(geometry, true)?;
                     Some(wbvector::Feature {
                         fid: if feature.fid == 0 { (index + 1) as u64 } else { feature.fid },
                         geometry: Some(wbvector::Geometry::LineString(axis)),
@@ -17162,7 +17384,7 @@ impl Tool for CompactnessRatioTool {
         ToolMetadata {
             id: "compactness_ratio",
             display_name: "Compactness Ratio",
-            summary: "Computes compactness ratio (perimeter of equivalent circle / actual perimeter) for polygon features.",
+            summary: "Computes compactness ratio (area / perimeter) for polygon features.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -17182,7 +17404,7 @@ impl Tool for CompactnessRatioTool {
         ToolManifest {
             id: "compactness_ratio".to_string(),
             display_name: "Compactness Ratio".to_string(),
-            summary: "Computes compactness ratio (perimeter of equivalent circle / actual perimeter) for polygon features.".to_string(),
+            summary: "Computes compactness ratio (area / perimeter) for polygon features.".to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -17213,8 +17435,8 @@ impl Tool for CompactnessRatioTool {
         ctx.progress.info("running compactness ratio");
         let mut output = input.clone();
         let mut schema = output.schema.clone();
-        if schema.field_index("COMPACTNESS").is_none() {
-            schema.add_field(wbvector::FieldDef::new("COMPACTNESS", wbvector::FieldType::Float));
+        if schema.field_index("COMPACT").is_none() {
+            schema.add_field(wbvector::FieldDef::new("COMPACT", wbvector::FieldType::Float));
             output.schema = schema;
         }
 
@@ -17226,8 +17448,7 @@ impl Tool for CompactnessRatioTool {
                     if let Some(area) = get_polygon_area(geometry) {
                         if let Some(perimeter) = get_polygon_perimeter(geometry) {
                             if area > 0.0 && perimeter > 0.0 {
-                                let equiv_circle_perim = 2.0 * (std::f64::consts::PI * area).sqrt() * std::f64::consts::PI.sqrt();
-                                equiv_circle_perim / perimeter
+                                area / perimeter
                             } else {
                                 -999.0
                             }
@@ -17320,16 +17541,38 @@ impl Tool for ElongationRatioTool {
             .par_iter()
             .map(|feature| {
                 let elongation = if let Some(geometry) = &feature.geometry {
-                    if let Some((min_x, min_y, max_x, max_y)) = get_bounding_box(geometry) {
-                        let width = max_x - min_x;
-                        let height = max_y - min_y;
-                        let (short_axis, long_axis) = if width < height {
-                            (width, height)
-                        } else {
-                            (height, width)
-                        };
-                        if long_axis > 0.0 {
-                            short_axis / long_axis
+                    let mut coords = Vec::<wbvector::Coord>::new();
+                    match geometry {
+                        wbvector::Geometry::Polygon { exterior, interiors } => {
+                            coords.extend(exterior.coords().iter().cloned());
+                            for interior in interiors {
+                                coords.extend(interior.coords().iter().cloned());
+                            }
+                        }
+                        wbvector::Geometry::MultiPolygon(parts) => {
+                            for (exterior, interiors) in parts {
+                                coords.extend(exterior.coords().iter().cloned());
+                                for interior in interiors {
+                                    coords.extend(interior.coords().iter().cloned());
+                                }
+                            }
+                        }
+                        _ => return -999.0,
+                    }
+
+                    if coords.len() < 2 {
+                        -999.0
+                    } else if let Some(mbb) = minimum_bounding_box_coords(&coords, MbbCriterion::Area, f64::EPSILON) {
+                        if mbb.len() >= 3 {
+                            let d01 = ((mbb[0].x - mbb[1].x).powi(2) + (mbb[0].y - mbb[1].y).powi(2)).sqrt();
+                            let d12 = ((mbb[1].x - mbb[2].x).powi(2) + (mbb[1].y - mbb[2].y).powi(2)).sqrt();
+                            let short_axis = d01.min(d12);
+                            let long_axis = d01.max(d12);
+                            if long_axis > 0.0 {
+                                1.0 - short_axis / long_axis
+                            } else {
+                                -999.0
+                            }
                         } else {
                             -999.0
                         }
@@ -17358,11 +17601,11 @@ impl Tool for LinearityIndexTool {
         ToolMetadata {
             id: "linearity_index",
             display_name: "Linearity Index",
-            summary: "Computes linearity index (straight-line distance / actual length) for line and polygon features.",
+            summary: "Computes linearity index (regression r-squared) for polygon features.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input line or polygon vector layer.", required: true },
+                ToolParamSpec { name: "input", description: "Input polygon vector layer.", required: true },
                 ToolParamSpec { name: "output", description: "Output vector with linearity field appended.", required: true },
             ],
         }
@@ -17378,17 +17621,17 @@ impl Tool for LinearityIndexTool {
         ToolManifest {
             id: "linearity_index".to_string(),
             display_name: "Linearity Index".to_string(),
-            summary: "Computes linearity index (straight-line distance / actual length) for line and polygon features.".to_string(),
+            summary: "Computes linearity index (regression r-squared) for polygon features.".to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamDescriptor { name: "input".to_string(), description: "Input line or polygon vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "input".to_string(), description: "Input polygon vector layer.".to_string(), required: true },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output vector with linearity field appended.".to_string(), required: true },
             ],
             defaults,
             examples: vec![ToolExample {
                 name: "linearity_index_basic".to_string(),
-                description: "Computes linearity index for line/polygon features.".to_string(),
+                description: "Computes linearity index for polygon features.".to_string(),
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "gis".to_string(), "shape".to_string(), "linearity".to_string(), "legacy-port".to_string()],
@@ -17397,7 +17640,14 @@ impl Tool for LinearityIndexTool {
     }
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
-        let _ = load_vector_arg(args, "input")?;
+        let input = load_vector_arg(args, "input")?;
+        if let Some(geom_type) = input.geom_type {
+            if geom_type != wbvector::GeometryType::Polygon {
+                return Err(ToolError::Validation(
+                    "input vector data must be of POLYGON base shape type".to_string(),
+                ));
+            }
+        }
         let _ = parse_vector_path_arg(args, "output")?;
         Ok(())
     }
@@ -17418,27 +17668,11 @@ impl Tool for LinearityIndexTool {
             .features
             .par_iter()
             .map(|feature| {
-                let linearity = if let Some(geometry) = &feature.geometry {
-                    if let Some((min_x, min_y, max_x, max_y)) = get_bounding_box(geometry) {
-                        let straight_dist = ((max_x - min_x) * (max_x - min_x)
-                            + (max_y - min_y) * (max_y - min_y))
-                            .sqrt();
-                        if let Some(actual_length) = get_geometry_length(geometry) {
-                            if actual_length > 0.0 {
-                                straight_dist / actual_length
-                            } else {
-                                -999.0
-                            }
-                        } else {
-                            -999.0
-                        }
-                    } else {
-                        -999.0
-                    }
-                } else {
-                    -999.0
-                };
-                linearity
+                feature
+                    .geometry
+                    .as_ref()
+                    .and_then(compute_legacy_linearity_index)
+                    .unwrap_or(-999.0)
             })
             .collect();
         for (feature, value) in output.features.iter_mut().zip(values) {
@@ -17452,11 +17686,327 @@ impl Tool for LinearityIndexTool {
     }
 }
 
+fn compute_legacy_linearity_index(geom: &wbvector::Geometry) -> Option<f64> {
+    let coords = match geom {
+        wbvector::Geometry::Polygon { exterior, .. } => exterior.coords(),
+        wbvector::Geometry::MultiPolygon(parts) => parts.first().map(|(exterior, _)| exterior.coords())?,
+        _ => return None,
+    };
+
+    if coords.is_empty() {
+        return None;
+    }
+
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for coord in coords {
+        min_x = min_x.min(coord.x);
+        min_y = min_y.min(coord.y);
+        max_x = max_x.max(coord.x);
+        max_y = max_y.max(coord.y);
+    }
+
+    let midpoint_x = (max_x - min_x) * 0.5;
+    let midpoint_y = (max_y - min_y) * 0.5;
+    let n = coords.len() as f64;
+
+    let mut sigma_x = 0.0;
+    let mut sigma_y = 0.0;
+    let mut sigma_xy = 0.0;
+    let mut sigma_xsqr = 0.0;
+    let mut sigma_ysqr = 0.0;
+
+    for coord in coords {
+        let x = coord.x - midpoint_x;
+        let y = coord.y - midpoint_y;
+        sigma_x += x;
+        sigma_y += y;
+        sigma_xy += x * y;
+        sigma_xsqr += x * x;
+        sigma_ysqr += y * y;
+    }
+
+    let mean_x = sigma_x / n;
+    let sxx = sigma_xsqr / n - mean_x * mean_x;
+    let mean_y = sigma_y / n;
+    let syy = sigma_ysqr / n - mean_y * mean_y;
+    let sxy = sigma_xy / n - (sigma_x * sigma_y) / (n * n);
+    let denom = (sxx * syy).sqrt();
+    if denom > 0.0 {
+        let r = sxy / denom;
+        Some(r * r)
+    } else {
+        Some(0.0)
+    }
+}
+
 impl Tool for NarrownessIndexTool {
     fn metadata(&self) -> ToolMetadata {
         ToolMetadata {
             id: "narrowness_index",
             display_name: "Narrowness Index",
+            summary: "Calculates raster patch narrowness index as area divided by area of the largest contained circle based on maximum distance-to-edge.",
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input patch-ID raster with positive integer-like IDs.", required: true },
+                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("patches.tif"));
+
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("narrowness_index.tif"));
+
+        ToolManifest {
+            id: "narrowness_index".to_string(),
+            display_name: "Narrowness Index".to_string(),
+            summary: "Calculates raster patch narrowness index as area divided by area of the largest contained circle based on maximum distance-to-edge.".to_string(),
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input patch-ID raster with positive integer-like IDs.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Optional output raster path.".to_string(), required: false },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "narrowness_index_basic".to_string(),
+                description: "Computes per-patch raster narrowness index values.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["raster".to_string(), "gis".to_string(), "patch".to_string(), "shape".to_string(), "legacy-port".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_required_raster_arg(args, "input")?;
+        let _ = parse_optional_output_path(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
+        let input = load_required_raster_arg(args, "input")?;
+        let output_path = parse_optional_output_path(args, "output")?;
+
+        let rows = input.rows;
+        let cols = input.cols;
+        let nodata = input.nodata;
+        let (raw_min, raw_max) = min_max_valid(&input)
+            .ok_or_else(|| ToolError::Validation("input raster does not contain valid patch IDs".to_string()))?;
+        let min_val = raw_min.floor();
+        let max_val = raw_max.floor();
+        if !min_val.is_finite() || !max_val.is_finite() || max_val < min_val {
+            return Err(ToolError::Validation("input raster does not contain valid patch IDs".to_string()));
+        }
+        let bins = (max_val - min_val + 1.0) as usize;
+        if bins == 0 {
+            return Err(ToolError::Validation("input raster does not contain valid patch IDs".to_string()));
+        }
+
+        let out_nodata = -999.0;
+        let inf_val = f64::INFINITY;
+        let mut dist_sq = vec![out_nodata; rows * cols];
+        let mut r_x = vec![0.0f64; rows * cols];
+        let mut r_y = vec![0.0f64; rows * cols];
+        let mut area_data = vec![0usize; bins];
+        let mut max_width = vec![0.0f64; bins];
+
+        let d_x: [isize; 8] = [-1, -1, 0, 1, 1, 1, 0, -1];
+        let d_y: [isize; 8] = [0, -1, -1, -1, 0, 1, 1, 1];
+        let g_x: [f64; 8] = [1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0];
+        let g_y: [f64; 8] = [0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0];
+        let cell_size = (input.cell_size_x + input.cell_size_y) / 2.0;
+
+        ctx.progress.info("running narrowness index");
+        for row in 0..rows {
+            for col in 0..cols {
+                let z = input.get(0, row as isize, col as isize);
+                let idx = row * cols + col;
+                if z == 0.0 || z == nodata {
+                    dist_sq[idx] = 0.0;
+                    continue;
+                }
+
+                let Some(bin) = patch_bin_index(z, min_val, bins) else {
+                    dist_sq[idx] = out_nodata;
+                    continue;
+                };
+                area_data[bin] += 1;
+
+                let mut is_edge = false;
+                for a in 0..8 {
+                    let z2 = input.get(0, row as isize + d_y[a], col as isize + d_x[a]);
+                    if z2 != z {
+                        is_edge = true;
+                        break;
+                    }
+                }
+                if is_edge {
+                    dist_sq[idx] = cell_size;
+                    max_width[bin] = cell_size;
+                } else {
+                    dist_sq[idx] = inf_val;
+                }
+            }
+            coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.25);
+        }
+
+        for row in 0..rows {
+            for col in 0..cols {
+                let idx = row * cols + col;
+                let z = dist_sq[idx];
+                if z != 0.0 {
+                    let mut z_min = inf_val;
+                    let mut which_cell = 0usize;
+                    for i in 0..4 {
+                        let nr = row as isize + d_y[i];
+                        let nc = col as isize + d_x[i];
+                        if nr < 0 || nc < 0 || nr >= rows as isize || nc >= cols as isize {
+                            continue;
+                        }
+                        let nidx = nr as usize * cols + nc as usize;
+                        let mut z2 = dist_sq[nidx];
+                        if z2 == out_nodata {
+                            continue;
+                        }
+                        let h = match i {
+                            0 => 2.0 * r_x[nidx] + 1.0,
+                            1 => 2.0 * (r_x[nidx] + r_y[nidx] + 1.0),
+                            2 => 2.0 * r_y[nidx] + 1.0,
+                            _ => 2.0 * (r_x[nidx] + r_y[nidx] + 1.0),
+                        };
+                        z2 += h;
+                        if z2 < z_min {
+                            z_min = z2;
+                            which_cell = i;
+                        }
+                    }
+                    if z_min < z {
+                        let nr = (row as isize + d_y[which_cell]) as usize;
+                        let nc = (col as isize + d_x[which_cell]) as usize;
+                        let nidx = nr * cols + nc;
+                        dist_sq[idx] = z_min;
+                        r_x[idx] = r_x[nidx] + g_x[which_cell];
+                        r_y[idx] = r_y[nidx] + g_y[which_cell];
+                    }
+                }
+            }
+            coalescer.emit_unit_fraction(ctx.progress, 0.25 + (row + 1) as f64 / rows.max(1) as f64 * 0.25);
+        }
+
+        for row in (0..rows).rev() {
+            for col in (0..cols).rev() {
+                let idx = row * cols + col;
+                let z = dist_sq[idx];
+                if z != 0.0 {
+                    let mut z_min = inf_val;
+                    let mut which_cell = 4usize;
+                    for i in 4..8 {
+                        let nr = row as isize + d_y[i];
+                        let nc = col as isize + d_x[i];
+                        if nr < 0 || nc < 0 || nr >= rows as isize || nc >= cols as isize {
+                            continue;
+                        }
+                        let nidx = nr as usize * cols + nc as usize;
+                        let mut z2 = dist_sq[nidx];
+                        if z2 == out_nodata {
+                            continue;
+                        }
+                        let h = match i {
+                            5 => 2.0 * (r_x[nidx] + r_y[nidx] + 1.0),
+                            4 => 2.0 * r_x[nidx] + 1.0,
+                            6 => 2.0 * r_y[nidx] + 1.0,
+                            _ => 2.0 * (r_x[nidx] + r_y[nidx] + 1.0),
+                        };
+                        z2 += h;
+                        if z2 < z_min {
+                            z_min = z2;
+                            which_cell = i;
+                        }
+                    }
+                    if z_min < z {
+                        let nr = (row as isize + d_y[which_cell]) as usize;
+                        let nc = (col as isize + d_x[which_cell]) as usize;
+                        let nidx = nr * cols + nc;
+                        dist_sq[idx] = z_min;
+                        r_x[idx] = r_x[nidx] + g_x[which_cell];
+                        r_y[idx] = r_y[nidx] + g_y[which_cell];
+                    }
+                }
+            }
+            let row_done = rows - row;
+            coalescer.emit_unit_fraction(ctx.progress, 0.5 + row_done as f64 / rows.max(1) as f64 * 0.2);
+        }
+
+        for row in 0..rows {
+            for col in 0..cols {
+                let z = input.get(0, row as isize, col as isize);
+                let idx = row * cols + col;
+                if z != nodata {
+                    if z != 0.0 {
+                        dist_sq[idx] = dist_sq[idx].sqrt() * cell_size;
+                        if let Some(bin) = patch_bin_index(z, min_val, bins) {
+                            if dist_sq[idx] > max_width[bin] {
+                                max_width[bin] = dist_sq[idx];
+                            }
+                        }
+                    } else {
+                        dist_sq[idx] = 0.0;
+                    }
+                } else {
+                    dist_sq[idx] = out_nodata;
+                }
+            }
+            coalescer.emit_unit_fraction(ctx.progress, 0.7 + (row + 1) as f64 / rows.max(1) as f64 * 0.15);
+        }
+
+        let cell_area = cell_size * cell_size;
+        let mut narrowness = vec![0.0f64; bins];
+        for bin in 1..bins {
+            if area_data[bin] > 0 && max_width[bin] > 0.0 {
+                narrowness[bin] = (area_data[bin] as f64 * cell_area)
+                    / (std::f64::consts::PI * max_width[bin] * max_width[bin]);
+            }
+        }
+
+        let mut output = build_output_like_raster(&input, DataType::F64);
+        output.nodata = out_nodata;
+        for row in 0..rows {
+            let row_offset = row * cols;
+            for col in 0..cols {
+                let z = input.get(0, row as isize, col as isize);
+                let out_val = if z == nodata {
+                    out_nodata
+                } else if z == 0.0 {
+                    0.0
+                } else if let Some(bin) = patch_bin_index(z, min_val, bins) {
+                    narrowness[bin]
+                } else {
+                    out_nodata
+                };
+                output.data.set_f64(row_offset + col, out_val);
+            }
+            coalescer.emit_unit_fraction(ctx.progress, 0.85 + (row + 1) as f64 / rows.max(1) as f64 * 0.15);
+        }
+
+        let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
+        Ok(GisOverlayCore::build_result(locator))
+    }
+}
+
+impl Tool for NarrownessIndexVectorTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "narrowness_index_vector",
+            display_name: "Narrowness Index Vector",
             summary: "Computes narrowness index (perimeter / sqrt(area)) for polygon features.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
@@ -17472,11 +18022,11 @@ impl Tool for NarrownessIndexTool {
         defaults.insert("input".to_string(), json!("polygons.shp"));
 
         let mut example_args = defaults.clone();
-        example_args.insert("output".to_string(), json!("narrowness_index.shp"));
+        example_args.insert("output".to_string(), json!("narrowness_index_vector.shp"));
 
         ToolManifest {
-            id: "narrowness_index".to_string(),
-            display_name: "Narrowness Index".to_string(),
+            id: "narrowness_index_vector".to_string(),
+            display_name: "Narrowness Index Vector".to_string(),
             summary: "Computes narrowness index (perimeter / sqrt(area)) for polygon features.".to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
@@ -17486,7 +18036,7 @@ impl Tool for NarrownessIndexTool {
             ],
             defaults,
             examples: vec![ToolExample {
-                name: "narrowness_index_basic".to_string(),
+                name: "narrowness_index_vector_basic".to_string(),
                 description: "Computes narrowness index for polygon features.".to_string(),
                 args: example_args,
             }],
@@ -17505,7 +18055,7 @@ impl Tool for NarrownessIndexTool {
         let input = load_vector_arg(args, "input")?;
         let output_path = parse_vector_path_arg(args, "output")?;
 
-        ctx.progress.info("running narrowness index");
+        ctx.progress.info("running narrowness index vector");
         let mut output = input.clone();
         let mut schema = output.schema.clone();
         if schema.field_index("NARROWNESS").is_none() {
@@ -18024,6 +18574,11 @@ impl Tool for ConstructVectorTinTool {
                     required: false,
                 },
                 ToolParamSpec {
+                    name: "use_z",
+                    description: "If true, use geometry Z values for triangle elevations.",
+                    required: false,
+                },
+                ToolParamSpec {
                     name: "max_triangle_edge_length",
                     description:
                         "Maximum allowable triangle edge length (filters long edges). Use 0 or negative for no limit.",
@@ -18042,6 +18597,7 @@ impl Tool for ConstructVectorTinTool {
         let mut defaults = ToolArgs::new();
         defaults.insert("input_points".to_string(), json!("points.shp"));
         defaults.insert("field_name".to_string(), json!("FID"));
+        defaults.insert("use_z".to_string(), json!(false));
         defaults.insert("max_triangle_edge_length".to_string(), json!(-1.0));
         let mut example_args = defaults.clone();
         example_args.insert("output".to_string(), json!("construct_vector_tin.shp"));
@@ -18063,6 +18619,12 @@ impl Tool for ConstructVectorTinTool {
                 ToolParamDescriptor {
                     name: "field_name".to_string(),
                     description: "Optional field name for vertex heights (numeric field)."
+                        .to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
+                    name: "use_z".to_string(),
+                    description: "If true, use geometry Z values for triangle elevations."
                         .to_string(),
                     required: false,
                 },
@@ -18108,12 +18670,41 @@ impl Tool for ConstructVectorTinTool {
             }
         }
 
+        let use_z = args.get("use_z").and_then(|v| v.as_bool()).unwrap_or(false);
         let field_name = args
             .get("field_name")
             .and_then(|v| v.as_str())
             .map(|s| s.trim())
             .unwrap_or("FID");
-        if !field_name.eq_ignore_ascii_case("FID") {
+        if use_z {
+            for feature in &input.features {
+                let Some(geometry) = feature.geometry.as_ref() else {
+                    continue;
+                };
+                match geometry {
+                    wbvector::Geometry::Point(coord) => {
+                        if coord.z.is_none() {
+                            return Err(ToolError::Validation(
+                                "input_points must contain Z values in point geometry when use_z is true".to_string(),
+                            ));
+                        }
+                    }
+                    wbvector::Geometry::MultiPoint(coords) => {
+                        if coords.iter().any(|c| c.z.is_none()) {
+                            return Err(ToolError::Validation(
+                                "input_points must contain Z values in all multipoint vertices when use_z is true".to_string(),
+                            ));
+                        }
+                    }
+                    _ => {
+                        return Err(ToolError::Validation(
+                            "input_points vector data must contain only point geometries"
+                                .to_string(),
+                        ));
+                    }
+                }
+            }
+        } else if !field_name.eq_ignore_ascii_case("FID") {
             let field_idx = input.schema.field_index(field_name).ok_or_else(|| {
                 ToolError::Validation("field_name must exist in input_points schema".to_string())
             })?;
@@ -18152,13 +18743,14 @@ impl Tool for ConstructVectorTinTool {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| "FID".to_string());
+        let use_z = args.get("use_z").and_then(|v| v.as_bool()).unwrap_or(false);
         let max_triangle_edge_length = args
             .get("max_triangle_edge_length")
             .and_then(|v| v.as_f64())
             .unwrap_or(-1.0);
         let output_path = parse_vector_path_arg(args, "output")?;
 
-        let field_idx = if field_name.eq_ignore_ascii_case("FID") {
+        let field_idx = if use_z || field_name.eq_ignore_ascii_case("FID") {
             None
         } else {
             Some(
@@ -18182,24 +18774,47 @@ impl Tool for ConstructVectorTinTool {
                     return Ok(Vec::new());
                 };
 
-                let z_value = if let Some(field_idx) = field_idx {
-                    feature
-                        .attributes
-                        .get(field_idx)
-                        .and_then(|value| value.as_f64())
-                        .unwrap_or(feature.fid as f64)
-                } else {
-                    feature.fid as f64
-                };
-
                 let mut local_points = Vec::<(TopoCoord, f64)>::new();
                 match geometry {
                     wbvector::Geometry::Point(coord) => {
+                        let z_value = if use_z {
+                            coord.z.ok_or_else(|| {
+                                ToolError::Validation(
+                                    "input_points must contain Z values in point geometry when use_z is true".to_string(),
+                                )
+                            })?
+                        } else if let Some(field_idx) = field_idx {
+                            feature
+                                .attributes
+                                .get(field_idx)
+                                .and_then(|value| value.as_f64())
+                                .unwrap_or(feature.fid as f64)
+                        } else {
+                            feature.fid as f64
+                        };
                         local_points.push((TopoCoord::xy(coord.x, coord.y), z_value));
                     }
                     wbvector::Geometry::MultiPoint(coords) => {
+                        let z_value = if let Some(field_idx) = field_idx {
+                            feature
+                                .attributes
+                                .get(field_idx)
+                                .and_then(|value| value.as_f64())
+                                .unwrap_or(feature.fid as f64)
+                        } else {
+                            feature.fid as f64
+                        };
                         for coord in coords {
-                            local_points.push((TopoCoord::xy(coord.x, coord.y), z_value));
+                            let point_z = if use_z {
+                                coord.z.ok_or_else(|| {
+                                    ToolError::Validation(
+                                        "input_points must contain Z values in all multipoint vertices when use_z is true".to_string(),
+                                    )
+                                })?
+                            } else {
+                                z_value
+                            };
+                            local_points.push((TopoCoord::xy(coord.x, coord.y), point_z));
                         }
                     }
                     _ => {
@@ -18242,50 +18857,96 @@ impl Tool for ConstructVectorTinTool {
         output
             .schema
             .add_field(wbvector::FieldDef::new("FID", wbvector::FieldType::Integer));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("CENTROID_Z", wbvector::FieldType::Float));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("HILLSHADE", wbvector::FieldType::Integer));
+
+        let azimuth = (315.0f64 - 90.0f64).to_radians();
+        let altitude = 30.0f64.to_radians();
+        let sin_theta = altitude.sin();
+        let cos_theta = altitude.cos();
 
         let total_triangles = triangulation.triangles.len().max(1);
-        let triangle_rings: Vec<Option<Vec<wbvector::Coord>>> = triangulation
+        let triangle_data: Vec<Option<(Vec<wbvector::Coord>, f64, i64)>> = triangulation
             .triangles
             .par_iter()
             .map(|tri| {
-                let p1 = tri[0];
+                // Maintain legacy clockwise vertex ordering.
+                let p1 = tri[2];
                 let p2 = tri[1];
-                let p3 = tri[2];
+                let p3 = tri[0];
 
                 let c1 = &points[p1];
                 let c2 = &points[p2];
                 let c3 = &points[p3];
+                let z1 = z_values[p1];
+                let z2 = z_values[p2];
+                let z3 = z_values[p3];
                 let max_edge_sq = max_distance_squared(
                     (c1.x, c1.y),
                     (c2.x, c2.y),
                     (c3.x, c3.y),
-                    z_values[p1],
-                    z_values[p2],
-                    z_values[p3],
+                    z1,
+                    z2,
+                    z3,
                 );
                 if max_edge_sq > max_edge_len_sq {
                     return None;
                 }
 
-                Some(vec![
+                let a = nalgebra::Vector3::new(c1.x, c1.y, z1);
+                let b = nalgebra::Vector3::new(c2.x, c2.y, z2);
+                let c = nalgebra::Vector3::new(c3.x, c3.y, z3);
+                let norm = (b - a).cross(&(c - a));
+                let centroid_z = (z1 + z2 + z3) / 3.0;
+
+                let mut hillshade = 0.0f64;
+                if norm.z != 0.0 {
+                    let fx = -norm.x / norm.z;
+                    let fy = -norm.y / norm.z;
+                    if fx != 0.0 {
+                        let tan_slope = (fx * fx + fy * fy).sqrt();
+                        let aspect = (180.0 - (fy / fx).atan().to_degrees() + 90.0 * (fx / fx.abs()))
+                            .to_radians();
+                        let term1 = tan_slope / (1.0 + tan_slope * tan_slope).sqrt();
+                        let term2 = sin_theta / tan_slope;
+                        let term3 = cos_theta * (azimuth - aspect).sin();
+                        hillshade = term1 * (term2 - term3);
+                    } else {
+                        hillshade = 0.5;
+                    }
+                    hillshade *= 1024.0;
+                    if hillshade < 0.0 {
+                        hillshade = 0.0;
+                    }
+                }
+
+                Some((vec![
                     wbvector::Coord::xy(c1.x, c1.y),
                     wbvector::Coord::xy(c2.x, c2.y),
                     wbvector::Coord::xy(c3.x, c3.y),
                     wbvector::Coord::xy(c1.x, c1.y),
-                ])
+                ], centroid_z, hillshade as i64))
             })
             .collect();
 
         let mut next_fid: u64 = 1;
-        for (tri_idx, ring) in triangle_rings.into_iter().enumerate() {
-            let Some(ring) = ring else {
+        for (tri_idx, tri_data) in triangle_data.into_iter().enumerate() {
+            let Some((ring, centroid_z, hillshade)) = tri_data else {
                 coalescer.emit_unit_fraction(ctx.progress, (tri_idx + 1) as f64 / total_triangles as f64);
                 continue;
             };
             output.push(wbvector::Feature {
                 fid: next_fid,
                 geometry: Some(wbvector::Geometry::polygon(ring, vec![])),
-                attributes: vec![wbvector::FieldValue::Integer(next_fid as i64)],
+                attributes: vec![
+                    wbvector::FieldValue::Integer(next_fid as i64),
+                    wbvector::FieldValue::Float(centroid_z),
+                    wbvector::FieldValue::Integer(hillshade),
+                ],
             });
 
             next_fid += 1;

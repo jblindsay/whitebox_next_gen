@@ -13,13 +13,14 @@ use wbcore::{
 	parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH, LicenseTier, Tool, ToolArgs, ToolCategory,
 	ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamSpec, ToolRunResult, ToolStability,
 };
+use wbprojection::{identify_epsg_from_wkt_with_policy, Crs, EpsgIdentifyPolicy};
 
 use wbraster::{BandView, DataType, Raster, RasterConfig, RasterFormat};
 use wbvector;
 use wbvector::memory_store as vector_memory_store;
 
 use crate::memory_store;
-use super::flow_algorithms::{D8FlowAccumTool, D8PointerTool};
+use super::flow_algorithms::D8FlowAccumTool;
 use super::stream_network_analysis::VectorStreamNetworkAnalysisTool;
 
 mod find_noflow_cells;
@@ -126,6 +127,22 @@ fn build_result(path: String) -> ToolRunResult {
 		outputs,
 		..Default::default()
 	}
+}
+
+fn raster_is_geographic(input: &Raster) -> bool {
+	let epsg = input.crs.epsg.or_else(|| {
+		input
+			.crs
+			.wkt
+			.as_deref()
+			.and_then(|w| identify_epsg_from_wkt_with_policy(w, EpsgIdentifyPolicy::Lenient))
+	});
+	if let Some(code) = epsg {
+		if let Ok(crs) = Crs::from_epsg(code) {
+			return crs.is_geographic();
+		}
+	}
+	false
 }
 
 fn write_or_store_vector_output(layer: &wbvector::Layer, output_path: &str) -> Result<String, ToolError> {
@@ -529,6 +546,33 @@ impl PartialOrd for FlatNode {
 }
 
 impl Ord for FlatNode {
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.partial_cmp(other).unwrap_or(Ordering::Equal)
+	}
+}
+
+#[derive(Clone, Copy)]
+struct FlowAccumWorkflowNode {
+	row: isize,
+	col: isize,
+	priority: f64,
+}
+
+impl PartialEq for FlowAccumWorkflowNode {
+	fn eq(&self, other: &Self) -> bool {
+		self.row == other.row && self.col == other.col && self.priority.to_bits() == other.priority.to_bits()
+	}
+}
+
+impl Eq for FlowAccumWorkflowNode {}
+
+impl PartialOrd for FlowAccumWorkflowNode {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(other.priority.total_cmp(&self.priority))
+	}
+}
+
+impl Ord for FlowAccumWorkflowNode {
 	fn cmp(&self, other: &Self) -> Ordering {
 		self.partial_cmp(other).unwrap_or(Ordering::Equal)
 	}
@@ -2158,6 +2202,40 @@ fn rasterize_polygon_boundaries(mask: &mut [u8], rows: usize, cols: usize, dem: 
 	}
 }
 
+fn rasterize_polygon_areas(mask: &mut [u8], _rows: usize, cols: usize, dem: &Raster, geom: &wbvector::Geometry) {
+	match geom {
+		wbvector::Geometry::Polygon { exterior, interiors } => {
+			if let Some((rmin, cmin, rmax, cmax)) = polygon_bbox_pixels(dem, exterior) {
+				for r in rmin..=rmax {
+					for c in cmin..=cmax {
+						let x = dem.col_center_x(c as isize);
+						let y = dem.row_center_y(r as isize);
+						if polygon_contains_xy(exterior, interiors, x, y) {
+							mask[idx(r, c, cols)] = 1;
+						}
+					}
+				}
+			}
+		}
+		wbvector::Geometry::MultiPolygon(polys) => {
+			for (exterior, interiors) in polys {
+				if let Some((rmin, cmin, rmax, cmax)) = polygon_bbox_pixels(dem, exterior) {
+					for r in rmin..=rmax {
+						for c in cmin..=cmax {
+							let x = dem.col_center_x(c as isize);
+							let y = dem.row_center_y(r as isize);
+							if polygon_contains_xy(exterior, interiors, x, y) {
+								mask[idx(r, c, cols)] = 1;
+							}
+						}
+					}
+				}
+			}
+		}
+		_ => {}
+	}
+}
+
 fn read_vector_layer_aligned_to_dem(dem: &Raster, path: &str, input_name: &str) -> Result<wbvector::Layer, ToolError> {
 	let layer = if wbvector::memory_store::vector_is_memory_path(path) {
 		let id = wbvector::memory_store::vector_path_to_id(path).ok_or_else(|| {
@@ -2232,6 +2310,493 @@ fn stream_mask_from_vector(dem: &Raster, path: &str, input_name: &str) -> Result
 		}
 	}
 	Ok(mask)
+}
+
+fn is_between_inclusive(v: f64, a: f64, b: f64) -> bool {
+	(v >= a && v <= b) || (v >= b && v <= a)
+}
+
+fn set_i8_cell(grid: &mut [i8], rows: usize, cols: usize, r: isize, c: isize, v: i8) {
+	if in_bounds(r, c, rows, cols) {
+		grid[idx(r as usize, c as usize, cols)] = v;
+	}
+}
+
+fn get_i8_cell(grid: &[i8], rows: usize, cols: usize, r: isize, c: isize) -> i8 {
+	if in_bounds(r, c, rows, cols) {
+		grid[idx(r as usize, c as usize, cols)]
+	} else {
+		-1
+	}
+}
+
+fn maybe_mark_intersection_from_intermediate(
+	grid: &mut [i8],
+	intersections: &mut Vec<usize>,
+	rows: usize,
+	cols: usize,
+	r: isize,
+	c: isize,
+) {
+	if !in_bounds(r, c, rows, cols) {
+		return;
+	}
+	let i = idx(r as usize, c as usize, cols);
+	if grid[i] == 1 {
+		intersections.push(i);
+		grid[i] = 4;
+		return;
+	}
+	if grid[i] != 0 {
+		return;
+	}
+
+	grid[i] = 2;
+
+	if (get_i8_cell(grid, rows, cols, r + DY[0], c + DX[0]) == 2
+		&& get_i8_cell(grid, rows, cols, r + DY[7], c + DX[7]) == 1
+		&& get_i8_cell(grid, rows, cols, r + DY[1], c + DX[1]) == 1)
+		|| (get_i8_cell(grid, rows, cols, r + DY[2], c + DX[2]) == 2
+			&& get_i8_cell(grid, rows, cols, r + DY[3], c + DX[3]) == 1
+			&& get_i8_cell(grid, rows, cols, r + DY[1], c + DX[1]) == 1)
+		|| (get_i8_cell(grid, rows, cols, r + DY[4], c + DX[4]) == 2
+			&& get_i8_cell(grid, rows, cols, r + DY[3], c + DX[3]) == 1
+			&& get_i8_cell(grid, rows, cols, r + DY[5], c + DX[5]) == 1)
+		|| (get_i8_cell(grid, rows, cols, r + DY[6], c + DX[6]) == 2
+			&& get_i8_cell(grid, rows, cols, r + DY[7], c + DX[7]) == 1
+			&& get_i8_cell(grid, rows, cols, r + DY[5], c + DX[5]) == 1)
+	{
+		intersections.push(i);
+		grid[i] = 4;
+	}
+}
+
+fn stream_road_crossings_legacy(dem: &Raster, streams: &wbvector::Layer, roads: &wbvector::Layer) -> (Vec<i8>, Vec<usize>) {
+	let rows = dem.rows;
+	let cols = dem.cols;
+	let mut grid = vec![0i8; rows * cols];
+	let mut intersections = Vec::<usize>::new();
+
+	let mut rasterize_stream_part = |pts: &[wbvector::Coord]| {
+		if pts.len() < 2 {
+			return;
+		}
+
+		if let Some((c0, r0)) = dem.world_to_pixel(pts[0].x, pts[0].y) {
+			if in_bounds(r0, c0, rows, cols) {
+				let i = idx(r0 as usize, c0 as usize, cols);
+				if grid[i] == 0 {
+					grid[i] = 1;
+				}
+			}
+		}
+		if let Some((c1, r1)) = dem.world_to_pixel(pts[pts.len() - 1].x, pts[pts.len() - 1].y) {
+			if in_bounds(r1, c1, rows, cols) {
+				let i = idx(r1 as usize, c1 as usize, cols);
+				if grid[i] == 0 {
+					grid[i] = 1;
+				}
+			}
+		}
+
+		let mut rmin = usize::MAX;
+		let mut cmin = usize::MAX;
+		let mut rmax = 0usize;
+		let mut cmax = 0usize;
+		let mut found = false;
+		for p in pts {
+			if let Some((c, r)) = dem.world_to_pixel(p.x, p.y) {
+				if in_bounds(r, c, rows, cols) {
+					let ru = r as usize;
+					let cu = c as usize;
+					rmin = rmin.min(ru);
+					cmin = cmin.min(cu);
+					rmax = rmax.max(ru);
+					cmax = cmax.max(cu);
+					found = true;
+				}
+			}
+		}
+		if !found {
+			return;
+		}
+
+		for r in rmin..=rmax {
+			let row_y = dem.row_center_y(r as isize);
+			for seg in pts.windows(2) {
+				let y1 = seg[0].y;
+				let y2 = seg[1].y;
+				if !is_between_inclusive(row_y, y1, y2) || (y2 - y1).abs() < 1.0e-15 {
+					continue;
+				}
+				let x1 = seg[0].x;
+				let x2 = seg[1].x;
+				let x_prime = x1 + (row_y - y1) / (y2 - y1) * (x2 - x1);
+				if let Some((c, rr)) = dem.world_to_pixel(x_prime, row_y) {
+					if in_bounds(rr, c, rows, cols) {
+						let i = idx(rr as usize, c as usize, cols);
+						if grid[i] == 0 {
+							grid[i] = 1;
+						}
+					}
+				}
+			}
+		}
+
+		for c in cmin..=cmax {
+			let col_x = dem.col_center_x(c as isize);
+			for seg in pts.windows(2) {
+				let x1 = seg[0].x;
+				let x2 = seg[1].x;
+				if !is_between_inclusive(col_x, x1, x2) || (x2 - x1).abs() < 1.0e-15 {
+					continue;
+				}
+				let y1 = seg[0].y;
+				let y2 = seg[1].y;
+				let y_prime = y1 + (col_x - x1) / (x2 - x1) * (y2 - y1);
+				if let Some((cc, r)) = dem.world_to_pixel(col_x, y_prime) {
+					if in_bounds(r, cc, rows, cols) {
+						let i = idx(r as usize, cc as usize, cols);
+						if grid[i] == 0 {
+							grid[i] = 1;
+						}
+					}
+				}
+			}
+		}
+	};
+
+	for feat in &streams.features {
+		if let Some(ref g) = feat.geometry {
+			match g {
+				wbvector::Geometry::LineString(pts) => rasterize_stream_part(pts),
+				wbvector::Geometry::MultiLineString(lines) => {
+					for part in lines {
+						rasterize_stream_part(part);
+					}
+				}
+				_ => {}
+			}
+		}
+	}
+
+	let mut scan_road_part = |pts: &[wbvector::Coord]| {
+		if pts.len() < 2 {
+			return;
+		}
+
+		if let Some((c0, r0)) = dem.world_to_pixel(pts[0].x, pts[0].y) {
+			if in_bounds(r0, c0, rows, cols) {
+				let i = idx(r0 as usize, c0 as usize, cols);
+				if grid[i] == 1 {
+					intersections.push(i);
+					grid[i] = 4;
+				} else {
+					grid[i] = 2;
+				}
+			}
+		}
+		if let Some((c1, r1)) = dem.world_to_pixel(pts[pts.len() - 1].x, pts[pts.len() - 1].y) {
+			if in_bounds(r1, c1, rows, cols) {
+				let i = idx(r1 as usize, c1 as usize, cols);
+				if grid[i] == 1 {
+					intersections.push(i);
+					grid[i] = 4;
+				} else {
+					grid[i] = 2;
+				}
+			}
+		}
+
+		let mut rmin = usize::MAX;
+		let mut cmin = usize::MAX;
+		let mut rmax = 0usize;
+		let mut cmax = 0usize;
+		let mut found = false;
+		for p in pts {
+			if let Some((c, r)) = dem.world_to_pixel(p.x, p.y) {
+				if in_bounds(r, c, rows, cols) {
+					let ru = r as usize;
+					let cu = c as usize;
+					rmin = rmin.min(ru);
+					cmin = cmin.min(cu);
+					rmax = rmax.max(ru);
+					cmax = cmax.max(cu);
+					found = true;
+				}
+			}
+		}
+		if !found {
+			return;
+		}
+
+		for r in rmin..=rmax {
+			let row_y = dem.row_center_y(r as isize);
+			for seg in pts.windows(2) {
+				let y1 = seg[0].y;
+				let y2 = seg[1].y;
+				if !is_between_inclusive(row_y, y1, y2) || (y2 - y1).abs() < 1.0e-15 {
+					continue;
+				}
+				let x1 = seg[0].x;
+				let x2 = seg[1].x;
+				let x_prime = x1 + (row_y - y1) / (y2 - y1) * (x2 - x1);
+				if let Some((c, rr)) = dem.world_to_pixel(x_prime, row_y) {
+					maybe_mark_intersection_from_intermediate(
+						&mut grid,
+						&mut intersections,
+						rows,
+						cols,
+						rr,
+						c,
+					);
+				}
+			}
+		}
+
+		for c in cmin..=cmax {
+			let col_x = dem.col_center_x(c as isize);
+			for seg in pts.windows(2) {
+				let x1 = seg[0].x;
+				let x2 = seg[1].x;
+				if !is_between_inclusive(col_x, x1, x2) || (x2 - x1).abs() < 1.0e-15 {
+					continue;
+				}
+				let y1 = seg[0].y;
+				let y2 = seg[1].y;
+				let y_prime = y1 + (col_x - x1) / (x2 - x1) * (y2 - y1);
+				if let Some((cc, r)) = dem.world_to_pixel(col_x, y_prime) {
+					maybe_mark_intersection_from_intermediate(
+						&mut grid,
+						&mut intersections,
+						rows,
+						cols,
+						r,
+						cc,
+					);
+				}
+			}
+		}
+	};
+
+	for feat in &roads.features {
+		if let Some(ref g) = feat.geometry {
+			match g {
+				wbvector::Geometry::LineString(pts) => scan_road_part(pts),
+				wbvector::Geometry::MultiLineString(lines) => {
+					for part in lines {
+						scan_road_part(part);
+					}
+				}
+				_ => {}
+			}
+		}
+	}
+
+	(grid, intersections)
+}
+
+fn run_burn_streams_at_roads_fast(
+	dem: &Raster,
+	streams_path: &str,
+	roads_path: &str,
+	road_width: f64,
+) -> Result<Vec<f64>, ToolError> {
+	let stream_mask = stream_mask_from_vector(dem, streams_path, "streams")?;
+	let road_mask = stream_mask_from_vector(dem, roads_path, "roads")?;
+
+	let rows = dem.rows;
+	let cols = dem.cols;
+	let mut out = raster_to_vec(dem);
+	let grid_res = ((dem.cell_size_x.abs() + dem.cell_size_y.abs()) / 2.0).max(1.0e-12);
+	let width_cells = ((road_width / grid_res).ceil() as usize / 2).max(1);
+
+	let mut intersections = Vec::<usize>::new();
+	for i in 0..rows * cols {
+		if stream_mask[i] > 0 && road_mask[i] > 0 && out[i] != dem.nodata {
+			intersections.push(i);
+		}
+	}
+
+	for &seed in &intersections {
+		let mut q = VecDeque::<(usize, usize)>::new();
+		let mut visited = HashSet::<usize>::new();
+		let mut touched = Vec::<usize>::new();
+		let mut minz = f64::INFINITY;
+
+		q.push_back((seed, 0));
+		while let Some((i, d)) = q.pop_front() {
+			if !visited.insert(i) {
+				continue;
+			}
+			if stream_mask[i] == 0 || out[i] == dem.nodata {
+				continue;
+			}
+			touched.push(i);
+			if out[i] < minz {
+				minz = out[i];
+			}
+			if d >= width_cells {
+				continue;
+			}
+			let r = i / cols;
+			let c = i % cols;
+			for n in 0..8 {
+				let rn = r as isize + DY[n];
+				let cn = c as isize + DX[n];
+				if !in_bounds(rn, cn, rows, cols) {
+					continue;
+				}
+				let ni = idx(rn as usize, cn as usize, cols);
+				if stream_mask[ni] > 0 {
+					q.push_back((ni, d + 1));
+				}
+			}
+		}
+
+		if minz.is_finite() {
+			for i in touched {
+				if out[i] > minz {
+					out[i] = minz;
+				}
+			}
+		}
+	}
+
+	Ok(out)
+}
+
+fn run_burn_streams_at_roads_legacy(
+	dem: &Raster,
+	streams_path: &str,
+	roads_path: &str,
+	road_width: f64,
+) -> Result<Vec<f64>, ToolError> {
+	let streams = read_vector_layer_aligned_to_dem(dem, streams_path, "streams")?;
+	let roads = read_vector_layer_aligned_to_dem(dem, roads_path, "roads")?;
+	let rows = dem.rows;
+	let cols = dem.cols;
+	let nodata = dem.nodata;
+	let mut out = raster_to_vec(dem);
+
+	let mut max_elev = f64::NEG_INFINITY;
+	for &z in &out {
+		if z != nodata && z > max_elev {
+			max_elev = z;
+		}
+	}
+	if !max_elev.is_finite() {
+		max_elev = 0.0;
+	}
+
+	let grid_res = ((dem.cell_size_x.abs() + dem.cell_size_y.abs()) / 2.0).max(1.0e-12);
+	let width_in_cells = (road_width / grid_res).ceil() as usize / 2;
+
+	let (mut raster_lines, intersections) = stream_road_crossings_legacy(dem, &streams, &roads);
+
+	for &i in &intersections {
+		if raster_lines[i] != 4 {
+			continue;
+		}
+		let r = (i / cols) as isize;
+		let c = (i % cols) as isize;
+		let mut neighbouring_intersection = false;
+		for d in 0..8 {
+			if get_i8_cell(&raster_lines, rows, cols, r + DY[d], c + DX[d]) == 4 {
+				neighbouring_intersection = true;
+				break;
+			}
+		}
+		if neighbouring_intersection {
+			raster_lines[i] = 1;
+		}
+	}
+
+	for &i in &intersections {
+		if raster_lines[i] != 4 {
+			continue;
+		}
+
+		let r = (i / cols) as isize;
+		let c = (i % cols) as isize;
+		let mut stack = Vec::<(isize, isize, usize)>::new();
+		let mut minz = max_elev;
+
+		for e in 0..8 {
+			let rn = r + DY[e];
+			let cn = c + DX[e];
+			if get_i8_cell(&raster_lines, rows, cols, rn, cn) == 1 {
+				stack.push((rn, cn, 1));
+				while let Some((rr, cc, dist)) = stack.pop() {
+					if !in_bounds(rr, cc, rows, cols) {
+						continue;
+					}
+					let j = idx(rr as usize, cc as usize, cols);
+					let z = out[j];
+					if z != nodata && z < minz {
+						minz = z;
+					}
+					if dist + 1 < width_in_cells {
+						for d in 0..8 {
+							let r2 = rr + DY[d];
+							let c2 = cc + DX[d];
+							if get_i8_cell(&raster_lines, rows, cols, r2, c2) == 1 {
+								set_i8_cell(&mut raster_lines, rows, cols, r2, c2, 3);
+								stack.push((r2, c2, dist + 1));
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if out[i] != nodata {
+			out[i] = minz;
+		}
+
+		for e in 0..8 {
+			let rn = r + DY[e];
+			let cn = c + DX[e];
+			if get_i8_cell(&raster_lines, rows, cols, rn, cn) == 3 {
+				stack.push((rn, cn, 1));
+				while let Some((rr, cc, dist)) = stack.pop() {
+					if !in_bounds(rr, cc, rows, cols) {
+						continue;
+					}
+					let j = idx(rr as usize, cc as usize, cols);
+					if out[j] != nodata && out[j] > minz {
+						out[j] = minz;
+					}
+					if dist + 1 < width_in_cells {
+						for d in 0..8 {
+							let r2 = rr + DY[d];
+							let c2 = cc + DX[d];
+							if get_i8_cell(&raster_lines, rows, cols, r2, c2) == 3 {
+								set_i8_cell(&mut raster_lines, rows, cols, r2, c2, 1);
+								stack.push((r2, c2, dist + 1));
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	Ok(out)
+}
+
+fn parse_burn_streams_at_roads_mode(args: &ToolArgs) -> Result<&'static str, ToolError> {
+	let mode = args
+		.get("behavior_mode")
+		.and_then(|v| v.as_str())
+		.unwrap_or("legacy");
+	match mode {
+		"legacy" => Ok("legacy"),
+		"fast" => Ok("fast"),
+		_ => Err(ToolError::Validation(
+			"behavior_mode must be one of: legacy, fast".to_string(),
+		)),
+	}
 }
 
 fn ring_contains_xy(ring: &wbvector::Ring, x: f64, y: f64) -> bool {
@@ -2961,7 +3526,7 @@ impl Tool for FlowAccumFullWorkflowTool {
 		Ok(())
 	}
 
-	fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+	fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
 		let dem_path = parse_raster_path_arg(args, "dem")
 			.or_else(|_| parse_raster_path_arg(args, "input"))
 			.or_else(|_| parse_raster_path_arg(args, "input_dem"))?;
@@ -2988,56 +3553,331 @@ impl Tool for FlowAccumFullWorkflowTool {
 			.and_then(|v| v.as_bool())
 			.unwrap_or(false);
 
-		let mut fill_args = ToolArgs::new();
-		fill_args.insert("dem".to_string(), json!(dem_path));
-		fill_args.insert("fix_flats".to_string(), json!(true));
-		if let Some(path) = breached_dem_output {
-			fill_args.insert("output".to_string(), json!(path.to_string_lossy().to_string()));
-		}
-		let fill_tool = FillDepressionsTool;
-		let filled = fill_tool.run(&fill_args, ctx)?;
-		let filled_path = filled
-			.outputs
-			.get("path")
-			.and_then(|v| v.as_str())
-			.ok_or_else(|| ToolError::Execution("fill_depressions did not return an output path".to_string()))?
-			.to_string();
+		let out_type = if out_type.contains("specific") || out_type.contains("sca") {
+			"sca"
+		} else if out_type.contains("cells") {
+			"cells"
+		} else {
+			"ca"
+		};
 
-		let mut d8_ptr_args = ToolArgs::new();
-		d8_ptr_args.insert("dem".to_string(), json!(filled_path.clone()));
-		d8_ptr_args.insert("esri_pntr".to_string(), json!(esri_pntr));
-		if let Some(path) = flow_dir_output {
-			d8_ptr_args.insert("output".to_string(), json!(path.to_string_lossy().to_string()));
-		}
-		let d8_ptr_tool = D8PointerTool;
-		let flow_ptr = d8_ptr_tool.run(&d8_ptr_args, ctx)?;
-		let flow_ptr_path = flow_ptr
-			.outputs
-			.get("path")
-			.and_then(|v| v.as_str())
-			.ok_or_else(|| ToolError::Execution("d8_pointer did not return an output path".to_string()))?
-			.to_string();
+		let dem = load_raster(&dem_path)?;
+		let rows = dem.rows;
+		let cols = dem.cols;
+		let nodata = dem.nodata;
+		let n = rows * cols;
+		let input = raster_to_vec(&dem);
 
-		let mut accum_args = ToolArgs::new();
-		accum_args.insert("input".to_string(), json!(flow_ptr_path.clone()));
-		accum_args.insert("input_is_pointer".to_string(), json!(true));
-		accum_args.insert("out_type".to_string(), json!(out_type));
-		accum_args.insert("log_transform".to_string(), json!(log_transform));
-		accum_args.insert("clip".to_string(), json!(clip));
-		accum_args.insert("esri_pntr".to_string(), json!(esri_pntr));
-		if let Some(path) = flow_accum_output {
-			accum_args.insert("output".to_string(), json!(path.to_string_lossy().to_string()));
+		let mut z_factor = 1.0;
+		if raster_is_geographic(&dem) {
+			let mid_lat_deg = dem.row_center_y((rows / 2) as isize);
+			if (-90.0..=90.0).contains(&mid_lat_deg) {
+				z_factor = 1.0 / (111320.0 * mid_lat_deg.to_radians().cos());
+			}
 		}
-		let d8_accum_tool = D8FlowAccumTool;
-		let accum = d8_accum_tool.run(&accum_args, ctx)?;
-		let accum_path = accum
-			.outputs
-			.get("path")
-			.and_then(|v| v.as_str())
-			.ok_or_else(|| ToolError::Execution("d8_flow_accum did not return an output path".to_string()))?
-			.to_string();
 
-		Ok(build_triple_raster_result(filled_path, flow_ptr_path, accum_path))
+		let mut max_elev = f64::NEG_INFINITY;
+		for &z in &input {
+			if z != nodata && z > max_elev {
+				max_elev = z;
+			}
+		}
+		if !max_elev.is_finite() {
+			max_elev = 0.0;
+		}
+		let elev_digits = (max_elev.abs() as i64).to_string().len().max(1);
+		let elev_multiplier = 10.0_f64.powi((12_i32 - elev_digits as i32).max(0));
+		let small_num = 1.0 / elev_multiplier;
+
+		let eight_grid_res = dem.cell_size_x.abs() * 8.0;
+		let mut aspect = vec![nodata; n];
+		for r in 0..rows {
+			for c in 0..cols {
+				let i = idx(r, c, cols);
+				let z = input[i];
+				if z == nodata {
+					continue;
+				}
+				let mut nn = [0.0_f64; 8];
+				for k in 0..8 {
+					let rn = r as isize + DY[k];
+					let cn = c as isize + DX[k];
+					let zn = if in_bounds(rn, cn, rows, cols) {
+						input[idx(rn as usize, cn as usize, cols)]
+					} else {
+						nodata
+					};
+					nn[k] = if zn != nodata { zn * z_factor } else { z * z_factor };
+				}
+				let fy = (nn[6] - nn[4] + 2.0 * (nn[7] - nn[3]) + nn[0] - nn[2]) / eight_grid_res;
+				let fx = (nn[2] - nn[4] + 2.0 * (nn[1] - nn[5]) + nn[0] - nn[6]) / eight_grid_res;
+				if fx != 0.0 {
+					aspect[i] = 180.0 - (fy / fx).atan().to_degrees() + 90.0 * (fx / fx.abs());
+				}
+			}
+		}
+
+		let background_val = (i32::MIN + 1) as f64;
+		let mut breached_dem = vec![background_val; n];
+		let mut flow_dir = vec![-1_i8; n];
+		let mut queue = VecDeque::<(isize, isize)>::with_capacity((rows + cols) * 2);
+		for r in 0..rows as isize {
+			queue.push_back((r, -1));
+			queue.push_back((r, cols as isize));
+		}
+		for c in 0..cols as isize {
+			queue.push_back((-1, c));
+			queue.push_back((rows as isize, c));
+		}
+
+		let mut minheap = BinaryHeap::<FlowAccumWorkflowNode>::with_capacity(n);
+		while let Some((r, c)) = queue.pop_front() {
+			for k in 0..8 {
+				let rn = r + DY[k];
+				let cn = c + DX[k];
+				if !in_bounds(rn, cn, rows, cols) {
+					continue;
+				}
+				let ni = idx(rn as usize, cn as usize, cols);
+				if breached_dem[ni] != background_val {
+					continue;
+				}
+				let zin = input[ni];
+				if zin == nodata {
+					breached_dem[ni] = nodata;
+					queue.push_back((rn, cn));
+					continue;
+				}
+
+				let mut is_lowest = true;
+				for p in 0..8 {
+					let ry = rn + DY[p];
+					let cx = cn + DX[p];
+					if !in_bounds(ry, cx, rows, cols) {
+						continue;
+					}
+					let znb = input[idx(ry as usize, cx as usize, cols)];
+					if znb != nodata && znb < zin {
+						is_lowest = false;
+						break;
+					}
+				}
+
+				if is_lowest {
+					breached_dem[ni] = zin;
+					minheap.push(FlowAccumWorkflowNode {
+						row: rn,
+						col: cn,
+						priority: zin,
+					});
+				}
+			}
+		}
+
+		let back_link = [4_i8, 5, 6, 7, 0, 1, 2, 3];
+		let directions = [45.0_f64, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0, 360.0];
+		while let Some(cell) = minheap.pop() {
+			let i = idx(cell.row as usize, cell.col as usize, cols);
+			let zout = breached_dem[i];
+			for k in 0..8 {
+				let rn = cell.row + DY[k];
+				let cn = cell.col + DX[k];
+				if !in_bounds(rn, cn, rows, cols) {
+					continue;
+				}
+				let ni = idx(rn as usize, cn as usize, cols);
+				let zout_n = breached_dem[ni];
+
+				if zout_n == background_val {
+					let zin = input[ni];
+					if zin != nodata {
+						flow_dir[ni] = back_link[k];
+						breached_dem[ni] = zin;
+						minheap.push(FlowAccumWorkflowNode {
+							row: rn,
+							col: cn,
+							priority: zin,
+						});
+						if zin < (zout + small_num) {
+							let mut x = cn;
+							let mut y = rn;
+							let mut z_target = zin;
+							loop {
+								if !in_bounds(y, x, rows, cols) {
+									break;
+								}
+								let ti = idx(y as usize, x as usize, cols);
+								let dir = flow_dir[ti];
+								if dir < 0 {
+									break;
+								}
+								y += DY[dir as usize];
+								x += DX[dir as usize];
+								if !in_bounds(y, x, rows, cols) {
+									break;
+								}
+								z_target -= small_num;
+								let tj = idx(y as usize, x as usize, cols);
+								if breached_dem[tj] > z_target {
+									breached_dem[tj] = z_target;
+								} else {
+									break;
+								}
+							}
+						}
+					} else {
+						breached_dem[ni] = nodata;
+					}
+				} else if zout_n > zout && zout_n != nodata && aspect[ni] != nodata {
+					let cur = flow_dir[ni];
+					if cur >= 0 {
+						let prospective_fd = directions[back_link[k] as usize];
+						let mut diff1 = prospective_fd - aspect[ni];
+						if diff1 > 180.0 {
+							diff1 -= 360.0;
+						}
+						if diff1 < -180.0 {
+							diff1 += 360.0;
+						}
+						diff1 = diff1.abs();
+
+						let current_fd = directions[cur as usize];
+						let mut diff2 = current_fd - aspect[ni];
+						if diff2 > 180.0 {
+							diff2 -= 360.0;
+						}
+						if diff2 < -180.0 {
+							diff2 += 360.0;
+						}
+						diff2 = diff2.abs();
+
+						if diff1 < diff2 {
+							flow_dir[ni] = back_link[k];
+						}
+					}
+				}
+			}
+		}
+
+		let inflowing_vals = [4_i8, 5, 6, 7, 0, 1, 2, 3];
+		let mut num_inflowing = vec![-1_i8; n];
+		for r in 0..rows {
+			for c in 0..cols {
+				let i = idx(r, c, cols);
+				if input[i] == nodata {
+					continue;
+				}
+				let mut cnt = 0_i8;
+				for k in 0..8 {
+					let rn = r as isize + DY[k];
+					let cn = c as isize + DX[k];
+					if !in_bounds(rn, cn, rows, cols) {
+						continue;
+					}
+					let ni = idx(rn as usize, cn as usize, cols);
+					if flow_dir[ni] == inflowing_vals[k] {
+						cnt += 1;
+					}
+				}
+				num_inflowing[i] = cnt;
+			}
+		}
+
+		let mut accum = vec![1.0_f64; n];
+		let mut stack = Vec::<usize>::with_capacity(n);
+		for i in 0..n {
+			if num_inflowing[i] == 0 {
+				stack.push(i);
+			}
+		}
+
+		while let Some(i) = stack.pop() {
+			let fa = accum[i];
+			num_inflowing[i] = num_inflowing[i].saturating_sub(1);
+			let dir = flow_dir[i];
+			if dir >= 0 {
+				let r = i / cols;
+				let c = i % cols;
+				let rn = r as isize + DY[dir as usize];
+				let cn = c as isize + DX[dir as usize];
+				if in_bounds(rn, cn, rows, cols) {
+					let ni = idx(rn as usize, cn as usize, cols);
+					accum[ni] += fa;
+					num_inflowing[ni] = num_inflowing[ni].saturating_sub(1);
+					if num_inflowing[ni] == 0 {
+						stack.push(ni);
+					}
+				}
+			}
+		}
+
+		let cell_size_x = dem.cell_size_x.abs();
+		let cell_size_y = dem.cell_size_y.abs();
+		let diag_cell_size = (cell_size_x * cell_size_x + cell_size_y * cell_size_y).sqrt();
+		let mut cell_area = cell_size_x * cell_size_y;
+		let mut flow_widths = [
+			diag_cell_size,
+			cell_size_y,
+			diag_cell_size,
+			cell_size_x,
+			diag_cell_size,
+			cell_size_y,
+			diag_cell_size,
+			cell_size_x,
+		];
+		if out_type == "cells" {
+			cell_area = 1.0;
+			flow_widths = [1.0; 8];
+		} else if out_type == "ca" {
+			flow_widths = [1.0; 8];
+		}
+
+		let pntr_vals = if esri_pntr {
+			[128.0_f64, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
+		} else {
+			[1.0_f64, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0]
+		};
+
+		let mut pntr_data = vec![nodata; n];
+		let mut accum_data = vec![nodata; n];
+		for i in 0..n {
+			if input[i] == nodata {
+				continue;
+			}
+			let dir = flow_dir[i];
+			if dir >= 0 {
+				pntr_data[i] = pntr_vals[dir as usize];
+				let mut scaled = accum[i] * cell_area / flow_widths[dir as usize];
+				if log_transform {
+					scaled = scaled.ln();
+				}
+				accum_data[i] = scaled;
+			} else {
+				pntr_data[i] = 0.0;
+				let mut scaled = accum[i] * cell_area / flow_widths[3];
+				if log_transform {
+					scaled = scaled.ln();
+				}
+				accum_data[i] = scaled;
+			}
+		}
+
+		if clip {
+			// Accepted for API compatibility; no display-stat clipping is applied in NG raster outputs.
+		}
+
+		let mut breached_raster = vec_to_raster(&dem, &breached_dem, DataType::F64);
+		breached_raster.nodata = nodata;
+		let mut pointer_raster = vec_to_raster(&dem, &pntr_data, DataType::I16);
+		pointer_raster.nodata = nodata;
+		let mut accum_raster = vec_to_raster(&dem, &accum_data, DataType::F32);
+		accum_raster.nodata = nodata;
+
+		let breached_path = write_or_store_output(breached_raster, breached_dem_output)?;
+		let flow_ptr_path = write_or_store_output(pointer_raster, flow_dir_output)?;
+		let accum_path = write_or_store_output(accum_raster, flow_accum_output)?;
+
+		Ok(build_triple_raster_result(breached_path, flow_ptr_path, accum_path))
 	}
 }
 
@@ -3280,7 +4120,20 @@ impl Tool for EdgeContaminationTool {
 		let e2_row = [-1, -1, -1, -1, 1, 1, 1, 1];
 		let atan_of_1 = 1.0_f64.atan();
 		let mut z_factor = args.get("z_factor").and_then(|v| v.as_f64()).unwrap_or(-1.0);
-		if !z_factor.is_finite() || z_factor <= 0.0 {
+		if !z_factor.is_finite() {
+			z_factor = 1.0;
+		} else if z_factor < 0.0 {
+			if raster_is_geographic(&dem) {
+				let mid_lat = dem.y_min + (dem.rows as f64 * dem.cell_size_y) * 0.5;
+				if (-90.0..=90.0).contains(&mid_lat) {
+					z_factor = 1.0 / (111_320.0 * mid_lat.to_radians().cos().abs().max(1.0e-8));
+				} else {
+					z_factor = 1.0;
+				}
+			} else {
+				z_factor = 1.0;
+			}
+		} else if z_factor == 0.0 {
 			z_factor = 1.0;
 		}
 
@@ -3339,6 +4192,158 @@ impl Tool for EdgeContaminationTool {
 			}
 		}
 
+		let d8_receivers: Option<Vec<i32>> = if use_d8 {
+			Some(
+				(0..rows * cols)
+					.into_par_iter()
+					.map(|i| {
+						let r = i / cols;
+						let c = i % cols;
+						let z0 = dem.get(0, r as isize, c as isize);
+						if z0 == nodata {
+							return -1;
+						}
+						let z = z0 * z_factor;
+						let mut best_dir = -1i8;
+						let mut best_slope = f64::MIN;
+						for n in 0..8 {
+							let rn = r as isize + DY[n];
+							let cn = c as isize + DX[n];
+							if !in_bounds(rn, cn, rows, cols) {
+								continue;
+							}
+							let zn = dem.get(0, rn, cn);
+							if zn == nodata {
+								continue;
+							}
+							let slope = (z - zn * z_factor) / lengths[n];
+							if slope > best_slope && slope > 0.0 {
+								best_slope = slope;
+								best_dir = n as i8;
+							}
+						}
+						if best_dir >= 0 {
+							let rn = r as isize + DY[best_dir as usize];
+							let cn = c as isize + DX[best_dir as usize];
+							idx(rn as usize, cn as usize, cols) as i32
+						} else {
+							-1
+						}
+					})
+					.collect(),
+			)
+		} else {
+			None
+		};
+
+		let dinf_receivers: Option<Vec<(i32, i32)>> = if use_dinf {
+			Some(
+				(0..rows * cols)
+					.into_par_iter()
+					.map(|i| {
+						let r = i / cols;
+						let c = i % cols;
+						let z0 = dem.get(0, r as isize, c as isize);
+						if z0 == nodata {
+							return (-1, -1);
+						}
+						let z = z0 * z_factor;
+						let mut best_slope = f64::MIN;
+						let mut best_a = -1i32;
+						let mut best_b = -1i32;
+						for n in 0..8 {
+							let r1 = r as isize + e1_row[n];
+							let c1 = c as isize + e1_col[n];
+							let r2 = r as isize + e2_row[n];
+							let c2 = c as isize + e2_col[n];
+							if !in_bounds(r1, c1, rows, cols) || !in_bounds(r2, c2, rows, cols) {
+								continue;
+							}
+							let e1 = dem.get(0, r1, c1);
+							let e2 = dem.get(0, r2, c2);
+							if e1 == nodata || e2 == nodata {
+								continue;
+							}
+							let e1 = e1 * z_factor;
+							let e2 = e2 * z_factor;
+							let (mut s, r_ang);
+							let mut a = -1i32;
+							let mut b = -1i32;
+							if z > e1 && z > e2 {
+								let s1 = (z - e1) / grid_res;
+								let s2 = (e1 - e2) / grid_res;
+								r_ang = if s1 != 0.0 { (s2 / s1).atan() } else { std::f64::consts::PI / 2.0 };
+								s = (s1 * s1 + s2 * s2).sqrt();
+								if (s1 < 0.0 && s2 <= 0.0) || (s1 == 0.0 && s2 < 0.0) {
+									s *= -1.0;
+								}
+								if r_ang < 0.0 {
+									s = s1;
+								} else if r_ang > atan_of_1 {
+									s = (z - e2) / diag;
+								}
+								a = idx(r1 as usize, c1 as usize, cols) as i32;
+								b = idx(r2 as usize, c2 as usize, cols) as i32;
+							} else if z > e1 || z > e2 {
+								if z > e1 {
+									s = (z - e1) / grid_res;
+									a = idx(r1 as usize, c1 as usize, cols) as i32;
+								} else {
+									s = (z - e2) / diag;
+									b = idx(r2 as usize, c2 as usize, cols) as i32;
+								}
+							} else {
+								continue;
+							}
+							if s >= best_slope {
+								best_slope = s;
+								best_a = a;
+								best_b = b;
+							}
+						}
+						if best_slope > 0.0 {
+							(best_a, best_b)
+						} else {
+							(-1, -1)
+						}
+					})
+					.collect(),
+			)
+		} else {
+			None
+		};
+
+		let mfd_receivers: Option<Vec<u8>> = if use_mfd {
+			Some(
+				(0..rows * cols)
+					.into_par_iter()
+					.map(|i| {
+						let r = i / cols;
+						let c = i % cols;
+						let z0 = dem.get(0, r as isize, c as isize);
+						if z0 == nodata {
+							return 0u8;
+						}
+						let mut mask = 0u8;
+						for n in 0..8 {
+							let rn = r as isize + DY[n];
+							let cn = c as isize + DX[n];
+							if !in_bounds(rn, cn, rows, cols) {
+								continue;
+							}
+							let zn = dem.get(0, rn, cn);
+							if zn != nodata && zn < z0 {
+								mask |= 1u8 << n;
+							}
+						}
+						mask
+					})
+					.collect(),
+			)
+		} else {
+			None
+		};
+
 		while let Some(i) = edge_stack.pop() {
 			out[i] = 1.0;
 			let r = i / cols;
@@ -3347,104 +4352,33 @@ impl Tool for EdgeContaminationTool {
 			if z0 == nodata {
 				continue;
 			}
-			let z = z0 * z_factor;
 
 			if use_d8 {
-				let mut best_dir = -1i8;
-				let mut best_slope = f64::MIN;
-				for n in 0..8 {
-					let rn = r as isize + DY[n];
-					let cn = c as isize + DX[n];
-					if !in_bounds(rn, cn, rows, cols) {
-						continue;
-					}
-					let zn = dem.get(0, rn, cn);
-					if zn == nodata {
-						continue;
-					}
-					let slope = (z - zn * z_factor) / lengths[n];
-					if slope > best_slope && slope > 0.0 {
-						best_slope = slope;
-						best_dir = n as i8;
-					}
-				}
-				if best_dir >= 0 {
-					let rn = r as isize + DY[best_dir as usize];
-					let cn = c as isize + DX[best_dir as usize];
-					let ni = idx(rn as usize, cn as usize, cols);
-					if visited[ni] == 0 {
-						visited[ni] = 2;
-						edge_stack.push(ni);
+				if let Some(d8) = &d8_receivers {
+					let ni = d8[i];
+					if ni >= 0 {
+						let ni = ni as usize;
+						if visited[ni] == 0 {
+							visited[ni] = 2;
+							edge_stack.push(ni);
+						}
 					}
 				}
 				continue;
 			}
 
 			if use_dinf {
-				let mut best_slope = f64::MIN;
-				let mut best_a: Option<(isize, isize)> = None;
-				let mut best_b: Option<(isize, isize)> = None;
-				for n in 0..8 {
-					let r1 = r as isize + e1_row[n];
-					let c1 = c as isize + e1_col[n];
-					let r2 = r as isize + e2_row[n];
-					let c2 = c as isize + e2_col[n];
-					if !in_bounds(r1, c1, rows, cols) || !in_bounds(r2, c2, rows, cols) {
-						continue;
+				if let Some(dinf) = &dinf_receivers {
+					let (a, b) = dinf[i];
+					if a >= 0 {
+						let ni = a as usize;
+					if visited[ni] == 0 {
+						visited[ni] = 2;
+						edge_stack.push(ni);
 					}
-					let e1 = dem.get(0, r1, c1);
-					let e2 = dem.get(0, r2, c2);
-					if e1 == nodata || e2 == nodata {
-						continue;
 					}
-					let e1 = e1 * z_factor;
-					let e2 = e2 * z_factor;
-					let (mut s, r_ang);
-					let mut a: Option<(isize, isize)> = None;
-					let mut b: Option<(isize, isize)> = None;
-					if z > e1 && z > e2 {
-						let s1 = (z - e1) / grid_res;
-						let s2 = (e1 - e2) / grid_res;
-						r_ang = if s1 != 0.0 { (s2 / s1).atan() } else { std::f64::consts::PI / 2.0 };
-						s = (s1 * s1 + s2 * s2).sqrt();
-						if (s1 < 0.0 && s2 <= 0.0) || (s1 == 0.0 && s2 < 0.0) {
-							s *= -1.0;
-						}
-						if r_ang < 0.0 {
-							s = s1;
-						} else if r_ang > atan_of_1 {
-							s = (z - e2) / diag;
-						}
-						a = Some((r1, c1));
-						b = Some((r2, c2));
-					} else if z > e1 || z > e2 {
-						if z > e1 {
-							s = (z - e1) / grid_res;
-							a = Some((r1, c1));
-						} else {
-							s = (z - e2) / diag;
-							b = Some((r2, c2));
-						}
-					} else {
-						continue;
-					}
-					if s >= best_slope {
-						best_slope = s;
-						best_a = a;
-						best_b = b;
-					}
-				}
-
-				if best_slope > 0.0 {
-					if let Some((rn, cn)) = best_a {
-						let ni = idx(rn as usize, cn as usize, cols);
-						if visited[ni] == 0 {
-							visited[ni] = 2;
-							edge_stack.push(ni);
-						}
-					}
-					if let Some((rn, cn)) = best_b {
-						let ni = idx(rn as usize, cn as usize, cols);
+					if b >= 0 {
+						let ni = b as usize;
 						if visited[ni] == 0 {
 							visited[ni] = 2;
 							edge_stack.push(ni);
@@ -3455,20 +4389,19 @@ impl Tool for EdgeContaminationTool {
 			}
 
 			if use_mfd {
-				for n in 0..8 {
-					let rn = r as isize + DY[n];
-					let cn = c as isize + DX[n];
-					if !in_bounds(rn, cn, rows, cols) {
-						continue;
-					}
-					let zn = dem.get(0, rn, cn);
-					if zn == nodata || zn >= z0 {
-						continue;
-					}
-					let ni = idx(rn as usize, cn as usize, cols);
-					if visited[ni] == 0 {
-						visited[ni] = 2;
-						edge_stack.push(ni);
+				if let Some(mfd) = &mfd_receivers {
+					let mask = mfd[i];
+					for n in 0..8 {
+						if (mask & (1u8 << n)) == 0 {
+							continue;
+						}
+						let rn = r as isize + DY[n];
+						let cn = c as isize + DX[n];
+						let ni = idx(rn as usize, cn as usize, cols);
+						if visited[ni] == 0 {
+							visited[ni] = 2;
+							edge_stack.push(ni);
+						}
 					}
 				}
 			}
@@ -4134,32 +5067,48 @@ impl Tool for DownslopeFlowpathLengthTool {
 		let mut wgt = vec![1.0; rows * cols];
 		let mut out = vec![-999.0; rows * cols];
 
-		for r in 0..rows {
-			for c in 0..cols {
-				let i = idx(r, c, cols);
-				let z = pntr.get(0, r as isize, c as isize);
-				if z == pntr.nodata {
-					out[i] = out_nodata;
-					continue;
-				}
-				flow_dir[i] = decode_d8_pointer_dir_checked(z, esri_style)?;
-				if let Some(ws) = &watersheds {
-					let wz = ws.get(0, r as isize, c as isize);
-					if wz == ws.nodata {
-						out[i] = out_nodata;
+		let init_rows: Vec<(Vec<i8>, Vec<f64>, Vec<f64>, Vec<f64>)> = (0..rows)
+			.into_par_iter()
+			.map(|r| -> Result<(Vec<i8>, Vec<f64>, Vec<f64>, Vec<f64>), ToolError> {
+				let mut row_flow = vec![-1i8; cols];
+				let mut row_ws = vec![1.0; cols];
+				let mut row_wgt = vec![1.0; cols];
+				let mut row_out = vec![-999.0; cols];
+				for c in 0..cols {
+					let z = pntr.get(0, r as isize, c as isize);
+					if z == pntr.nodata {
+						row_out[c] = out_nodata;
 						continue;
 					}
-					ws_id[i] = wz;
-				}
-				if let Some(w) = &weights {
-					let wz = w.get(0, r as isize, c as isize);
-					if wz == w.nodata {
-						out[i] = out_nodata;
-						continue;
+					row_flow[c] = decode_d8_pointer_dir_checked(z, esri_style)?;
+					if let Some(ws) = &watersheds {
+						let wz = ws.get(0, r as isize, c as isize);
+						if wz == ws.nodata {
+							row_out[c] = out_nodata;
+							continue;
+						}
+						row_ws[c] = wz;
 					}
-					wgt[i] = wz;
+					if let Some(w) = &weights {
+						let wz = w.get(0, r as isize, c as isize);
+						if wz == w.nodata {
+							row_out[c] = out_nodata;
+							continue;
+						}
+						row_wgt[c] = wz;
+					}
 				}
-			}
+				Ok((row_flow, row_ws, row_wgt, row_out))
+			})
+			.collect::<Result<Vec<_>, ToolError>>()?;
+
+		for (r, (row_flow, row_ws, row_wgt, row_out)) in init_rows.into_iter().enumerate() {
+			let start = r * cols;
+			let end = start + cols;
+			flow_dir[start..end].copy_from_slice(&row_flow);
+			ws_id[start..end].copy_from_slice(&row_ws);
+			wgt[start..end].copy_from_slice(&row_wgt);
+			out[start..end].copy_from_slice(&row_out);
 		}
 
 		for r in 0..rows {
@@ -4211,11 +5160,11 @@ impl Tool for DownslopeFlowpathLengthTool {
 			}
 		}
 
-		for i in 0..out.len() {
-			if out[i] == -999.0 {
-				out[i] = 0.0;
+		out.par_iter_mut().for_each(|v| {
+			if *v == -999.0 {
+				*v = 0.0;
 			}
-		}
+		});
 
 		let mut raster = vec_to_raster(&pntr, &out, DataType::F32);
 		raster.nodata = out_nodata;
@@ -4387,27 +5336,35 @@ impl Tool for AverageUpslopeFlowpathLengthTool {
 		let out_nodata = -32768.0;
 
 		let dirs = d8_dir_from_dem_local(&dem);
-		let mut inflow = vec![-1i32; rows * cols];
-		for r in 0..rows {
-			for c in 0..cols {
-				let i = idx(r, c, cols);
-				if dem.get(0, r as isize, c as isize) == nodata {
-					continue;
-				}
-				let mut count = 0i32;
-				for k in 0..8 {
-					let rn = r as isize + DY[k];
-					let cn = c as isize + DX[k];
-					if !in_bounds(rn, cn, rows, cols) {
+		let inflowing_vals: [i8; 8] = [4, 5, 6, 7, 0, 1, 2, 3];
+		let inflow_rows: Vec<Vec<i32>> = (0..rows)
+			.into_par_iter()
+			.map(|r| {
+				let mut row_inflow = vec![-1i32; cols];
+				for c in 0..cols {
+					if dem.get(0, r as isize, c as isize) == nodata {
 						continue;
 					}
-					let ni = idx(rn as usize, cn as usize, cols);
-					if dirs[ni] == [4, 5, 6, 7, 0, 1, 2, 3][k] {
-						count += 1;
+					let mut count = 0i32;
+					for k in 0..8 {
+						let rn = r as isize + DY[k];
+						let cn = c as isize + DX[k];
+						if !in_bounds(rn, cn, rows, cols) {
+							continue;
+						}
+						let ni = idx(rn as usize, cn as usize, cols);
+						if dirs[ni] == inflowing_vals[k] {
+							count += 1;
+						}
 					}
+					row_inflow[c] = count;
 				}
-				inflow[i] = count;
-			}
+				row_inflow
+			})
+			.collect();
+		let mut inflow = Vec::with_capacity(rows * cols);
+		for row in inflow_rows {
+			inflow.extend(row);
 		}
 
 		let cell_x = dem.cell_size_x;
@@ -5108,7 +6065,7 @@ impl Tool for DepthToWaterTool {
 			let layer = read_vector_layer_aligned_to_dem(&dem, &lakes_path, "lakes")?;
 			for feat in &layer.features {
 				if let Some(ref g) = feat.geometry {
-					rasterize_polygon_boundaries(&mut sources, rows, cols, &dem, g);
+					rasterize_polygon_areas(&mut sources, rows, cols, &dem, g);
 				}
 			}
 		}
@@ -5290,6 +6247,7 @@ impl Tool for BurnStreamsAtRoadsTool {
 				ToolParamSpec { name: "streams", description: "Input streams vector", required: true },
 				ToolParamSpec { name: "roads", description: "Input roads vector", required: true },
 				ToolParamSpec { name: "road_width", description: "Maximum road embankment width (map units)", required: true },
+				ToolParamSpec { name: "behavior_mode", description: "Crossing/burn behavior mode: legacy or fast", required: false },
 				ToolParamSpec { name: "output", description: "Output raster path", required: false },
 			],
 		}
@@ -5298,6 +6256,7 @@ impl Tool for BurnStreamsAtRoadsTool {
 	fn manifest(&self) -> ToolManifest {
 		let mut defaults = ToolArgs::new();
 		defaults.insert("road_width".to_string(), json!(0.0));
+		defaults.insert("behavior_mode".to_string(), json!("legacy"));
 		ToolManifest {
 			id: "burn_streams_at_roads".to_string(),
 			display_name: "Burn Streams At Roads".to_string(),
@@ -5326,6 +6285,7 @@ impl Tool for BurnStreamsAtRoadsTool {
 		if road_width <= 0.0 {
 			return Err(ToolError::Validation("'road_width' must be > 0".to_string()));
 		}
+		let _ = parse_burn_streams_at_roads_mode(args)?;
 		Ok(())
 	}
 
@@ -5334,67 +6294,13 @@ impl Tool for BurnStreamsAtRoadsTool {
 		let streams_path = parse_vector_path_arg(args, "streams")?;
 		let roads_path = parse_vector_path_arg(args, "roads")?;
 		let road_width = args.get("road_width").and_then(|v| v.as_f64()).unwrap_or(0.0);
+		let mode = parse_burn_streams_at_roads_mode(args)?;
 
-		let stream_mask = stream_mask_from_vector(&dem, &streams_path, "streams")?;
-		let road_mask = stream_mask_from_vector(&dem, &roads_path, "roads")?;
-
-		let rows = dem.rows;
-		let cols = dem.cols;
-		let mut out = raster_to_vec(&dem);
-		let grid_res = ((dem.cell_size_x.abs() + dem.cell_size_y.abs()) / 2.0).max(1.0e-12);
-		let width_cells = ((road_width / grid_res).ceil() as usize / 2).max(1);
-
-		let mut intersections = Vec::<usize>::new();
-		for i in 0..rows * cols {
-			if stream_mask[i] > 0 && road_mask[i] > 0 && out[i] != dem.nodata {
-				intersections.push(i);
-			}
-		}
-
-		for &seed in &intersections {
-			let mut q = VecDeque::<(usize, usize)>::new();
-			let mut visited = HashSet::<usize>::new();
-			let mut touched = Vec::<usize>::new();
-			let mut minz = f64::INFINITY;
-
-			q.push_back((seed, 0));
-			while let Some((i, d)) = q.pop_front() {
-				if !visited.insert(i) {
-					continue;
-				}
-				if stream_mask[i] == 0 || out[i] == dem.nodata {
-					continue;
-				}
-				touched.push(i);
-				if out[i] < minz {
-					minz = out[i];
-				}
-				if d >= width_cells {
-					continue;
-				}
-				let r = i / cols;
-				let c = i % cols;
-				for n in 0..8 {
-					let rn = r as isize + DY[n];
-					let cn = c as isize + DX[n];
-					if !in_bounds(rn, cn, rows, cols) {
-						continue;
-					}
-					let ni = idx(rn as usize, cn as usize, cols);
-					if stream_mask[ni] > 0 {
-						q.push_back((ni, d + 1));
-					}
-				}
-			}
-
-			if minz.is_finite() {
-				for i in touched {
-					if out[i] > minz {
-						out[i] = minz;
-					}
-				}
-			}
-		}
+		let out = if mode == "legacy" {
+			run_burn_streams_at_roads_legacy(&dem, &streams_path, &roads_path, road_width)?
+		} else {
+			run_burn_streams_at_roads_fast(&dem, &streams_path, &roads_path, road_width)?
+		};
 
 		let mut raster = vec_to_raster(&dem, &out, DataType::F32);
 		raster.nodata = dem.nodata;
@@ -6910,7 +7816,7 @@ impl Tool for HydrologicConnectivityTool {
 			license_tier: LicenseTier::Open,
 			params: vec![
 				ToolParamSpec { name: "dem", description: "Input DEM raster", required: true },
-				ToolParamSpec { name: "exponent", description: "Dispersion exponent (accepted for compatibility)", required: false },
+				ToolParamSpec { name: "exponent", description: "Dispersion exponent controlling MFD flow partitioning", required: false },
 				ToolParamSpec { name: "convergence_threshold", description: "Threshold area for stream initiation in cells", required: false },
 				ToolParamSpec { name: "z_factor", description: "Vertical scaling factor", required: false },
 				ToolParamSpec { name: "output1", description: "Optional output path for DUL raster", required: false },
@@ -6956,10 +7862,17 @@ impl Tool for HydrologicConnectivityTool {
 		let dem = load_raster(&dem_path)?;
 		let out1_path = parse_optional_output_path(args, "output1")?;
 		let out2_path = parse_optional_output_path(args, "output2")?;
-		let convergence_threshold = args
+		let mut exponent = args.get("exponent").and_then(|v| v.as_f64()).unwrap_or(1.1);
+		if !exponent.is_finite() || exponent <= 0.0 {
+			exponent = 1.0;
+		}
+		let mut convergence_threshold = args
 			.get("convergence_threshold")
 			.and_then(|v| v.as_f64())
 			.unwrap_or(0.0);
+		if !convergence_threshold.is_finite() || convergence_threshold <= 0.0 {
+			convergence_threshold = f64::INFINITY;
+		}
 		let mut z_factor = args.get("z_factor").and_then(|v| v.as_f64()).unwrap_or(1.0);
 		if !z_factor.is_finite() || z_factor <= 0.0 {
 			z_factor = 1.0;
@@ -6970,8 +7883,17 @@ impl Tool for HydrologicConnectivityTool {
 		let nodata = dem.nodata;
 		let cell_area = dem.cell_size_x * dem.cell_size_y;
 		let cell_len = ((dem.cell_size_x.abs() + dem.cell_size_y.abs()) / 2.0).max(1.0e-12);
+		let contour_len = [
+			0.354 * dem.cell_size_x.abs(),
+			0.5 * dem.cell_size_x.abs(),
+			0.354 * dem.cell_size_x.abs(),
+			0.5 * dem.cell_size_x.abs(),
+			0.354 * dem.cell_size_x.abs(),
+			0.5 * dem.cell_size_x.abs(),
+			0.354 * dem.cell_size_x.abs(),
+			0.5 * dem.cell_size_x.abs(),
+		];
 
-		let dirs = d8_dir_from_dem_local(&dem);
 		let inflowing_vals: [i8; 8] = [4, 5, 6, 7, 0, 1, 2, 3];
 
 		let mut inflow = vec![-1i32; rows * cols];
@@ -6994,8 +7916,8 @@ impl Tool for HydrologicConnectivityTool {
 					if !in_bounds(rn, cn, rows, cols) {
 						continue;
 					}
-					let ni = idx(rn as usize, cn as usize, cols);
-					if dirs[ni] == inflowing_vals[k] {
+					let zn = dem.get(0, rn, cn);
+					if zn != nodata && zn > z {
 						count += 1;
 					}
 				}
@@ -7008,23 +7930,83 @@ impl Tool for HydrologicConnectivityTool {
 
 		while let Some(i) = stack.pop() {
 			topo.push(i);
-			let dir = dirs[i];
-			if dir < 0 {
-				continue;
-			}
 			let r = i / cols;
 			let c = i % cols;
-			let rn = r as isize + DY[dir as usize];
-			let cn = c as isize + DX[dir as usize];
-			if !in_bounds(rn, cn, rows, cols) {
+			let z = dem.get(0, r as isize, c as isize);
+			if z == nodata {
 				continue;
 			}
-			let ni = idx(rn as usize, cn as usize, cols);
-			if inflow[ni] >= 0 {
-				accum[ni] += accum[i];
-				inflow[ni] -= 1;
-				if inflow[ni] == 0 {
-					stack.push(ni);
+
+			let fa = accum[i];
+			let mut is_converged = fa >= convergence_threshold;
+			let mut f_exp = exponent;
+			if convergence_threshold.is_finite() {
+				f_exp = (fa / convergence_threshold + 1.0).powf(exponent);
+				if f_exp > 10.0 {
+					is_converged = true;
+				}
+			}
+
+			let mut max_slope = f64::MIN;
+			let mut steepest_dir: Option<usize> = None;
+			let mut total_w = 0.0f64;
+			let mut weights = [0.0f64; 8];
+			let mut downslope = [false; 8];
+
+			for n in 0..8 {
+				let rn = r as isize + DY[n];
+				let cn = c as isize + DX[n];
+				if !in_bounds(rn, cn, rows, cols) {
+					continue;
+				}
+				let zn = dem.get(0, rn, cn);
+				if zn == nodata || zn >= z {
+					continue;
+				}
+				let slope = ((z - zn) / [
+					(dem.cell_size_x * dem.cell_size_x + dem.cell_size_y * dem.cell_size_y).sqrt(),
+					dem.cell_size_x,
+					(dem.cell_size_x * dem.cell_size_x + dem.cell_size_y * dem.cell_size_y).sqrt(),
+					dem.cell_size_y,
+					(dem.cell_size_x * dem.cell_size_x + dem.cell_size_y * dem.cell_size_y).sqrt(),
+					dem.cell_size_x,
+					(dem.cell_size_x * dem.cell_size_x + dem.cell_size_y * dem.cell_size_y).sqrt(),
+					dem.cell_size_y,
+				][n])
+				.max(1.0e-6);
+				downslope[n] = true;
+				if slope > max_slope {
+					max_slope = slope;
+					steepest_dir = Some(n);
+				}
+				if !is_converged {
+					let w = contour_len[n] * slope.powf(f_exp.min(10.0));
+					weights[n] = w;
+					total_w += w;
+				}
+			}
+
+			if !is_converged && total_w <= 0.0 {
+				is_converged = true;
+			}
+
+			for n in 0..8 {
+				if !downslope[n] {
+					continue;
+				}
+				if is_converged && steepest_dir != Some(n) {
+					continue;
+				}
+				let rn = r as isize + DY[n];
+				let cn = c as isize + DX[n];
+				let ni = idx(rn as usize, cn as usize, cols);
+				let frac = if is_converged { 1.0 } else { weights[n] / total_w.max(1.0e-12) };
+				accum[ni] += fa * frac;
+				if inflow[ni] >= 0 {
+					inflow[ni] -= 1;
+					if inflow[ni] == 0 {
+						stack.push(ni);
+					}
 				}
 			}
 		}
@@ -7037,25 +8019,37 @@ impl Tool for HydrologicConnectivityTool {
 				if z == nodata {
 					continue;
 				}
-				let dir = dirs[i];
-				let slope = if dir >= 0 {
-					let rn = r as isize + DY[dir as usize];
-					let cn = c as isize + DX[dir as usize];
-					if in_bounds(rn, cn, rows, cols) {
-						let zn = dem.get(0, rn, cn);
-						if zn != nodata {
-							((z * z_factor - zn * z_factor).max(0.0) / cell_len).max(1.0e-6)
-						} else {
-							1.0e-6
-						}
-					} else {
-						1.0e-6
+
+				let z00 = z * z_factor;
+				let mut nvals = [z00; 8];
+				let mut flow_width = 0.0f64;
+				for n in 0..8 {
+					let rn = r as isize + DY[n];
+					let cn = c as isize + DX[n];
+					if !in_bounds(rn, cn, rows, cols) {
+						continue;
 					}
-				} else {
-					1.0e-6
-				};
+					let zn = dem.get(0, rn, cn);
+					if zn != nodata {
+						nvals[n] = zn * z_factor;
+						if zn < z {
+							flow_width += contour_len[n];
+						}
+					}
+				}
+
+				let fx = (nvals[2] - nvals[4] + 2.0 * (nvals[1] - nvals[5]) + nvals[0] - nvals[6])
+					/ (8.0 * dem.cell_size_x.abs().max(1.0e-12));
+				let fy = (nvals[6] - nvals[4] + 2.0 * (nvals[7] - nvals[3]) + nvals[0] - nvals[2])
+					/ (8.0 * dem.cell_size_y.abs().max(1.0e-12));
+				let slope_grad = (fx * fx + fy * fy).sqrt().max(1.0e-6);
+
+				if accum[i] >= convergence_threshold {
+					flow_width = 0.5 * dem.cell_size_x.abs();
+				}
+				flow_width = flow_width.max(0.5 * dem.cell_size_x.abs().max(1.0e-12));
 				let sca = (accum[i] * cell_area).max(1.0e-6);
-				wi[i] = (sca / slope.max(1.0e-6)).ln();
+				wi[i] = ((sca / flow_width) / slope_grad).ln();
 			}
 		}
 
@@ -7327,68 +8321,274 @@ impl Tool for ImpoundmentSizeIndexTool {
 		let rows = dem.rows;
 		let cols = dem.cols;
 		let nodata = dem.nodata;
+		let num_cells = rows * cols;
 		let grid_area = dem.cell_size_x * dem.cell_size_y;
 		let cell_len = ((dem.cell_size_x.abs() + dem.cell_size_y.abs()) / 2.0).max(1.0e-12);
-		let radius = ((dam_length / (2.0 * cell_len)).ceil() as isize).max(1);
+		let half_dam_length = ((dam_length / (2.0 * cell_len)).floor() as isize).max(1) as usize;
+		let dam_profile_length = half_dam_length * 2 + 1;
 
-		let mut out_mean = vec![nodata; rows * cols];
-		let mut out_max = vec![nodata; rows * cols];
-		let mut out_volume = vec![nodata; rows * cols];
-		let mut out_area = vec![nodata; rows * cols];
-		let mut out_height = vec![nodata; rows * cols];
+		let perpendicular1: [usize; 4] = [2, 3, 4, 1];
+		let perpendicular2: [usize; 4] = [6, 7, 0, 5];
 
+		let mut crest_elev = vec![nodata; num_cells];
+		let mut dam_profile = vec![f64::NEG_INFINITY; dam_profile_length];
+		let mut dam_profile_filled = vec![f64::NEG_INFINITY; dam_profile_length];
 		for r in 0..rows {
 			for c in 0..cols {
 				let i = idx(r, c, cols);
-				let z0 = dem.get(0, r as isize, c as isize);
-				if z0 == nodata {
+				let z = dem.get(0, r as isize, c as isize);
+				if z == nodata {
 					continue;
 				}
 
-				let mut crest = z0;
-				for rr in (r as isize - radius)..=(r as isize + radius) {
-					for cc in (c as isize - radius)..=(c as isize + radius) {
-						if !in_bounds(rr, cc, rows, cols) {
-							continue;
+				for dir in 0..4 {
+					let perp1 = perpendicular1[dir];
+					let perp2 = perpendicular2[dir];
+
+					dam_profile.fill(f64::NEG_INFINITY);
+					dam_profile_filled.fill(f64::NEG_INFINITY);
+					dam_profile[half_dam_length] = z;
+
+					let mut rn1 = r as isize;
+					let mut cn1 = c as isize;
+					let mut rn2 = r as isize;
+					let mut cn2 = c as isize;
+					for step in 1..=half_dam_length {
+						rn1 += DY[perp1];
+						cn1 += DX[perp1];
+						dam_profile[half_dam_length + step] = if in_bounds(rn1, cn1, rows, cols) {
+							dem.get(0, rn1, cn1)
+						} else {
+							nodata
+						};
+						if dam_profile[half_dam_length + step] == nodata {
+							dam_profile[half_dam_length + step] = f64::NEG_INFINITY;
 						}
-						let z = dem.get(0, rr, cc);
-						if z != nodata && z > crest {
-							crest = z;
+
+						rn2 += DY[perp2];
+						cn2 += DX[perp2];
+						dam_profile[half_dam_length - step] = if in_bounds(rn2, cn2, rows, cols) {
+							dem.get(0, rn2, cn2)
+						} else {
+							nodata
+						};
+						if dam_profile[half_dam_length - step] == nodata {
+							dam_profile[half_dam_length - step] = f64::NEG_INFINITY;
+						}
+					}
+
+					dam_profile_filled[0] = dam_profile[0];
+					for j in 1..(dam_profile_length - 1) {
+						dam_profile_filled[j] = dam_profile_filled[j - 1].max(dam_profile[j]);
+					}
+					dam_profile_filled[dam_profile_length - 1] = dam_profile[dam_profile_length - 1];
+					for j in (1..(dam_profile_length - 1)).rev() {
+						if dam_profile_filled[j + 1] > dam_profile[j] {
+							if dam_profile_filled[j + 1] < dam_profile_filled[j] {
+								dam_profile_filled[j] = dam_profile_filled[j + 1];
+							}
+						} else {
+							dam_profile_filled[j] = dam_profile[j];
+						}
+					}
+
+					if dam_profile_filled[half_dam_length] > crest_elev[i] {
+						crest_elev[i] = dam_profile_filled[half_dam_length];
+					}
+
+					let mut rr1 = r as isize;
+					let mut cc1 = c as isize;
+					let mut rr2 = r as isize;
+					let mut cc2 = c as isize;
+					for step in 1..=half_dam_length {
+						rr1 += DY[perp1];
+						cc1 += DX[perp1];
+						if in_bounds(rr1, cc1, rows, cols) {
+							let ni = idx(rr1 as usize, cc1 as usize, cols);
+							if dem.get(0, rr1, cc1) != nodata && dam_profile_filled[half_dam_length + step] > crest_elev[ni] {
+								crest_elev[ni] = dam_profile_filled[half_dam_length + step];
+							}
+						}
+
+						rr2 += DY[perp2];
+						cc2 += DX[perp2];
+						if in_bounds(rr2, cc2, rows, cols) {
+							let ni = idx(rr2 as usize, cc2 as usize, cols);
+							if dem.get(0, rr2, cc2) != nodata && dam_profile_filled[half_dam_length - step] > crest_elev[ni] {
+								crest_elev[ni] = dam_profile_filled[half_dam_length - step];
+							}
 						}
 					}
 				}
-				let dam_h = (crest - z0).max(0.0);
-
-				let mut flooded_cells = 0.0f64;
-				let mut flooded_vol = 0.0f64;
-				let mut max_depth = 0.0f64;
-				for rr in (r as isize - radius)..=(r as isize + radius) {
-					for cc in (c as isize - radius)..=(c as isize + radius) {
-						if !in_bounds(rr, cc, rows, cols) {
-							continue;
-						}
-						let z = dem.get(0, rr, cc);
-						if z == nodata || z >= crest {
-							continue;
-						}
-						let d = crest - z;
-						flooded_cells += 1.0;
-						flooded_vol += d * grid_area;
-						if d > max_depth {
-							max_depth = d;
-						}
-					}
-				}
-
-				let area = flooded_cells * grid_area;
-				let mean = if area > 0.0 { flooded_vol / area } else { 0.0 };
-
-				out_height[i] = dam_h;
-				out_area[i] = area;
-				out_volume[i] = flooded_vol;
-				out_max[i] = max_depth;
-				out_mean[i] = mean;
 			}
+		}
+
+		let background = (i32::MIN + 1) as f64;
+		let mut filled_dem = vec![background; num_cells];
+		let mut flow_dir = vec![-1i8; num_cells];
+
+		let mut queue = VecDeque::<(isize, isize)>::with_capacity(num_cells.max(1));
+		for r in 0..rows {
+			queue.push_back((r as isize, -1));
+			queue.push_back((r as isize, cols as isize));
+		}
+		for c in 0..cols {
+			queue.push_back((-1, c as isize));
+			queue.push_back((rows as isize, c as isize));
+		}
+
+		let mut heap = BinaryHeap::<MinNode>::with_capacity(num_cells.max(1));
+		while let Some((r, c)) = queue.pop_front() {
+			for n in 0..8 {
+				let rn = r + DY[n];
+				let cn = c + DX[n];
+				if !in_bounds(rn, cn, rows, cols) {
+					continue;
+				}
+				let ni = idx(rn as usize, cn as usize, cols);
+				if filled_dem[ni] != background {
+					continue;
+				}
+				let zin = dem.get(0, rn, cn);
+				if zin == nodata {
+					filled_dem[ni] = nodata;
+					queue.push_back((rn, cn));
+				} else {
+					filled_dem[ni] = crest_elev[ni];
+					heap.push(MinNode { elev: zin, i: ni });
+				}
+			}
+		}
+
+		let back_link: [i8; 8] = [4, 5, 6, 7, 0, 1, 2, 3];
+		let mut num_inflowing = vec![-1i8; num_cells];
+		let mut stack = Vec::<usize>::with_capacity(num_cells.max(1));
+		while let Some(cell) = heap.pop() {
+			let i = cell.i;
+			let r = i / cols;
+			let c = i % cols;
+			let zout = filled_dem[i];
+			let mut count = 0i8;
+
+			for n in 0..8 {
+				let rn = r as isize + DY[n];
+				let cn = c as isize + DX[n];
+				if !in_bounds(rn, cn, rows, cols) {
+					continue;
+				}
+				let ni = idx(rn as usize, cn as usize, cols);
+				if filled_dem[ni] != background {
+					continue;
+				}
+				let crest_n = crest_elev[ni];
+				if crest_n != nodata {
+					flow_dir[ni] = back_link[n];
+					count += 1;
+					let mut z_fill = crest_n;
+					if z_fill < zout {
+						z_fill = zout;
+					}
+					filled_dem[ni] = z_fill;
+					heap.push(MinNode {
+						elev: dem.get(0, rn, cn),
+						i: ni,
+					});
+				} else {
+					filled_dem[ni] = nodata;
+				}
+			}
+
+			num_inflowing[i] = count;
+			if count == 0 {
+				stack.push(i);
+			}
+		}
+
+		let mut upslope_elevs = vec![Vec::<f64>::new(); num_cells];
+		let mut out_max = vec![0.0f64; num_cells];
+		let mut out_volume = vec![0.0f64; num_cells];
+		let mut out_area = vec![0.0f64; num_cells];
+		while let Some(i) = stack.pop() {
+			let z = dem.get(0, (i / cols) as isize, (i % cols) as isize);
+			num_inflowing[i] -= 1;
+
+			let dir = flow_dir[i];
+			if dir < 0 {
+				continue;
+			}
+
+			let r = i / cols;
+			let c = i % cols;
+			let rn = r as isize + DY[dir as usize];
+			let cn = c as isize + DX[dir as usize];
+			if !in_bounds(rn, cn, rows, cols) {
+				continue;
+			}
+			let ni = idx(rn as usize, cn as usize, cols);
+
+			let cutoff_z = filled_dem[ni];
+			let threshold = crest_elev[ni];
+			let mut num_upslope = 0.0f64;
+			let mut total_elev_diff = 0.0f64;
+			let mut max_depth = 0.0f64;
+
+			if z != nodata {
+				upslope_elevs[i].push(z);
+			}
+			let source_upslope = std::mem::take(&mut upslope_elevs[i]);
+			for up_z in source_upslope {
+				if up_z < cutoff_z {
+					upslope_elevs[ni].push(up_z);
+					if up_z < threshold {
+						num_upslope += 1.0;
+						let diff = threshold - up_z;
+						total_elev_diff += diff;
+						if diff > max_depth {
+							max_depth = diff;
+						}
+					}
+				}
+			}
+
+			out_area[ni] += num_upslope * grid_area;
+			out_volume[ni] += total_elev_diff * grid_area;
+			if out_max[ni] < max_depth {
+				out_max[ni] = max_depth;
+			}
+
+			num_inflowing[ni] -= 1;
+			if num_inflowing[ni] == 0 {
+				stack.push(ni);
+			}
+		}
+
+		let mut out_height = vec![nodata; num_cells];
+		for r in 0..rows {
+			for c in 0..cols {
+				let i = idx(r, c, cols);
+				let z = dem.get(0, r as isize, c as isize);
+				if z == nodata {
+					out_max[i] = nodata;
+					out_volume[i] = nodata;
+					out_area[i] = nodata;
+					continue;
+				}
+				let dam_h = crest_elev[i] - z;
+				out_height[i] = dam_h;
+				if dam_h <= 0.0 {
+					out_max[i] = 0.0;
+					out_volume[i] = 0.0;
+					out_area[i] = 0.0;
+				}
+			}
+		}
+
+		let mut out_mean = vec![nodata; num_cells];
+		for i in 0..num_cells {
+			if out_area[i] == nodata {
+				continue;
+			}
+			out_mean[i] = if out_area[i] > 0.0 { out_volume[i] / out_area[i] } else { 0.0 };
 		}
 
 		let mut outputs = BTreeMap::new();
@@ -7503,27 +8703,34 @@ impl Tool for AverageFlowpathSlopeTool {
 
 		let dirs = d8_dir_from_dem_local(&dem);
 		let inflowing_vals: [i8; 8] = [4, 5, 6, 7, 0, 1, 2, 3];
-		let mut inflow = vec![-1i32; rows * cols];
-		for r in 0..rows {
-			for c in 0..cols {
-				let i = idx(r, c, cols);
-				if dem.get(0, r as isize, c as isize) == nodata {
-					continue;
-				}
-				let mut count = 0i32;
-				for k in 0..8 {
-					let rn = r as isize + DY[k];
-					let cn = c as isize + DX[k];
-					if !in_bounds(rn, cn, rows, cols) {
+		let inflow_rows: Vec<Vec<i32>> = (0..rows)
+			.into_par_iter()
+			.map(|r| {
+				let mut row_inflow = vec![-1i32; cols];
+				for c in 0..cols {
+					if dem.get(0, r as isize, c as isize) == nodata {
 						continue;
 					}
-					let ni = idx(rn as usize, cn as usize, cols);
-					if dirs[ni] == inflowing_vals[k] {
-						count += 1;
+					let mut count = 0i32;
+					for k in 0..8 {
+						let rn = r as isize + DY[k];
+						let cn = c as isize + DX[k];
+						if !in_bounds(rn, cn, rows, cols) {
+							continue;
+						}
+						let ni = idx(rn as usize, cn as usize, cols);
+						if dirs[ni] == inflowing_vals[k] {
+							count += 1;
+						}
 					}
+					row_inflow[c] = count;
 				}
-				inflow[i] = count;
-			}
+				row_inflow
+			})
+			.collect();
+		let mut inflow = Vec::with_capacity(rows * cols);
+		for row in inflow_rows {
+			inflow.extend(row);
 		}
 
 		let cell_x = dem.cell_size_x;

@@ -1338,10 +1338,11 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
             Ok(D8Core::build_result(D8Core::write_or_store_output(out, output_path)?))
         }
         "distance_to_outlet" => {
-            let (pntr, streams, output_path, esri_style, _zero_background) = parse_d8_stream_inputs(args)?;
+            let (pntr, streams, output_path, esri_style, zero_background) = parse_d8_stream_inputs(args)?;
             let rows = pntr.rows;
             let cols = pntr.cols;
             let nodata = streams.nodata;
+            let background = if zero_background { 0.0 } else { nodata };
             let pntr_matches = D8Core::build_pntr_matches(esri_style);
             let lengths = grid_lengths(&pntr);
 
@@ -1391,7 +1392,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
                     if streams.get(0, row as isize, col as isize) > 0.0 {
                         out.set_unchecked(0, row as isize, col as isize, dist[row][col].max(0.0));
                     } else {
-                        out.set_unchecked(0, row as isize, col as isize, nodata);
+                        out.set_unchecked(0, row as isize, col as isize, background);
                     }
                 }
             }
@@ -1446,10 +1447,11 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
             Ok(D8Core::build_result(D8Core::write_or_store_output(out, output_path)?))
         }
         "farthest_channel_head" => {
-            let (pntr, streams, output_path, esri_style, _zero_background) = parse_d8_stream_inputs(args)?;
+            let (pntr, streams, output_path, esri_style, zero_background) = parse_d8_stream_inputs(args)?;
             let rows = pntr.rows;
             let cols = pntr.cols;
             let nodata = streams.nodata;
+            let background = if zero_background { 0.0 } else { nodata };
             let inflowing = D8Core::inflowing_vals(esri_style);
             let pntr_matches = D8Core::build_pntr_matches(esri_style);
             let lengths = grid_lengths(&pntr);
@@ -1487,17 +1489,19 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
                     if streams.get(0, row as isize, col as isize) > 0.0 {
                         out.set_unchecked(0, row as isize, col as isize, out_vals[row][col]);
                     } else {
-                        out.set_unchecked(0, row as isize, col as isize, nodata);
+                        out.set_unchecked(0, row as isize, col as isize, background);
                     }
                 }
             }
             Ok(D8Core::build_result(D8Core::write_or_store_output(out, output_path)?))
         }
         "find_main_stem" => {
-            let (pntr, streams, output_path, esri_style, _zero_background) = parse_d8_stream_inputs(args)?;
+            let (pntr, streams, output_path, esri_style, zero_background) = parse_d8_stream_inputs(args)?;
             let rows = pntr.rows;
             let cols = pntr.cols;
             let nodata = streams.nodata;
+            let pntr_nodata = pntr.nodata;
+            let background = if zero_background { 0.0 } else { nodata };
             let inflowing = D8Core::inflowing_vals(esri_style);
             let pntr_matches = D8Core::build_pntr_matches(esri_style);
             let lengths = grid_lengths(&pntr);
@@ -1533,7 +1537,13 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
             out.data_type = DataType::I16;
             for row in 0..rows {
                 for col in 0..cols {
-                    out.set_unchecked(0, row as isize, col as isize, if streams.get(0, row as isize, col as isize) > 0.0 { 0.0 } else { nodata });
+                    if streams.get(0, row as isize, col as isize) > 0.0 {
+                        out.set_unchecked(0, row as isize, col as isize, 0.0);
+                    } else if pntr.get(0, row as isize, col as isize) != pntr_nodata {
+                        out.set_unchecked(0, row as isize, col as isize, background);
+                    } else {
+                        out.set_unchecked(0, row as isize, col as isize, nodata);
+                    }
                 }
             }
 
@@ -1549,7 +1559,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
                     let mut y = row as isize;
                     let mut x = col as isize;
                     loop {
-                        out.set_unchecked(0, y, x, 1.0);
+                        out.set_unchecked(0, y, x, streams.get(0, y, x));
                         let mut best = None;
                         let mut best_dist = -1.0;
                         for i in 0..8 {

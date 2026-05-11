@@ -38,6 +38,8 @@ use wbcore::{
     ToolParamSpec,
     ToolRunResult,
 };
+use wblidar::las::LasReader;
+use wblidar::las::vlr::{find_epsg, find_ogc_wkt, GEOKEY_DIRECTORY_RECORD_ID};
 use wblidar::{memory_store as lidar_memory_store, Crs as LidarCrs, LidarFormat, PointCloud, PointReader, PointRecord, Rgb16};
 use wbraster::{CrsInfo, DataType, Raster, RasterConfig, RasterFormat};
 use wbvector::memory_store as vector_memory_store;
@@ -1680,6 +1682,17 @@ impl Plane {
             return 90.0;
         }
         (self.c.abs() / denom).acos().to_degrees()
+    }
+
+    fn angle_between(&self, other: Plane) -> f64 {
+        let na = Vector3::new(self.a, self.b, self.c);
+        let nb = Vector3::new(other.a, other.b, other.c);
+        let ma = na.norm();
+        let mb = nb.norm();
+        if ma <= f64::EPSILON || mb <= f64::EPSILON {
+            return std::f64::consts::PI;
+        }
+        (na.dot(&nb) / (ma * mb)).clamp(-1.0, 1.0).acos()
     }
 
 }
@@ -3380,73 +3393,6 @@ fn raster_cell_index(
         Some(row as usize * cols + col as usize)
     }
 }
-
-fn parse_azimuth_altitude(args: &ToolArgs) -> (f64, f64) {
-    let az = parse_f64_alias(args, &["azimuth"], 315.0).to_radians();
-    let alt = parse_f64_alias(args, &["altitude"], 30.0).to_radians();
-    (az, alt)
-}
-
-fn hillshade_from_raster(
-    values: &[f64],
-    rows: usize,
-    cols: usize,
-    cell_x: f64,
-    cell_y: f64,
-    nodata: f64,
-    azimuth_rad: f64,
-    altitude_rad: f64,
-) -> Vec<f64> {
-    let mut out = vec![nodata; rows * cols];
-    if rows < 3 || cols < 3 {
-        return out;
-    }
-
-    let sin_alt = altitude_rad.sin();
-    let cos_alt = altitude_rad.cos();
-
-    for row in 1..(rows - 1) {
-        for col in 1..(cols - 1) {
-            let idx = row * cols + col;
-            let z = values[idx];
-            if z == nodata {
-                continue;
-            }
-
-            let z1 = values[(row - 1) * cols + (col - 1)];
-            let z2 = values[(row - 1) * cols + col];
-            let z3 = values[(row - 1) * cols + (col + 1)];
-            let z4 = values[row * cols + (col - 1)];
-            let z5 = values[row * cols + (col + 1)];
-            let z6 = values[(row + 1) * cols + (col - 1)];
-            let z7 = values[(row + 1) * cols + col];
-            let z8 = values[(row + 1) * cols + (col + 1)];
-
-            if [z1, z2, z3, z4, z5, z6, z7, z8].iter().any(|v| *v == nodata) {
-                continue;
-            }
-
-            let dzdx = ((z3 + 2.0 * z5 + z8) - (z1 + 2.0 * z4 + z6)) / (8.0 * cell_x);
-            let dzdy = ((z6 + 2.0 * z7 + z8) - (z1 + 2.0 * z2 + z3)) / (8.0 * cell_y);
-            let slope = (dzdx * dzdx + dzdy * dzdy).sqrt().atan();
-            let aspect = dzdy.atan2(-dzdx);
-
-            let hs = 255.0
-                * (sin_alt * slope.sin() + cos_alt * slope.cos() * (azimuth_rad - aspect).cos())
-                    .max(0.0);
-            out[idx] = hs;
-        }
-    }
-
-    for idx in 0..out.len() {
-        if out[idx] == nodata && values[idx] != nodata {
-            out[idx] = 0.0;
-        }
-    }
-
-    out
-}
-
 
 #[derive(Clone, Copy)]
 enum RbfBasisType {
@@ -5755,105 +5701,134 @@ impl Tool for LidarHillshadeTool {
         ToolMetadata {
             id: "lidar_hillshade",
             display_name: "LiDAR Hillshade",
-            summary: "Creates a hillshade raster from LiDAR elevations using local block maxima as surface input.",
+            summary: "Computes per-point hillshade intensity from local plane normals and stores grayscale RGB in LiDAR output.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
-                ToolParamSpec { name: "resolution", description: "Output cell size.", required: false, ..Default::default() },
-                ToolParamSpec { name: "search_radius", description: "Compatibility parameter reserved for legacy hillshade neighborhood control.", required: false, ..Default::default() },
+                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius for local normal estimation. Values <= 0 use estimated nominal spacing.", required: false, ..Default::default() },
                 ToolParamSpec { name: "azimuth", description: "Illumination azimuth in degrees.", required: false, ..Default::default() },
                 ToolParamSpec { name: "altitude", description: "Illumination altitude in degrees.", required: false, ..Default::default() },
-                ToolParamSpec { name: "returns_included", description: "Return filtering mode: all, first, or last.", required: false, ..Default::default() },
-                ToolParamSpec { name: "excluded_classes", description: "Classes to exclude (array or comma-delimited string).", required: false, ..Default::default() },
-                ToolParamSpec { name: "min_elev", description: "Minimum elevation threshold used for point inclusion filtering.", required: false, ..Default::default() },
-                ToolParamSpec { name: "max_elev", description: "Maximum elevation threshold used for point inclusion filtering.", required: false, ..Default::default() },
-                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = parse_lidar_path_arg_optional(args)?;
-        let resolution = parse_f64_alias(args, &["resolution", "cell_size"], 1.0);
-        if !resolution.is_finite() || resolution <= 0.0 {
-            return Err(ToolError::Validation("resolution/cell_size must be a positive finite value".to_string()));
-        }
         let search_radius = parse_f64_alias(args, &["search_radius", "radius"], -1.0);
         if !search_radius.is_finite() {
             return Err(ToolError::Validation("search_radius/radius must be finite".to_string()));
         }
-        let _ = parse_optional_output_path(args, "output")?;
+        let _ = parse_optional_lidar_output_path(args)?;
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_lidar_path_arg_optional(args)?;
-        let resolution = parse_f64_alias(args, &["resolution", "cell_size"], 1.0);
-        let _search_radius = parse_f64_alias(args, &["search_radius", "radius"], -1.0);
-        let returns_mode = parse_returns_mode(args);
-        let include_classes = parse_excluded_classes(args)?;
-        let min_z = parse_f64_alias(args, &["min_elev", "minz"], f64::NEG_INFINITY);
-        let max_z = parse_f64_alias(args, &["max_elev", "maxz"], f64::INFINITY);
-        let output_path = parse_optional_output_path(args, "output")?;
-        let (azimuth, altitude) = parse_azimuth_altitude(args);
+        let output_path = parse_optional_lidar_output_path(args)?;
+        let search_radius = parse_f64_alias(args, &["search_radius", "radius"], -1.0);
+        let mut azimuth = parse_f64_alias(args, &["azimuth"], 315.0);
+        let altitude = parse_f64_alias(args, &["altitude"], 30.0);
+        azimuth = (azimuth - 90.0).to_radians();
+        let altitude_rad = altitude.to_radians();
+        let sin_theta = altitude_rad.sin();
+        let cos_theta = altitude_rad.cos();
 
         let run_single = |input_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
             let cloud = load_lidar_cloud(input_path, "input")?;
-            if cloud.crs.is_none() {
-                ctx.progress.info(
-                    "input LiDAR has no CRS metadata; output raster will be written without CRS assignment",
-                );
+            if cloud.points.is_empty() {
+                let out_cloud = PointCloud {
+                    points: vec![],
+                    crs: cloud.crs.clone(),
+                };
+                return store_or_write_lidar_output(&out_cloud, out_path, "lidar_hillshade");
             }
 
-            let samples = collect_lidar_samples(&cloud.points, "elevation", returns_mode, &include_classes, min_z, max_z)?;
-            let mut output = build_lidar_output(&samples, resolution, lidar_crs_to_raster_crs(cloud.crs.as_ref()), DataType::F64)?;
+            let local_radius = if search_radius <= 0.0 {
+                estimate_nominal_spacing(&cloud) * 3.0
+            } else {
+                search_radius
+            };
+            let radius_sq = local_radius * local_radius;
 
-            // Build local surface from block maxima then hillshade it.
-            let mut surface = vec![output.nodata; output.data.len()];
-            let y_max = output.y_max();
-            for (x, y, z) in &samples {
-                if let Some(idx) = raster_cell_index(*x, *y, output.x_min, y_max, output.cell_size_x, output.cell_size_y, output.rows, output.cols) {
-                    if surface[idx] == output.nodata || *z > surface[idx] {
-                        surface[idx] = *z;
+            let mut tree = KdTree::new(3);
+            for (i, p) in cloud.points.iter().enumerate() {
+                tree.add([p.x, p.y, p.z], i)
+                    .map_err(|e| ToolError::Execution(format!("failed indexing lidar points: {e}")))?;
+            }
+            let tree = Arc::new(tree);
+
+            let points: Vec<PointRecord> = cloud
+                .points
+                .par_iter()
+                .map(|p| {
+                    let mut q = *p;
+                    let neighbours = tree
+                        .within(&[p.x, p.y, p.z], radius_sq, &squared_euclidean)
+                        .unwrap_or_default();
+                    let sample: Vec<Vector3<f64>> = neighbours
+                        .iter()
+                        .map(|(_, idx)| point_to_vec3(&cloud.points[**idx]))
+                        .collect();
+
+                    let mut hillshade = 0.0_f64;
+                    let normal = plane_normal_and_centroid(&sample)
+                        .map(|(n, _)| n)
+                        .unwrap_or_else(|| Vector3::new(0.0, 0.0, 0.0));
+                    let a = normal.x;
+                    let b = normal.y;
+                    let c = normal.z;
+                    if c != 0.0 {
+                        let fx = -a / c;
+                        let fy = -b / c;
+                        if fx != 0.0 {
+                            let tan_slope = (fx * fx + fy * fy).sqrt();
+                            let aspect = (180.0
+                                - (fy / fx).atan().to_degrees()
+                                + 90.0 * (fx / fx.abs()))
+                                .to_radians();
+                            let term1 = tan_slope / (1.0 + tan_slope * tan_slope).sqrt();
+                            let term2 = sin_theta / tan_slope;
+                            let term3 = cos_theta * (azimuth - aspect).sin();
+                            hillshade = term1 * (term2 - term3);
+                        } else {
+                            hillshade = 0.5;
+                        }
+                        hillshade = (hillshade * 255.0).max(0.0).min(255.0);
                     }
-                }
-            }
 
-            let shaded = hillshade_from_raster(
-                &surface,
-                output.rows,
-                output.cols,
-                output.cell_size_x,
-                output.cell_size_y,
-                output.nodata,
-                azimuth,
-                altitude,
-            );
-            for (idx, value) in shaded.iter().enumerate() {
-                output.data.set_f64(idx, *value);
-            }
+                    let g = hillshade.round() as u8;
+                    q.color = Some(color8_to_rgb16(g, g, g));
+                    q
+                })
+                .collect();
 
-            store_or_write_output(output, out_path)
+            let out_cloud = PointCloud {
+                points,
+                crs: cloud.crs.clone(),
+            };
+
+            store_or_write_lidar_output(&out_cloud, out_path, "lidar_hillshade")
         };
 
         if let Some(input_path) = input_path {
             ctx.progress.info("reading input lidar");
             let locator = run_single(Path::new(&input_path), output_path)?;
             ctx.progress.progress(1.0);
-            Ok(build_raster_result(locator))
+            Ok(build_lidar_result(locator))
         } else {
             ctx.progress.info("batch mode: scanning working directory for lidar files");
             let files = find_lidar_files()?;
             let outputs = files
                 .into_par_iter()
                 .map(|input| {
-                    let out = generate_batch_output_path(&input, "hillshade");
+                    let out = generate_batch_lidar_output_path(&input, "hillshade");
                     run_single(&input, Some(out))
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             ctx.progress.progress(1.0);
-            build_batch_placeholder_raster_result(outputs)
+            build_batch_placeholder_lidar_result(outputs)
         }
     }
 }
@@ -6025,45 +6000,39 @@ impl Tool for RemoveDuplicatesTool {
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
             let cloud = load_lidar_cloud(in_path, "input")?;
 
-            let (_, _, points) = cloud.points.par_iter()
-                .fold(|| {
-                    let seen_xy = HashSet::<(u64, u64)>::new();
-                    let seen_xyz = HashSet::<(u64, u64, u64)>::new();
-                    (seen_xy, seen_xyz, Vec::new())
-                },
-                |(mut seen_xy, mut seen_xyz, mut points), p| {
-                    if include_z {
+            let points = if include_z {
+                let mut counts = HashMap::<(u64, u64, u64), usize>::with_capacity(cloud.points.len());
+                for p in &cloud.points {
+                    let key = (p.x.to_bits(), p.y.to_bits(), p.z.to_bits());
+                    *counts.entry(key).or_insert(0) += 1;
+                }
+
+                cloud
+                    .points
+                    .iter()
+                    .copied()
+                    .filter(|p| {
                         let key = (p.x.to_bits(), p.y.to_bits(), p.z.to_bits());
-                        if seen_xyz.insert(key) {
-                            points.push(*p);
-                        }
-                    } else {
+                        counts.get(&key).copied().unwrap_or(0) == 1
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                let mut counts = HashMap::<(u64, u64), usize>::with_capacity(cloud.points.len());
+                for p in &cloud.points {
+                    let key = (p.x.to_bits(), p.y.to_bits());
+                    *counts.entry(key).or_insert(0) += 1;
+                }
+
+                cloud
+                    .points
+                    .iter()
+                    .copied()
+                    .filter(|p| {
                         let key = (p.x.to_bits(), p.y.to_bits());
-                        if seen_xy.insert(key) {
-                            points.push(*p);
-                        }
-                    }
-                    (seen_xy, seen_xyz, points)
-                })
-                .reduce(|| {
-                    (HashSet::new(), HashSet::new(), Vec::new())
-                },
-                |(mut seen_xy, mut seen_xyz, mut acc), (_other_xy, _other_xyz, other_pts)| {
-                    for p in other_pts {
-                        if include_z {
-                            let key = (p.x.to_bits(), p.y.to_bits(), p.z.to_bits());
-                            if seen_xyz.insert(key) {
-                                acc.push(p);
-                            }
-                        } else {
-                            let key = (p.x.to_bits(), p.y.to_bits());
-                            if seen_xy.insert(key) {
-                                acc.push(p);
-                            }
-                        }
-                    }
-                    (seen_xy, seen_xyz, acc)
-                });
+                        counts.get(&key).copied().unwrap_or(0) == 1
+                    })
+                    .collect::<Vec<_>>()
+            };
 
             let out_cloud = PointCloud { points, crs: cloud.crs.clone() };
             store_or_write_lidar_output(&out_cloud, out_path, "remove_duplicates")
@@ -7764,6 +7733,7 @@ impl Tool for LidarGroundPointFilterTool {
                 ToolParamSpec { name: "slope_threshold", description: "Slope threshold in degrees (default 45.0, max 88).", required: false, ..Default::default() },
                 ToolParamSpec { name: "height_threshold", description: "Minimum vertical separation to flag off-terrain (default 1.0).", required: false, ..Default::default() },
                 ToolParamSpec { name: "classify", description: "If true classify points (ground=2, off-terrain=1); else filter off-terrain points.", required: false, ..Default::default() },
+                ToolParamSpec { name: "slope_norm", description: "If true, apply top-hat terrain normalization before slope testing (default true).", required: false, ..Default::default() },
                 ToolParamSpec { name: "height_above_ground", description: "If true, output z values as local height above nearest lower neighbor.", required: false, ..Default::default() },
                 ToolParamSpec { name: "output", description: "Optional output LiDAR path for single-input mode.", required: false, ..Default::default() },
             ],
@@ -7789,6 +7759,7 @@ impl Tool for LidarGroundPointFilterTool {
             return Err(ToolError::Validation("height_threshold must be a non-negative finite value".to_string()));
         }
         let _ = parse_bool_alias(args, &["classify"], false);
+        let _ = parse_bool_alias(args, &["slope_norm"], true);
         let _ = parse_bool_alias(args, &["height_above_ground"], false);
         let _ = parse_optional_lidar_output_path(args)?;
         Ok(())
@@ -7802,6 +7773,7 @@ impl Tool for LidarGroundPointFilterTool {
         let slope_threshold = slope_degrees.to_radians().tan();
         let height_threshold = parse_f64_alias(args, &["height_threshold"], 1.0);
         let classify = parse_bool_alias(args, &["classify"], false);
+        let slope_norm = parse_bool_alias(args, &["slope_norm"], true);
         let height_above_ground = parse_bool_alias(args, &["height_above_ground"], false);
         let output_path = parse_optional_lidar_output_path(args)?;
 
@@ -7813,9 +7785,11 @@ impl Tool for LidarGroundPointFilterTool {
             }
 
             let mut tree: KdTree<f64, usize, [f64; 2]> = KdTree::new(2);
+            let mut eligible = vec![false; cloud.points.len()];
             for (idx, p) in cloud.points.iter().enumerate() {
                 if !point_is_noise(p) && !point_is_withheld(p) && is_late_return(p) {
                     let _ = tree.add([p.x, p.y], idx);
+                    eligible[idx] = true;
                 }
             }
 
@@ -7823,53 +7797,141 @@ impl Tool for LidarGroundPointFilterTool {
             
             let tree_arc = Arc::new(tree);
             let cloud_arc = Arc::new(cloud.points.clone());
-            let results: Vec<(bool, f64)> = (0..cloud.points.len()).into_par_iter()
+            let eligible_arc = Arc::new(eligible);
+
+            let residuals: Vec<f64> = if slope_norm {
+                let erosion: Vec<f64> = (0..cloud.points.len())
+                    .into_par_iter()
+                    .map(|i| {
+                        if !eligible_arc[i] {
+                            return f64::NAN;
+                        }
+                        let p = cloud_arc[i];
+                        let neighbours = tree_arc
+                            .within(&[p.x, p.y], radius_sq, &squared_euclidean)
+                            .unwrap_or_default();
+                        let mut min_local = p.z;
+                        for (_, nref) in neighbours {
+                            let nidx = *nref;
+                            min_local = min_local.min(cloud_arc[nidx].z);
+                        }
+                        min_local
+                    })
+                    .collect();
+
+                let erosion_arc = Arc::new(erosion);
+                (0..cloud.points.len())
+                    .into_par_iter()
+                    .map(|i| {
+                        if !eligible_arc[i] {
+                            return f64::NAN;
+                        }
+                        let p = cloud_arc[i];
+                        let neighbours = tree_arc
+                            .within(&[p.x, p.y], radius_sq, &squared_euclidean)
+                            .unwrap_or_default();
+                        let mut opened_local = erosion_arc[i];
+                        for (_, nref) in neighbours {
+                            let nidx = *nref;
+                            let e = erosion_arc[nidx];
+                            if e.is_finite() && e > opened_local {
+                                opened_local = e;
+                            }
+                        }
+                        p.z - opened_local
+                    })
+                    .collect()
+            } else {
+                (0..cloud.points.len())
+                    .into_par_iter()
+                    .map(|i| {
+                        if eligible_arc[i] {
+                            cloud_arc[i].z
+                        } else {
+                            f64::NAN
+                        }
+                    })
+                    .collect()
+            };
+
+            let residuals_arc = Arc::new(residuals);
+            let is_off_terrain: Vec<bool> = (0..cloud.points.len())
+                .into_par_iter()
                 .map(|i| {
-                    let p = &cloud_arc[i];
-                    if point_is_withheld(p) || point_is_noise(p) {
-                        return (false, 0.0);
+                    if !eligible_arc[i] {
+                        return true;
                     }
-                    let mut neigh = tree_arc.within(&[p.x, p.y], radius_sq, &squared_euclidean).unwrap_or_default();
-                    if neigh.len() < min_neighbours + 1 && min_neighbours > 0 {
-                        neigh = tree_arc
-                            .nearest(&[p.x, p.y], min_neighbours + 1, &squared_euclidean)
+                    if slope_norm && residuals_arc[i] >= height_threshold {
+                        return true;
+                    }
+
+                    let p = cloud_arc[i];
+                    let mut neighbours = tree_arc
+                        .within(&[p.x, p.y], radius_sq, &squared_euclidean)
+                        .unwrap_or_default();
+                    if neighbours.len() < min_neighbours && min_neighbours > 0 {
+                        neighbours = tree_arc
+                            .nearest(&[p.x, p.y], min_neighbours.max(1), &squared_euclidean)
                             .unwrap_or_default();
                     }
 
-                    let mut local_min = p.z;
-                    let mut off_terrain = false;
-                    for (dist_sq, idx_ref) in neigh {
-                        let n_idx = *idx_ref;
-                        if n_idx == i {
+                    let mut max_slope = f64::NEG_INFINITY;
+                    for (dist_sq, nref) in neighbours {
+                        let nidx = *nref;
+                        if nidx == i || !eligible_arc[nidx] {
                             continue;
                         }
-                        let n = cloud_arc[n_idx];
-                        if point_is_withheld(&n) || point_is_noise(&n) {
+                        if dist_sq <= 0.0 {
                             continue;
                         }
-                        if n.z < local_min {
-                            local_min = n.z;
-                        }
-                        if n.z + height_threshold < p.z {
-                            let dist = dist_sq.sqrt();
-                            if dist > 0.0 {
-                                let slope = (p.z - n.z) / dist;
-                                if slope > slope_threshold {
-                                    off_terrain = true;
-                                    break;
-                                }
-                            }
+                        let slope = (residuals_arc[i] - residuals_arc[nidx]) / dist_sq.sqrt();
+                        if slope > max_slope {
+                            max_slope = slope;
                         }
                     }
-                    (off_terrain, (p.z - local_min).max(0.0))
+                    max_slope > slope_threshold
                 })
                 .collect();
 
-            let is_off_terrain: Vec<bool> = results.iter().map(|(off, _)| *off).collect();
-            let hag: Vec<f64> = results.iter().map(|(_, h)| *h).collect();
-
             let is_off_terrain_arc = Arc::new(is_off_terrain);
-            let hag_arc = Arc::new(hag);
+            let hag: Option<Arc<Vec<f64>>> = if classify && height_above_ground {
+                let values = (0..cloud.points.len())
+                    .into_par_iter()
+                    .map(|i| {
+                        if !eligible_arc[i] || !is_off_terrain_arc[i] {
+                            return 0.0;
+                        }
+                        let p = cloud_arc[i];
+                        let mut neighbours = tree_arc
+                            .within(&[p.x, p.y], radius_sq, &squared_euclidean)
+                            .unwrap_or_default();
+                        if neighbours.len() < min_neighbours && min_neighbours > 0 {
+                            neighbours = tree_arc
+                                .nearest(&[p.x, p.y], min_neighbours.max(1), &squared_euclidean)
+                                .unwrap_or_default();
+                        }
+                        let mut total = 0.0;
+                        let mut count = 0usize;
+                        for (_, nref) in neighbours {
+                            let nidx = *nref;
+                            if !eligible_arc[nidx] || is_off_terrain_arc[nidx] {
+                                continue;
+                            }
+                            total += p.z - cloud_arc[nidx].z;
+                            count += 1;
+                        }
+                        if count > 0 {
+                            total / count as f64
+                        } else {
+                            0.0
+                        }
+                    })
+                    .collect();
+                Some(Arc::new(values))
+            } else {
+                None
+            };
+
             let points: Vec<PointRecord> = if classify {
                 cloud
                     .points
@@ -7877,9 +7939,15 @@ impl Tool for LidarGroundPointFilterTool {
                     .enumerate()
                     .map(|(i, p)| {
                         let mut q = *p;
-                        q.classification = if is_off_terrain_arc[i] { 1 } else { 2 };
-                        if height_above_ground {
-                            q.z = hag_arc[i];
+                        if !point_is_noise(p) && !point_is_withheld(p) {
+                            q.classification = if is_off_terrain_arc[i] { 1 } else { 2 };
+                            if height_above_ground {
+                                if let Some(hag_values) = &hag {
+                                    q.z = hag_values[i];
+                                } else {
+                                    q.z = 0.0;
+                                }
+                            }
                         }
                         q
                     })
@@ -7893,10 +7961,7 @@ impl Tool for LidarGroundPointFilterTool {
                         if is_off_terrain_arc[i] {
                             None
                         } else {
-                            let mut q = *p;
-                            if height_above_ground {
-                                q.z = hag_arc[i];
-                            }
+                            let q = *p;
                             Some(q)
                         }
                     })
@@ -8475,125 +8540,123 @@ impl Tool for ClassifyLidarTool {
             }
 
             // Stage 1: local geometry (RANSAC-like planarity + linearity around each late-return point).
-            let mut planar = vec![0.0_f64; n_points];
-            let mut linear = vec![0.0_f64; n_points];
-            let mut rng = rand::rng();
-            for i in 0..n_points {
-                if !active_late[i] {
-                    continue;
-                }
-                let p1 = cloud.points[i];
-                let found = tree.within(&[p1.x, p1.y], radius_sq, &squared_euclidean).unwrap_or_default();
-                let mut neigh: Vec<usize> = Vec::with_capacity(found.len());
-                for (_, idx_ref) in found {
-                    let idx = *idx_ref;
-                    if idx == i {
-                        continue;
+            let (planar, linear): (Vec<f64>, Vec<f64>) = (0..n_points)
+                .into_par_iter()
+                .map(|i| {
+                    if !active_late[i] {
+                        return (0.0, 0.0);
                     }
-                    if !active_late[idx] {
-                        continue;
-                    }
-                    let p2 = cloud.points[idx];
-                    if (p1.z - p2.z).abs() <= search_radius {
-                        neigh.push(idx);
-                    }
-                }
-                if neigh.len() <= 5 {
-                    continue;
-                }
-
-                let n = neigh.len();
-                let mut max_planar_pts = 0usize;
-                let mut max_linear_pts = 0usize;
-                for _ in 0..num_iter {
-                    let n1 = rng.random_range(0..n);
-                    let mut n2 = rng.random_range(0..n);
-                    while n2 == n1 {
-                        n2 = rng.random_range(0..n);
-                    }
-                    let p2 = cloud.points[neigh[n1]];
-                    let p3 = cloud.points[neigh[n2]];
-
-                    let a = (p2.y - p1.y) * (p3.z - p1.z) - (p3.y - p1.y) * (p2.z - p1.z);
-                    let b = (p2.z - p1.z) * (p3.x - p1.x) - (p3.z - p1.z) * (p2.x - p1.x);
-                    let c = (p2.x - p1.x) * (p3.y - p1.y) - (p3.x - p1.x) * (p2.y - p1.y);
-                    let d = -(a * p1.x + b * p1.y + c * p1.z);
-                    let norm1 = (a * a + b * b + c * c).sqrt().max(1e-12);
-
-                    let p = p2.y - p1.y;
-                    let q = p1.x - p2.x;
-                    let r = -(p * p1.x + q * p1.y);
-                    let norm2 = (p * p + q * q).sqrt().max(1e-12);
-
-                    let mut planar_pts = 0usize;
-                    let mut linear_pts = 0usize;
-                    for (j, idx) in neigh.iter().enumerate() {
-                        if j != n1 && j != n2 {
-                            let pt = cloud.points[*idx];
-                            let residual_plane = (a * pt.x + b * pt.y + c * pt.z + d).abs() / norm1;
-                            if residual_plane < grd_threshold {
-                                planar_pts += 1;
-                            }
+                    let p1 = cloud.points[i];
+                    let found = tree.within(&[p1.x, p1.y], radius_sq, &squared_euclidean).unwrap_or_default();
+                    let mut neigh: Vec<usize> = Vec::with_capacity(found.len());
+                    for (_, idx_ref) in found {
+                        let idx = *idx_ref;
+                        if idx == i || !active_late[idx] {
+                            continue;
                         }
-                        if j != n1 {
-                            let pt = cloud.points[*idx];
-                            let residual_line = (p * pt.x + q * pt.y + r).abs() / norm2;
-                            if residual_line < grd_threshold {
-                                linear_pts += 1;
-                            }
+                        let p2 = cloud.points[idx];
+                        if (p1.z - p2.z).abs() <= search_radius {
+                            neigh.push(idx);
                         }
                     }
-                    max_planar_pts = max_planar_pts.max(planar_pts);
-                    max_linear_pts = max_linear_pts.max(linear_pts);
-                }
+                    if neigh.len() <= 5 {
+                        return (0.0, 0.0);
+                    }
 
-                planar[i] = (max_planar_pts + 2) as f64 / n as f64;
-                linear[i] = (max_linear_pts + 1) as f64 / n as f64;
-            }
+                    let n = neigh.len();
+                    let mut rng = rand::rng();
+                    let mut max_planar_pts = 0usize;
+                    let mut max_linear_pts = 0usize;
+                    for _ in 0..num_iter {
+                        let n1 = rng.random_range(0..n);
+                        let mut n2 = rng.random_range(0..n);
+                        while n2 == n1 {
+                            n2 = rng.random_range(0..n);
+                        }
+                        let p2 = cloud.points[neigh[n1]];
+                        let p3 = cloud.points[neigh[n2]];
+
+                        let a = (p2.y - p1.y) * (p3.z - p1.z) - (p3.y - p1.y) * (p2.z - p1.z);
+                        let b = (p2.z - p1.z) * (p3.x - p1.x) - (p3.z - p1.z) * (p2.x - p1.x);
+                        let c = (p2.x - p1.x) * (p3.y - p1.y) - (p3.x - p1.x) * (p2.y - p1.y);
+                        let d = -(a * p1.x + b * p1.y + c * p1.z);
+                        let norm1 = (a * a + b * b + c * c).sqrt().max(1e-12);
+
+                        let p = p2.y - p1.y;
+                        let q = p1.x - p2.x;
+                        let r = -(p * p1.x + q * p1.y);
+                        let norm2 = (p * p + q * q).sqrt().max(1e-12);
+
+                        let mut planar_pts = 0usize;
+                        let mut linear_pts = 0usize;
+                        for (j, idx) in neigh.iter().enumerate() {
+                            if j != n1 && j != n2 {
+                                let pt = cloud.points[*idx];
+                                let residual_plane = (a * pt.x + b * pt.y + c * pt.z + d).abs() / norm1;
+                                if residual_plane < grd_threshold {
+                                    planar_pts += 1;
+                                }
+                            }
+                            if j != n1 {
+                                let pt = cloud.points[*idx];
+                                let residual_line = (p * pt.x + q * pt.y + r).abs() / norm2;
+                                if residual_line < grd_threshold {
+                                    linear_pts += 1;
+                                }
+                            }
+                        }
+                        max_planar_pts = max_planar_pts.max(planar_pts);
+                        max_linear_pts = max_linear_pts.max(linear_pts);
+                    }
+
+                    (
+                        (max_planar_pts + 2) as f64 / n as f64,
+                        (max_linear_pts + 1) as f64 / n as f64,
+                    )
+                })
+                .unzip();
 
             // Stage 2: white top-hat-like residuals from late-return neighbors (erosion + dilation).
-            let mut neighborhood_min = vec![f64::MAX; n_points];
-            for i in 0..n_points {
-                if !active_late[i] {
-                    continue;
-                }
-                let p = cloud.points[i];
-                let found = tree.within(&[p.x, p.y], radius_sq, &squared_euclidean).unwrap_or_default();
-                let mut min_z = f64::MAX;
-                for (_, idx_ref) in found {
-                    let idx = *idx_ref;
-                    if active_late[idx] {
-                        min_z = min_z.min(cloud.points[idx].z);
+            let neighborhood_min: Vec<f64> = (0..n_points)
+                .into_par_iter()
+                .map(|i| {
+                    if !active_late[i] {
+                        return f64::MAX;
                     }
-                }
-                if min_z.is_finite() {
-                    neighborhood_min[i] = min_z;
-                }
-            }
-
-            let mut residuals = vec![f64::MIN; n_points];
-            for i in 0..n_points {
-                if !active_late[i] {
-                    continue;
-                }
-                let p = cloud.points[i];
-                let found = tree.within(&[p.x, p.y], radius_sq, &squared_euclidean).unwrap_or_default();
-                let mut max_z = f64::NEG_INFINITY;
-                for (_, idx_ref) in found {
-                    let idx = *idx_ref;
-                    if active_late[idx] {
-                        let zn = neighborhood_min[idx];
-                        if zn.is_finite() {
-                            max_z = max_z.max(zn);
+                    let p = cloud.points[i];
+                    let found = tree.within(&[p.x, p.y], radius_sq, &squared_euclidean).unwrap_or_default();
+                    let mut min_z = f64::MAX;
+                    for (_, idx_ref) in found {
+                        let idx = *idx_ref;
+                        if active_late[idx] {
+                            min_z = min_z.min(cloud.points[idx].z);
                         }
                     }
-                }
-                if max_z.is_finite() {
-                    residuals[i] = p.z - max_z;
-                } else {
-                    residuals[i] = 0.0;
-                }
-            }
+                    if min_z.is_finite() { min_z } else { f64::MAX }
+                })
+                .collect();
+
+            let mut residuals: Vec<f64> = (0..n_points)
+                .into_par_iter()
+                .map(|i| {
+                    if !active_late[i] {
+                        return f64::MIN;
+                    }
+                    let p = cloud.points[i];
+                    let found = tree.within(&[p.x, p.y], radius_sq, &squared_euclidean).unwrap_or_default();
+                    let mut max_z = f64::NEG_INFINITY;
+                    for (_, idx_ref) in found {
+                        let idx = *idx_ref;
+                        if active_late[idx] {
+                            let zn = neighborhood_min[idx];
+                            if zn.is_finite() {
+                                max_z = max_z.max(zn);
+                            }
+                        }
+                    }
+                    if max_z.is_finite() { p.z - max_z } else { 0.0 }
+                })
+                .collect();
 
             // Stage 3: cluster planar low-residual surfaces, selecting largest-area as primary ground cluster.
             let mut cluster = vec![0usize; n_points];
@@ -8798,25 +8861,29 @@ impl Tool for ClassifyLidarTool {
                 }
             }
 
-            let mut points = cloud.points.clone();
-            for i in 0..n_points {
-                if point_is_withheld(&points[i]) {
-                    continue;
-                }
-                points[i].classification = if grd_cluster > 1 && cluster[i] == grd_cluster {
-                    2
-                } else if grd_cluster <= 1 && residuals[i].abs() <= grd_threshold {
-                    2
-                } else if cluster[i] == unclassed_cluster {
-                    1
-                } else if cluster[i] == 1 {
-                    5
-                } else if cluster[i] > 1 {
-                    6
-                } else {
-                    points[i].classification
-                };
-            }
+            let points: Vec<PointRecord> = (0..n_points)
+                .into_par_iter()
+                .map(|i| {
+                    let mut point = cloud.points[i];
+                    if point_is_withheld(&point) {
+                        return point;
+                    }
+                    point.classification = if grd_cluster > 1 && cluster[i] == grd_cluster {
+                        2
+                    } else if grd_cluster <= 1 && residuals[i].abs() <= grd_threshold {
+                        2
+                    } else if cluster[i] == unclassed_cluster {
+                        1
+                    } else if cluster[i] == 1 {
+                        5
+                    } else if cluster[i] > 1 {
+                        6
+                    } else {
+                        point.classification
+                    };
+                    point
+                })
+                .collect();
 
             let out_cloud = PointCloud { points, crs: cloud.crs.clone() };
             store_or_write_lidar_output(&out_cloud, out_path, "classify_lidar")
@@ -9019,7 +9086,7 @@ impl Tool for ErasePolygonFromLidarTool {
         let points: Vec<PointRecord> = cloud
             .points
             .par_iter()
-            .filter(|p| point_in_any_prepared_polygon(p.x, p.y, &polys))
+            .filter(|p| !point_in_any_prepared_polygon(p.x, p.y, &polys))
             .copied()
             .collect();
 
@@ -9227,12 +9294,12 @@ impl Tool for LidarSegmentationTool {
             params: vec![
                 ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
                 ToolParamSpec { name: "search_radius", description: "Neighbourhood radius for region growing.", required: false, ..Default::default() },
-                ToolParamSpec { name: "num_iterations", description: "Compatibility parameter for legacy RANSAC iterations.", required: false, ..Default::default() },
-                ToolParamSpec { name: "num_samples", description: "Compatibility parameter for legacy model sampling.", required: false, ..Default::default() },
-                ToolParamSpec { name: "inlier_threshold", description: "Compatibility parameter for legacy planar inlier threshold.", required: false, ..Default::default() },
-                ToolParamSpec { name: "acceptable_model_size", description: "Compatibility parameter for legacy planar model size.", required: false, ..Default::default() },
-                ToolParamSpec { name: "max_planar_slope", description: "Compatibility parameter for legacy planar slope filtering.", required: false, ..Default::default() },
-                ToolParamSpec { name: "norm_diff_threshold", description: "Compatibility parameter for normal-angle thresholding.", required: false, ..Default::default() },
+                ToolParamSpec { name: "num_iterations", description: "Number of RANSAC iterations used to detect local planar models.", required: false, ..Default::default() },
+                ToolParamSpec { name: "num_samples", description: "Number of points sampled per local RANSAC model fit.", required: false, ..Default::default() },
+                ToolParamSpec { name: "inlier_threshold", description: "Residual threshold used to classify points as local plane inliers.", required: false, ..Default::default() },
+                ToolParamSpec { name: "acceptable_model_size", description: "Minimum number of inliers required for an accepted local plane model.", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_planar_slope", description: "Maximum accepted planar slope in degrees.", required: false, ..Default::default() },
+                ToolParamSpec { name: "norm_diff_threshold", description: "Maximum angular difference (degrees) between neighbouring planar normals during growth.", required: false, ..Default::default() },
                 ToolParamSpec { name: "max_z_diff", description: "Maximum Z difference allowed while growing a segment.", required: false, ..Default::default() },
                 ToolParamSpec { name: "classes", description: "If true, do not cross class boundaries while growing segments.", required: false, ..Default::default() },
                 ToolParamSpec { name: "ground", description: "If true, assigns class=2 to the largest segment and class=1 to other segmented points.", required: false, ..Default::default() },
@@ -9247,6 +9314,10 @@ impl Tool for LidarSegmentationTool {
         if !search_radius.is_finite() || search_radius <= 0.0 {
             return Err(ToolError::Validation("search_radius must be a positive finite value".to_string()));
         }
+        let norm_diff = parse_f64_alias(args, &["norm_diff_threshold", "norm_diff"], 2.0);
+        if !norm_diff.is_finite() {
+            return Err(ToolError::Validation("norm_diff_threshold must be finite".to_string()));
+        }
         let max_z_diff = parse_f64_alias(args, &["max_z_diff", "maxzdiff"], 1.0);
         if !max_z_diff.is_finite() || max_z_diff < 0.0 {
             return Err(ToolError::Validation("max_z_diff must be a finite non-negative value".to_string()));
@@ -9258,7 +9329,14 @@ impl Tool for LidarSegmentationTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_required_lidar_path_alias(args, &["input", "input_lidar", "in_lidar"], "input")?;
         let search_radius = parse_f64_alias(args, &["search_radius", "radius"], 2.0);
-        let _norm_diff_threshold = parse_f64_alias(args, &["norm_diff_threshold", "norm_diff"], 2.0);
+        let num_iterations = parse_f64_alias(args, &["num_iterations", "num_iter"], 50.0).max(1.0) as usize;
+        let num_samples = parse_f64_alias(args, &["num_samples"], 10.0).max(5.0) as usize;
+        let inlier_threshold = parse_f64_alias(args, &["inlier_threshold", "threshold"], 0.15).max(0.0);
+        let acceptable_model_size = parse_f64_alias(args, &["acceptable_model_size", "model_size"], 30.0).max(5.0) as usize;
+        let max_planar_slope = parse_f64_alias(args, &["max_planar_slope", "max_slope"], 75.0).clamp(0.0, 90.0);
+        let max_norm_diff = parse_f64_alias(args, &["norm_diff_threshold", "norm_diff"], 2.0)
+            .clamp(0.0, 90.0)
+            .to_radians();
         let max_z_diff = parse_f64_alias(args, &["max_z_diff", "maxzdiff"], 1.0);
         let class_boundaries = parse_bool_alias(args, &["classes"], false);
         let assign_ground_classes = parse_bool_alias(args, &["ground"], false);
@@ -9272,22 +9350,125 @@ impl Tool for LidarSegmentationTool {
             return Ok(build_lidar_result(locator));
         }
 
-        let mut tree = KdTree::new(2);
+        let mut tree = KdTree::new(3);
         let mut active_indices = Vec::new();
         for (i, p) in cloud.points.iter().enumerate() {
             if point_is_withheld(p) || point_is_noise(p) {
                 continue;
             }
-            tree.add([p.x, p.y], i)
+            tree.add([p.x, p.y, p.z], i)
                 .map_err(|e| ToolError::Execution(format!("failed indexing lidar points: {e}")))?;
             active_indices.push(i);
         }
 
+        let radius_sq = search_radius * search_radius;
+        let sample_floor = num_samples.max(acceptable_model_size);
+        let tree = Arc::new(tree);
+
+        let local_models: Vec<(Plane, f64, Vec<usize>)> = active_indices
+            .par_iter()
+            .filter_map(|idx| {
+                let idx = *idx;
+                let p = cloud.points[idx];
+                let center = Vector3::new(p.x, p.y, p.z);
+                let neighbours = tree
+                    .within(&[p.x, p.y, p.z], radius_sq, &squared_euclidean)
+                    .unwrap_or_default();
+                if neighbours.len() <= sample_floor {
+                    return None;
+                }
+
+                let neighbour_points: Vec<(usize, Vector3<f64>)> = neighbours
+                    .iter()
+                    .map(|(_, nref)| {
+                        let nidx = **nref;
+                        let np = cloud.points[nidx];
+                        (nidx, Vector3::new(np.x, np.y, np.z))
+                    })
+                    .collect();
+                let choices: Vec<usize> = (0..neighbour_points.len()).collect();
+                let mut rng = rand::rngs::StdRng::seed_from_u64(0x517C_C1B7_u64 ^ idx as u64);
+
+                let mut best_plane = Plane::zero();
+                let mut best_rmse = f64::INFINITY;
+                let mut best_inliers = Vec::new();
+
+                for _ in 0..num_iterations {
+                    let picks: Vec<usize> = choices
+                        .as_slice()
+                        .sample(&mut rng, num_samples.min(choices.len()))
+                        .copied()
+                        .collect();
+                    let sample: Vec<Vector3<f64>> = picks
+                        .iter()
+                        .map(|pidx| neighbour_points[*pidx].1)
+                        .collect();
+                    let model = Plane::from_points(&sample);
+                    if model.slope() > max_planar_slope || model.residual(&center) > inlier_threshold {
+                        continue;
+                    }
+
+                    let inliers: Vec<usize> = neighbour_points
+                        .iter()
+                        .filter_map(|(pid, pt)| {
+                            if model.residual(pt) <= inlier_threshold {
+                                Some(*pid)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    if inliers.len() < acceptable_model_size {
+                        continue;
+                    }
+
+                    let refined_points: Vec<Vector3<f64>> = inliers
+                        .iter()
+                        .map(|pid| {
+                            let cp = cloud.points[*pid];
+                            Vector3::new(cp.x, cp.y, cp.z)
+                        })
+                        .collect();
+                    let refined = Plane::from_points(&refined_points);
+                    if refined.residual(&center) > inlier_threshold {
+                        continue;
+                    }
+                    let rmse = refined_points
+                        .iter()
+                        .map(|pt| refined.residual(pt))
+                        .sum::<f64>()
+                        / refined_points.len() as f64;
+                    if rmse < best_rmse {
+                        best_rmse = rmse;
+                        best_plane = refined;
+                        best_inliers = inliers;
+                    }
+                }
+
+                if best_rmse.is_finite() {
+                    Some((best_plane, best_rmse, best_inliers))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let mut model_rmse = vec![f64::INFINITY; cloud.points.len()];
+        let mut planes = vec![Plane::zero(); cloud.points.len()];
+        for (plane, rmse, inliers) in local_models {
+            for pid in inliers {
+                if rmse < model_rmse[pid] {
+                    model_rmse[pid] = rmse;
+                    planes[pid] = plane;
+                }
+            }
+        }
+
         let mut segment_id = vec![0usize; cloud.points.len()];
         let mut current_segment = 0usize;
-        let radius_sq = search_radius * search_radius;
 
-        for seed in active_indices {
+        for seed in &active_indices {
+            let seed = *seed;
             if segment_id[seed] != 0 {
                 continue;
             }
@@ -9297,8 +9478,9 @@ impl Tool for LidarSegmentationTool {
 
             while let Some(idx) = stack.pop() {
                 let p = cloud.points[idx];
+                let is_planar = model_rmse[idx].is_finite();
                 let neighbours = tree
-                    .within(&[p.x, p.y], radius_sq, &squared_euclidean)
+                    .within(&[p.x, p.y, p.z], radius_sq, &squared_euclidean)
                     .unwrap_or_default();
                 for (_, nref) in neighbours {
                     let nidx = *nref;
@@ -9309,10 +9491,18 @@ impl Tool for LidarSegmentationTool {
                     if class_boundaries && pn.classification != p.classification {
                         continue;
                     }
-                    if (pn.z - p.z).abs() <= max_z_diff {
-                        segment_id[nidx] = current_segment;
-                        stack.push(nidx);
+                    let is_planar_n = model_rmse[nidx].is_finite();
+                    if is_planar != is_planar_n {
+                        continue;
                     }
+                    if (pn.z - p.z).abs() > max_z_diff {
+                        continue;
+                    }
+                    if is_planar && planes[idx].angle_between(planes[nidx]) > max_norm_diff {
+                        continue;
+                    }
+                    segment_id[nidx] = current_segment;
+                    stack.push(nidx);
                 }
             }
         }
@@ -10072,6 +10262,10 @@ impl Tool for LidarSegmentationBasedFilterTool {
         if !search_radius.is_finite() || search_radius <= 0.0 {
             return Err(ToolError::Validation("search_radius must be a positive finite value".to_string()));
         }
+        let norm_diff_threshold = parse_f64_alias(args, &["norm_diff_threshold", "norm_diff"], 2.0);
+        if !norm_diff_threshold.is_finite() {
+            return Err(ToolError::Validation("norm_diff_threshold must be a finite value".to_string()));
+        }
         let max_z_diff = parse_f64_alias(args, &["max_z_diff", "maxzdiff"], 1.0);
         if !max_z_diff.is_finite() || max_z_diff < 0.0 {
             return Err(ToolError::Validation("max_z_diff must be a finite non-negative value".to_string()));
@@ -10083,7 +10277,14 @@ impl Tool for LidarSegmentationBasedFilterTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_required_lidar_path_alias(args, &["input", "input_lidar", "in_lidar"], "input")?;
         let search_radius = parse_f64_alias(args, &["search_radius", "radius"], 5.0);
-        let _norm_diff_threshold = parse_f64_alias(args, &["norm_diff_threshold", "norm_diff"], 2.0);
+        let _num_iterations = parse_f64_alias(args, &["num_iterations", "num_iter"], 50.0).max(1.0) as usize;
+        let _num_samples = parse_f64_alias(args, &["num_samples"], 10.0).max(5.0) as usize;
+        let _inlier_threshold = parse_f64_alias(args, &["inlier_threshold", "threshold"], 0.15).max(0.0);
+        let _acceptable_model_size = parse_f64_alias(args, &["acceptable_model_size", "model_size"], 30.0).max(5.0) as usize;
+        let _max_planar_slope = parse_f64_alias(args, &["max_planar_slope", "max_slope"], 75.0).clamp(0.0, 90.0);
+        let norm_diff_threshold = parse_f64_alias(args, &["norm_diff_threshold", "norm_diff"], 2.0)
+            .clamp(0.0, 90.0)
+            .to_radians();
         let max_z_diff = parse_f64_alias(args, &["max_z_diff", "maxzdiff"], 1.0);
         let classify_points = parse_bool_alias(args, &["classify_points", "classify"], false);
         let output_path = parse_optional_output_path(args, "output")?;
@@ -10098,39 +10299,141 @@ impl Tool for LidarSegmentationBasedFilterTool {
 
         let mut tree = KdTree::new(2);
         let mut active = Vec::new();
-        let mut min_z = f64::INFINITY;
         for (i, p) in cloud.points.iter().enumerate() {
             if point_is_withheld(p) || point_is_noise(p) {
                 continue;
             }
-            min_z = min_z.min(p.z);
             tree.add([p.x, p.y], i)
                 .map_err(|e| ToolError::Execution(format!("failed indexing lidar points: {e}")))?;
             active.push(i);
         }
 
-        let mut is_ground = vec![false; cloud.points.len()];
-        let mut stack = Vec::new();
-        for idx in active {
-            if cloud.points[idx].z <= min_z + max_z_diff {
-                is_ground[idx] = true;
-                stack.push(idx);
-            }
+        if active.is_empty() {
+            let points = if classify_points {
+                let mut pts = cloud.points.clone();
+                for p in &mut pts {
+                    if point_is_withheld(p) {
+                        continue;
+                    }
+                    p.classification = 1;
+                }
+                pts
+            } else {
+                Vec::new()
+            };
+            let out_cloud = PointCloud {
+                points,
+                crs: cloud.crs.clone(),
+            };
+            let locator = store_or_write_lidar_output(&out_cloud, output_path, "lidar_segmentation_based_filter")?;
+            ctx.progress.progress(1.0);
+            return Ok(build_lidar_result(locator));
         }
 
         let radius_sq = search_radius * search_radius;
-        while let Some(idx) = stack.pop() {
-            let p = cloud.points[idx];
+
+        // Legacy-style top-hat preprocessing: erosion (local min) followed by dilation (local max of eroded surface).
+        let mut erosion = vec![f64::NAN; cloud.points.len()];
+        for idx in &active {
+            let p = cloud.points[*idx];
             let neighbours = tree
                 .within(&[p.x, p.y], radius_sq, &squared_euclidean)
+                .unwrap_or_default();
+            let mut min_local = p.z;
+            for (_, nref) in neighbours {
+                let nidx = *nref;
+                min_local = min_local.min(cloud.points[nidx].z);
+            }
+            erosion[*idx] = min_local;
+        }
+
+        let mut residual = vec![f64::NAN; cloud.points.len()];
+        for idx in &active {
+            let p = cloud.points[*idx];
+            let neighbours = tree
+                .within(&[p.x, p.y], radius_sq, &squared_euclidean)
+                .unwrap_or_default();
+            let mut opened_local = erosion[*idx];
+            for (_, nref) in neighbours {
+                let nidx = *nref;
+                let e = erosion[nidx];
+                if e.is_finite() && e > opened_local {
+                    opened_local = e;
+                }
+            }
+            residual[*idx] = p.z - opened_local;
+        }
+
+        let mut tree3d = KdTree::new(3);
+        for idx in &active {
+            let p = cloud.points[*idx];
+            tree3d
+                .add([p.x, p.y, residual[*idx]], *idx)
+                .map_err(|e| ToolError::Execution(format!("failed indexing lidar residual points: {e}")))?;
+        }
+
+        let mut normals: Vec<Option<Vector3<f64>>> = vec![None; cloud.points.len()];
+        for idx in &active {
+            let p = cloud.points[*idx];
+            let neighbours = tree3d
+                .within(&[p.x, p.y, residual[*idx]], radius_sq, &squared_euclidean)
+                .unwrap_or_default();
+            let sample: Vec<Vector3<f64>> = neighbours
+                .iter()
+                .map(|(_, nref)| {
+                    let nidx = **nref;
+                    let pn = cloud.points[nidx];
+                    Vector3::new(pn.x, pn.y, residual[nidx])
+                })
+                .collect();
+            if let Some((normal, _)) = plane_normal_and_centroid(&sample) {
+                normals[*idx] = Some(normal);
+            }
+        }
+
+        let mut is_ground = vec![false; cloud.points.len()];
+        let mut stack = Vec::new();
+        for idx in &active {
+            if residual[*idx].is_finite() && residual[*idx].abs() <= 1.0e-12 {
+                is_ground[*idx] = true;
+                stack.push(*idx);
+            }
+        }
+
+        if stack.is_empty() {
+            let mut min_resid = f64::INFINITY;
+            for idx in &active {
+                min_resid = min_resid.min(residual[*idx]);
+            }
+            for idx in &active {
+                if (residual[*idx] - min_resid).abs() <= 1.0e-12 {
+                    is_ground[*idx] = true;
+                    stack.push(*idx);
+                }
+            }
+        }
+
+        while let Some(idx) = stack.pop() {
+            let p = cloud.points[idx];
+            let neighbours = tree3d
+                .within(&[p.x, p.y, residual[idx]], radius_sq, &squared_euclidean)
                 .unwrap_or_default();
             for (_, nref) in neighbours {
                 let nidx = *nref;
                 if is_ground[nidx] {
                     continue;
                 }
-                let pn = cloud.points[nidx];
-                if (pn.z - p.z).abs() <= max_z_diff {
+                let res_ok = (residual[nidx] - residual[idx]).abs() <= max_z_diff;
+                if !res_ok {
+                    continue;
+                }
+                let norm_ok = match (normals[idx], normals[nidx]) {
+                    (Some(n0), Some(n1)) => {
+                        n0.dot(&n1).clamp(-1.0, 1.0).abs().acos() <= norm_diff_threshold
+                    }
+                    _ => true,
+                };
+                if norm_ok {
                     is_ground[nidx] = true;
                     stack.push(nidx);
                 }
@@ -10506,12 +10809,17 @@ impl Tool for ClassifyBuildingsInLidarTool {
         let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         let polys = read_prepared_polygons(&buildings_path)?;
 
-        let mut points = cloud.points.clone();
-        for p in &mut points {
-            if point_in_any_prepared_polygon(p.x, p.y, &polys) {
-                p.classification = 6;
-            }
-        }
+        let points: Vec<PointRecord> = cloud
+            .points
+            .par_iter()
+            .map(|p| {
+                let mut q = *p;
+                if point_in_any_prepared_polygon(q.x, q.y, &polys) {
+                    q.classification = 6;
+                }
+                q
+            })
+            .collect();
 
         let out_cloud = PointCloud {
             points,
@@ -10905,6 +11213,8 @@ impl Tool for LidarInfoTool {
         let input_path = parse_required_lidar_path_alias(args, &["input", "input_lidar", "in_lidar"], "input")?;
         let output_path = parse_optional_output_path(args, "output")?;
         let show_density = parse_bool_alias(args, &["show_point_density"], true);
+        let show_vlrs = parse_bool_alias(args, &["show_vlrs"], true);
+        let show_geokeys = parse_bool_alias(args, &["show_geokeys"], true);
 
         ctx.progress.info("reading lidar and building info report");
         let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
@@ -11011,6 +11321,69 @@ impl Tool for LidarInfoTool {
         report.push_str("\nclass counts:\n");
         for (cls, c) in class_counts {
             report.push_str(&format!("  {}: {}\n", cls, c));
+        }
+
+        if show_vlrs || show_geokeys {
+            if lidar_memory_store::lidar_is_memory_path(&input_path) {
+                report.push_str("\nmetadata detail (vlrs/geokeys): unavailable for memory:// lidar inputs\n");
+            } else {
+                match File::open(&input_path)
+                    .map_err(|e| ToolError::Execution(format!("failed opening lidar file for metadata parsing: {e}")))
+                    .and_then(|file| {
+                        LasReader::new(file).map_err(|e| {
+                            ToolError::Execution(format!("failed parsing LAS header/VLR metadata: {e}"))
+                        })
+                    })
+                {
+                    Ok(reader) => {
+                        let vlrs = reader.vlrs();
+                        if show_vlrs {
+                            report.push_str("\nvlrs:\n");
+                            if vlrs.is_empty() {
+                                report.push_str("  none\n");
+                            } else {
+                                for (i, vlr) in vlrs.iter().enumerate() {
+                                    report.push_str(&format!(
+                                        "  {}: user_id='{}', record_id={}, description='{}', bytes={}\n",
+                                        i + 1,
+                                        vlr.key.user_id,
+                                        vlr.key.record_id,
+                                        vlr.description,
+                                        vlr.data.len()
+                                    ));
+                                }
+                            }
+                        }
+                        if show_geokeys {
+                            report.push_str("\ngeokeys:\n");
+                            let geokey_vlr_count = vlrs
+                                .iter()
+                                .filter(|v| {
+                                    v.key.user_id == "LASF_Projection"
+                                        && v.key.record_id == GEOKEY_DIRECTORY_RECORD_ID
+                                })
+                                .count();
+                            report.push_str(&format!("  geokey_directory_vlrs: {}\n", geokey_vlr_count));
+                            if let Some(epsg) = find_epsg(vlrs) {
+                                report.push_str(&format!("  epsg: {}\n", epsg));
+                            } else {
+                                report.push_str("  epsg: not found\n");
+                            }
+                            if let Some(wkt) = find_ogc_wkt(vlrs) {
+                                report.push_str(&format!("  wkt_present: true\n  wkt_chars: {}\n", wkt.len()));
+                            } else {
+                                report.push_str("  wkt_present: false\n");
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        report.push_str(&format!(
+                            "\nmetadata detail (vlrs/geokeys): unavailable ({})\n",
+                            err
+                        ));
+                    }
+                }
+            }
         }
 
         let out = output_path.unwrap_or_else(|| default_output_sibling_path(Path::new(&input_path), "info", "txt"));

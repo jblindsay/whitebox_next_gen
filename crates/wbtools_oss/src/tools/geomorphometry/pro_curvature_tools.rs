@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use rayon::prelude::*;
 use serde_json::json;
 use wbprojection::{Crs, EpsgIdentifyPolicy, identify_epsg_from_wkt_with_policy};
 use wbcore::{PercentCoalescer, 
@@ -674,157 +675,143 @@ impl ProCurvatureCore {
 
         for band_idx in 0..bands {
             let band = band_idx as isize;
-            let num_workers = rayon::current_num_threads().max(1);
-            let (tx, rx) = std::sync::mpsc::channel::<(usize, Vec<f64>)>();
+            let row_data_all: Vec<Vec<f64>> = (0..rows)
+                .into_par_iter()
+                .map(|row_idx| {
+                    let mut row_out = vec![nodata; cols];
+                    let row = row_idx as isize;
 
-            std::thread::scope(|scope| {
-                for worker_id in 0..num_workers {
-                    let tx = tx.clone();
-                    let input = &input;
-                    scope.spawn(move || {
-                        for row_idx in (worker_id..rows).step_by(num_workers) {
-                            let mut row_out = vec![nodata; cols];
-                            let row = row_idx as isize;
+                    for c in 0..cols {
+                        let col = c as isize;
 
-                            for c in 0..cols {
-                                let col = c as isize;
+                        let derivs = if is_geographic {
+                            Self::derivatives_geographic(&input, band, row, col, z_factor, deriv_mask)
+                        } else {
+                            Self::derivatives_projected(&input, band, row, col, z_factor, dx, dy, deriv_mask)
+                        };
+                        let Some(d) = derivs else {
+                            continue;
+                        };
 
-                                let derivs = if is_geographic {
-                                    Self::derivatives_geographic(input, band, row, col, z_factor, deriv_mask)
-                                } else {
-                                    Self::derivatives_projected(input, band, row, col, z_factor, dx, dy, deriv_mask)
-                                };
-                                let Some(d) = derivs else {
-                                    continue;
-                                };
+                        let p = d.p;
+                        let q = d.q;
+                        let r = d.r;
+                        let s = d.s;
+                        let t = d.t;
 
-                                let p = d.p;
-                                let q = d.q;
-                                let r = d.r;
-                                let s = d.s;
-                                let t = d.t;
+                        let g2 = p * p + q * q;
+                        let w  = 1.0 + g2;
 
-                                let g2 = p * p + q * q;
-                                let w  = 1.0 + g2;
+                        let w_sqrt = w.sqrt();
+                        let w_pow_1p5 = w * w_sqrt;
 
-                                let w_sqrt = w.sqrt();
-                                let w_pow_1p5 = w * w_sqrt;
+                        let mean_curv = -((1.0 + q * q).mul_add(r,
+                            (1.0 + p * p).mul_add(t, -2.0 * p * q * s)))
+                            / (2.0 * w_pow_1p5);
 
-                                let mean_curv = -((1.0 + q * q).mul_add(r,
+                        let r_t_minus_s2 = r * t - s * s;
+                        let w_squared = w * w;
+                        let gaussian_curv = r_t_minus_s2 / w_squared;
+
+                        let disc = (mean_curv * mean_curv - gaussian_curv).max(0.0);
+                        let sqrt_disc = disc.sqrt();
+
+                        let minimal_curv = mean_curv - sqrt_disc;
+                        let maximal_curv = mean_curv + sqrt_disc;
+
+                        let diff_curv = if g2 > f64::EPSILON {
+                            let numerator = q * q.mul_add(r,
+                                p * p.mul_add(t, -2.0 * p * q * s));
+                            let denominator = g2 * w_sqrt;
+                            numerator / denominator
+                                - ((1.0 + q * q).mul_add(r,
                                     (1.0 + p * p).mul_add(t, -2.0 * p * q * s)))
-                                    / (2.0 * w_pow_1p5);
+                                    / (2.0 * w_pow_1p5)
+                        } else {
+                            0.0
+                        };
 
-                                let r_t_minus_s2 = r * t - s * s;
-                                let w_squared = w * w;
-                                let gaussian_curv = r_t_minus_s2 / w_squared;
-
-                                let disc = (mean_curv * mean_curv - gaussian_curv).max(0.0);
-                                let sqrt_disc = disc.sqrt();
-
-                                let minimal_curv = mean_curv - sqrt_disc;
-                                let maximal_curv = mean_curv + sqrt_disc;
-
-                                let diff_curv = if g2 > f64::EPSILON {
-                                    let numerator = q * q.mul_add(r,
-                                        p * p.mul_add(t, -2.0 * p * q * s));
-                                    let denominator = g2 * w_sqrt;
-                                    numerator / denominator
-                                        - ((1.0 + q * q).mul_add(r,
-                                            (1.0 + p * p).mul_add(t, -2.0 * p * q * s)))
-                                            / (2.0 * w_pow_1p5)
-                                } else {
+                        let mut curv = match op {
+                            ProCurvatureOp::Minimal => minimal_curv,
+                            ProCurvatureOp::Maximal => maximal_curv,
+                            ProCurvatureOp::ShapeIndex => {
+                                let denom = maximal_curv - minimal_curv;
+                                if denom.abs() <= f64::EPSILON {
                                     0.0
-                                };
-
-                                let mut curv = match op {
-                                    ProCurvatureOp::Minimal => minimal_curv,
-                                    ProCurvatureOp::Maximal => maximal_curv,
-                                    ProCurvatureOp::ShapeIndex => {
-                                        let denom = maximal_curv - minimal_curv;
-                                        if denom.abs() <= f64::EPSILON {
-                                            0.0
-                                        } else {
-                                            2.0 / std::f64::consts::PI
-                                                * ((maximal_curv + minimal_curv) / denom).atan()
-                                        }
-                                    }
-                                    ProCurvatureOp::Curvedness => {
-                                        ((minimal_curv * minimal_curv + maximal_curv * maximal_curv) / 2.0)
-                                            .sqrt()
-                                    }
-                                    ProCurvatureOp::Unsphericity => sqrt_disc,
-                                    ProCurvatureOp::Ring => {
-                                        if g2 <= f64::EPSILON {
-                                            0.0
-                                        } else {
-                                            let num = (p * p - q * q).mul_add(s, -p * q * (r - t));
-                                            let denom = g2 * w;
-                                            (num / denom) * (num / denom)
-                                        }
-                                    }
-                                    ProCurvatureOp::Rotor => {
-                                        if g2 <= f64::EPSILON {
-                                            0.0
-                                        } else {
-                                            ((p * p - q * q).mul_add(s, -p * q * (r - t)))
-                                                / (g2 * g2.sqrt() * g2)
-                                        }
-                                    }
-                                    ProCurvatureOp::Difference => diff_curv,
-                                    ProCurvatureOp::HorizontalExcess => {
-                                        if g2 <= f64::EPSILON { 0.0 } else { sqrt_disc - diff_curv }
-                                    }
-                                    ProCurvatureOp::VerticalExcess => {
-                                        if g2 <= f64::EPSILON { 0.0 } else { sqrt_disc + diff_curv }
-                                    }
-                                    ProCurvatureOp::Accumulation => {
-                                        if g2 <= f64::EPSILON {
-                                            0.0
-                                        } else {
-                                            mean_curv * mean_curv - diff_curv * diff_curv
-                                        }
-                                    }
-                                    ProCurvatureOp::GeneratingFunction => Self::generating_function_value(
-                                        input,
-                                        band,
-                                        row,
-                                        col,
-                                        z_factor,
-                                        is_geographic,
-                                        dx,
-                                        dy,
-                                    )
-                                    .unwrap_or(0.0),
-                                    ProCurvatureOp::PrincipalCurvatureDirection => {
-                                        let theta_deg = 0.5 * (2.0 * s).atan2(r - t).to_degrees();
-                                        theta_deg.rem_euclid(180.0)
-                                    }
-                                    ProCurvatureOp::Casorati => {
-                                        ((minimal_curv * minimal_curv + maximal_curv * maximal_curv) / 2.0)
-                                            .sqrt()
-                                    }
-                                };
-
-                                if log_transform && !matches!(op, ProCurvatureOp::PrincipalCurvatureDirection) {
-                                    curv = curv.signum() * (1.0 + log_multiplier * curv.abs()).ln();
+                                } else {
+                                    2.0 / std::f64::consts::PI
+                                        * ((maximal_curv + minimal_curv) / denom).atan()
                                 }
-
-                                row_out[c] = curv;
                             }
-
-                            if tx.send((row_idx, row_out)).is_err() {
-                                break;
+                            ProCurvatureOp::Curvedness => {
+                                ((minimal_curv * minimal_curv + maximal_curv * maximal_curv) / 2.0)
+                                    .sqrt()
                             }
+                            ProCurvatureOp::Unsphericity => sqrt_disc,
+                            ProCurvatureOp::Ring => {
+                                if g2 <= f64::EPSILON {
+                                    0.0
+                                } else {
+                                    let num = (p * p - q * q).mul_add(s, -p * q * (r - t));
+                                    let denom = g2 * w;
+                                    (num / denom) * (num / denom)
+                                }
+                            }
+                            ProCurvatureOp::Rotor => {
+                                if g2 <= f64::EPSILON {
+                                    0.0
+                                } else {
+                                    ((p * p - q * q).mul_add(s, -p * q * (r - t)))
+                                        / (g2 * g2.sqrt() * g2)
+                                }
+                            }
+                            ProCurvatureOp::Difference => diff_curv,
+                            ProCurvatureOp::HorizontalExcess => {
+                                if g2 <= f64::EPSILON { 0.0 } else { sqrt_disc - diff_curv }
+                            }
+                            ProCurvatureOp::VerticalExcess => {
+                                if g2 <= f64::EPSILON { 0.0 } else { sqrt_disc + diff_curv }
+                            }
+                            ProCurvatureOp::Accumulation => {
+                                if g2 <= f64::EPSILON {
+                                    0.0
+                                } else {
+                                    mean_curv * mean_curv - diff_curv * diff_curv
+                                }
+                            }
+                            ProCurvatureOp::GeneratingFunction => Self::generating_function_value(
+                                &input,
+                                band,
+                                row,
+                                col,
+                                z_factor,
+                                is_geographic,
+                                dx,
+                                dy,
+                            )
+                            .unwrap_or(0.0),
+                            ProCurvatureOp::PrincipalCurvatureDirection => {
+                                let theta_deg = 0.5 * (2.0 * s).atan2(r - t).to_degrees();
+                                theta_deg.rem_euclid(180.0)
+                            }
+                            ProCurvatureOp::Casorati => {
+                                ((minimal_curv * minimal_curv + maximal_curv * maximal_curv) / 2.0)
+                                    .sqrt()
+                            }
+                        };
+
+                        if log_transform && !matches!(op, ProCurvatureOp::PrincipalCurvatureDirection) {
+                            curv = curv.signum() * (1.0 + log_multiplier * curv.abs()).ln();
                         }
-                    });
-                }
-            });
-            drop(tx);
 
-            for _ in 0..rows {
-                let (row_idx, row_data) = rx
-                    .recv()
-                    .map_err(|e| ToolError::Execution(format!("failed receiving row data: {}", e)))?;
+                        row_out[c] = curv;
+                    }
+
+                    row_out
+                })
+                .collect();
+
+            for (row_idx, row_data) in row_data_all.into_iter().enumerate() {
                 output
                     .set_row_slice(band, row_idx as isize, &row_data)
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", row_idx, e)))?;

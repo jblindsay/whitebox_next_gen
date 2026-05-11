@@ -14,6 +14,7 @@ use wbcore::{
 use wbraster::{DataType, Raster, RasterConfig, RasterFormat};
 
 use crate::memory_store;
+use crate::rendering::{LineGraph, RadialLineGraph};
 
 pub struct RuggednessIndexTool;
 pub struct SurfaceAreaRatioTool;
@@ -370,6 +371,18 @@ impl TerrainAnalysisCore {
 
     fn idx(row: usize, col: usize, cols: usize) -> usize {
         row * cols + col
+    }
+
+    fn haversine_distance_m(lat1_deg: f64, lon1_deg: f64, lat2_deg: f64, lon2_deg: f64) -> f64 {
+        let r = 6_371_000.0_f64;
+        let lat1 = lat1_deg.to_radians();
+        let lat2 = lat2_deg.to_radians();
+        let dlat = (lat2_deg - lat1_deg).to_radians();
+        let dlon = (lon2_deg - lon1_deg).to_radians();
+        let a = (dlat * 0.5).sin().powi(2)
+            + lat1.cos() * lat2.cos() * (dlon * 0.5).sin().powi(2);
+        let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
+        r * c
     }
 
     fn rect_sum(sum: &[f64], cols: usize, y1: usize, x1: usize, y2: usize, x2: usize) -> f64 {
@@ -829,119 +842,6 @@ impl TerrainAnalysisCore {
         (1.0 - (l2.sqrt() / l1.sqrt())).clamp(0.0, 1.0)
     }
 
-    fn write_slope_vs_aspect_html(
-        output_path: &std::path::Path,
-        dem_name: &str,
-        angles_deg: &[f64],
-        p25: &[f64],
-        p50: &[f64],
-        p75: &[f64],
-        elong25: f64,
-        elong50: f64,
-        elong75: f64,
-    ) -> Result<(), ToolError> {
-        let width = 920.0;
-        let height = 650.0;
-        let cx = 300.0;
-        let cy = 330.0;
-        let radius = 225.0;
-        let right_x = 610.0;
-        let max_slope = p75
-            .iter()
-            .chain(p50.iter())
-            .chain(p25.iter())
-            .copied()
-            .filter(|v| v.is_finite())
-            .fold(0.0_f64, f64::max)
-            .max(1.0);
-
-        let to_xy = |angle_deg: f64, val: f64| {
-            let theta = angle_deg.to_radians();
-            let rr = (val / max_slope).clamp(0.0, 1.2) * radius;
-            let x = cx + rr * theta.sin();
-            let y = cy - rr * theta.cos();
-            (x, y)
-        };
-
-        let mut grid = String::new();
-        for i in 1..=4 {
-            let rr = radius * i as f64 / 4.0;
-            let label = max_slope * i as f64 / 4.0;
-            grid.push_str(&format!(
-                "<circle cx='{:.2}' cy='{:.2}' r='{:.2}' fill='none' stroke='#d7d7d7'/>",
-                cx, cy, rr
-            ));
-            grid.push_str(&format!(
-                "<text x='{:.2}' y='{:.2}' font-size='12' fill='#666'>{:.1}</text>",
-                cx + rr + 6.0,
-                cy + 4.0,
-                label
-            ));
-        }
-        for a in (0..360).step_by(45) {
-            let (x, y) = to_xy(a as f64, max_slope);
-            grid.push_str(&format!(
-                "<line x1='{:.2}' y1='{:.2}' x2='{:.2}' y2='{:.2}' stroke='#d7d7d7'/>",
-                cx, cy, x, y
-            ));
-            let (lx, ly) = to_xy(a as f64, max_slope * 1.08);
-            grid.push_str(&format!(
-                "<text x='{:.2}' y='{:.2}' font-size='12' text-anchor='middle' fill='#555'>{}</text>",
-                lx,
-                ly + 4.0,
-                a
-            ));
-        }
-
-        let polyline = |vals: &[f64], color: &str| {
-            let mut pts = String::new();
-            for (a, v) in angles_deg.iter().zip(vals.iter()) {
-                let (x, y) = to_xy(*a, *v);
-                pts.push_str(&format!("{:.2},{:.2} ", x, y));
-            }
-            if let (Some(a0), Some(v0)) = (angles_deg.first(), vals.first()) {
-                let (x, y) = to_xy(*a0, *v0);
-                pts.push_str(&format!("{:.2},{:.2}", x, y));
-            }
-            format!("<polyline fill='none' stroke='{}' stroke-width='2.5' points='{}'/>", color, pts)
-        };
-
-        let series_svg = format!(
-            "{}{}{}",
-            polyline(p75, "#c23b22"),
-            polyline(p50, "#1f77b4"),
-            polyline(p25, "#2a9d3c")
-        );
-
-        let html = format!(
-            "<!doctype html><html><head><meta charset='utf-8'><title>Slope vs Aspect</title><style>body{{margin:0;background:#ececec;font-family:Helvetica,Arial,sans-serif;color:#111}}main{{max-width:1200px;margin:0 auto;padding:24px}}h1{{margin:0 0 12px 0;font-size:30px;font-weight:600}}.card{{background:#f3f3f3;border:1px solid #cfcfcf;border-radius:10px;padding:12px}}table{{border-collapse:collapse;margin-top:12px}}th,td{{border:1px solid #c6c6c6;padding:6px 10px}}th{{background:#efefef;text-align:left}}td.num{{text-align:right}}</style></head><body><main><h1>Slope vs Aspect</h1><div class='card'><p><strong>Input DEM:</strong> {}</p><svg viewBox='0 0 {} {}' width='100%' height='{}'>{}<g>{}</g><g><rect x='{:.2}' y='{:.2}' width='18' height='3' fill='#c23b22'/><text x='{:.2}' y='{:.2}' font-size='13'>75th percentile</text><rect x='{:.2}' y='{:.2}' width='18' height='3' fill='#1f77b4'/><text x='{:.2}' y='{:.2}' font-size='13'>Median</text><rect x='{:.2}' y='{:.2}' width='18' height='3' fill='#2a9d3c'/><text x='{:.2}' y='{:.2}' font-size='13'>25th percentile</text></g></svg><table><tr><th>Percentile</th><th>Elongation ratio</th></tr><tr><td>25th</td><td class='num'>{:.4}</td></tr><tr><td>50th</td><td class='num'>{:.4}</td></tr><tr><td>75th</td><td class='num'>{:.4}</td></tr></table></div></main></body></html>",
-            dem_name,
-            width,
-            height,
-            height,
-            grid,
-            series_svg,
-            right_x,
-            180.0,
-            right_x + 26.0,
-            184.0,
-            right_x,
-            208.0,
-            right_x + 26.0,
-            212.0,
-            right_x,
-            236.0,
-            right_x + 26.0,
-            240.0,
-            elong25,
-            elong50,
-            elong75
-        );
-
-        std::fs::write(output_path, html)
-            .map_err(|e| ToolError::Execution(format!("failed writing slope-vs-aspect HTML: {e}")))
-    }
-
     fn write_slope_vs_elev_html(
         output_path: &std::path::Path,
         series: &[(String, Vec<(f64, f64)>)],
@@ -1271,124 +1171,6 @@ impl TerrainAnalysisCore {
         }
     }
 
-    fn write_profile_html(
-        output_path: &std::path::Path,
-        title: &str,
-        surface_name: &str,
-        series: &[(String, Vec<(f64, f64)>)],
-    ) -> Result<(), ToolError> {
-        let width = 980.0;
-        let height = 560.0;
-        let pad_l = 90.0;
-        let pad_r = 220.0;
-        let pad_t = 40.0;
-        let pad_b = 70.0;
-
-        let min_x = series
-            .iter()
-            .flat_map(|(_, pts)| pts.iter().map(|(x, _)| *x))
-            .fold(f64::INFINITY, f64::min);
-        let max_x = series
-            .iter()
-            .flat_map(|(_, pts)| pts.iter().map(|(x, _)| *x))
-            .fold(f64::NEG_INFINITY, f64::max);
-        let min_y = series
-            .iter()
-            .flat_map(|(_, pts)| pts.iter().map(|(_, y)| *y))
-            .fold(f64::INFINITY, f64::min)
-            .floor();
-        let max_y = series
-            .iter()
-            .flat_map(|(_, pts)| pts.iter().map(|(_, y)| *y))
-            .fold(f64::NEG_INFINITY, f64::max)
-            .ceil();
-
-        let min_x = if min_x.is_finite() { min_x } else { 0.0 };
-        let max_x = if max_x.is_finite() { max_x } else { 1.0 };
-        let min_y = if min_y.is_finite() { min_y } else { 0.0 };
-        let max_y = if max_y.is_finite() { max_y } else { 1.0 };
-
-        let x_rng = (max_x - min_x).max(1.0);
-        let y_rng = (max_y - min_y).max(1.0);
-        let sx = |x: f64| pad_l + (x - min_x) / x_rng * (width - pad_l - pad_r);
-        let sy = |y: f64| height - pad_b - (y - min_y) / y_rng * (height - pad_t - pad_b);
-
-        let palette = [
-            "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#17becf",
-            "#bcbd22",
-        ];
-
-        let mut grid = String::new();
-        for i in 0..=10 {
-            let x = min_x + i as f64 / 10.0 * x_rng;
-            let px = sx(x);
-            grid.push_str(&format!(
-                "<line x1='{:.2}' y1='{:.2}' x2='{:.2}' y2='{:.2}' stroke='#d0d0d0'/>",
-                px,
-                pad_t,
-                px,
-                height - pad_b
-            ));
-        }
-        for i in 0..=8 {
-            let yv = min_y + i as f64 / 8.0 * y_rng;
-            let py = sy(yv);
-            grid.push_str(&format!(
-                "<line x1='{:.2}' y1='{:.2}' x2='{:.2}' y2='{:.2}' stroke='#d0d0d0'/>",
-                pad_l,
-                py,
-                width - pad_r,
-                py
-            ));
-        }
-
-        let mut lines = String::new();
-        let mut legend = String::new();
-        for (i, (name, pts)) in series.iter().enumerate() {
-            if pts.is_empty() {
-                continue;
-            }
-            let color = palette[i % palette.len()];
-            let poly = pts
-                .iter()
-                .map(|(x, y)| format!("{:.2},{:.2}", sx(*x), sy(*y)))
-                .collect::<Vec<_>>()
-                .join(" ");
-            lines.push_str(&format!(
-                "<polyline fill='none' stroke='{}' stroke-width='2.2' points='{}'/>",
-                color, poly
-            ));
-            legend.push_str(&format!(
-                "<div style='margin:6px 0'><span style='display:inline-block;width:22px;height:3px;background:{};vertical-align:middle;margin-right:8px'></span>{}</div>",
-                color, name
-            ));
-        }
-
-        let html = format!(
-            "<!doctype html><html><head><meta charset='utf-8'><title>{}</title><style>body{{margin:0;background:#ececec;font-family:Helvetica,Arial,sans-serif;color:#111}}main{{max-width:1200px;margin:0 auto;padding:24px}}h1{{margin:0 0 12px 0;font-size:30px;font-weight:600}}.card{{background:#f3f3f3;border:1px solid #cfcfcf;border-radius:10px;padding:12px}}.meta{{margin:0 0 10px 2px;font-size:14px}}</style></head><body><main><h1>{}</h1><div class='card'><p class='meta'><strong>Input Surface</strong>: {}</p><svg viewBox='0 0 {} {}' width='100%' height='{}'>{}<rect x='{:.2}' y='{:.2}' width='{:.2}' height='{:.2}' fill='none' stroke='#5a5a5a' stroke-width='1.2'/>{}<text x='{:.2}' y='{:.2}' style='font-size:14px;fill:#222'>Distance</text><text transform='translate({:.2},{:.2}) rotate(-90)' style='font-size:14px;fill:#222'>Elevation</text></svg><div style='margin-top:10px'>{}</div></div></main></body></html>",
-            title,
-            title,
-            surface_name,
-            width,
-            height,
-            height,
-            grid,
-            pad_l,
-            pad_t,
-            width - pad_l - pad_r,
-            height - pad_t - pad_b,
-            lines,
-            width / 2.0 - 32.0,
-            height - 18.0,
-            20.0,
-            height / 2.0 + 42.0,
-            legend,
-        );
-
-        std::fs::write(output_path, html)
-            .map_err(|e| ToolError::Execution(format!("failed writing HTML report: {}", e)))
-    }
-
     fn run_profile(args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let lines_path = parse_vector_path_arg(args, "lines_vector")
             .or_else(|_| parse_vector_path_arg(args, "lines"))
@@ -1487,21 +1269,36 @@ impl TerrainAnalysisCore {
             ));
         }
 
-        let mut series = Vec::with_capacity(xdata.len());
-        for i in 0..xdata.len() {
-            let pts = xdata[i]
-                .iter()
-                .zip(ydata[i].iter())
-                .map(|(x, y)| (*x, *y))
-                .collect::<Vec<_>>();
-            series.push((names[i].clone(), pts));
-        }
-
         let surface_name = std::path::Path::new(&surface_path)
             .file_name()
             .and_then(|s| s.to_str())
             .unwrap_or("surface");
-        Self::write_profile_html(&output_path, "Profile", surface_name, &series)?;
+
+        let multiples = xdata.len() > 2 && xdata.len() < 12;
+        let graph = LineGraph {
+            parent_id: "graph".to_string(),
+            width: 700.0,
+            height: 500.0,
+            data_x: xdata,
+            data_y: ydata,
+            series_labels: names,
+            x_axis_label: "Distance".to_string(),
+            y_axis_label: "Elevation".to_string(),
+            draw_points: false,
+            draw_gridlines: true,
+            draw_legend: multiples,
+            draw_grey_background: false,
+        };
+
+        let html = format!(
+            "<!doctype html><html><head><meta charset=\"utf-8\"><title>Profile</title>{}</head><body><h1>Profile</h1><p><strong>Input Surface</strong>: {}<br></p><div id='graph' align=\"center\">{}</div></body></html>",
+            crate::rendering::html::get_css(),
+            surface_name,
+            graph.get_svg()
+        );
+        std::fs::write(&output_path, html).map_err(|e| {
+            ToolError::Execution(format!("failed writing profile HTML report: {}", e))
+        })?;
 
         let mut outputs = std::collections::BTreeMap::new();
         outputs.insert("path".to_string(), json!(output_path.to_string_lossy().to_string()));
@@ -1883,17 +1680,42 @@ impl TerrainAnalysisCore {
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("dem");
-        Self::write_slope_vs_aspect_html(
-            &output_path,
+        let xdata = vec![angles.clone(), angles.clone(), angles.clone()];
+        let ydata = vec![p75, p50, p25];
+        let labels = vec![
+            "75th percentile".to_string(),
+            "Median".to_string(),
+            "25th percentile".to_string(),
+        ];
+        let graph = RadialLineGraph {
+            parent_id: "graph".to_string(),
+            width: 700.0,
+            height: 500.0,
+            data_x: xdata,
+            data_y: ydata,
+            series_labels: labels,
+            x_axis_label: "Aspect".to_string(),
+            x_symbol: "&Psi;".to_string(),
+            y_axis_label: "Slope".to_string(),
+            y_symbol: "&beta;".to_string(),
+            draw_points: false,
+            draw_gridlines: true,
+            draw_legend: true,
+            draw_grey_background: false,
+            fill_polygons: false,
+        };
+        let html = format!(
+            "<!doctype html><html><head><meta charset=\"utf-8\"><title>Slope vs. Aspect</title>{}</head><body><h1>Slope vs. Aspect</h1><p><strong>Input DEM</strong>: {}<br></p><div id='graph' align=\"center\">{}</div><table align=\"center\"><tr><th>Percentile</th><th>Elongation ratio</th></tr><tr><td>25th</td><td class=\"numberCell\">{:.4}</td></tr><tr><td>50th</td><td class=\"numberCell\">{:.4}</td></tr><tr><td>75th</td><td class=\"numberCell\">{:.4}</td></tr></table></body></html>",
+            crate::rendering::html::get_css(),
             dem_name,
-            &angles,
-            &p25,
-            &p50,
-            &p75,
+            graph.get_svg(),
             elong25,
             elong50,
-            elong75,
-        )?;
+            elong75
+        );
+        std::fs::write(&output_path, html).map_err(|e| {
+            ToolError::Execution(format!("failed writing slope-vs-aspect HTML report: {}", e))
+        })?;
 
         let mut outputs = std::collections::BTreeMap::new();
         outputs.insert("path".to_string(), json!(output_path.to_string_lossy().to_string()));
@@ -2198,6 +2020,14 @@ impl TerrainAnalysisCore {
         let bands = input.bands;
         let nodata = input.nodata;
         let sigma = (mid as f64 + 0.5) / 3.0;
+        let mut z_factor = 1.0f64;
+        let mut eight_grid_res = input.cell_size_x.abs() * 8.0;
+        if Self::raster_is_geographic(&input) {
+            let lat_mid = input.row_center_y((rows / 2) as isize).to_radians();
+            z_factor = 1.0 / (111_320.0 * lat_mid.cos().abs().max(1.0e-8));
+            eight_grid_res = input.cell_size_x.abs().max(1.0e-12) * 8.0;
+        }
+        eight_grid_res = eight_grid_res.max(1.0e-12);
 
         for band_idx in 0..bands {
             let band = band_idx as isize;
@@ -2205,14 +2035,17 @@ impl TerrainAnalysisCore {
             let coalescer = PercentCoalescer::new(1, 99);
 
             let mut values = vec![f64::NAN; rows * cols];
-            for r in 0..rows {
-                for c in 0..cols {
-                    let v = input.get(band, r as isize, c as isize);
-                    if !input.is_nodata(v) {
-                        values[r * cols + c] = v;
+            values
+                .par_chunks_mut(cols)
+                .enumerate()
+                .for_each(|(r, row_vals)| {
+                    for (c, out) in row_vals.iter_mut().enumerate() {
+                        let v = input.get(band, r as isize, c as isize);
+                        if !input.is_nodata(v) {
+                            *out = v;
+                        }
                     }
-                }
-            }
+                });
 
             let smoothed = if filter_size > 3 {
                 Self::gaussian_blur_values(&values, rows, cols, sigma)
@@ -2223,44 +2056,67 @@ impl TerrainAnalysisCore {
             let mut cos_a = vec![f64::NAN; rows * cols];
             let mut sin_a = vec![f64::NAN; rows * cols];
             let mut flat = vec![false; rows * cols];
-            for r in 0..rows {
-                for c in 0..cols {
-                    let idx = r * cols + c;
-                    let zc = smoothed[idx];
-                    if !zc.is_finite() {
-                        continue;
-                    }
-                    let z = |dr: isize, dc: isize| {
-                        let rr = r as isize + dr;
-                        let cc = c as isize + dc;
-                        if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
-                            return zc;
+            let aspect_rows: Vec<(Vec<f64>, Vec<f64>, Vec<bool>)> = (0..rows)
+                .into_par_iter()
+                .map(|r| {
+                    let mut row_cos = vec![f64::NAN; cols];
+                    let mut row_sin = vec![f64::NAN; cols];
+                    let mut row_flat = vec![false; cols];
+                    for c in 0..cols {
+                        let idx = r * cols + c;
+                        let zc = smoothed[idx];
+                        if !zc.is_finite() {
+                            continue;
                         }
-                        let v = smoothed[rr as usize * cols + cc as usize];
-                        if v.is_finite() { v } else { zc }
-                    };
-                    let z1 = z(-1, -1);
-                    let z2 = z(-1, 0);
-                    let z3 = z(-1, 1);
-                    let z4 = z(0, -1);
-                    let z6 = z(0, 1);
-                    let z7 = z(1, -1);
-                    let z8 = z(1, 0);
-                    let z9 = z(1, 1);
-                    let dzdx = ((z3 + 2.0 * z6 + z9) - (z1 + 2.0 * z4 + z7)) / 8.0;
-                    let dzdy = ((z7 + 2.0 * z8 + z9) - (z1 + 2.0 * z2 + z3)) / 8.0;
-                    let slope_mag = (dzdx * dzdx + dzdy * dzdy).sqrt();
-                    if slope_mag <= f64::EPSILON {
-                        flat[idx] = true;
-                        continue;
+                        let z = |dr: isize, dc: isize| {
+                            let rr = r as isize + dr;
+                            let cc = c as isize + dc;
+                            if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
+                                return zc;
+                            }
+                            let v = smoothed[rr as usize * cols + cc as usize];
+                            if v.is_finite() { v } else { zc }
+                        };
+                        let z1 = z(-1, -1);
+                        let z2 = z(-1, 0);
+                        let z3 = z(-1, 1);
+                        let z4 = z(0, -1);
+                        let z6 = z(0, 1);
+                        let z7 = z(1, -1);
+                        let z8 = z(1, 0);
+                        let z9 = z(1, 1);
+                        let zc_scaled = zc * z_factor;
+                        let z1s = if z1.is_finite() { z1 * z_factor } else { zc_scaled };
+                        let z2s = if z2.is_finite() { z2 * z_factor } else { zc_scaled };
+                        let z3s = if z3.is_finite() { z3 * z_factor } else { zc_scaled };
+                        let z4s = if z4.is_finite() { z4 * z_factor } else { zc_scaled };
+                        let z6s = if z6.is_finite() { z6 * z_factor } else { zc_scaled };
+                        let z7s = if z7.is_finite() { z7 * z_factor } else { zc_scaled };
+                        let z8s = if z8.is_finite() { z8 * z_factor } else { zc_scaled };
+                        let z9s = if z9.is_finite() { z9 * z_factor } else { zc_scaled };
+                        let dzdx = ((z3s + 2.0 * z6s + z9s) - (z1s + 2.0 * z4s + z7s)) / eight_grid_res;
+                        let dzdy = ((z7s + 2.0 * z8s + z9s) - (z1s + 2.0 * z2s + z3s)) / eight_grid_res;
+                        let slope_mag = (dzdx * dzdx + dzdy * dzdy).sqrt();
+                        if slope_mag <= f64::EPSILON {
+                            row_flat[c] = true;
+                            continue;
+                        }
+                        let mut aspect = dzdy.atan2(-dzdx);
+                        if aspect < 0.0 {
+                            aspect += std::f64::consts::PI * 2.0;
+                        }
+                        row_cos[c] = aspect.cos();
+                        row_sin[c] = aspect.sin();
                     }
-                    let mut aspect = dzdy.atan2(-dzdx);
-                    if aspect < 0.0 {
-                        aspect += std::f64::consts::PI * 2.0;
-                    }
-                    cos_a[idx] = aspect.cos();
-                    sin_a[idx] = aspect.sin();
-                }
+                    (row_cos, row_sin, row_flat)
+                })
+                .collect();
+            for (r, (row_cos, row_sin, row_flat)) in aspect_rows.into_iter().enumerate() {
+                let start = r * cols;
+                let end = start + cols;
+                cos_a[start..end].copy_from_slice(&row_cos);
+                sin_a[start..end].copy_from_slice(&row_sin);
+                flat[start..end].copy_from_slice(&row_flat);
             }
 
             let (sum_cos, count_cos) = Self::build_integral_from_values(&cos_a, rows, cols);
@@ -3252,10 +3108,11 @@ impl TerrainAnalysisCore {
         let cols = input.cols;
         let nodata = input.nodata;
         let band = 0isize;
+        let is_geographic = Self::raster_is_geographic(&input);
 
         let mut resx = input.cell_size_x.abs();
         let mut resy = input.cell_size_y.abs();
-        if Self::raster_is_geographic(&input) {
+        if is_geographic {
             let mid_lat = ((input.y_min + input.y_max()) * 0.5).to_radians();
             let m_per_deg = 111_320.0;
             resx *= m_per_deg * mid_lat.cos().abs().max(1.0e-8);
@@ -3280,43 +3137,181 @@ impl TerrainAnalysisCore {
             10f64.powi(9)
         };
 
-        // Stage 1: curvedness estimate and log transform.
+        // Stage 1: legacy-style curvedness estimate and log transform.
         let curv: Vec<Vec<f64>> = (0..rows)
             .into_par_iter()
             .map(|r| {
                 let mut row_out = vec![0.0; cols];
                 for c in 0..cols {
-                    let zc = input.get(band, r as isize, c as isize);
-                    if input.is_nodata(zc) {
+                    let row = r as isize;
+                    let col = c as isize;
+                    let z12 = input.get(band, row, col);
+                    if input.is_nodata(z12) {
                         row_out[c] = nodata;
                         continue;
                     }
+
                     let z = |dr: isize, dc: isize| {
-                        let rr = r as isize + dr;
-                        let cc = c as isize + dc;
+                        let rr = row + dr;
+                        let cc = col + dc;
                         if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
-                            return zc;
+                            return z12;
                         }
                         let v = input.get(band, rr, cc);
-                        if input.is_nodata(v) { zc } else { v }
+                        if input.is_nodata(v) { z12 } else { v }
                     };
 
-                    let z1 = z(-1, -1);
-                    let z2 = z(-1, 0);
-                    let z3 = z(-1, 1);
-                    let z4 = z(0, -1);
-                    let z6 = z(0, 1);
-                    let z7 = z(1, -1);
-                    let z8 = z(1, 0);
-                    let z9 = z(1, 1);
+                    let (p, q, r2, s2, t2) = if !is_geographic {
+                        // Legacy projected mode uses 5x5 Florinsky derivatives.
+                        let mut zz = [0.0f64; 25];
+                        let mut k = 0usize;
+                        for dr in -2..=2 {
+                            for dc in -2..=2 {
+                                zz[k] = z(dr, dc);
+                                k += 1;
+                            }
+                        }
 
-                    let p = ((z3 + z6 + z9) - (z1 + z4 + z7)) / (6.0 * resx);
-                    let q = ((z7 + z8 + z9) - (z1 + z2 + z3)) / (6.0 * resy);
-                    let r2 = (z1 - 2.0 * z2 + z3 + z4 - 2.0 * zc + z6 + z7 - 2.0 * z8 + z9)
-                        / (3.0 * resx * resx);
-                    let t2 = (z1 - 2.0 * z4 + z7 + z2 - 2.0 * zc + z8 + z3 - 2.0 * z6 + z9)
-                        / (3.0 * resy * resy);
-                    let s2 = (z1 - z3 - z7 + z9) / (4.0 * resx * resy);
+                        let r2 = (2.0
+                            * (zz[0] + zz[4] + zz[5] + zz[9] + zz[10] + zz[14] + zz[15] + zz[19] + zz[20] + zz[24])
+                            - 2.0 * (zz[2] + zz[7] + zz[12] + zz[17] + zz[22])
+                            - zz[1] - zz[3] - zz[6] - zz[8] - zz[11] - zz[13] - zz[16] - zz[18] - zz[21] - zz[23])
+                            / (35.0 * res * res);
+
+                        let t2 = (2.0
+                            * (zz[0] + zz[1] + zz[2] + zz[3] + zz[4] + zz[20] + zz[21] + zz[22] + zz[23] + zz[24])
+                            - 2.0 * (zz[10] + zz[11] + zz[12] + zz[13] + zz[14])
+                            - zz[5] - zz[6] - zz[7] - zz[8] - zz[9] - zz[15] - zz[16] - zz[17] - zz[18] - zz[19])
+                            / (35.0 * res * res);
+
+                        let s2 = (zz[8] + zz[16] - zz[6] - zz[18]
+                            + 4.0 * (zz[4] + zz[20] - zz[0] - zz[24])
+                            + 2.0 * (zz[3] + zz[9] + zz[15] + zz[21] - zz[1] - zz[5] - zz[19] - zz[23]))
+                            / (100.0 * res * res);
+
+                        let q = (44.0 * (zz[3] + zz[23] - zz[1] - zz[21])
+                            + 31.0
+                                * (zz[0] + zz[20] - zz[4] - zz[24]
+                                    + 2.0 * (zz[8] + zz[18] - zz[6] - zz[16]))
+                            + 17.0 * (zz[14] - zz[10] + 4.0 * (zz[13] - zz[11]))
+                            + 5.0 * (zz[9] + zz[19] - zz[5] - zz[15]))
+                            / (420.0 * res);
+
+                        let p = (44.0 * (zz[5] + zz[9] - zz[15] - zz[19])
+                            + 31.0
+                                * (zz[20] + zz[24] - zz[0] - zz[4]
+                                    + 2.0 * (zz[6] + zz[8] - zz[16] - zz[18]))
+                            + 17.0 * (zz[2] - zz[22] + 4.0 * (zz[7] - zz[17]))
+                            + 5.0 * (zz[1] + zz[3] - zz[21] - zz[23]))
+                            / (420.0 * res);
+
+                        (p, q, r2, s2, t2)
+                    } else {
+                        // Legacy geographic mode uses local-distance 3x3 derivatives.
+                        let z0 = z(-1, -1);
+                        let z1 = z(-1, 0);
+                        let z2 = z(-1, 1);
+                        let z3 = z(0, -1);
+                        let z5 = z(0, 1);
+                        let z6 = z(1, -1);
+                        let z7 = z(1, 0);
+                        let z8 = z(1, 1);
+
+                        let phi = input.row_center_y(row);
+                        let lambda = input.col_center_x(col);
+                        let phi_s = input.row_center_y((row + 1).min(rows as isize - 1));
+                        let phi_n = input.row_center_y((row - 1).max(0));
+                        let lambda_w = input.col_center_x((col - 1).max(0));
+
+                        let b = Self::haversine_distance_m(phi, lambda, phi, lambda_w).max(f64::EPSILON);
+                        let d = Self::haversine_distance_m(phi, lambda, phi_s, lambda).max(f64::EPSILON);
+                        let e = Self::haversine_distance_m(phi, lambda, phi_n, lambda).max(f64::EPSILON);
+                        let a = Self::haversine_distance_m(phi_s, lambda, phi_s, lambda_w).max(f64::EPSILON);
+                        let c = Self::haversine_distance_m(phi_n, lambda, phi_n, lambda_w).max(f64::EPSILON);
+
+                        let r2 = (c * c * (z0 + z2 - 2.0 * z1)
+                            + b * b * (z3 + z5 - 2.0 * z12)
+                            + a * a * (z6 + z8 - 2.0 * z7))
+                            / (a.powi(4) + b.powi(4) + c.powi(4)).max(f64::EPSILON);
+
+                        let t_num = 2.0
+                            * ((d * (a.powi(4) + b.powi(4) + b * b * c * c) - c * c * e * (a * a - b * b))
+                                * (z0 + z2)
+                                - (d * (a.powi(4) + c.powi(4) + b * b * c * c)
+                                    + e * (a.powi(4) + c.powi(4) + a * a * b * b))
+                                    * (z3 + z5)
+                                + (e * (b.powi(4) + c.powi(4) + a * a * b * b)
+                                    + a * a * d * (b * b - c * c))
+                                    * (z6 + z8)
+                                + d * (b.powi(4) * (z1 - 3.0 * z12)
+                                    + c.powi(4) * (3.0 * z1 - z12)
+                                    + (a.powi(4) - 2.0 * b * b * c * c) * (z1 - z12))
+                                + e * (a.powi(4) * (3.0 * z7 - z12)
+                                    + b.powi(4) * (z7 - 3.0 * z12)
+                                    + (c.powi(4) - 2.0 * a * a * b * b) * (z7 - z12))
+                                - 2.0
+                                    * (a * a * d * (b * b - c * c) * z7
+                                        - c * c * e * (a * a - b * b) * z1));
+                        let t_den = 3.0 * d * e * (d + e) * (a.powi(4) + b.powi(4) + c.powi(4));
+                        let t2 = if t_den.abs() > f64::EPSILON {
+                            t_num / t_den
+                        } else {
+                            0.0
+                        };
+
+                        let s_num = c * (a * a * (d + e) + b * b * e) * (z2 - z0)
+                            - b * (a * a * d - c * c * e) * (z3 - z5)
+                            + a * (c * c * (d + e) + b * b * d) * (z6 - z8);
+                        let s_den = 2.0
+                            * (a * a * c * c * (d + e).powi(2)
+                                + b * b * (a * a * d * d + c * c * e * e));
+                        let s2 = if s_den.abs() > f64::EPSILON {
+                            s_num / s_den
+                        } else {
+                            0.0
+                        };
+
+                        let p_num = a * a * c * d * (d + e) * (z2 - z0)
+                            + b * (a * a * d * d + c * c * e * e) * (z5 - z3)
+                            + a * c * c * e * (d + e) * (z8 - z6);
+                        let p_den = 2.0
+                            * (a * a * c * c * (d + e).powi(2)
+                                + b * b * (a * a * d * d + c * c * e * e));
+                        let p = if p_den.abs() > f64::EPSILON {
+                            p_num / p_den
+                        } else {
+                            0.0
+                        };
+
+                        let q_num = (d * d * (a.powi(4) + b.powi(4) + b * b * c * c)
+                            + c * c * e * e * (a * a - b * b))
+                            * (z0 + z2)
+                            - (d * d * (a.powi(4) + c.powi(4) + b * b * c * c)
+                                - e * e * (a.powi(4) + c.powi(4) + a * a * b * b))
+                                * (z3 + z5)
+                            - (e * e * (b.powi(4) + c.powi(4) + a * a * b * b)
+                                - a * a * d * d * (b * b - c * c))
+                                * (z6 + z8)
+                            + d * d
+                                * (b.powi(4) * (z1 - 3.0 * z12)
+                                    + c.powi(4) * (3.0 * z1 - z12)
+                                    + (a.powi(4) - 2.0 * b * b * c * c) * (z1 - z12))
+                            + e * e
+                                * (a.powi(4) * (z12 - 3.0 * z7)
+                                    + b.powi(4) * (3.0 * z12 - z7)
+                                    + (c.powi(4) - 2.0 * a * a * b * b) * (z12 - z7))
+                            - 2.0
+                                * (a * a * d * d * (b * b - c * c) * z7
+                                    + c * c * e * e * (a * a - b * b) * z1);
+                        let q_den = 3.0 * d * e * (d + e) * (a.powi(4) + b.powi(4) + c.powi(4));
+                        let q = if q_den.abs() > f64::EPSILON {
+                            q_num / q_den
+                        } else {
+                            0.0
+                        };
+
+                        (p, q, r2, s2, t2)
+                    };
 
                     let d = 1.0 + p * p + q * q;
                     let mean_curv = -((1.0 + q * q) * r2 - 2.0 * p * q * s2 + (1.0 + p * p) * t2)
@@ -3337,6 +3332,13 @@ impl TerrainAnalysisCore {
         let compute_progress = PercentCoalescer::new(1, 99);
 
         // Stage 2: threshold and directional local-min suppression.
+        let offsets5 = [
+            (-2isize, -2isize), (-1, -2), (0, -2), (1, -2), (2, -2),
+            (-2, -1), (-1, -1), (0, -1), (1, -1), (2, -1),
+            (-2, 0), (-1, 0), (0, 0), (1, 0), (2, 0),
+            (-2, 1), (-1, 1), (0, 1), (1, 1), (2, 1),
+            (-2, 2), (-1, 2), (0, 2), (1, 2), (2, 2),
+        ];
         let mut thinned = vec![vec![0.0; cols]; rows];
         for r in 0..rows {
             for c in 0..cols {
@@ -3372,6 +3374,23 @@ impl TerrainAnalysisCore {
                     || (z < n7 && z < n1)
                     || (z < n0 && z < n1 && z < n2 && z < n3 && z < n4 && z < n5 && z < n6 && z < n7);
                 if !suppress {
+                    let mut is_edge_or_nodata = false;
+                    for (dc, dr) in offsets5 {
+                        let rr = r as isize + dr;
+                        let cc = c as isize + dc;
+                        if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
+                            is_edge_or_nodata = true;
+                            break;
+                        }
+                        let v = input.get(band, rr, cc);
+                        if input.is_nodata(v) {
+                            is_edge_or_nodata = true;
+                            break;
+                        }
+                    }
+                    if is_edge_or_nodata {
+                        continue;
+                    }
                     thinned[r][c] = z;
                 }
             }
@@ -3438,77 +3457,142 @@ impl TerrainAnalysisCore {
                 .progress((rows + r + 1) as f64 / (rows as f64 * 4.0));
         }
 
-        // Stage 3: label connected line components, preferring endpoint starts.
+        // Stage 3: legacy-style endpoint-first tracing into line IDs.
         let mut line_id = vec![0i32; rows * cols];
-        let mut feature_cells: Vec<Vec<(usize, usize)>> = vec![Vec::new()];
         let mut next_id = 1i32;
+        let mut feature_size: Vec<usize> = vec![0usize];
 
-        let degree = |r: usize, c: usize, grid: &Vec<Vec<f64>>| -> usize {
-            let mut n = 0usize;
-            for i in 0..8 {
-                let rr = r as isize + dy[i];
-                let cc = c as isize + dx[i];
-                if rr >= 0
-                    && cc >= 0
-                    && rr < rows as isize
-                    && cc < cols as isize
-                    && grid[rr as usize][cc as usize] > 0.0
-                {
-                    n += 1;
-                }
-            }
-            n
-        };
-
-        let mut seed_cells: Vec<(usize, usize)> = Vec::new();
         for r in 0..rows {
             for c in 0..cols {
-                if thinned[r][c] > 0.0 && degree(r, c, &thinned) == 1 {
-                    seed_cells.push((r, c));
+                if thinned[r][c] <= 0.0 || line_id[Self::idx(r, c, cols)] != 0 {
+                    continue;
                 }
-            }
-        }
-        for r in 0..rows {
-            for c in 0..cols {
-                if thinned[r][c] > 0.0 {
-                    seed_cells.push((r, c));
-                }
-            }
-        }
 
-        for (sr, sc) in seed_cells {
-            let si = Self::idx(sr, sc, cols);
-            if thinned[sr][sc] <= 0.0 || line_id[si] != 0 {
-                continue;
-            }
-            let mut comp: Vec<(usize, usize)> = Vec::new();
-            let mut stack = vec![(sr, sc)];
-            line_id[si] = next_id;
-            while let Some((r, c)) = stack.pop() {
-                comp.push((r, c));
+                let mut num_neighbours = 0usize;
                 for i in 0..8 {
                     let rr = r as isize + dy[i];
                     let cc = c as isize + dx[i];
                     if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
                         continue;
                     }
-                    let rru = rr as usize;
-                    let ccu = cc as usize;
-                    if thinned[rru][ccu] <= 0.0 {
+                    if thinned[rr as usize][cc as usize] > 0.0 {
+                        num_neighbours += 1;
+                    }
+                }
+
+                if num_neighbours == 1 {
+                    line_id[Self::idx(r, c, cols)] = next_id;
+                    feature_size.push(1);
+                    let mut row_n = r as isize;
+                    let mut col_n = c as isize;
+                    let mut flag = true;
+                    while flag {
+                        let mut maxval = 0.0;
+                        let mut max_idx = -1isize;
+                        for i in 0..8 {
+                            let rr = row_n + dy[i];
+                            let cc = col_n + dx[i];
+                            if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
+                                continue;
+                            }
+                            let v = thinned[rr as usize][cc as usize];
+                            if v > maxval && line_id[Self::idx(rr as usize, cc as usize, cols)] == 0 {
+                                maxval = v;
+                                max_idx = i as isize;
+                            }
+                        }
+
+                        if max_idx >= 0 {
+                            row_n += dy[max_idx as usize];
+                            col_n += dx[max_idx as usize];
+                            line_id[Self::idx(row_n as usize, col_n as usize, cols)] = next_id;
+                            feature_size[next_id as usize] += 1;
+                        } else {
+                            flag = false;
+                        }
+                    }
+                    next_id += 1;
+                }
+            }
+        }
+
+        // Mop-up pass for any remaining untraced line cells.
+        for r in 0..rows {
+            for c in 0..cols {
+                if thinned[r][c] <= 0.0 || line_id[Self::idx(r, c, cols)] != 0 {
+                    continue;
+                }
+                line_id[Self::idx(r, c, cols)] = next_id;
+                feature_size.push(1);
+                let mut row_n = r as isize;
+                let mut col_n = c as isize;
+                let mut flag = true;
+                while flag {
+                    let mut maxval = 0.0;
+                    let mut max_idx = -1isize;
+                    for i in 0..8 {
+                        let rr = row_n + dy[i];
+                        let cc = col_n + dx[i];
+                        if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
+                            continue;
+                        }
+                        let v = thinned[rr as usize][cc as usize];
+                        if v > maxval && line_id[Self::idx(rr as usize, cc as usize, cols)] == 0 {
+                            maxval = v;
+                            max_idx = i as isize;
+                        }
+                    }
+
+                    if max_idx >= 0 {
+                        row_n += dy[max_idx as usize];
+                        col_n += dx[max_idx as usize];
+                        line_id[Self::idx(row_n as usize, col_n as usize, cols)] = next_id;
+                        feature_size[next_id as usize] += 1;
+                    } else {
+                        flag = false;
+                    }
+                }
+                next_id += 1;
+            }
+        }
+
+        // Stage 4: find anchor cells and vectorize using legacy start-cell tracing order.
+        let mut anchor = vec![false; rows * cols];
+        for r in 0..rows {
+            for c in 0..cols {
+                let fid = line_id[Self::idx(r, c, cols)];
+                if fid <= 0 || fid as usize >= feature_size.len() || feature_size[fid as usize] < min_length {
+                    continue;
+                }
+
+                let mut num_same = 0usize;
+                let mut anchor_cell = -1isize;
+                for i in 0..8 {
+                    let rr = r as isize + dy[i];
+                    let cc = c as isize + dx[i];
+                    if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
                         continue;
                     }
-                    let ni = Self::idx(rru, ccu, cols);
-                    if line_id[ni] == 0 {
-                        line_id[ni] = next_id;
-                        stack.push((rru, ccu));
+                    let fid_n = line_id[Self::idx(rr as usize, cc as usize, cols)];
+                    if fid_n == fid {
+                        num_same += 1;
+                    } else if fid_n > 0 {
+                        if anchor_cell == -1 || (anchor_cell % 2 == 1 && i % 2 == 0) {
+                            anchor_cell = i as isize;
+                        }
+                    }
+                }
+
+                if num_same == 1 && anchor_cell >= 0 {
+                    let rr = r as isize + dy[anchor_cell as usize];
+                    let cc = c as isize + dx[anchor_cell as usize];
+                    if rr >= 0 && cc >= 0 && rr < rows as isize && cc < cols as isize {
+                        anchor[Self::idx(rr as usize, cc as usize, cols)] = true;
                     }
                 }
             }
-            feature_cells.push(comp);
-            next_id += 1;
         }
 
-        // Stage 4: vectorize each sufficiently long component.
         let mut layer = wbvector::Layer::new("breaklines").with_geom_type(wbvector::GeometryType::LineString);
         layer.crs = match (input.crs.epsg, input.crs.wkt.as_deref()) {
             (_, Some(wkt)) => Some(wbvector::Crs::new().with_wkt(wkt)),
@@ -3520,109 +3604,165 @@ impl TerrainAnalysisCore {
         layer.add_field(wbvector::FieldDef::new("LENGTH", wbvector::FieldType::Float));
 
         let mut out_fid = 1i64;
-        for comp in feature_cells.iter().skip(1) {
-            if comp.len() < min_length {
-                continue;
-            }
+        let mut visited = vec![false; rows * cols];
+        for r in 0..rows {
+            for c in 0..cols {
+                let fid = line_id[Self::idx(r, c, cols)];
+                if fid <= 0 || fid as usize >= feature_size.len() || feature_size[fid as usize] < min_length {
+                    continue;
+                }
 
-            let comp_set: std::collections::HashSet<(usize, usize)> = comp.iter().copied().collect();
-            let mut start = comp[0];
-            for &(r, c) in comp {
-                let mut deg = 0usize;
+                let mut num_same = 0usize;
+                let mut anchor_cell = -1isize;
                 for i in 0..8 {
                     let rr = r as isize + dy[i];
                     let cc = c as isize + dx[i];
-                    if rr >= 0
-                        && cc >= 0
-                        && rr < rows as isize
-                        && cc < cols as isize
-                        && comp_set.contains(&(rr as usize, cc as usize))
-                    {
-                        deg += 1;
-                    }
-                }
-                if deg == 1 {
-                    start = (r, c);
-                    break;
-                }
-            }
-
-            let mut ordered: Vec<(usize, usize)> = Vec::with_capacity(comp.len());
-            let mut used: std::collections::HashSet<(usize, usize)> = std::collections::HashSet::new();
-            let mut cur = start;
-            let mut prev: Option<(usize, usize)> = None;
-            loop {
-                ordered.push(cur);
-                used.insert(cur);
-                let mut next_candidates: Vec<(usize, usize)> = Vec::new();
-                for i in 0..8 {
-                    let rr = cur.0 as isize + dy[i];
-                    let cc = cur.1 as isize + dx[i];
                     if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
                         continue;
                     }
-                    let ncell = (rr as usize, cc as usize);
-                    if !comp_set.contains(&ncell) || used.contains(&ncell) {
+                    let fid_n = line_id[Self::idx(rr as usize, cc as usize, cols)];
+                    if fid_n == fid {
+                        num_same += 1;
+                    } else if fid_n > 0 {
+                        if anchor_cell == -1 || (anchor_cell % 2 == 1 && i % 2 == 0) {
+                            anchor_cell = i as isize;
+                        }
+                    }
+                }
+
+                if num_same != 1 {
+                    continue;
+                }
+
+                let mut coords: Vec<wbvector::Coord> = Vec::new();
+                let mut anchor_flags: Vec<bool> = Vec::new();
+                if anchor_cell > 0 {
+                    let rr = r as isize + dy[anchor_cell as usize];
+                    let cc = c as isize + dx[anchor_cell as usize];
+                    if rr >= 0 && cc >= 0 && rr < rows as isize && cc < cols as isize {
+                        let x = input.col_center_x(cc);
+                        let y = input.row_center_y(rr);
+                        let zv = input.get(band, rr, cc);
+                        if input.is_nodata(zv) {
+                            coords.push(wbvector::Coord::xy(x, y));
+                        } else {
+                            coords.push(wbvector::Coord::xyz(x, y, zv));
+                        }
+                        anchor_flags.push(false);
+                    }
+                }
+
+                let mut row_n = r as isize;
+                let mut col_n = c as isize;
+                let mut num_cells = 0usize;
+                let mut avg_sum = 0.0;
+                let mut flag = true;
+                while flag {
+                    let x = input.col_center_x(col_n);
+                    let y = input.row_center_y(row_n);
+                    let zv = input.get(band, row_n, col_n);
+                    if input.is_nodata(zv) {
+                        coords.push(wbvector::Coord::xy(x, y));
+                    } else {
+                        coords.push(wbvector::Coord::xyz(x, y, zv));
+                    }
+                    anchor_flags.push(anchor[Self::idx(row_n as usize, col_n as usize, cols)]);
+                    avg_sum += thinned[row_n as usize][col_n as usize];
+                    visited[Self::idx(row_n as usize, col_n as usize, cols)] = true;
+
+                    flag = false;
+                    for i in 0..8 {
+                        let rr = row_n + dy[i];
+                        let cc = col_n + dx[i];
+                        if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
+                            continue;
+                        }
+                        if line_id[Self::idx(rr as usize, cc as usize, cols)] == fid
+                            && !visited[Self::idx(rr as usize, cc as usize, cols)]
+                        {
+                            row_n = rr;
+                            col_n = cc;
+                            flag = true;
+                            break;
+                        }
+                    }
+
+                    num_cells += 1;
+                }
+
+                if num_cells < min_length {
+                    continue;
+                }
+
+                let mut end_anchor = -1isize;
+                for i in 0..8 {
+                    let rr = row_n + dy[i];
+                    let cc = col_n + dx[i];
+                    if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
                         continue;
                     }
-                    if prev.is_some() && prev.unwrap() == ncell {
-                        continue;
+                    let fid_n = line_id[Self::idx(rr as usize, cc as usize, cols)];
+                    if fid_n != fid && fid_n > 0 {
+                        if end_anchor == -1 || (end_anchor % 2 == 1 && i % 2 == 0) {
+                            end_anchor = i as isize;
+                        }
                     }
-                    next_candidates.push(ncell);
                 }
-                if next_candidates.is_empty() {
-                    break;
+                if end_anchor > 0 {
+                    let rr = row_n + dy[end_anchor as usize];
+                    let cc = col_n + dx[end_anchor as usize];
+                    if rr >= 0 && cc >= 0 && rr < rows as isize && cc < cols as isize {
+                        let x = input.col_center_x(cc);
+                        let y = input.row_center_y(rr);
+                        let zv = input.get(band, rr, cc);
+                        if input.is_nodata(zv) {
+                            coords.push(wbvector::Coord::xy(x, y));
+                        } else {
+                            coords.push(wbvector::Coord::xyz(x, y, zv));
+                        }
+                        anchor_flags.push(false);
+                    }
                 }
-                next_candidates.sort_by(|a, b| {
-                    let za = thinned[a.0][a.1];
-                    let zb = thinned[b.0][b.1];
-                    zb.partial_cmp(&za).unwrap_or(std::cmp::Ordering::Equal)
-                });
-                prev = Some(cur);
-                cur = next_candidates[0];
-            }
 
-            if ordered.len() < min_length {
-                continue;
-            }
-
-            let mut coords: Vec<wbvector::Coord> = ordered
-                .iter()
-                .map(|(r, c)| wbvector::Coord::xy(input.col_center_x(*c as isize), input.row_center_y(*r as isize)))
-                .collect();
-
-            if coords.len() > 4 {
-                let mut smooth = coords.clone();
-                for i in 1..coords.len() - 1 {
-                    smooth[i].x = (coords[i - 1].x + coords[i].x + coords[i + 1].x) / 3.0;
-                    smooth[i].y = (coords[i - 1].y + coords[i].y + coords[i + 1].y) / 3.0;
+                if coords.len() > 4 {
+                    let mut smooth = coords.clone();
+                    for i in 1..coords.len() - 1 {
+                        if !anchor_flags[i] {
+                            smooth[i].x = (coords[i - 1].x + coords[i].x + coords[i + 1].x) / 3.0;
+                            smooth[i].y = (coords[i - 1].y + coords[i].y + coords[i + 1].y) / 3.0;
+                        }
+                    }
+                    coords = smooth;
                 }
-                coords = smooth;
-            }
 
-            let mut length = 0.0;
-            for i in 1..coords.len() {
-                let dx = coords[i].x - coords[i - 1].x;
-                let dy = coords[i].y - coords[i - 1].y;
-                length += (dx * dx + dy * dy).sqrt();
-            }
-            let avg_curv = ordered
-                .iter()
-                .map(|(r, c)| thinned[*r][*c])
-                .sum::<f64>()
-                / ordered.len() as f64;
+                let mut length = 0.0;
+                for i in 1..coords.len() {
+                    if is_geographic {
+                        length += Self::haversine_distance_m(
+                            coords[i - 1].y,
+                            coords[i - 1].x,
+                            coords[i].y,
+                            coords[i].x,
+                        );
+                    } else {
+                        let dx = coords[i].x - coords[i - 1].x;
+                        let dy = coords[i].y - coords[i - 1].y;
+                        length += (dx * dx + dy * dy).sqrt();
+                    }
+                }
 
-            layer
-                .add_feature(
-                    Some(wbvector::Geometry::line_string(coords)),
-                    &[
-                        ("FID", wbvector::FieldValue::Integer(out_fid)),
-                        ("AVG_CURV", wbvector::FieldValue::Float(avg_curv)),
-                        ("LENGTH", wbvector::FieldValue::Float(length)),
-                    ],
-                )
-                .map_err(|e| ToolError::Execution(format!("failed building output feature: {}", e)))?;
-            out_fid += 1;
+                layer
+                    .add_feature(
+                        Some(wbvector::Geometry::line_string(coords)),
+                        &[
+                            ("FID", wbvector::FieldValue::Integer(out_fid)),
+                            ("AVG_CURV", wbvector::FieldValue::Float(avg_sum / num_cells as f64)),
+                            ("LENGTH", wbvector::FieldValue::Float(length)),
+                        ],
+                    )
+                    .map_err(|e| ToolError::Execution(format!("failed building output feature: {}", e)))?;
+                out_fid += 1;
+            }
         }
 
         ctx.progress.progress(1.0);
@@ -6844,14 +6984,14 @@ impl TerrainAnalysisCore {
             let coalescer = PercentCoalescer::new(1, 99);
 
             let mut base = vec![f64::NAN; rows * cols];
-            for r in 0..rows {
-                for c in 0..cols {
+            base.par_chunks_mut(cols).enumerate().for_each(|(r, row_vals)| {
+                for (c, out) in row_vals.iter_mut().enumerate() {
                     let v = input.get(band, r as isize, c as isize);
                     if !input.is_nodata(v) {
-                        base[r * cols + c] = v;
+                        *out = v;
                     }
                 }
-            }
+            });
 
             let sigma = (mid as f64 + 0.5) / 3.0;
             let smoothed = Self::gaussian_blur_values(&base, rows, cols, sigma.max(1.0));
@@ -7007,12 +7147,12 @@ impl TerrainAnalysisCore {
             );
 
             let mut diff = vec![f64::NAN; rows * cols];
-            for i in 0..rows * cols {
+            diff.par_iter_mut().enumerate().for_each(|(i, out)| {
                 if onx[i].is_finite() && snx[i].is_finite() {
                     let dot = (onx[i] * snx[i] + ony[i] * sny[i] + onz[i] * snz[i]).clamp(-1.0, 1.0);
-                    diff[i] = dot.acos().to_degrees();
+                    *out = dot.acos().to_degrees();
                 }
-            }
+            });
 
             let (sum, count) = Self::build_integral_from_values(&diff, rows, cols);
             let row_data: Vec<Vec<f64>> = (0..rows)

@@ -8,12 +8,12 @@ Rust workspace for Whitebox next-generation backend libraries and tool crates.
 
 Whitebox Next Gen is a ground-up redesign that improves on its predecessor in nearly every dimension:
 
-- **CRS & reprojection** — Full read/write of coordinate reference system metadata across raster, vector, and LiDAR data, with multiple resampling methods for raster reprojection.
-- **Raster I/O** — More robust GeoTIFF handling (including Cloud-Optimized GeoTIFFs), plus newly supported formats such as GeoPackage Raster and JPEG2000.
-- **Vector I/O** — Expanded from Esri Shapefile-only to 11 formats, including GeoPackage, FlatGeobuf, GeoParquet, and other modern interchange formats.
-- **Vector topology** — A new, dedicated topology engine (`wbtopology`) enabling robust overlay, buffering, and related operations.
-- **LiDAR I/O** — Full support for LAS 1.0–1.5, LAZ, COPC, E57, and PLY via `wblidar`, a high-performance, modern LiDAR I/O engine.
-- **Frontends** — Whitebox Workflows for Python (WbW-Python), Whitebox Workflows for R (WbW-R), and a QGIS 4-compliant plugin (`wbw_qgis`) are in active development.
+- **[CRS & reprojection](./crates/wbprojection/README.md)** — Full read/write of coordinate reference system metadata across raster, vector, and LiDAR data, with multiple resampling methods for raster reprojection.
+- **[Raster I/O](./crates/wbraster/README.md)** — More robust GeoTIFF handling (including Cloud-Optimized GeoTIFFs), plus newly supported formats such as GeoPackage Raster and JPEG2000.
+- **[Vector I/O](./crates/wbvector/README.md)** — Expanded from Esri Shapefile-only to 11 formats, including GeoPackage, FlatGeobuf, GeoParquet, and other modern interchange formats.
+- **[Vector topology](./crates/wbtopology/README.md)** — A new, dedicated topology engine (`wbtopology`) enabling robust overlay, buffering, and related operations.
+- **[LiDAR I/O](./crates/wblidar/README.md)** — Full support for LAS 1.0–1.5, LAZ, COPC, E57, and PLY via `wblidar`, a high-performance, modern LiDAR I/O engine.
+- **Frontends** — Whitebox Workflows for Python ([WbW-Python](./crates/wbw_python/README.md)), Whitebox Workflows for R ([WbW-R](./crates/wbw_r/README.md)), and a QGIS 4-compliant plugin ([`wbw_qgis`](./crates/wbw_qgis/README.md)) are in active development.
 
 ## Design Goals
 

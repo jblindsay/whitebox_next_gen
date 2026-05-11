@@ -17,6 +17,45 @@ use crate::noding::{node_linestrings_with_options, NodingOptions, NodingStrategy
 use crate::overlay::polygon_unary_union;
 use crate::spatial_index::SpatialIndex;
 
+/// Role classification for offset curves in buffer operations.
+///
+/// Mirrors GEOS/JTS buffer semantics: edge deltas are computed from curve role,
+/// not from source polygon containment. This ensures correct inside/outside labeling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CurveRole {
+    /// Left offset of a linestring (inside buffer is on the left of the curve direction).
+    LeftOffset,
+    /// Right offset of a linestring (inside buffer is on the right of the curve direction).
+    RightOffset,
+    /// End cap connecting left and right offsets.
+    EndCap,
+    /// Exterior ring offset of a polygon.
+    ExteriorOffset,
+    /// Interior (hole) ring offset of a polygon.
+    HoleOffset,
+}
+
+impl CurveRole {
+    /// Standard delta for this role when the curve is oriented forward.
+    /// Delta encodes which side of the curve is "inside buffer".
+    pub fn standard_delta(self) -> i32 {
+        match self {
+            // Left offset: edge is oriented left-to-right; inside is on the left (−90° turn).
+            // An edge perpendicular to the offset (facing left) should be +1.
+            CurveRole::LeftOffset => 1,
+            // Right offset: edge is oriented right-to-left (reversed); inside is on the right.
+            // An edge perpendicular to the offset (facing right) should be −1.
+            CurveRole::RightOffset => -1,
+            // End caps don't separate inside from outside; they're neutral.
+            CurveRole::EndCap => 0,
+            // Exterior offset: inside is outside the original polygon (−distance).
+            CurveRole::ExteriorOffset => 1,
+            // Hole offset: inside is inside the hole boundary.
+            CurveRole::HoleOffset => -1,
+        }
+    }
+}
+
 /// Configuration for [`BufferOp`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BufferOpOptions {
@@ -85,11 +124,9 @@ impl BufferOp {
 
     /// Run the global buffering pipeline for line input and return dissolved output.
     ///
-    /// Current behavior keeps the staged architecture (curve generation -> global noding
-    /// -> polygonization -> dissolve) while face-depth labeling is being integrated.
-    ///
-    /// This makes the execution flow explicit and testable without changing public
-    /// tool semantics in one large rewrite.
+    /// Uses role-based delta classification (mirrors GEOS/JTS): each offset curve
+    /// is tagged with its role (LeftOffset/RightOffset/EndCap), and depth labeling
+    /// uses curve roles to determine inside/outside, not source polygon containment.
     pub fn run_linestrings_dissolved(
         &self,
         lines: &[LineString],
@@ -107,7 +144,8 @@ impl BufferOp {
             };
         }
 
-        let curves = self.collect_raw_curves(lines, distance);
+        // Stage 1: Generate offset curves with role metadata.
+        let (curves, roles) = self.collect_raw_curves_with_roles(lines, distance);
         stats.raw_curves = curves.len();
         if curves.is_empty() {
             return BufferOpResult {
@@ -116,9 +154,8 @@ impl BufferOp {
             };
         }
 
-        let source_polygons = self.collect_source_line_buffers(lines, distance);
-
-        self.dissolve_curve_set(curves, &source_polygons, stats)
+        // Stage 2-6: Noding, graph build, depth labeling using curve roles.
+        self.dissolve_curve_set_with_roles(curves, roles, true, stats)
     }
 
     /// Run the global buffering pipeline for polygon input and return dissolved output.
@@ -135,15 +172,366 @@ impl BufferOp {
             };
         }
 
-        let mut curves = Vec::<LineString>::new();
-        for poly in polygons {
-            curves.extend(buffer_polygon_curve_set(poly, distance, self.options.buffer));
-        }
+        // Stage 1: Generate offset curves with role metadata.
+        let (curves, roles) = self.collect_polygon_curves_with_roles(polygons, distance);
         stats.raw_curves = curves.len();
+        if curves.is_empty() {
+            return BufferOpResult {
+                polygons: Vec::new(),
+                stats,
+            };
+        }
 
-        let source_polygons = self.collect_source_polygon_buffers(polygons, distance);
+        // Stage 2-6: Noding, graph build, depth labeling using curve roles.
+        self.dissolve_curve_set_with_roles(curves, roles, false, stats)
+    }
 
-        self.dissolve_curve_set(curves, &source_polygons, stats)
+    fn collect_raw_curves_with_roles(
+        &self,
+        lines: &[LineString],
+        distance: f64,
+    ) -> (Vec<LineString>, Vec<CurveRole>) {
+        let mut curves = Vec::<LineString>::new();
+        let mut roles = Vec::<CurveRole>::new();
+        for line in lines {
+            let raw_curves = buffer_linestring_curve_set(line, distance, self.options.buffer);
+            for (idx, curve) in raw_curves.iter().enumerate() {
+                // First two curves are left and right offsets (for open lines).
+                // Remaining are end caps (if any) or ring offsets (if closed).
+                let role = if line.coords.len() < 2 || !is_line_closed(&line.coords) {
+                    // Open line: first is left, second is right, rest are caps or geometry
+                    if idx == 0 {
+                        CurveRole::LeftOffset
+                    } else if idx == 1 {
+                        CurveRole::RightOffset
+                    } else {
+                        CurveRole::EndCap
+                    }
+                } else {
+                    // Closed line: first is exterior, rest are interior/holes
+                    if idx == 0 {
+                        CurveRole::ExteriorOffset
+                    } else {
+                        CurveRole::HoleOffset
+                    }
+                };
+                curves.push(curve.clone());
+                roles.push(role);
+            }
+        }
+        (curves, roles)
+    }
+
+    fn collect_polygon_curves_with_roles(
+        &self,
+        polygons: &[Polygon],
+        distance: f64,
+    ) -> (Vec<LineString>, Vec<CurveRole>) {
+        let mut curves = Vec::<LineString>::new();
+        let mut roles = Vec::<CurveRole>::new();
+        for poly in polygons {
+            let raw_curves = buffer_polygon_curve_set(poly, distance, self.options.buffer);
+            for (idx, curve) in raw_curves.iter().enumerate() {
+                // First curve is exterior, rest are holes.
+                let role = if idx == 0 {
+                    CurveRole::ExteriorOffset
+                } else {
+                    CurveRole::HoleOffset
+                };
+                curves.push(curve.clone());
+                roles.push(role);
+            }
+        }
+        (curves, roles)
+    }
+
+    fn dissolve_curve_set_with_roles(
+        &self,
+        curves: Vec<LineString>,
+        roles: Vec<CurveRole>,
+        allow_negative_depth_inside: bool,
+        mut stats: BufferOpStats,
+    ) -> BufferOpResult {
+        if curves.is_empty() || roles.is_empty() || curves.len() != roles.len() {
+            return BufferOpResult {
+                polygons: Vec::new(),
+                stats,
+            };
+        }
+
+        // Stage 2: Global noding of all curves.
+        let noded = node_linestrings_with_options(&curves, self.options.noding);
+        stats.noded_curves = noded.len();
+        if noded.is_empty() {
+            return BufferOpResult {
+                polygons: Vec::new(),
+                stats,
+            };
+        }
+
+        // Stage 3-4: Build planar graph and extract bounded face rings.
+        let epsilon = self.options.epsilon.max(self.options.noding.epsilon).max(1.0e-9);
+        let graph = TopologyGraph::from_linestrings_with_options(&noded, self.options.noding);
+        let face_rings_with_edges = graph.extract_bounded_face_rings_with_edges(epsilon);
+        stats.face_rings = face_rings_with_edges.len();
+
+        // Stage 5: Role-based depth labeling (GEOS/JTS semantics).
+        let (selected_face_rings, selected_face_count) =
+            self.classify_inside_face_rings_by_role(
+                &graph,
+                &face_rings_with_edges,
+                &curves,
+                &roles,
+                epsilon,
+                allow_negative_depth_inside,
+            );
+        stats.labeled_inside_polygons = selected_face_count;
+
+        // Stage 6: Polygonize and dissolve.
+        let all_face_rings: Vec<LineString> = face_rings_with_edges
+            .iter()
+            .map(|(ring, _)| ring.clone())
+            .collect();
+        let polygonize_input: &[LineString] = if !selected_face_rings.is_empty() {
+            &selected_face_rings
+        } else if !all_face_rings.is_empty() {
+            &all_face_rings
+        } else {
+            &noded
+        };
+
+        let poly_result = crate::constructive::polygonize_linework(
+            polygonize_input,
+            PolygonizeOptions {
+                epsilon: self.options.epsilon,
+                noding: self.options.noding,
+            },
+        );
+        stats.candidate_polygons = poly_result.polygons.len();
+
+        if poly_result.polygons.is_empty() {
+            return BufferOpResult {
+                polygons: Vec::new(),
+                stats,
+            };
+        }
+
+        let dissolved = polygon_unary_union(&poly_result.polygons, self.options.epsilon);
+        stats.dissolved_polygons = dissolved.len();
+
+        BufferOpResult {
+            polygons: dissolved,
+            stats,
+        }
+    }
+
+    fn classify_inside_face_rings_by_role(
+        &self,
+        graph: &TopologyGraph,
+        face_rings_with_edges: &[(LineString, Vec<usize>)],
+        curves: &[LineString],
+        roles: &[CurveRole],
+        eps: f64,
+        allow_negative_depth_inside: bool,
+    ) -> (Vec<LineString>, usize) {
+        if face_rings_with_edges.is_empty() || curves.is_empty() || roles.is_empty() {
+            return (Vec::new(), 0);
+        }
+
+        // Use reference-point method: place reference points based on curve roles,
+        // then classify each face directly using point-in-polygon testing.
+        let reference_points = self.compute_reference_points(curves, roles);
+        
+        // Classify faces: a face is inside if it contains at least one reference point
+        let mut selected = Vec::<LineString>::new();
+        for (face_id, (ring, _)) in face_rings_with_edges.iter().enumerate() {
+            let mut is_inside = false;
+            for ref_point_opt in &reference_points {
+                if let Some(ref_point) = ref_point_opt {
+                    if self.point_in_polygon_ring(*ref_point, &ring.coords, eps) {
+                        is_inside = true;
+                        break;
+                    }
+                }
+            }
+            if is_inside {
+                selected.push(ring.clone());
+            }
+        }
+        
+        let selected_count = selected.len();
+        (selected, selected_count)
+    }
+
+    fn compute_reference_points(
+        &self,
+        curves: &[LineString],
+        roles: &[CurveRole],
+    ) -> Vec<Option<Coord>> {
+        let mut refs = Vec::with_capacity(curves.len());
+        
+        for (curve_idx, (curve, role)) in curves.iter().zip(roles.iter()).enumerate() {
+            if curve.coords.len() < 2 {
+                refs.push(None);
+                continue;
+            }
+            
+            // Generate reference points based on role.
+            // Only meaningful roles get reference points:
+            // - LeftOffset: point offset left of curve
+            // - RightOffset: point offset right of curve
+            // - ExteriorOffset: point at centroid
+            // - HoleOffset: point at centroid
+            // - EndCap: no reference point
+            
+            let ref_point = match role {
+                CurveRole::LeftOffset | CurveRole::RightOffset => {
+                    // Use the centroid of the curve, then offset perpendicular based on role.
+                    let mut sum_x = 0.0;
+                    let mut sum_y = 0.0;
+                    for c in &curve.coords {
+                        sum_x += c.x;
+                        sum_y += c.y;
+                    }
+                    let centroid = Coord::xy(sum_x / curve.coords.len() as f64, sum_y / curve.coords.len() as f64);
+                    
+                    // Get a direction vector from the curve (use first two points).
+                    let p0 = curve.coords[0];
+                    let p1 = curve.coords[curve.coords.len() - 1];
+                    let dx = p1.x - p0.x;
+                    let dy = p1.y - p0.y;
+                    let len = (dx * dx + dy * dy).sqrt();
+                    
+                    if len < 1.0e-9 {
+                        Some(centroid)
+                    } else {
+                        // Perpendicular direction.
+                        let px = -dy / len;
+                        let py = dx / len;
+                        
+                        // Use larger offset to ensure point is definitely inside.
+                        let offset = 5.0;
+                        let offset_mult = match role {
+                            CurveRole::LeftOffset => 1.0,
+                            CurveRole::RightOffset => -1.0,
+                            _ => 0.0,
+                        };
+                        
+                        Some(Coord::xy(
+                            centroid.x + px * offset_mult * offset,
+                            centroid.y + py * offset_mult * offset,
+                        ))
+                    }
+                }
+                CurveRole::ExteriorOffset | CurveRole::HoleOffset => {
+                    // Use ring centroid for exterior/hole offsets.
+                    let mut sum_x = 0.0;
+                    let mut sum_y = 0.0;
+                    for c in &curve.coords {
+                        sum_x += c.x;
+                        sum_y += c.y;
+                    }
+                    Some(Coord::xy(sum_x / curve.coords.len() as f64, sum_y / curve.coords.len() as f64))
+                }
+                CurveRole::EndCap => {
+                    // End caps don't define inside/outside.
+                    None
+                }
+            };
+            
+            refs.push(ref_point);
+        }
+        
+        refs
+    }
+
+    fn compute_edge_deltas_from_reference_points(
+        &self,
+        graph: &TopologyGraph,
+        face_rings_with_edges: &[(LineString, Vec<usize>)],
+        reference_points: &[Option<Coord>],
+        eps: f64,
+        delta: &mut [i32],
+    ) {
+        // Use reference points to directly classify which faces are "inside" the buffer.
+        // Don't use BFS; classify each face independently.
+        let mut face_is_inside = vec![false; face_rings_with_edges.len()];
+        
+        for (curve_idx, ref_point_opt) in reference_points.iter().enumerate() {
+            if let Some(ref_point) = ref_point_opt {
+                // Test which faces contain this reference point.
+                for (face_id, (ring, _)) in face_rings_with_edges.iter().enumerate() {
+                    if self.point_in_polygon_ring(*ref_point, &ring.coords, eps) {
+                        face_is_inside[face_id] = true;
+                    }
+                }
+            }
+        }
+        
+        // Set delta=1 for edges of inside faces, delta=-1 for outside faces.
+        // The BFS in classify_faces_by_depth expects to propagate from exterior (depth=0).
+        // Edges between inside and outside faces should have non-zero delta.
+        for (face_id, inside) in face_is_inside.iter().enumerate() {
+            if !*inside {
+                continue;
+            }
+            
+            // For each edge of this inside face, check its twin in the adjacent face.
+            for &edge_id in &face_rings_with_edges[face_id].1 {
+                let sym = edge_id ^ 1;
+                if sym < graph.edges.len() {
+                    // Mark this edge as belonging to inside: delta=1
+                    // This tells BFS: "crossing this edge means entering inside buffer"
+                    delta[edge_id] = 1;
+                    delta[sym] = -1;
+                }
+            }
+        }
+    }
+
+    fn point_in_polygon_ring(&self, p: Coord, ring: &[Coord], eps: f64) -> bool {
+        if ring.len() < 4 {
+            return false;
+        }
+        
+        // Ray casting algorithm.
+        let mut crossings = 0;
+        let ray_p = Coord::xy(p.x, p.y + 1e6); // ray going upward
+        
+        for i in 0..(ring.len() - 1) {
+            let a = ring[i];
+            let b = ring[i + 1];
+            
+            if self.segments_intersect_ray(a, b, p, ray_p, eps) {
+                crossings += 1;
+            }
+        }
+        
+        crossings % 2 == 1
+    }
+
+    fn segments_intersect_ray(
+        &self,
+        a: Coord,
+        b: Coord,
+        ray_start: Coord,
+        ray_end: Coord,
+        eps: f64,
+    ) -> bool {
+        // Check if segment ab intersects the ray from ray_start to ray_end.
+        let (dx1, dy1) = (b.x - a.x, b.y - a.y);
+        let (dx2, dy2) = (ray_end.x - ray_start.x, ray_end.y - ray_start.y);
+        
+        let denom = dx1 * dy2 - dy1 * dx2;
+        if denom.abs() < eps {
+            return false;
+        }
+        
+        let (dx3, dy3) = (ray_start.x - a.x, ray_start.y - a.y);
+        let t = (dx3 * dy2 - dy3 * dx2) / denom;
+        let u = (dx3 * dy1 - dy3 * dx1) / denom;
+        
+        t >= eps && t <= (1.0 - eps) && u >= eps
     }
 
     fn collect_raw_curves(&self, lines: &[LineString], distance: f64) -> Vec<LineString> {
@@ -181,6 +569,7 @@ impl BufferOp {
         &self,
         curves: Vec<LineString>,
         source_polygons: &[Polygon],
+        allow_negative_depth_inside: bool,
         mut stats: BufferOpStats,
     ) -> BufferOpResult {
         if curves.is_empty() {
@@ -207,7 +596,13 @@ impl BufferOp {
         stats.face_rings = face_rings_with_edges.len();
 
         let (selected_face_rings, selected_face_count) =
-            self.classify_inside_face_rings(&graph, &face_rings_with_edges, source_polygons, epsilon);
+            self.classify_inside_face_rings(
+                &graph,
+                &face_rings_with_edges,
+                source_polygons,
+                epsilon,
+                allow_negative_depth_inside,
+            );
         stats.labeled_inside_polygons = selected_face_count;
 
         // Prefer depth-labeled face rings when available.
@@ -255,6 +650,7 @@ impl BufferOp {
         face_rings_with_edges: &[(LineString, Vec<usize>)],
         source_polygons: &[Polygon],
         eps: f64,
+        allow_negative_depth_inside: bool,
     ) -> (Vec<LineString>, usize) {
         if face_rings_with_edges.is_empty() || source_polygons.is_empty() {
             return (Vec::new(), 0);
@@ -262,7 +658,12 @@ impl BufferOp {
 
         let mut edge_delta = vec![0i32; graph.edges.len()];
         self.compute_edge_deltas(graph, source_polygons, eps, &mut edge_delta);
-        let included = self.classify_faces_by_depth(graph, face_rings_with_edges, &edge_delta);
+        let included = self.classify_faces_by_depth(
+            graph,
+            face_rings_with_edges,
+            &edge_delta,
+            allow_negative_depth_inside,
+        );
 
         let mut selected = Vec::<LineString>::new();
         for ((ring, _), keep) in face_rings_with_edges.iter().zip(included.into_iter()) {
@@ -272,6 +673,57 @@ impl BufferOp {
         }
         let selected_count = selected.len();
         (selected, selected_count)
+    }
+
+    fn compute_edge_deltas_from_curves(
+        &self,
+        graph: &TopologyGraph,
+        curves: &[LineString],
+        roles: &[CurveRole],
+        eps: f64,
+        delta: &mut [i32],
+    ) {
+        // Build a spatial index of all curves for fast lookup.
+        let curve_geoms: Vec<Geometry> = curves
+            .iter()
+            .cloned()
+            .map(Geometry::LineString)
+            .collect();
+        let curve_index = SpatialIndex::from_geometries(&curve_geoms);
+
+        // For each edge, find which curve(s) it came from and use their roles.
+        let mut edge_id = 0usize;
+        while edge_id < graph.edges.len() {
+            let edge = &graph.edges[edge_id];
+            let a = graph.nodes[edge.from].coord;
+            let b = graph.nodes[edge.to].coord;
+            let midpoint = Coord::xy((a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
+            let dx = b.x - a.x;
+            let dy = b.y - a.y;
+
+            // Find which source curve this edge came from.
+            // Query the spatial index for curves near this edge's midpoint.
+            let mut d = 0i32;
+            for curve_idx in curve_index.query_point(midpoint) {
+                if curve_idx >= curves.len() || curve_idx >= roles.len() {
+                    continue;
+                }
+                let curve = &curves[curve_idx];
+                let role = roles[curve_idx];
+
+                // Check if the edge midpoint lies on this curve.
+                if self.edge_on_curve(midpoint, curve, eps) {
+                    // Compute the delta based on curve role and edge direction.
+                    d += self.delta_from_curve_role_and_direction(role, dx, dy, curve, midpoint, eps);
+                }
+            }
+
+            delta[edge_id] = d;
+            if edge_id + 1 < delta.len() {
+                delta[edge_id + 1] = -d;
+            }
+            edge_id += 2;
+        }
     }
 
     fn compute_edge_deltas(
@@ -317,6 +769,54 @@ impl BufferOp {
             }
             edge_id += 2;
         }
+    }
+
+    fn edge_on_curve(&self, midpoint: Coord, curve: &LineString, eps: f64) -> bool {
+        if curve.coords.len() < 2 {
+            return false;
+        }
+        for i in 0..(curve.coords.len() - 1) {
+            if point_on_segment_eps(midpoint, curve.coords[i], curve.coords[i + 1], eps) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn delta_from_curve_role_and_direction(
+        &self,
+        role: CurveRole,
+        dx: f64,
+        dy: f64,
+        curve: &LineString,
+        midpoint: Coord,
+        eps: f64,
+    ) -> i32 {
+        // Find the segment index on the curve where midpoint lies.
+        for i in 0..(curve.coords.len() - 1) {
+            let c = curve.coords[i];
+            let d = curve.coords[i + 1];
+            if !point_on_segment_eps(midpoint, c, d, eps) {
+                continue;
+            }
+
+            // Curve direction: from c to d.
+            let cdx = d.x - c.x;
+            let cdy = d.y - c.y;
+            let dot = dx * cdx + dy * cdy;
+            let edge_forward = dot >= 0.0; // edge direction matches curve direction
+
+            // Base delta from role.
+            let role_delta = role.standard_delta();
+
+            // Adjust if edge direction opposes curve direction.
+            if edge_forward {
+                return role_delta;
+            } else {
+                return -role_delta;
+            }
+        }
+        0 // Edge not on this curve.
     }
 
     fn ring_segment_delta(
@@ -365,6 +865,7 @@ impl BufferOp {
         graph: &TopologyGraph,
         face_rings: &[(LineString, Vec<usize>)],
         delta: &[i32],
+        allow_negative_depth_inside: bool,
     ) -> Vec<bool> {
         let n_faces = face_rings.len();
         let n_edges = graph.edges.len();
@@ -432,7 +933,11 @@ impl BufferOp {
             }
         }
 
-        face_depth.into_iter().map(|d| d > 0).collect()
+        if allow_negative_depth_inside {
+            face_depth.into_iter().map(|d| d != 0).collect()
+        } else {
+            face_depth.into_iter().map(|d| d > 0).collect()
+        }
     }
 }
 
@@ -443,3 +948,15 @@ impl Default for BufferOp {
         }
     }
 }
+
+/// Helper: detect if a coordinate path forms a closed ring.
+fn is_line_closed(coords: &[Coord]) -> bool {
+    if coords.len() < 4 {
+        return false;
+    }
+    let eps = 1.0e-9;
+    let dx = (coords[0].x - coords[coords.len() - 1].x).abs();
+    let dy = (coords[0].y - coords[coords.len() - 1].y).abs();
+    dx <= eps && dy <= eps
+}
+

@@ -34,7 +34,8 @@ use wbcore::{PercentCoalescer,
 use wbraster::{CrsInfo, DataType, Raster, RasterConfig, RasterFormat};
 use wbvector::memory_store as vector_memory_store;
 use wbtopology::{
-    buffer_linestring, buffer_linestring_curve_set, buffer_point, buffer_polygon_multi,
+    BufferOp, BufferOpOptions,
+    buffer_linestring, buffer_point, buffer_polygon_multi,
     make_valid_polygon, BufferCapStyle,
     BufferJoinStyle, BufferOptions, Coord as TopoCoord, LineString as TopoLineString,
     Geometry as TopoGeometry, LinearRing as TopoLinearRing, Polygon as TopoPolygon,
@@ -47,6 +48,7 @@ use wbtopology::{
     polygonize_linework, PolygonizeOptions,
     polygon_intersection, polygon_unary_dissolve, polygon_unary_union_with_options,
     UnaryDissolveOptions, UnaryDissolveStrategy,
+    NodingOptions, NodingStrategy,
     voronoi_diagram,
     Envelope as TopoEnvelope,
     PreparedPolygon, SpatialIndex,
@@ -10364,26 +10366,28 @@ fn collect_buffered_polygons_from_geometry(
     Ok(())
 }
 
-fn collect_buffer_curve_lines_from_geometry(
+fn collect_input_lines_from_geometry(
     geometry: &wbvector::Geometry,
-    distance: f64,
-    options: BufferOptions,
-    curves: &mut Vec<TopoLineString>,
+    lines: &mut Vec<TopoLineString>,
 ) -> Result<(), ToolError> {
     match geometry {
         wbvector::Geometry::LineString(coords) => {
-            let line = TopoLineString::new(coords.iter().map(to_topo_coord).collect());
-            curves.extend(buffer_linestring_curve_set(&line, distance, options));
+            let line_coords: Vec<TopoCoord> = coords.iter().map(to_topo_coord).collect();
+            if line_coords.len() >= 2 {
+                lines.push(TopoLineString::new(line_coords));
+            }
         }
-        wbvector::Geometry::MultiLineString(lines) => {
-            for line_coords in lines {
-                let line = TopoLineString::new(line_coords.iter().map(to_topo_coord).collect());
-                curves.extend(buffer_linestring_curve_set(&line, distance, options));
+        wbvector::Geometry::MultiLineString(parts) => {
+            for part in parts {
+                let line_coords: Vec<TopoCoord> = part.iter().map(to_topo_coord).collect();
+                if line_coords.len() >= 2 {
+                    lines.push(TopoLineString::new(line_coords));
+                }
             }
         }
         wbvector::Geometry::GeometryCollection(parts) => {
             for part in parts {
-                collect_buffer_curve_lines_from_geometry(part, distance, options, curves)?;
+                collect_input_lines_from_geometry(part, lines)?;
             }
         }
         _ => {
@@ -10393,6 +10397,94 @@ fn collect_buffer_curve_lines_from_geometry(
         }
     }
     Ok(())
+}
+
+fn collect_input_polygons_from_geometry(
+    geometry: &wbvector::Geometry,
+    polygons: &mut Vec<TopoPolygon>,
+) -> Result<(), ToolError> {
+    match geometry {
+        wbvector::Geometry::Polygon { exterior, interiors } => {
+            polygons.push(to_topo_polygon(exterior, interiors));
+        }
+        wbvector::Geometry::MultiPolygon(parts) => {
+            for (exterior, interiors) in parts {
+                polygons.push(to_topo_polygon(exterior, interiors));
+            }
+        }
+        wbvector::Geometry::GeometryCollection(parts) => {
+            for part in parts {
+                collect_input_polygons_from_geometry(part, polygons)?;
+            }
+        }
+        _ => {
+            return Err(ToolError::Validation(
+                "polygon dissolve buffer fast path supports only polygon geometries".to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn collect_input_lines_and_polygons_from_geometry(
+    geometry: &wbvector::Geometry,
+    lines: &mut Vec<TopoLineString>,
+    polygons: &mut Vec<TopoPolygon>,
+) {
+    match geometry {
+        wbvector::Geometry::LineString(coords) => {
+            let line_coords: Vec<TopoCoord> = coords.iter().map(to_topo_coord).collect();
+            if line_coords.len() >= 2 {
+                lines.push(TopoLineString::new(line_coords));
+            }
+        }
+        wbvector::Geometry::Polygon { exterior, interiors } => {
+            polygons.push(to_topo_polygon(exterior, interiors));
+        }
+        wbvector::Geometry::MultiLineString(parts) => {
+            for part in parts {
+                let line_coords: Vec<TopoCoord> = part.iter().map(to_topo_coord).collect();
+                if line_coords.len() >= 2 {
+                    lines.push(TopoLineString::new(line_coords));
+                }
+            }
+        }
+        wbvector::Geometry::MultiPolygon(parts) => {
+            for (exterior, interiors) in parts {
+                polygons.push(to_topo_polygon(exterior, interiors));
+            }
+        }
+        wbvector::Geometry::GeometryCollection(parts) => {
+            for part in parts {
+                collect_input_lines_and_polygons_from_geometry(part, lines, polygons);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_point_buffered_polygons_from_geometry(
+    geometry: &wbvector::Geometry,
+    distance: f64,
+    options: BufferOptions,
+    polygons: &mut Vec<TopoPolygon>,
+) {
+    match geometry {
+        wbvector::Geometry::Point(coord) => {
+            polygons.push(buffer_point(to_topo_coord(coord), distance, options));
+        }
+        wbvector::Geometry::MultiPoint(points) => {
+            for point in points {
+                polygons.push(buffer_point(to_topo_coord(point), distance, options));
+            }
+        }
+        wbvector::Geometry::GeometryCollection(parts) => {
+            for part in parts {
+                collect_point_buffered_polygons_from_geometry(part, distance, options, polygons);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn topo_coord_dist2(a: TopoCoord, b: TopoCoord) -> f64 {
@@ -10651,21 +10743,26 @@ impl Tool for BufferVectorTool {
             // Optimize dissolve path: collect all buffered geometries without building feature layer first
             let skipped_features = AtomicUsize::new(0);
             let use_line_curve_fast_path = input.geom_type == Some(wbvector::GeometryType::LineString);
+            let use_polygon_curve_fast_path = input.geom_type == Some(wbvector::GeometryType::Polygon);
+            let op = BufferOp::new(BufferOpOptions {
+                buffer: options,
+                noding: NodingOptions {
+                    epsilon: 1.0e-9,
+                    strategy: NodingStrategy::SnapRounding,
+                    precision: None,
+                },
+                epsilon: 1.0e-9,
+            });
 
             let dissolved_polys = if use_line_curve_fast_path {
-                let curve_lines: Vec<TopoLineString> = input
+                let source_lines: Vec<TopoLineString> = input
                     .features
                     .par_iter()
                     .flat_map(|feature| {
                         if let Some(geometry) = &feature.geometry {
-                            let mut curves = Vec::<TopoLineString>::new();
-                            match collect_buffer_curve_lines_from_geometry(
-                                geometry,
-                                distance,
-                                options,
-                                &mut curves,
-                            ) {
-                                Ok(()) => curves,
+                            let mut lines = Vec::<TopoLineString>::new();
+                            match collect_input_lines_from_geometry(geometry, &mut lines) {
+                                Ok(()) => lines,
                                 Err(_) => {
                                     skipped_features.fetch_add(1, AtomicOrdering::Relaxed);
                                     Vec::new()
@@ -10677,40 +10774,15 @@ impl Tool for BufferVectorTool {
                     })
                     .collect();
 
-                let polygonized = polygonize_linework(
-                    &curve_lines,
-                    PolygonizeOptions {
-                        epsilon: 1.0e-9,
-                        ..PolygonizeOptions::default()
-                    },
-                );
-
-                if polygonized.polygons.is_empty() {
-                    Vec::new()
-                } else {
-                    polygon_unary_union_with_options(
-                        &polygonized.polygons,
-                        UnaryDissolveOptions {
-                            epsilon: 1.0e-9,
-                            strategy: UnaryDissolveStrategy::GraphDriven,
-                            ..UnaryDissolveOptions::default()
-                        },
-                    )
-                }
-            } else {
-                let all_buffered_polys: Vec<TopoPolygon> = input
+                op.run_linestrings_dissolved(&source_lines, distance).polygons
+            } else if use_polygon_curve_fast_path {
+                let source_polygons: Vec<TopoPolygon> = input
                     .features
                     .par_iter()
                     .flat_map(|feature| {
                         if let Some(geometry) = &feature.geometry {
                             let mut polygons = Vec::<TopoPolygon>::new();
-                            match collect_buffered_polygons_from_geometry(
-                                geometry,
-                                distance,
-                                options,
-                                true,
-                                &mut polygons,
-                            ) {
+                            match collect_input_polygons_from_geometry(geometry, &mut polygons) {
                                 Ok(()) => polygons,
                                 Err(_) => {
                                     skipped_features.fetch_add(1, AtomicOrdering::Relaxed);
@@ -10723,7 +10795,53 @@ impl Tool for BufferVectorTool {
                     })
                     .collect();
 
-                let raw_polys: Vec<TopoPolygon> = all_buffered_polys
+                op.run_polygons_dissolved(&source_polygons, distance).polygons
+            } else {
+                let mixed_parts: Vec<(Vec<TopoLineString>, Vec<TopoPolygon>, Vec<TopoPolygon>)> = input
+                    .features
+                    .par_iter()
+                    .map(|feature| {
+                        if let Some(geometry) = &feature.geometry {
+                            let mut lines = Vec::<TopoLineString>::new();
+                            let mut polys = Vec::<TopoPolygon>::new();
+                            let mut point_buffers = Vec::<TopoPolygon>::new();
+                            collect_input_lines_and_polygons_from_geometry(
+                                geometry,
+                                &mut lines,
+                                &mut polys,
+                            );
+                            collect_point_buffered_polygons_from_geometry(
+                                geometry,
+                                distance,
+                                options,
+                                &mut point_buffers,
+                            );
+                            (lines, polys, point_buffers)
+                        } else {
+                            (Vec::new(), Vec::new(), Vec::new())
+                        }
+                    })
+                    .collect();
+
+                let mut mixed_lines = Vec::<TopoLineString>::new();
+                let mut mixed_polygons = Vec::<TopoPolygon>::new();
+                let mut mixed_point_buffers = Vec::<TopoPolygon>::new();
+                for (lines, polygons, point_buffers) in mixed_parts {
+                    mixed_lines.extend(lines);
+                    mixed_polygons.extend(polygons);
+                    mixed_point_buffers.extend(point_buffers);
+                }
+
+                let mut merged_outputs = Vec::<TopoPolygon>::new();
+                if !mixed_lines.is_empty() {
+                    merged_outputs.extend(op.run_linestrings_dissolved(&mixed_lines, distance).polygons);
+                }
+                if !mixed_polygons.is_empty() {
+                    merged_outputs.extend(op.run_polygons_dissolved(&mixed_polygons, distance).polygons);
+                }
+                merged_outputs.extend(mixed_point_buffers);
+
+                let raw_polys: Vec<TopoPolygon> = merged_outputs
                     .into_iter()
                     .filter(|poly| poly.exterior.coords.len() >= 4)
                     .collect();

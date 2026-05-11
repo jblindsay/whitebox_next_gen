@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning while in pre-1.0 development.
 
+## [Unreleased]
+
+### Added
+- Added `BufferOp` staged dissolve orchestration API (`BufferOp`, `BufferOpOptions`, `BufferOpResult`, `BufferOpStats`) and crate-root exports for restart-safe GEOS-style buffering flow.
+- Added `tests/buffer_op_pipeline_tests.rs` to validate staged line/polygon dissolve behavior, stats invariants, and invalid-distance guards.
+
+### Changed
+- BufferOp dissolve pipeline now executes explicit staged flow: raw curve generation, global noding, planar graph bounded-face extraction, edge-delta + BFS face depth labeling, depth-selected face-ring polygonization, and final dissolve.
+- `buffer_vector` dissolve integration now routes pure line, pure polygon, and mixed line/polygon/point flows through BufferOp staging in `wbtools_oss`, with merged final dissolve output.
+- Reinstated `buffer_vector` in curated frontend taxonomy (`wbw_python` source taxonomy and synced Python/R/QGIS resolved artifacts).
+
 ## [0.1.2] – 2026-05-09
 
 ### Testing

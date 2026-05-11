@@ -673,6 +673,22 @@ pub fn buffer_linestring_curve_set(
     vec![LineString::new(cleaned)]
 }
 
+/// Build raw closed buffer boundary curves for a polygon.
+///
+/// This exposes polygon offset-curve generation for global graph-based buffering
+/// workflows that collect curves across many source features before one shared
+/// noding and dissolve step.
+pub fn buffer_polygon_curve_set(
+    poly: &Polygon,
+    distance: f64,
+    options: BufferOptions,
+) -> Vec<LineString> {
+    if !distance.is_finite() || distance <= 0.0 {
+        return Vec::new();
+    }
+    build_polygon_buffer_curve_set(poly, distance, options)
+}
+
 /// Generate a one-sided offset curve for a linestring.
 ///
 /// Unlike [`buffer_linestring`], which produces a closed polygon corridor,

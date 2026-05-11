@@ -2118,6 +2118,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("breach_single_cell_pits", "hydrology", "depressions_storage"),
     ("breakline_mapping", "terrain", "general"),
     ("buffer_raster", "raster", "distance_cost"),
+    ("buffer_vector", "vector", "geometry_processing"),
     ("build_object_hierarchy_multiscale", "remote_sensing", "obia"),
     ("burn_streams", "hydrology", "depressions_storage"),
     ("burn_streams_at_roads", "hydrology", "depressions_storage"),

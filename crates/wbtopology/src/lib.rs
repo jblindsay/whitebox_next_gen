@@ -62,6 +62,7 @@
 //! ```
 
 pub mod algorithms;
+pub mod buffer_op;
 pub mod constructive;
 pub mod error;
 pub mod fixed_radius_search;
@@ -83,10 +84,12 @@ pub mod voronoi;
 
 pub use error::{Result, TopologyError};
 pub use fixed_radius_search::{DistanceMetric, FixedRadiusSearch2D};
+pub use buffer_op::{BufferOp, BufferOpOptions, BufferOpResult, BufferOpStats};
 pub use constructive::{
 	buffer_linestring,
 	buffer_linestring_curve_set,
 	buffer_linestring_with_precision,
+	buffer_polygon_curve_set,
 	buffer_polygon,
 	buffer_polygon_multi,
 	buffer_polygon_with_precision,

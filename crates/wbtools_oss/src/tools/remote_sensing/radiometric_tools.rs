@@ -745,10 +745,22 @@ impl Tool for DarkObjectSubtractionTool {
             nodata,
         );
 
+        let mut diagnostic = output_diagnostic_offsets_path.as_ref().map(|_| {
+            let mut diagnostic = rasters[0].clone();
+            diagnostic.bands = rasters.len();
+            diagnostic.data = wbraster::raster::RasterData::new_filled(
+                diagnostic.data_type,
+                rasters.len() * rows * cols,
+                nodata,
+            );
+            diagnostic
+        });
+
         let total_rows = (rows * rasters.len()).max(1);
         let mut done_rows = 0usize;
         let coalescer = PercentCoalescer::new(1, 98);
         let mut band_offsets = Vec::with_capacity(rasters.len());
+        let create_diagnostic = output_diagnostic_offsets_path.is_some();
 
         for (band_idx, raster) in rasters.iter().enumerate() {
             ctx.progress.info(&format!(
@@ -770,31 +782,47 @@ impl Tool for DarkObjectSubtractionTool {
                 offset
             ));
 
-            let band_rows: Vec<Vec<f64>> = (0..rows)
+            let band_rows: Vec<(Vec<f64>, Option<Vec<f64>>)> = (0..rows)
                 .into_par_iter()
                 .map(|r| {
                     let row = raster.row_slice(0, r as isize);
-                    row.into_iter()
-                        .map(|v| {
-                            if (v - raster.nodata).abs() <= f64::EPSILON || v.is_nan() {
-                                nodata
-                            } else {
-                                let corrected = v - offset;
-                                if clamp_non_negative {
-                                    corrected.max(0.0)
-                                } else {
-                                    corrected
-                                }
-                            }
-                        })
-                        .collect::<Vec<f64>>()
+                    let mut corrected_row = vec![nodata; cols];
+                    let mut diag_row = if create_diagnostic {
+                        Some(vec![nodata; cols])
+                    } else {
+                        None
+                    };
+                    for (c, v) in row.iter().copied().enumerate() {
+                        if (v - raster.nodata).abs() <= f64::EPSILON || v.is_nan() {
+                            continue;
+                        }
+                        let corrected = v - offset;
+                        corrected_row[c] = if clamp_non_negative {
+                            corrected.max(0.0)
+                        } else {
+                            corrected
+                        };
+                        if let Some(ref mut d) = diag_row {
+                            d[c] = offset;
+                        }
+                    }
+                    (corrected_row, diag_row)
                 })
                 .collect();
 
-            for (r, row) in band_rows.iter().enumerate() {
+            for (r, (row, diag_row)) in band_rows.iter().enumerate() {
                 output
                     .set_row_slice(band_idx as isize, r as isize, row)
                     .map_err(|e| ToolError::Execution(format!("failed writing output row {}: {e}", r)))?;
+                if let (Some(diag), Some(drow)) = (diagnostic.as_mut(), diag_row.as_ref()) {
+                    diag.set_row_slice(band_idx as isize, r as isize, drow).map_err(|e| {
+                        ToolError::Execution(format!(
+                            "failed writing diagnostic row {} for band {}: {e}",
+                            r,
+                            band_idx + 1
+                        ))
+                    })?;
+                }
                 done_rows += 1;
                 coalescer.emit_unit_fraction(ctx.progress, done_rows as f64 / total_rows as f64);
             }
@@ -811,39 +839,7 @@ impl Tool for DarkObjectSubtractionTool {
         outputs.insert("clamp_non_negative".to_string(), json!(clamp_non_negative));
         outputs.insert("offsets".to_string(), json!(band_offsets));
 
-        if let Some(diag_path) = output_diagnostic_offsets_path {
-            let mut diagnostic = rasters[0].clone();
-            diagnostic.bands = rasters.len();
-            diagnostic.data = wbraster::raster::RasterData::new_filled(
-                diagnostic.data_type,
-                rasters.len() * rows * cols,
-                nodata,
-            );
-            for (band_idx, raster) in rasters.iter().enumerate() {
-                let offset = band_offsets[band_idx];
-                for r in 0..rows {
-                    let input_row = raster.row_slice(0, r as isize);
-                    let diag_row: Vec<f64> = input_row
-                        .into_iter()
-                        .map(|v| {
-                            if (v - raster.nodata).abs() <= f64::EPSILON || v.is_nan() {
-                                nodata
-                            } else {
-                                offset
-                            }
-                        })
-                        .collect();
-                    diagnostic
-                        .set_row_slice(band_idx as isize, r as isize, &diag_row)
-                        .map_err(|e| {
-                            ToolError::Execution(format!(
-                                "failed writing diagnostic row {} for band {}: {e}",
-                                r,
-                                band_idx + 1
-                            ))
-                        })?;
-                }
-            }
+        if let (Some(diag_path), Some(diagnostic)) = (output_diagnostic_offsets_path, diagnostic) {
             let diag_locator = write_or_store_output(diagnostic, Some(diag_path))?;
             outputs.insert(
                 "diagnostic_offsets".to_string(),
@@ -1085,23 +1081,22 @@ impl Tool for DnToToaReflectanceTool {
                 .into_par_iter()
                 .map(|r| {
                     let row = raster.row_slice(0, r as isize);
-                    row.into_iter()
-                        .map(|v| {
-                            if (v - raster.nodata).abs() <= f64::EPSILON || v.is_nan() {
-                                nodata
-                            } else {
-                                let mut out_v = mult * v + add;
-                                if let Some(s) = div {
-                                    out_v /= s;
-                                }
-                                if clamp_unit_interval {
-                                    out_v.clamp(0.0, 1.0)
-                                } else {
-                                    out_v
-                                }
-                            }
-                        })
-                        .collect::<Vec<f64>>()
+                    let mut out_row = vec![nodata; cols];
+                    for (c, v) in row.iter().copied().enumerate() {
+                        if (v - raster.nodata).abs() <= f64::EPSILON || v.is_nan() {
+                            continue;
+                        }
+                        let mut out_v = mult * v + add;
+                        if let Some(s) = div {
+                            out_v /= s;
+                        }
+                        out_row[c] = if clamp_unit_interval {
+                            out_v.clamp(0.0, 1.0)
+                        } else {
+                            out_v
+                        };
+                    }
+                    out_row
                 })
                 .collect();
 
@@ -1559,12 +1554,11 @@ impl Tool for PcaBasedChangeDetectionTool {
         let nodata = t1_rasters[0].nodata;
 
         ctx.progress.info("pca_based_change_detection: estimating covariance of spectral change vectors");
-        let (sum, sum_sq, valid_count) = (0..n)
+        let (sum, sum_sq, valid_count, _scratch) = (0..n)
             .into_par_iter()
             .fold(
-                || (vec![0.0_f64; bands], vec![0.0_f64; bands * bands], 0_u64),
-                |(mut local_sum, mut local_sq, mut local_count), idx| {
-                    let mut dv = vec![0.0_f64; bands];
+                || (vec![0.0_f64; bands], vec![0.0_f64; bands * bands], 0_u64, vec![0.0_f64; bands]),
+                |(mut local_sum, mut local_sq, mut local_count, mut dv), idx| {
                     let mut valid = true;
                     for b in 0..bands {
                         let v1 = t1_rasters[b].data.get_f64(idx);
@@ -1589,19 +1583,19 @@ impl Tool for PcaBasedChangeDetectionTool {
                             }
                         }
                     }
-                    (local_sum, local_sq, local_count)
+                    (local_sum, local_sq, local_count, dv)
                 },
             )
             .reduce(
-                || (vec![0.0_f64; bands], vec![0.0_f64; bands * bands], 0_u64),
-                |(mut sum_a, mut sq_a, cnt_a), (sum_b, sq_b, cnt_b)| {
+                || (vec![0.0_f64; bands], vec![0.0_f64; bands * bands], 0_u64, vec![0.0_f64; bands]),
+                |(mut sum_a, mut sq_a, cnt_a, dv_a), (sum_b, sq_b, cnt_b, _dv_b)| {
                     for i in 0..bands {
                         sum_a[i] += sum_b[i];
                     }
                     for i in 0..(bands * bands) {
                         sq_a[i] += sq_b[i];
                     }
-                    (sum_a, sq_a, cnt_a + cnt_b)
+                    (sum_a, sq_a, cnt_a + cnt_b, dv_a)
                 },
             );
 
@@ -1701,9 +1695,30 @@ impl Tool for PcaBasedChangeDetectionTool {
 
         let mut out = t1_rasters[0].clone();
         out.bands = 1;
+        let mut mask = if output_mask_path.is_some() && threshold_sigma.is_some() && sigma_pc > 0.0 {
+            let mut m = t1_rasters[0].clone();
+            m.bands = 1;
+            Some(m)
+        } else {
+            None
+        };
+        let threshold = threshold_sigma.map(|th| th.abs() * sigma_pc);
+
         for (r, row) in out_rows.iter().enumerate() {
             out.set_row_slice(0, r as isize, row)
                 .map_err(|e| ToolError::Execution(format!("failed writing output row {}: {e}", r)))?;
+            if let (Some(mask_raster), Some(th)) = (mask.as_mut(), threshold) {
+                let mut mask_row = vec![nodata; cols];
+                for (c, v) in row.iter().copied().enumerate() {
+                    if (v - nodata).abs() <= f64::EPSILON || v.is_nan() {
+                        continue;
+                    }
+                    mask_row[c] = if v >= th { 1.0 } else { 0.0 };
+                }
+                mask_raster
+                    .set_row_slice(0, r as isize, &mask_row)
+                    .map_err(|e| ToolError::Execution(format!("failed writing mask row {}: {e}", r)))?;
+            }
             done_rows += 1;
             coalescer.emit_unit_fraction(ctx.progress, done_rows as f64 / total_rows as f64);
         }
@@ -1718,31 +1733,9 @@ impl Tool for PcaBasedChangeDetectionTool {
         outputs.insert("valid_pixel_count".to_string(), json!(valid_count));
         outputs.insert("sigma_pc".to_string(), json!(sigma_pc));
 
-        if let (Some(mask_path), Some(th_sigma)) = (output_mask_path, threshold_sigma) {
+        if let (Some(mask_path), Some(th_sigma), Some(mask)) = (output_mask_path, threshold_sigma, mask) {
             if sigma_pc > 0.0 {
                 let threshold = th_sigma.abs() * sigma_pc;
-                let mask_rows: Vec<Vec<f64>> = out_rows
-                    .par_iter()
-                    .map(|row| {
-                        row.iter()
-                            .map(|v| {
-                                if (*v - nodata).abs() <= f64::EPSILON || v.is_nan() {
-                                    nodata
-                                } else if *v >= threshold {
-                                    1.0
-                                } else {
-                                    0.0
-                                }
-                            })
-                            .collect::<Vec<f64>>()
-                    })
-                    .collect();
-                let mut mask = t1_rasters[0].clone();
-                mask.bands = 1;
-                for (r, row) in mask_rows.iter().enumerate() {
-                    mask.set_row_slice(0, r as isize, row)
-                        .map_err(|e| ToolError::Execution(format!("failed writing mask row {}: {e}", r)))?;
-                }
                 let mask_locator = write_or_store_output(mask, Some(mask_path))?;
                 outputs.insert("mask".to_string(), json!({"__wbw_type__": "raster", "path": mask_locator, "active_band": 0}));
                 outputs.insert("threshold_sigma".to_string(), json!(th_sigma));
@@ -3803,9 +3796,10 @@ impl Tool for ContinuumRemovalTool {
                     .map(|b| b.row_slice(0, r as isize))
                     .collect();
                 let mut out_by_band = vec![vec![nodata; cols]; num_bands];
+                let mut spectrum = vec![0.0_f64; num_bands];
+                let mut continuum = vec![0.0_f64; num_bands];
 
                 for c in 0..cols {
-                    let mut spectrum = vec![0.0_f64; num_bands];
                     let mut valid = true;
                     for b in 0..num_bands {
                         let v = band_rows[b][c];
@@ -3824,7 +3818,7 @@ impl Tool for ContinuumRemovalTool {
                         continue;
                     }
 
-                    let mut continuum = vec![0.0_f64; num_bands];
+                    continuum.fill(0.0);
                     for seg in 0..(hull.len() - 1) {
                         let i0 = hull[seg];
                         let i1 = hull[seg + 1];
@@ -4064,9 +4058,9 @@ impl Tool for LinearSpectralUnmixingTool {
                     .collect();
                 let mut out_by_endmember = vec![vec![nodata; cols]; num_endmembers];
                 let mut residual_row = vec![nodata; cols];
+                let mut pixel = vec![0.0_f64; num_bands];
 
                 for c in 0..cols {
-                    let mut pixel = vec![0.0_f64; num_bands];
                     let mut valid = true;
                     for b in 0..num_bands {
                         let v = band_rows[b][c];
@@ -4287,100 +4281,137 @@ impl Tool for MinimumNoiseFractionTool {
         let nodata = rasters[0].nodata;
         let nb = num_bands;
 
-        let mut mean = vec![0.0_f64; nb];
-        let mut cov_signal = vec![vec![0.0_f64; nb]; nb];
-        let mut cov_noise = vec![vec![0.0_f64; nb]; nb];
-        let mut valid_count = 0usize;
-        let mut noise_count = 0usize;
-
-        for r in 0..rows {
-            let band_rows: Vec<Vec<f64>> = rasters
-                .iter()
-                .map(|b| b.row_slice(0, r as isize))
-                .collect();
-            let band_rows_next: Option<Vec<Vec<f64>>> = if noise_mode == "difference_y" && r + 1 < rows {
-                Some(
-                    rasters
+        let (mut mean, mut cov_signal, mut cov_noise, valid_count, noise_count) = (0..rows)
+            .into_par_iter()
+            .fold(
+                || {
+                    (
+                        vec![0.0_f64; nb],
+                        vec![vec![0.0_f64; nb]; nb],
+                        vec![vec![0.0_f64; nb]; nb],
+                        0usize,
+                        0usize,
+                    )
+                },
+                |(mut mean_l, mut cov_signal_l, mut cov_noise_l, mut valid_count_l, mut noise_count_l), r| {
+                    let band_rows: Vec<Vec<f64>> = rasters
                         .iter()
-                        .map(|b| b.row_slice(0, (r + 1) as isize))
-                        .collect(),
-                )
-            } else {
-                None
-            };
+                        .map(|b| b.row_slice(0, r as isize))
+                        .collect();
+                    let band_rows_next: Option<Vec<Vec<f64>>> = if noise_mode == "difference_y" && r + 1 < rows {
+                        Some(
+                            rasters
+                                .iter()
+                                .map(|b| b.row_slice(0, (r + 1) as isize))
+                                .collect(),
+                        )
+                    } else {
+                        None
+                    };
 
-            for c in 0..cols {
-                let mut v = vec![0.0_f64; nb];
-                let mut ok = true;
-                for b in 0..nb {
-                    let x = band_rows[b][c];
-                    if rasters[b].is_nodata(x) || x.is_nan() {
-                        ok = false;
-                        break;
-                    }
-                    v[b] = x;
-                }
-                if !ok {
-                    continue;
-                }
+                    let mut v = vec![0.0_f64; nb];
+                    let mut vn = vec![0.0_f64; nb];
 
-                valid_count += 1;
-                for i in 0..nb {
-                    mean[i] += v[i];
-                }
-                for i in 0..nb {
-                    for j in i..nb {
-                        cov_signal[i][j] += v[i] * v[j];
-                    }
-                }
-
-                if noise_mode == "difference_y" {
-                    if let Some(ref next_rows) = band_rows_next {
-                        let mut vn = vec![0.0_f64; nb];
-                        let mut okn = true;
+                    for c in 0..cols {
+                        let mut ok = true;
                         for b in 0..nb {
-                            let x = next_rows[b][c];
+                            let x = band_rows[b][c];
                             if rasters[b].is_nodata(x) || x.is_nan() {
-                                okn = false;
+                                ok = false;
                                 break;
                             }
-                            vn[b] = x;
+                            v[b] = x;
                         }
-                        if okn {
-                            noise_count += 1;
-                            for i in 0..nb {
-                                let di = v[i] - vn[i];
-                                for j in i..nb {
-                                    let dj = v[j] - vn[j];
-                                    cov_noise[i][j] += di * dj;
+                        if !ok {
+                            continue;
+                        }
+
+                        valid_count_l += 1;
+                        for i in 0..nb {
+                            mean_l[i] += v[i];
+                        }
+                        for i in 0..nb {
+                            for j in i..nb {
+                                cov_signal_l[i][j] += v[i] * v[j];
+                            }
+                        }
+
+                        if noise_mode == "difference_y" {
+                            if let Some(ref next_rows) = band_rows_next {
+                                let mut okn = true;
+                                for b in 0..nb {
+                                    let x = next_rows[b][c];
+                                    if rasters[b].is_nodata(x) || x.is_nan() {
+                                        okn = false;
+                                        break;
+                                    }
+                                    vn[b] = x;
+                                }
+                                if okn {
+                                    noise_count_l += 1;
+                                    for i in 0..nb {
+                                        let di = v[i] - vn[i];
+                                        for j in i..nb {
+                                            let dj = v[j] - vn[j];
+                                            cov_noise_l[i][j] += di * dj;
+                                        }
+                                    }
+                                }
+                            }
+                        } else if c + 1 < cols {
+                            let mut okn = true;
+                            for b in 0..nb {
+                                let x = band_rows[b][c + 1];
+                                if rasters[b].is_nodata(x) || x.is_nan() {
+                                    okn = false;
+                                    break;
+                                }
+                                vn[b] = x;
+                            }
+                            if okn {
+                                noise_count_l += 1;
+                                for i in 0..nb {
+                                    let di = v[i] - vn[i];
+                                    for j in i..nb {
+                                        let dj = v[j] - vn[j];
+                                        cov_noise_l[i][j] += di * dj;
+                                    }
                                 }
                             }
                         }
                     }
-                } else if c + 1 < cols {
-                    let mut vn = vec![0.0_f64; nb];
-                    let mut okn = true;
-                    for b in 0..nb {
-                        let x = band_rows[b][c + 1];
-                        if rasters[b].is_nodata(x) || x.is_nan() {
-                            okn = false;
-                            break;
+
+                    (mean_l, cov_signal_l, cov_noise_l, valid_count_l, noise_count_l)
+                },
+            )
+            .reduce(
+                || {
+                    (
+                        vec![0.0_f64; nb],
+                        vec![vec![0.0_f64; nb]; nb],
+                        vec![vec![0.0_f64; nb]; nb],
+                        0usize,
+                        0usize,
+                    )
+                },
+                |(mut mean_a, mut cov_signal_a, mut cov_noise_a, valid_count_a, noise_count_a),
+                 (mean_b, cov_signal_b, cov_noise_b, valid_count_b, noise_count_b)| {
+                    for i in 0..nb {
+                        mean_a[i] += mean_b[i];
+                        for j in i..nb {
+                            cov_signal_a[i][j] += cov_signal_b[i][j];
+                            cov_noise_a[i][j] += cov_noise_b[i][j];
                         }
-                        vn[b] = x;
                     }
-                    if okn {
-                        noise_count += 1;
-                        for i in 0..nb {
-                            let di = v[i] - vn[i];
-                            for j in i..nb {
-                                let dj = v[j] - vn[j];
-                                cov_noise[i][j] += di * dj;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+                    (
+                        mean_a,
+                        cov_signal_a,
+                        cov_noise_a,
+                        valid_count_a + valid_count_b,
+                        noise_count_a + noise_count_b,
+                    )
+                },
+            );
 
         if valid_count < 2 {
             return Err(ToolError::Execution(
@@ -4828,9 +4859,14 @@ impl Tool for SpectralLibraryMatchingTool {
 
                 let mut class_row = vec![nodata; cols];
                 let mut score_row = vec![nodata; cols];
+                let mut pixel = vec![0.0_f64; num_bands];
+                let mut sid_pixel_prob = if metric == "sid" {
+                    Some(vec![0.0_f64; num_bands])
+                } else {
+                    None
+                };
 
                 for c in 0..cols {
-                    let mut pixel = vec![0.0_f64; num_bands];
                     let mut valid = true;
                     for b in 0..num_bands {
                         let v = band_rows[b][c];
@@ -4844,19 +4880,20 @@ impl Tool for SpectralLibraryMatchingTool {
                         continue;
                     }
 
-                    let pixel_norm = pixel.iter().map(|v| v * v).sum::<f64>().sqrt().max(1.0e-12);
-                    let sid_pixel_prob = if metric == "sid" {
+                    let pixel_norm = if metric == "sam" {
+                        pixel.iter().map(|v| v * v).sum::<f64>().sqrt().max(1.0e-12)
+                    } else {
+                        1.0
+                    };
+                    if metric == "sid" {
                         let eps = 1.0e-12;
                         let s = pixel.iter().map(|v| v.max(0.0) + eps).sum::<f64>().max(eps);
-                        Some(
-                            pixel
-                                .iter()
-                                .map(|v| (v.max(0.0) + eps) / s)
-                                .collect::<Vec<_>>(),
-                        )
-                    } else {
-                        None
-                    };
+                        if let Some(ref mut p) = sid_pixel_prob {
+                            for b in 0..num_bands {
+                                p[b] = (pixel[b].max(0.0) + eps) / s;
+                            }
+                        }
+                    }
                     let mut best_idx = 0usize;
                     let mut best_score = f64::INFINITY;
 
@@ -5067,56 +5104,97 @@ impl Tool for CloudePottierDecompositionTool {
                 let mut alpha_row = vec![nodata; cols];
 
                 for c in 0..cols {
-                    let mut vals = vec![0.0_f64; rasters.len()];
-                    let mut valid = true;
-                    for i in 0..rasters.len() {
-                        let v = band_rows[i][c];
-                        if rasters[i].is_nodata(v) || v.is_nan() {
-                            valid = false;
-                            break;
+                    let m = if band_rows.len() == 3 {
+                        let v11 = band_rows[0][c];
+                        let v22 = band_rows[1][c];
+                        let v33 = band_rows[2][c];
+                        if rasters[0].is_nodata(v11)
+                            || rasters[1].is_nodata(v22)
+                            || rasters[2].is_nodata(v33)
+                            || v11.is_nan()
+                            || v22.is_nan()
+                            || v33.is_nan()
+                        {
+                            continue;
                         }
-                        vals[i] = v;
-                    }
-                    if !valid {
-                        continue;
-                    }
-
-                    let m = if vals.len() == 3 {
                         DMatrix::from_row_slice(
                             3,
                             3,
                             &[
-                                vals[0], 0.0, 0.0, //
-                                0.0, vals[1], 0.0, //
-                                0.0, 0.0, vals[2],
+                                v11, 0.0, 0.0, //
+                                0.0, v22, 0.0, //
+                                0.0, 0.0, v33,
                             ],
                         )
                     } else {
+                        let v11 = band_rows[0][c];
+                        let v12 = band_rows[1][c];
+                        let v13 = band_rows[2][c];
+                        let v21 = band_rows[3][c];
+                        let v22 = band_rows[4][c];
+                        let v23 = band_rows[5][c];
+                        let v31 = band_rows[6][c];
+                        let v32 = band_rows[7][c];
+                        let v33 = band_rows[8][c];
+                        if rasters[0].is_nodata(v11)
+                            || rasters[1].is_nodata(v12)
+                            || rasters[2].is_nodata(v13)
+                            || rasters[3].is_nodata(v21)
+                            || rasters[4].is_nodata(v22)
+                            || rasters[5].is_nodata(v23)
+                            || rasters[6].is_nodata(v31)
+                            || rasters[7].is_nodata(v32)
+                            || rasters[8].is_nodata(v33)
+                            || v11.is_nan()
+                            || v12.is_nan()
+                            || v13.is_nan()
+                            || v21.is_nan()
+                            || v22.is_nan()
+                            || v23.is_nan()
+                            || v31.is_nan()
+                            || v32.is_nan()
+                            || v33.is_nan()
+                        {
+                            continue;
+                        }
                         DMatrix::from_row_slice(
                             3,
                             3,
                             &[
-                                vals[0], vals[1], vals[2], //
-                                vals[3], vals[4], vals[5], //
-                                vals[6], vals[7], vals[8],
+                                v11, v12, v13, //
+                                v21, v22, v23, //
+                                v31, v32, v33,
                             ],
                         )
                     };
 
                     let eig = SymmetricEigen::new(m);
-                    let mut pairs = (0..3)
-                        .map(|k| {
-                            (
-                                eig.eigenvalues[k].max(0.0),
-                                eig.eigenvectors.column(k).iter().copied().collect::<Vec<_>>(),
-                            )
-                        })
-                        .collect::<Vec<_>>();
-                    pairs.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+                    let mut lambdas = [
+                        eig.eigenvalues[0].max(0.0),
+                        eig.eigenvalues[1].max(0.0),
+                        eig.eigenvalues[2].max(0.0),
+                    ];
+                    let mut evecs = [
+                        [eig.eigenvectors[(0, 0)], eig.eigenvectors[(1, 0)], eig.eigenvectors[(2, 0)]],
+                        [eig.eigenvectors[(0, 1)], eig.eigenvectors[(1, 1)], eig.eigenvectors[(2, 1)]],
+                        [eig.eigenvectors[(0, 2)], eig.eigenvectors[(1, 2)], eig.eigenvectors[(2, 2)]],
+                    ];
+                    if lambdas[1] > lambdas[0] {
+                        lambdas.swap(0, 1);
+                        evecs.swap(0, 1);
+                    }
+                    if lambdas[2] > lambdas[1] {
+                        lambdas.swap(1, 2);
+                        evecs.swap(1, 2);
+                    }
+                    if lambdas[1] > lambdas[0] {
+                        lambdas.swap(0, 1);
+                        evecs.swap(0, 1);
+                    }
 
-                    let l1 = pairs[0].0;
-                    let l2 = pairs[1].0;
-                    let l3 = pairs[2].0;
+                    let l1 = lambdas[0];
+                    let l2 = lambdas[1];
+                    let l3 = lambdas[2];
                     let span = (l1 + l2 + l3).max(1.0e-12);
                     let p = [l1 / span, l2 / span, l3 / span];
 
@@ -5136,9 +5214,9 @@ impl Tool for CloudePottierDecompositionTool {
                     .clamp(0.0, 1.0);
 
                     let mut alpha = 0.0_f64;
-                    for (k, (_, ev)) in pairs.iter().enumerate() {
-                        let c1 = ev[0].abs();
-                        let c23 = (ev[1] * ev[1] + ev[2] * ev[2]).sqrt();
+                    for k in 0..3 {
+                        let c1 = evecs[k][0].abs();
+                        let c23 = (evecs[k][1] * evecs[k][1] + evecs[k][2] * evecs[k][2]).sqrt();
                         let alpha_k = c23.atan2(c1);
                         alpha += p[k] * alpha_k;
                     }
@@ -5316,27 +5394,40 @@ impl Tool for FreemanDurdenDecompositionTool {
                 let mut clip_row = vec![nodata; cols];
 
                 for c in 0..cols {
-                    let mut vals = vec![0.0_f64; rasters.len()];
-                    let mut valid = true;
-                    for i in 0..rasters.len() {
-                        let v = band_rows[i][c];
-                        if rasters[i].is_nodata(v) || v.is_nan() {
-                            valid = false;
-                            break;
+                    let (c11, c22, c33, c13_re, has_cross_pol) = if band_rows.len() == 3 {
+                        let v11 = band_rows[0][c];
+                        let v22 = band_rows[1][c];
+                        let v33 = band_rows[2][c];
+                        if rasters[0].is_nodata(v11)
+                            || rasters[1].is_nodata(v22)
+                            || rasters[2].is_nodata(v33)
+                            || v11.is_nan()
+                            || v22.is_nan()
+                            || v33.is_nan()
+                        {
+                            continue;
                         }
-                        vals[i] = v;
-                    }
-                    if !valid {
-                        continue;
-                    }
-
-                    let c11 = vals[0].max(0.0);
-                    let c22 = if vals.len() == 3 { vals[1].max(0.0) } else { vals[4].max(0.0) };
-                    let c33 = if vals.len() == 3 { vals[2].max(0.0) } else { vals[8].max(0.0) };
-                    let c13_re = if vals.len() == 3 {
-                        0.0
+                        (v11.max(0.0), v22.max(0.0), v33.max(0.0), 0.0, false)
                     } else {
-                        0.5 * (vals[2] + vals[6])
+                        let v11 = band_rows[0][c];
+                        let v13 = band_rows[2][c];
+                        let v22 = band_rows[4][c];
+                        let v31 = band_rows[6][c];
+                        let v33 = band_rows[8][c];
+                        if rasters[0].is_nodata(v11)
+                            || rasters[2].is_nodata(v13)
+                            || rasters[4].is_nodata(v22)
+                            || rasters[6].is_nodata(v31)
+                            || rasters[8].is_nodata(v33)
+                            || v11.is_nan()
+                            || v13.is_nan()
+                            || v22.is_nan()
+                            || v31.is_nan()
+                            || v33.is_nan()
+                        {
+                            continue;
+                        }
+                        (v11.max(0.0), v22.max(0.0), v33.max(0.0), 0.5 * (v13 + v31), true)
                     };
                     let span = (c11 + c22 + c33).max(0.0);
                     if span <= 0.0 {
@@ -5358,7 +5449,7 @@ impl Tool for FreemanDurdenDecompositionTool {
                     let remaining = (span - pv).max(0.0);
                     let mut ps_raw = (c11 - c33).max(0.0);
                     let mut pd_raw = (c22 - c33).max(0.0);
-                    if vals.len() > 3 {
+                    if has_cross_pol {
                         let bias = c13_re.abs().min(0.5 * (c11 + c33));
                         if c13_re >= 0.0 {
                             ps_raw += bias;

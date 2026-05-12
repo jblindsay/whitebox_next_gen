@@ -511,6 +511,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Divides the first raster by the second on a cell-by-cell basis.
     run_tool("divide", list(...))
   }
+  session$download_osm_vector <- function(...) {
+    # Downloads OpenStreetMap features from the Overpass API for a bounding box and writes the result as a vector layer.
+    run_tool("download_osm_vector", list(...))
+  }
   session$downslope_distance_to_stream <- function(...) {
     # Computes downslope distance from each DEM cell to nearest stream along flow paths.
     run_tool("downslope_distance_to_stream", list(...))
@@ -1636,7 +1640,7 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("narrowness_index_vector", list(...))
   }
   session$natural_neighbour_interpolation <- function(...) {
-    # Interpolates a raster from point samples using a Delaunay-neighbour weighted scheme.
+    # Interpolates a raster from point samples using true Sibson natural-neighbour area weighting.
     run_tool("natural_neighbour_interpolation", list(...))
   }
   session$near <- function(...) {
@@ -4090,6 +4094,18 @@ wbw_divide <- function(...) {
   # Divides the first raster by the second on a cell-by-cell basis.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$divide(...)
+}
+
+download_osm_vector <- function(...) {
+  # Downloads OpenStreetMap features from the Overpass API for a bounding box and writes the result as a vector layer.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$download_osm_vector(...)
+}
+
+wbw_download_osm_vector <- function(...) {
+  # Downloads OpenStreetMap features from the Overpass API for a bounding box and writes the result as a vector layer.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$download_osm_vector(...)
 }
 
 downslope_distance_to_stream <- function(...) {
@@ -7465,13 +7481,13 @@ wbw_narrowness_index_vector <- function(...) {
 }
 
 natural_neighbour_interpolation <- function(...) {
-  # Interpolates a raster from point samples using a Delaunay-neighbour weighted scheme.
+  # Interpolates a raster from point samples using true Sibson natural-neighbour area weighting.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$natural_neighbour_interpolation(...)
 }
 
 wbw_natural_neighbour_interpolation <- function(...) {
-  # Interpolates a raster from point samples using a Delaunay-neighbour weighted scheme.
+  # Interpolates a raster from point samples using true Sibson natural-neighbour area weighting.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$natural_neighbour_interpolation(...)
 }

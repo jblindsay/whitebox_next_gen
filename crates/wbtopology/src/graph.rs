@@ -1,6 +1,6 @@
 //! Topology graph utilities built from noded linework.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::geom::{Coord, LineString};
 use crate::noding::{node_linestrings, node_linestrings_with_options, NodingOptions};
@@ -67,12 +67,20 @@ impl TopologyGraph {
         Self::build_from_noded(noded, eps)
     }
 
+    /// Build a topology graph from already-noded linestring segments.
+    ///
+    /// This avoids re-running noding when callers have already produced
+    /// two-point noded segments under explicit options.
+    pub fn from_noded_linestrings(lines: &[LineString], epsilon: f64) -> Self {
+        let eps = normalized_eps(epsilon);
+        Self::build_from_noded(lines.to_vec(), eps)
+    }
+
     fn build_from_noded(noded: Vec<LineString>, eps: f64) -> Self {
 
         let mut nodes = Vec::<GraphNode>::new();
         let mut edges = Vec::<DirectedEdge>::new();
         let mut node_index = HashMap::<NodeKey, usize>::new();
-        let mut segment_keys = HashSet::<(usize, usize)>::new();
 
         for ls in &noded {
             if ls.coords.len() != 2 {
@@ -85,11 +93,6 @@ impl TopologyGraph {
             let b_id = get_or_insert_node(b, eps, &mut node_index, &mut nodes);
 
             if a_id == b_id {
-                continue;
-            }
-
-            let key = if a_id < b_id { (a_id, b_id) } else { (b_id, a_id) };
-            if !segment_keys.insert(key) {
                 continue;
             }
 
@@ -399,4 +402,42 @@ fn signed_area(coords: &[Coord]) -> f64 {
         s += a.x * b.y - b.x * a.y;
     }
     0.5 * s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn seg(ax: f64, ay: f64, bx: f64, by: f64) -> LineString {
+        LineString::new(vec![Coord::xy(ax, ay), Coord::xy(bx, by)])
+    }
+
+    #[test]
+    fn extracts_single_bounded_face_for_square_cycle() {
+        let lines = vec![
+            seg(0.0, 0.0, 10.0, 0.0),
+            seg(10.0, 0.0, 10.0, 10.0),
+            seg(10.0, 10.0, 0.0, 10.0),
+            seg(0.0, 10.0, 0.0, 0.0),
+        ];
+
+        let graph = TopologyGraph::from_linestrings(&lines, 1.0e-9);
+        let rings = graph.extract_bounded_face_rings(1.0e-9);
+        assert_eq!(rings.len(), 1, "expected one bounded face for a simple square cycle");
+    }
+
+    #[test]
+    fn geos_parity_preserve_coincident_segment_multiplicity() {
+        let lines = vec![
+            seg(0.0, 0.0, 10.0, 0.0),
+            seg(0.0, 0.0, 10.0, 0.0),
+        ];
+
+        let graph = TopologyGraph::from_linestrings(&lines, 1.0e-9);
+        assert_eq!(
+            graph.edge_count(),
+            2,
+            "coincident source segments should remain distinct graph edges for correct depth-delta accumulation"
+        );
+    }
 }

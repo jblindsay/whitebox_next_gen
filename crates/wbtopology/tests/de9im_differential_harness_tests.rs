@@ -109,6 +109,15 @@ fn load_specs() -> Vec<CaseSpec> {
     }
 
     assert!(!out.is_empty(), "DE-9IM fixture file contained no cases");
+    let known_diff_count = out
+        .iter()
+        .filter(|spec| spec.parity_status == "known_diff")
+        .count();
+    assert_eq!(
+        known_diff_count, 0,
+        "DE-9IM fixture unexpectedly contains {} known_diff case(s); either fix parity or intentionally relax this guard",
+        known_diff_count
+    );
     out
 }
 
@@ -142,6 +151,15 @@ fn load_precision_specs() -> Vec<PrecisionCaseSpec> {
     }
 
     assert!(!out.is_empty(), "DE-9IM precision fixture file contained no cases");
+    let known_diff_count = out
+        .iter()
+        .filter(|spec| spec.parity_status == "known_diff")
+        .count();
+    assert_eq!(
+        known_diff_count, 0,
+        "DE-9IM precision fixture unexpectedly contains {} known_diff case(s); either fix parity or intentionally relax this guard",
+        known_diff_count
+    );
     out
 }
 

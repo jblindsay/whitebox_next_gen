@@ -1,0 +1,25 @@
+{
+  "type": "Topology",
+  "objects": {
+    "layer": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "id": 1,
+          "properties": {"name": "forward"},
+          "geometry": {"type": "LineString", "arcs": [0]}
+        },
+        {
+          "type": "Feature",
+          "id": 2,
+          "properties": {"name": "reverse"},
+          "geometry": {"type": "LineString", "arcs": [-1]}
+        }
+      ]
+    }
+  },
+  "arcs": [
+    [[0, 0], [2, 1], [4, 2]]
+  ]
+}

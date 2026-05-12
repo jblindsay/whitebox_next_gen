@@ -1,8 +1,13 @@
 # vector buffer_vector: Postmortem and Future Roadmap
 
 **Date:** 2026-05-07  
-**Status:** Suspended — tool hidden from public APIs pending architectural rewrite  
+**Status:** Suspended — re-hidden from public frontends on 2026-05-11 pending a proven architectural rewrite  
 **Author:** Development session notes
+
+**Latest Audit Delta (2026-05-11):**
+- Confirmed and fixed one systemic graph issue: coincident undirected segment multiplicity was being collapsed during graph build.
+- Graph multiplicity GEOS/JTS parity probe now passes as an active (non-ignored) test.
+- Remaining parity divergences are narrowed to downstream stages (overlay overlap area loss and BufferOp duplicate-coincident-line dissolve mismatch).
 
 ---
 
@@ -123,94 +128,161 @@ of many orders of magnitude.
 In hindsight, the signal was always there: GEOS's dissolve cost is 0.32 s more than non-dissolve on
 this dataset. That near-zero marginal cost of dissolving is only possible if dissolve is not an
 independent step — it must be inherent to the topology build. We interpreted the GEOS source code
-correctly multiple times during audits, but kept returning to incremental patches of the existing
-union pipeline rather than committing to the necessary architectural break.
+correctly multiple times during audits, and **a GEOS-like face-walk implementation was attempted in
+2026-05 modeled directly on GEOS's BufferOp architecture**. This attempt also failed with the same
+signature problems: performance degradation (15–90s vs expected <2s) and inaccurate output.
+
+This indicates the problem is not architectural misunderstanding. Instead, it points to a deeper
+issue in graph construction, face labeling, or ring assembly that affects even a correctly-modeled
+approach. The fact that four independent implementations (cascaded union, connected-component
+decomposition, line fast path, and GEOS-like face-walk) all produced identical failure signatures
+suggests either:
+1. A systematic bug in wbtopology's graph or noding primitives
+2. A subtle incompleteness in the algorithm design that survives correct architectural modeling
+3. An implementation detail that silently corrupts output in a way that is hard to debug without
+   side-by-side GEOS reference traces
+
+### 2026-05-11 Audit Update (GEOS/JTS-Parity Deep Dive)
+
+Follow-up parity probes were added and run across `graph`, `noding`, `buffer_op`, and `overlay`.
+One previously suspected systemic issue is now confirmed:
+
+- **Confirmed and fixed:** graph build was collapsing coincident undirected segment multiplicity.
+   This violated GEOS/JTS-style depth accounting assumptions. The deduplication logic was removed,
+   and a parity test for coincident multiplicity now passes as an active (non-ignored) test.
+
+Subsequent fixes in the same audit cycle addressed the initially failing parity probes:
+
+- **Resolved:** overlay unary union parity fixtures (touching/disjoint/overlap/containment/partial-overlap)
+   now pass and have been promoted from ignored to active regression tests.
+- **Resolved:** BufferOp duplicate coincident source-line area parity now passes and has been promoted
+   from ignored to active regression tests.
+
+Interpretation: this is no longer just a "known divergence" state. Multiple concrete graph/overlay/buffer
+defects were identified and fixed under GEOS/JTS-oriented probes. The vector pipeline is materially more
+trustworthy than at suspension time, but performance parity and broader real-world benchmarking still need
+separate validation before any frontend re-exposure decision.
 
 ---
 
-## The Path Forward
+## The Path Forward: Two Remaining Options
 
-The only fix that will work is a from-scratch `BufferOp` implementation in `wbtopology` modelled
-directly on GEOS's architecture. This is a non-trivial but well-understood piece of computational
-geometry.
+The GEOS-like rewrite approach was attempted and failed to produce correct output. Two paths remain:
 
-### High-Level Design
+### Option A: Deep Debugging of Graph/Noding Primitives
 
-```
-BufferOp::run(features, distance, options) -> Vec<TopoPolygon>
-  1. Curve generation (parallel, per feature)
-     - For each feature geometry, generate raw offset linework (open curves, no polygon closing)
-     - Cap and join styles applied here
-     - Output: Vec<TopoLineString> (all features combined)
+The GEOS-like attempt failed at the face-walk stage (15–90s, inaccurate output). Before abandoning
+the vector approach entirely, investigate whether wbtopology's graph or noder has subtle bugs or
+incompleteness that cascade into corrupted output.
 
-  2. Global noding
-     - Run MCIndexNoder (or equivalent snap-rounding noder) over ALL curves at once
-     - Output: Vec<TopoLineString> (noded, fully split at intersections)
+**Required work:**
+- Add extensive test coverage comparing wbtopology's noding output against GEOS's noding on identical input
+- Trace face-walk logic with actual geometric data, not just algorithm flow
+- Validate that half-edge graph construction is correct under all ring topology scenarios
+- Compare BufferSubgraph face-labeling logic against GEOS reference traces
 
-  3. Planar graph construction
-     - Build directed half-edge graph from noded linework
-     - Output: PlanarGraph
+**Risks:**
+- May consume 5–10 days of careful debugging without guarantee of success
+- If bugs are found and fixed, may still not achieve <2s performance due to architectural differences
+- Even with resolved parity probes, latent edge cases may remain in complex real-world topology workloads
+   not yet covered by differential fixture corpora
 
-  4. Subgraph labeling
-     - Traverse graph, label each face by buffer depth (inside/outside)
-     - For dissolve: faces with depth >= 1 are "inside"
-     - For non-dissolve: faces that belong to exactly one feature's buffer are "inside"
-     - Output: face labels on PlanarGraph
+**Worth pursuing only if:**
+- You have time for careful debugging and reference comparison against GEOS
+- You are committed to understanding why even a correctly-modeled approach failed
+- You want to preserve the "pure vector, exact geometry" path for future use
 
-  5. Ring extraction
-     - Walk outer boundary rings of "inside" faces
-     - Collect hole rings
-     - Output: Vec<TopoPolygon>
-```
+---
 
-### Key Prerequisite: MCIndexNoder in wbtopology
+## Alternative: Raster-Guided Vector Buffering
 
-wbtopology already has a snap-rounding noder. Whether it is efficient enough at GEOS MCIndexNoder
-scale (millions of segments) needs to be validated. MCIndexNoder uses an STR-tree to find candidate
-crossing pairs before doing exact intersection tests — this is the O(N log N) noding that makes
-GEOS fast.
+Discovered 2026-05-11 during architectural reflection: a hybrid raster/vector approach may be viable
+and offers certain advantages over a pure GEOS-like vector rewrite.
 
-### Key Prerequisite: Face Labeling / BufferSubgraph
+### Concept
 
-This is the most novel piece relative to current wbtopology capability. GEOS uses `EdgeRing` traversal
-with `depthDelta` tagging to propagate inside/outside labels across all faces. This logic needs to
-be implemented cleanly in wbtopology's graph module before `BufferOp` can be completed.
+1. Rasterize input geometries at high DPI within bounding box
+2. Compute distance transform via separable convolution
+3. Threshold at buffer distance → binary raster
+4. Run connectivity analysis to identify holes
+5. Extract boundary using marching squares → vector rings
+6. Return as MultiPolygon with holes
 
-### Scope Estimate
+### Why This Works
 
-This is a 3–5 day focused implementation task assuming:
-- The existing noder is reusable with minor extensions
-- The planar graph (`wbtopology::graph`) is extended with face-label traversal
-- The `BufferOp` orchestration layer is built on top
+| Aspect | Pure Vector (current) | GEOS-like Rewrite | Raster-Guided Hybrid |
+|--------|----------------------|-------------------|----------------------|
+| Non-dissolve buffers | ✅ Works | ✅ Works | ✅ Works |
+| Dissolve/union | ❌ Fails (O(N²)) | ✅ Works (O(N·k)) | ✅ Works (O(pixels)) |
+| Hole detection | ❌ Complex | ✅ Via face labels | ✅ Trivial (connectivity) |
+| Exactness | ✅ Exact | ✅ Exact | ⚠️ Bounded discretization |
+| Performance | ❌ Slow | ✅ Fast | ✅ Fast |
 
-It should not be started piecemeal. It should be designed in one sitting and implemented front-to-back
-before testing, because partial states of the pipeline are not testable in isolation.
+### Why Raster-Guided Is Now the Stronger Path
 
-### Recommended Starting Point
+Given that even a correctly-modeled GEOS-like implementation failed with performance and correctness
+issues, the raster-guided approach has distinct advantages:
 
-Read the following GEOS source files before writing a single line of Rust:
-- `src/operation/buffer/BufferOp.cpp` — top-level orchestration
-- `src/operation/buffer/BufferBuilder.cpp` — curve generation → noding → graph build
-- `src/operation/buffer/BufferSubgraph.cpp` — face labeling
-- `src/operation/buffer/OffsetCurveBuilder.cpp` — the actual geometry generation
+1. **Avoids the tricky part**: Graph construction, face-labeling, and ring assembly were the failure
+   point across all vector attempts. The raster approach sidesteps these entirely.
 
-These four files contain the complete GEOS buffer algorithm. Everything else (cap styles, join styles,
-arc approximation) is detail that can be adapted from our existing `constructive.rs` implementation.
+2. **Independently testable pieces**:
+   - Distance transform (decades-old image-processing standard)
+   - Connectivity analysis (textbook graph algorithm)
+   - Marching squares (well-understood boundary extraction)
+   
+   Each component can be validated against reference implementations without depending on the others.
+
+3. **Clearer error diagnosis**: If output is wrong, you can inspect the distance raster, connectivity
+   labels, and extracted boundaries independently. Graph corruption in a half-edge implementation is
+   much harder to debug.
+
+4. **Precision is explicit**: DPI-to-error trade-off is measurable and configurable. No hidden precision
+   thresholds or algorithm-dependent robustness factors. Users can reason about DPI choices the same
+   way they reason about coordinate precision in any GIS workflow.
+
+### Recommendation
+
+**Raster-guided approach is now the priority path** for future buffer implementation because:
+- Four independent vector approaches all failed with identical signatures
+- The GEOS-like architecture, while correct in design, also produced corrupted output (15–90s, inaccurate)
+- The raster approach achieves the same goals (dissolve, hole detection, exact geometry) with simpler,
+  independently-testable components
+- No hidden precision thresholds: DPI parameter is explicit, measurable, and under user control
+
+The raster approach is not a compromise—it's the clearer engineering solution given what we've learned.
+
+That said, the 2026-05-11 parity audit reduced uncertainty: one systemic graph bug was found and
+corrected. If vector buffering is revisited, continue from the current GEOS/JTS differential harnesses
+rather than restarting from first principles.
+
 
 ---
 
 ## Current Status of the Tool
 
 The `buffer_vector` tool remains registered in the wbtools_oss registry and all existing code is
-preserved. It has been **hidden from the public-facing APIs**:
+preserved. It has been **removed again from the public-facing frontends** after the 2026-05-11
+reopen attempt failed to produce trustworthy output:
 
 - Removed from `wbw_python/tool_taxonomy.toml` (nested accessor `wbe.vector.geometry_processing.buffer_vector` no longer exists)
 - Removed explicit Python method from `wb_environment.rs`
-- Commented out in both R generated wrapper files
-- Removed from QGIS plugin recipes and tool taxonomy
+- Removed from Python `.pyi` stubs and frontend docs/examples
+- Removed from both R generated wrapper files and R manual examples
+- Removed from QGIS plugin recipes/help and tool taxonomy
 
-The underlying implementation can be restored and tested internally at any time. When the `BufferOp`
-rewrite is complete, the existing non-dissolve path may be reused as a fallback, or replaced entirely.
+The underlying implementation remains available only for internal investigation. It should not be
+re-exposed until there is a proven, reference-validated implementation with correct output on real
+datasets.
+
+### Reopen Reminder
+
+If vector buffering is revisited in the future, treat it as a ground-up algorithm problem rather than
+an incremental patch task. Do not re-open the frontend surface until there is:
+
+- a reference comparison against GEOS/JTS on real datasets,
+- output validation beyond visual spot checks, and
+- a reasoned explanation for why the architecture is expected to be correct before public exposure.
 
 ---
 
@@ -232,3 +304,21 @@ rewrite is complete, the existing non-dissolve path may be reused as a fallback,
 4. **The existing correctness work is not wasted.** Offset curve generation, cap/join styles, arc
    approximation, and the non-dissolve per-feature path are all correct and will be reused directly
    in the `BufferOp` design.
+5. **Architectural correctness is not sufficient for implementation success.** Understanding GEOS's
+   algorithm correctly does not guarantee a correct Rust implementation. The identical failure signatures
+   across different approaches (cascaded union, connected-component decomposition, line fast path, and
+   GEOS-like face-walk) suggest the bugs may be in subtle areas (ordering of operations, coordinate
+   precision interactions, or edge cases in noding) that survive high-level architectural reviews.
+
+6. **Empirical data trumps theoretical analysis.** The GEOS dissolve cost of 0.32s (near-zero marginal)
+   was correctly interpreted as "dissolve is not a separate step." But this observation alone did not
+   lead to a working implementation. The actual problem revealed by four failures is deeper than
+   architectural choice.
+
+---
+
+## Sprint Restart Pointer (2026-05-12)
+
+For the next wbtopology hardening session, use this file as the canonical restart handoff:
+
+- `crates/wbtopology/docs/WBTOPOLOGY_SPRINT_RESTART_STARTING_POINT_2026-05-12.md`

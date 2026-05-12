@@ -1,0 +1,6 @@
+# name|eps|expected_segments|junction|lines
+# junction format: x:y
+# lines format: x1:y1,x2:y2[,...];x1:y1,x2:y2[,...]
+shallow_cross_micro_offset|1e-9|4|50.0:0.0005|0.0:0.0,100.0:0.001;0.0:0.001,100.0:0.0
+near_coincident_t_junction_micro|1e-9|7|25.0:0.0|0.0:0.0,50.0:0.0;0.0:1e-8,50.0:1e-8;25.0:-1.0,25.0:1.0
+shallow_cross_large_coordinates|1e-9|4|1000050000.0:1000000005.0|1000000000.0:1000000000.0,1000100000.0:1000000010.0;1000000000.0:1000000010.0,1000100000.0:1000000000.0

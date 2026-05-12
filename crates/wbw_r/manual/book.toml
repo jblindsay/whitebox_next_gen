@@ -8,3 +8,4 @@ src = "src"
 [output.html]
 default-theme = "light"
 git-repository-url = ""
+mathjax-support = true

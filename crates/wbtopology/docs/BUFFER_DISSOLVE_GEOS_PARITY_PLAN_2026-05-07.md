@@ -3,6 +3,13 @@
 ## Objective
 Close the extreme performance gap for dense line-network buffering and dissolve workloads by removing structural work amplification in wbtopology.
 
+## Current Status (2026-05-11)
+- Graph multiplicity parity issue is fixed and covered by an active test.
+- Overlay GEOS/JTS parity fixture scaffold (touching, disjoint, overlap, containment, partial-overlap) is passing and active.
+- BufferOp duplicate-coincident-line parity probe is passing and active.
+- Strict buffer parity harness (`buffer_geos_parity_harness`) is currently passing for the fixture corpus after holed round-positive path correction.
+- Full `wbtopology` suite still has baseline failures in `natural_neighbour` tests; these are tracked separately from buffer/overlay parity.
+
 Target context from latest user benchmark:
 - QGIS/GEOS: about 1.48s
 - wbtopology dissolve: killed after more than 10 minutes

@@ -441,14 +441,14 @@ wbe <- wbw_make_session()
 roads <- wbw_read_vector('roads.gpkg')
 
 # Omit output — result is memory-backed automatically
-buffered <- wbe$buffer_vector(input = roads$path, distance = 10.0)
-cat(buffered$path, '\n')  # memory://vector/...
+centroids <- wbe$centroid_vector(input = roads$path)
+cat(centroids$path, '\n')  # memory://vector/...
 
 # Persist when ready
-wbw_write_vector(buffered, 'roads_buffer.gpkg')
+wbw_write_vector(centroids, 'roads_centroids.gpkg')
 
 # Or supply output explicitly to write directly to disk
-wbe$buffer_vector(input = roads$path, distance = 10.0, output = 'roads_buffer_direct.gpkg')
+wbe$centroid_vector(input = roads$path, output = 'roads_centroids_direct.gpkg')
 ```
 
 ### Vector Write Option Reference

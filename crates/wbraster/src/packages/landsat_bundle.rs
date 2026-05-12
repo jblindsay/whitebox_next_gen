@@ -39,6 +39,28 @@ pub enum LandsatProcessingLevel {
     Unknown,
 }
 
+/// Landsat reflectance calibration coefficients for one band.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LandsatReflectanceCoefficients {
+    /// Reflectance multiplicative coefficient (`REFLECTANCE_MULT_BAND_*`).
+    pub mult: f64,
+    /// Reflectance additive coefficient (`REFLECTANCE_ADD_BAND_*`).
+    pub add: f64,
+}
+
+/// Landsat thermal calibration constants for one band.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LandsatThermalConstants {
+    /// Radiance multiplicative coefficient (`RADIANCE_MULT_BAND_*`).
+    pub radiance_mult: f64,
+    /// Radiance additive coefficient (`RADIANCE_ADD_BAND_*`).
+    pub radiance_add: f64,
+    /// Planck K1 constant (`K1_CONSTANT_BAND_*`).
+    pub k1: f64,
+    /// Planck K2 constant (`K2_CONSTANT_BAND_*`).
+    pub k2: f64,
+}
+
 /// Parsed Landsat Collection scene bundle.
 #[derive(Debug, Clone)]
 pub struct LandsatBundle {
@@ -212,6 +234,53 @@ impl LandsatBundle {
             ))
         })?;
         Raster::read(p)
+    }
+
+    /// Returns reflectance coefficients for a specific Landsat band number.
+    pub fn reflectance_coefficients_for_band(
+        &self,
+        band_number: usize,
+    ) -> Result<LandsatReflectanceCoefficients> {
+        let mtl_text = fs::read_to_string(&self.mtl_path)?;
+        let kv = parse_mtl_key_values(&mtl_text);
+        let rk = |name: &str| format!("{}_{}", name, band_number);
+
+        let mult = get_number(&kv, &[&rk("REFLECTANCE_MULT_BAND")]).ok_or_else(|| {
+            RasterError::MissingField(rk("REFLECTANCE_MULT_BAND"))
+        })?;
+        let add = get_number(&kv, &[&rk("REFLECTANCE_ADD_BAND")]).ok_or_else(|| {
+            RasterError::MissingField(rk("REFLECTANCE_ADD_BAND"))
+        })?;
+
+        Ok(LandsatReflectanceCoefficients { mult, add })
+    }
+
+    /// Returns thermal constants for a specific Landsat thermal band number.
+    pub fn thermal_constants_for_band(
+        &self,
+        band_number: usize,
+    ) -> Result<LandsatThermalConstants> {
+        let mtl_text = fs::read_to_string(&self.mtl_path)?;
+        let kv = parse_mtl_key_values(&mtl_text);
+        let rk = |name: &str| format!("{}_{}", name, band_number);
+
+        let radiance_mult = get_number(&kv, &[&rk("RADIANCE_MULT_BAND")]).ok_or_else(|| {
+            RasterError::MissingField(rk("RADIANCE_MULT_BAND"))
+        })?;
+        let radiance_add = get_number(&kv, &[&rk("RADIANCE_ADD_BAND")]).ok_or_else(|| {
+            RasterError::MissingField(rk("RADIANCE_ADD_BAND"))
+        })?;
+        let k1 = get_number(&kv, &[&rk("K1_CONSTANT_BAND")])
+            .ok_or_else(|| RasterError::MissingField(rk("K1_CONSTANT_BAND")))?;
+        let k2 = get_number(&kv, &[&rk("K2_CONSTANT_BAND")])
+            .ok_or_else(|| RasterError::MissingField(rk("K2_CONSTANT_BAND")))?;
+
+        Ok(LandsatThermalConstants {
+            radiance_mult,
+            radiance_add,
+            k1,
+            k2,
+        })
     }
 }
 
@@ -583,5 +652,40 @@ END
                 .chain(bundle.list_aux_keys()),
             "Landsat canonical key",
         );
+    }
+
+    #[test]
+    fn exposes_reflectance_and_thermal_coefficients_for_band() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path().join("LC09_COEFF_BUNDLE");
+        fs::create_dir_all(&root).expect("create root");
+
+        let mtl = r#"
+SPACECRAFT_ID = "LANDSAT_9"
+PROCESSING_LEVEL = "L1TP"
+REFLECTANCE_MULT_BAND_2 = 0.00002
+REFLECTANCE_ADD_BAND_2 = -0.1
+RADIANCE_MULT_BAND_10 = 0.0003342
+RADIANCE_ADD_BAND_10 = 0.1
+K1_CONSTANT_BAND_10 = 774.8853
+K2_CONSTANT_BAND_10 = 1321.0789
+"#;
+        fs::write(root.join("LC09_TEST_MTL.txt"), mtl).expect("write mtl");
+        fs::write(root.join("LC09_TEST_B2.TIF"), b"").expect("write band");
+
+        let bundle = LandsatBundle::open(&root).expect("open landsat bundle");
+        let refl = bundle
+            .reflectance_coefficients_for_band(2)
+            .expect("reflectance coefficients");
+        assert_eq!(refl.mult, 0.00002);
+        assert_eq!(refl.add, -0.1);
+
+        let therm = bundle
+            .thermal_constants_for_band(10)
+            .expect("thermal constants");
+        assert_eq!(therm.radiance_mult, 0.0003342);
+        assert_eq!(therm.radiance_add, 0.1);
+        assert_eq!(therm.k1, 774.8853);
+        assert_eq!(therm.k2, 1321.0789);
     }
 }

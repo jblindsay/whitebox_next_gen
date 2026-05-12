@@ -6,6 +6,9 @@ use chrono::{Datelike, Timelike};
 mod nibble_sieve;
 pub use nibble_sieve::{NibbleTool, SieveTool};
 
+mod osm_download;
+pub use osm_download::DownloadOsmVectorTool;
+
 
 fn max_distance_squared(
     (x1, y1): (f64, f64),

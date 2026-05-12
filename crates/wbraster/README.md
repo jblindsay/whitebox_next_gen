@@ -209,6 +209,7 @@ println!("tile: {:?}", pkg.tile_id);
 println!("solar zenith: {:?}°", pkg.mean_solar_zenith_deg);
 println!("cloud cover: {:?}%", pkg.cloud_coverage_assessment);
 println!("processing baseline: {:?}", pkg.processing_baseline);
+println!("reflectance scale factor: {:?}", pkg.reflectance_scale_factor());
 println!("bands: {:?}", pkg.list_band_keys());
 println!("qa layers: {:?}", pkg.list_qa_keys());
 println!("aux layers: {:?}", pkg.list_aux_keys()); // AOT, WVP, TCI (L2A)
@@ -358,6 +359,24 @@ if let Some(qa_pixel) = bundle.qa_path("QA_PIXEL") {
 
 let red = bundle.read_band("B4")?;
 let qa = bundle.read_qa_layer("QA_PIXEL")?;
+
+// Radiometric and thermal constants used by downstream TOA/LST workflows.
+if let Some(coeffs) = bundle.reflectance_coefficients_for_band(4) {
+  println!(
+    "B4 reflectance coeffs: mult={} add={}",
+    coeffs.mult,
+    coeffs.add
+  );
+}
+if let Some(thermal) = bundle.thermal_constants_for_band(10) {
+  println!(
+    "B10 thermal constants: k1={} k2={} radiance_mult={} radiance_add={}",
+    thermal.k1,
+    thermal.k2,
+    thermal.radiance_mult,
+    thermal.radiance_add
+  );
+}
 ```
 
 ### ICEYE Bundle Support

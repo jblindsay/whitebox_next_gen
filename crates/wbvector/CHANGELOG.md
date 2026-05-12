@@ -24,6 +24,12 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 	`VectorReprojectOptions::with_area_of_use_warning(bool)` to emit non-fatal
 	warnings when sampled layer extent points appear outside source/destination
 	CRS area of use definitions during vector reprojection.
+- Initial TopoJSON (`.topojson`) reader and writer module (`wbvector::topojson`) with dependency-light parsing and serialization.
+- TopoJSON routing in `VectorFormat` detection and crate-level sniffed read/write dispatch.
+- TopoJSON baseline unit coverage for parse and read/write roundtrip behavior.
+- `TopoJsonWriteOptions` with optional quantization (`transform` + delta-encoded arcs) and optional root `bbox` emission via `topojson::write_with_options` and `topojson::to_string_with_options`.
+- Expanded TopoJSON interop fixtures and tests covering object-map variants, foreign members, reversed arcs, and quantized writer roundtrip tolerance.
+- Added TopoJSON fixture provenance manifest (`tests/fixtures/topojson_io/provenance_manifest.json`) and a test guard that enforces manifest/fixture-set parity.
 
 ## [0.1.2] - 2026-05-07
 

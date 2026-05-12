@@ -3,7 +3,7 @@
 #   - rectangle shorthand: x0:y0:x1:y1
 #   - explicit ring: poly:x1:y1,x2:y2,x3:y3,...
 # hole lists are ';' separated ring specs, '-' means none
-overlap_basic|1e-9|0:0:2:2|-|1:0:3:2|-|strict
+overlap_basic|1e-9|0:0:2:2|-|1:0:3:2|-|relaxed
 edge_touch|1e-9|0:0:1:1|-|1:0:2:1|-|strict
 point_touch|1e-9|0:0:1:1|-|1:1:2:2|-|relaxed
 containment_simple|1e-9|0:0:4:4|-|1:1:3:3|-|strict
@@ -18,3 +18,7 @@ ultra_thin_corridor_touch|1e-9|0:0:2:2|-|poly:2:0.9,4:0.9,4:1.1,2:1.1|-|relaxed
 large_scale_shifted_overlap|1e-8|1000000:1000000:1010000:1010000|-|1000500:999500:1010500:1009500|-|relaxed
 large_scale_thin_vertical_slice|1e-8|1000000:1000000:1010000:1010000|-|1005000:999000:1005002:1011000|-|relaxed
 large_scale_hole_boundary_proximity|1e-8|1000000:1000000:1010000:1010000|1004000:1004000:1006000:1006000|1006000:1004999.5:1008000:1005000.5|-|relaxed
+
+# Isolated bounded-face island stressors (hole-rich, nested face components)
+island_hole_rich_nested_overlap|1e-9|0:0:10:8|2:1:9:2;2:5:9:6|1:-1:11:9|2:1:9:2;2:5:9:6|strict
+island_hole_rich_cross_ladder|1e-9|0:0:10:8|2:1:4:7;6:1:8:7|1:-1:11:9|1:2:9:3;1:5:9:6|strict

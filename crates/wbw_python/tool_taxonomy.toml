@@ -67,6 +67,9 @@ category = "remote_sensing"
 subcategory = "change_detection"
 tools = [
   "change_vector_analysis",
+  "image_difference_change_detection",
+  "pca_based_change_detection",
+  "post_classification_change",
   "remote_sensing_change_detection",
   "time_series_change_intelligence",
   "write_function_memory_insertion",
@@ -78,6 +81,28 @@ subcategory = "radiometric_correction"
 tools = [
   "brdf_surface_reflectance_consistency",
   "correct_vignetting",
+  "dark_object_subtraction",
+  "dn_to_toa_reflectance",
+]
+
+[[mapping]]
+category = "remote_sensing"
+subcategory = "thermal_emissivity"
+tools = [
+  "land_surface_temperature_single_channel",
+  "land_surface_temperature_split_window",
+  "ndvi_based_emissivity",
+]
+
+[[mapping]]
+category = "remote_sensing"
+subcategory = "spectral_analytics"
+tools = [
+  "continuum_removal",
+  "linear_spectral_unmixing",
+  "minimum_noise_fraction",
+  "spectral_angle_mapper",
+  "spectral_library_matching",
 ]
 
 [[mapping]]
@@ -178,6 +203,8 @@ tools = [
 category = "remote_sensing"
 subcategory = "sar"
 tools = [
+  "cloude_pottier_decomposition",
+  "freeman_durden_decomposition",
   "sar_coregistration",
   "sar_analysis_readiness",
   "sar_interferogram_coherence",
@@ -367,7 +394,6 @@ tools = [
 category = "vector"
 subcategory = "geometry_processing"
 tools = [
-  "buffer_vector",
   "centroid_vector",
   "concave_hull",
   "densify_features",
@@ -453,6 +479,13 @@ tools = [
   "parcel_and_land_fabric_topology_compliance_workflow",
   "emergency_scenario_routing_and_accessibility_simulator",
   "market_access_and_site_intelligence_workflow",
+]
+
+[[mapping]]
+category = "vector"
+subcategory = "online_data"
+tools = [
+  "download_osm_vector",
 ]
 
 [[mapping]]

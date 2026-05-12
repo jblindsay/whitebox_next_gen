@@ -1,0 +1,26 @@
+{
+  "type": "Topology",
+  "objects": {
+    "layer": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "id": "n-1",
+          "properties": {"name": "missing"},
+          "geometry": null
+        },
+        {
+          "type": "Feature",
+          "id": "n-2",
+          "properties": {"name": "present"},
+          "geometry": {
+            "type": "Point",
+            "coordinates": [1.5, 2.5]
+          }
+        }
+      ]
+    }
+  },
+  "arcs": []
+}

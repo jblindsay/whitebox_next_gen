@@ -163,8 +163,10 @@ pub use packages::sensor_bundle::{
 };
 pub use packages::landsat_bundle::{
 	LandsatBundle,
+	LandsatReflectanceCoefficients,
 	LandsatMission,
 	LandsatProcessingLevel,
+	LandsatThermalConstants,
 };
 pub use packages::iceye_bundle::IceyeBundle;
 pub use packages::dimap_bundle::DimapBundle;

@@ -23,6 +23,8 @@ assembling a workflow from isolated snippets.
 
 - `crates/wbw_python/examples/vector_attributes_harmonized_api.py` - schema inspection and attribute updates
 - `crates/wbw_python/examples/vector_multifile_write_demo.py` - format-aware vector export behavior
+- `crates/wbw_python/examples/vector_topojson_roundtrip.py` - TopoJSON read/write roundtrip workflow
+- `crates/wbw_python/examples/osm_download_vector.py` - OpenStreetMap download workflow via Overpass API
 
 ## Lidar Workflows
 

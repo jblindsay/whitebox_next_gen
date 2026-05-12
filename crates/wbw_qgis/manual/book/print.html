@@ -505,10 +505,15 @@ environment is explicitly configured for Pro-enabled integration testing.</p>
 <h2 id="raster-formats"><a class="header" href="#raster-formats">Raster Formats</a></h2>
 <p>Raster support in Whitebox is provided by <code>wbraster</code>.</p>
 <div class="table-wrapper"><table><thead><tr><th>Format</th><th>Extension(s)</th><th style="text-align: center">Read</th><th style="text-align: center">Write</th><th>Notes</th></tr></thead><tbody>
+<tr><td>DTED</td><td><code>.dt0</code>, <code>.dt1</code>, <code>.dt2</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>DTED 0/1/2 elevation; WGS-84 geographic only</td></tr>
 <tr><td>ENVI HDR Labelled</td><td><code>.hdr</code> + sidecar data</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Multi-band (<code>BSQ</code> / <code>BIL</code> / <code>BIP</code>)</td></tr>
 <tr><td>ER Mapper</td><td><code>.ers</code> + data</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Hierarchical header</td></tr>
+<tr><td>ERDAS IMAGINE (HFA)</td><td><code>.img</code></td><td style="text-align: center">Yes</td><td style="text-align: center">No</td><td>Read-only MVP; RLC compression supported</td></tr>
 <tr><td>Esri ASCII Grid</td><td><code>.asc</code>, <code>.grd</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Handles <code>xllcorner</code> and <code>xllcenter</code></td></tr>
 <tr><td>Esri Binary Grid</td><td>workspace dir / <code>.adf</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Single-band float32, big-endian</td></tr>
+<tr><td>Esri Float Grid</td><td><code>.flt</code>, <code>.hdr</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Single-band float grid with header</td></tr>
+<tr><td>JPEG + World File</td><td><code>.jpg</code>, <code>.jpeg</code> + <code>.jgw</code>/<code>.wld</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Non-rotated georeferencing</td></tr>
+<tr><td>PNG + World File</td><td><code>.png</code> + <code>.pgw</code>/<code>.wld</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Non-rotated georeferencing</td></tr>
 <tr><td>GeoTIFF / BigTIFF / COG</td><td><code>.tif</code>, <code>.tiff</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Stripped/tiled GeoTIFF, BigTIFF, COG</td></tr>
 <tr><td>GeoPackage Raster (Phase 4)</td><td><code>.gpkg</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Multi-band tiled raster</td></tr>
 <tr><td>GRASS ASCII Raster</td><td><code>.asc</code>, <code>.txt</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td><code>north/south/east/west</code>, <code>rows/cols</code> headers</td></tr>
@@ -518,6 +523,7 @@ environment is explicitly configured for Pro-enabled integration testing.</p>
 <tr><td>SAGA GIS Binary</td><td><code>.sgrd</code>, <code>.sdat</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>SAGA data types supported</td></tr>
 <tr><td>Surfer GRD</td><td><code>.grd</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>DSAA and DSRB</td></tr>
 <tr><td>Zarr v2/v3</td><td><code>.zarr</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>2D and 3D (<code>band,y,x</code>) chunked arrays</td></tr>
+<tr><td>XYZ ASCII Grid</td><td><code>.xyz</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Whitespace or comma-delimited X Y Z points</td></tr>
 </tbody></table>
 </div>
 <p>Notes:</p>
@@ -531,6 +537,7 @@ environment is explicitly configured for Pro-enabled integration testing.</p>
 <div class="table-wrapper"><table><thead><tr><th>Format</th><th style="text-align: center">Read</th><th style="text-align: center">Write</th><th>Notes</th></tr></thead><tbody>
 <tr><td>FlatGeobuf (<code>.fgb</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>High-performance binary interchange</td></tr>
 <tr><td>GeoJSON (<code>.geojson</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Web-friendly text format</td></tr>
+<tr><td>TopoJSON (<code>.topojson</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Topology-preserving JSON format</td></tr>
 <tr><td>GeoPackage (<code>.gpkg</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>SQLite container; multi-layer workflows</td></tr>
 <tr><td>GML (<code>.gml</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Standards-based XML exchange</td></tr>
 <tr><td>GPX (<code>.gpx</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>GPS tracks/routes/waypoints</td></tr>
@@ -2099,6 +2106,97 @@ errors before proceeding.</p>
 </tbody></table>
 </div>
 <hr />
+<h2 id="topojson-conversion-chain-qgis-interop"><a class="header" href="#topojson-conversion-chain-qgis-interop">TopoJSON Conversion Chain (QGIS Interop)</a></h2>
+<p>Use this workflow when you need to exchange shared-boundary vector data with
+web clients while keeping a GeoPackage working copy for analysis.</p>
+<h3 id="inputs-6"><a class="header" href="#inputs-6">Inputs</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>zones.gpkg</code></td><td>Polygon vector</td><td>Authoritative analysis dataset</td></tr>
+</tbody></table>
+</div>
+<h3 id="step-1--run-a-whitebox-vector-operation-and-emit-topojson"><a class="header" href="#step-1--run-a-whitebox-vector-operation-and-emit-topojson">Step 1 — Run a Whitebox vector operation and emit TopoJSON</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Vector Analysis →
+<code>Add Geometry Attributes</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input vector</td><td><code>zones.gpkg</code></td></tr>
+<tr><td>Units</td><td><code>Metres</code></td></tr>
+<tr><td>Output</td><td><code>zones_metrics.topojson</code></td></tr>
+</tbody></table>
+</div>
+<p>This confirms the plugin accepts <code>.topojson</code> output targets in a normal vector
+processing chain.</p>
+<h3 id="step-2--re-open-topojson-and-convert-back-to-geopackage"><a class="header" href="#step-2--re-open-topojson-and-convert-back-to-geopackage">Step 2 — Re-open TopoJSON and convert back to GeoPackage</a></h3>
+<ol>
+<li>Add <code>zones_metrics.topojson</code> to the QGIS project.</li>
+<li>Right-click the layer, then choose <strong>Export → Save Features As...</strong>.</li>
+<li>Set format to <strong>GeoPackage</strong> and save as <code>zones_metrics_roundtrip.gpkg</code>.</li>
+</ol>
+<h3 id="step-3--validate-roundtrip-integrity"><a class="header" href="#step-3--validate-roundtrip-integrity">Step 3 — Validate roundtrip integrity</a></h3>
+<p>Check these before publishing or reusing the roundtrip layer:</p>
+<ul>
+<li>Feature count matches source layer.</li>
+<li>Core attributes (e.g., ID fields and geometry metrics) are preserved.</li>
+<li>CRS is correctly populated on the roundtrip GeoPackage.</li>
+</ul>
+<h3 id="recommended-use-pattern"><a class="header" href="#recommended-use-pattern">Recommended use pattern</a></h3>
+<ul>
+<li>Keep <code>.gpkg</code> as the editable analysis master.</li>
+<li>Generate <code>.topojson</code> as interchange or web-delivery artifacts.</li>
+<li>Re-import to <code>.gpkg</code> for heavier downstream spatial analysis.</li>
+</ul>
+<h2 id="topojson-boundary-preserving-generalization-chain"><a class="header" href="#topojson-boundary-preserving-generalization-chain">TopoJSON Boundary-Preserving Generalization Chain</a></h2>
+<p>Use this chain when you need smaller delivery payloads while preserving shared
+boundary consistency during simplification.</p>
+<h3 id="inputs-7"><a class="header" href="#inputs-7">Inputs</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>admin_units.gpkg</code></td><td>Polygon vector</td><td>Shared boundaries between adjacent polygons</td></tr>
+</tbody></table>
+</div>
+<h3 id="step-1--simplify-and-emit-topojson"><a class="header" href="#step-1--simplify-and-emit-topojson">Step 1 — Simplify and emit TopoJSON</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Vector Analysis →
+<code>Simplify Features</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input vector</td><td><code>admin_units.gpkg</code></td></tr>
+<tr><td>Algorithm</td><td><code>Douglas-Peucker</code></td></tr>
+<tr><td>Tolerance</td><td><code>25.0</code> (adjust to target scale)</td></tr>
+<tr><td>Output</td><td><code>admin_units_simplified.topojson</code></td></tr>
+</tbody></table>
+</div>
+<h3 id="step-2--inspect-topology-consistency-in-qgis"><a class="header" href="#step-2--inspect-topology-consistency-in-qgis">Step 2 — Inspect topology consistency in QGIS</a></h3>
+<ol>
+<li>Add <code>admin_units_simplified.topojson</code> to the map.</li>
+<li>Inspect shared boundaries at high zoom for slivers/gaps.</li>
+<li>Validate feature count versus source before publication.</li>
+</ol>
+<h3 id="step-3--export-analysis-copy"><a class="header" href="#step-3--export-analysis-copy">Step 3 — Export analysis copy</a></h3>
+<p>Export to <code>admin_units_simplified.gpkg</code> for downstream joins/overlay work.</p>
+<h2 id="topojson-transport--enrichment-return-chain"><a class="header" href="#topojson-transport--enrichment-return-chain">TopoJSON Transport + Enrichment Return Chain</a></h2>
+<p>Use this chain when TopoJSON is used only for transport and you need to return
+to an analysis-grade format for attribute enrichment.</p>
+<h3 id="inputs-8"><a class="header" href="#inputs-8">Inputs</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>transport_in.topojson</code></td><td>Topology-preserving vector</td><td>Interchange input received from external system</td></tr>
+</tbody></table>
+</div>
+<h3 id="step-1--convert-transport-input-to-geopackage"><a class="header" href="#step-1--convert-transport-input-to-geopackage">Step 1 — Convert transport input to GeoPackage</a></h3>
+<ol>
+<li>Add <code>transport_in.topojson</code> to the project.</li>
+<li>Export as <code>transport_stage.gpkg</code>.</li>
+</ol>
+<h3 id="step-2--apply-enrichment-tools"><a class="header" href="#step-2--apply-enrichment-tools">Step 2 — Apply enrichment tools</a></h3>
+<p>Run Whitebox vector tools against <code>transport_stage.gpkg</code>:</p>
+<ul>
+<li><code>Add Geometry Attributes</code> for geometry metrics.</li>
+<li><code>Spatial Join</code> for contextual attribute enrichment.</li>
+<li><code>Near</code> for proximity attributes.</li>
+</ul>
+<h3 id="step-3--emit-deliverables"><a class="header" href="#step-3--emit-deliverables">Step 3 — Emit deliverables</a></h3>
+<p>Write two outputs:</p>
+<ul>
+<li><code>transport_enriched.gpkg</code> for analytic persistence.</li>
+<li><code>transport_enriched.topojson</code> for interchange/web handoff.</li>
+</ul>
+<hr />
 <h2 id="python-console-equivalent-5"><a class="header" href="#python-console-equivalent-5">Python Console Equivalent</a></h2>
 <pre><code class="language-python">import processing
 
@@ -2210,7 +2308,7 @@ increments only at equal-order confluences; Shreve is additive.</li>
 </ul>
 <hr />
 <h2 id="end-to-end-workflow-stream-network-ordering-and-connectivity"><a class="header" href="#end-to-end-workflow-stream-network-ordering-and-connectivity">End-to-End Workflow: Stream Network Ordering and Connectivity</a></h2>
-<h3 id="inputs-6"><a class="header" href="#inputs-6">Inputs</a></h3>
+<h3 id="inputs-9"><a class="header" href="#inputs-9">Inputs</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
 <tr><td><code>dem_conditioned.tif</code></td><td>GeoTIFF raster</td><td>Hydrologically conditioned DEM</td></tr>
 <tr><td><code>streams.tif</code></td><td>GeoTIFF raster</td><td>Binary stream raster from flow accumulation threshold</td></tr>
@@ -2387,7 +2485,7 @@ for example, aligning stationing to kilometre posts.</li>
 <h2 id="end-to-end-workflow-locating-inspection-events-along-a-road-network"><a class="header" href="#end-to-end-workflow-locating-inspection-events-along-a-road-network">End-to-End Workflow: Locating Inspection Events Along a Road Network</a></h2>
 <p>This workflow builds measure fields on a road network, then locates a set of
 field inspection points as events on their respective routes.</p>
-<h3 id="inputs-7"><a class="header" href="#inputs-7">Inputs</a></h3>
+<h3 id="inputs-10"><a class="header" href="#inputs-10">Inputs</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
 <tr><td><code>roads.shp</code></td><td>Polyline vector</td><td>Road centrelines, unique <code>ROUTE_ID</code> field</td></tr>
 <tr><td><code>inspections.csv</code></td><td>CSV table</td><td>Columns: <code>ROUTE_ID</code>, <code>CHAINAGE_M</code>, <code>CONDITION</code></td></tr>
@@ -2610,6 +2708,9 @@ for the task.</p>
 <tr><td>Compute distance to nearest feature</td><td><a href="vector-analysis.html">Vector Analysis — Step 4</a></td><td><code>whitebox_workflows:near</code></td></tr>
 <tr><td>Select features by spatial predicate</td><td><a href="vector-analysis.html">Vector Analysis — Step 5</a></td><td>QGIS Select by Expression</td></tr>
 <tr><td>Simplify polygon boundaries</td><td><a href="vector-analysis.html">Vector Analysis — Simplify</a></td><td><code>whitebox_workflows:simplify_features</code></td></tr>
+<tr><td>Convert GeoPackage to TopoJSON and back</td><td><a href="vector-analysis.html">Vector Analysis — TopoJSON Conversion Chain</a></td><td><code>whitebox_workflows:add_geometry_attributes</code>, QGIS Export</td></tr>
+<tr><td>Simplify shared boundaries and emit TopoJSON</td><td><a href="vector-analysis.html">Vector Analysis — TopoJSON Boundary-Preserving Generalization Chain</a></td><td><code>whitebox_workflows:simplify_features</code>, QGIS Export</td></tr>
+<tr><td>Convert TopoJSON transport input, enrich, and re-emit</td><td><a href="vector-analysis.html">Vector Analysis — TopoJSON Transport + Enrichment Return Chain</a></td><td>QGIS Export, <code>whitebox_workflows:add_geometry_attributes</code>, <code>whitebox_workflows:spatial_join</code>, <code>whitebox_workflows:near</code></td></tr>
 </tbody></table>
 </div>
 <hr />

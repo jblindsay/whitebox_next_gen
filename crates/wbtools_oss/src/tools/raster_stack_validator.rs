@@ -50,6 +50,71 @@ impl RasterStackValidation {
     }
 }
 
+/// Validates a stack of rasters for strict spatial compatibility (no auto-reprojection).
+///
+/// This is ideal for spectral analysis tools where inputs MUST be pre-aligned
+/// and share identical CRS, dimensions, and geotransform. Does NOT allow auto-reprojection.
+///
+/// Checks:
+/// * All rasters have same dimensions (rows, cols)
+/// * All rasters have matching CRS (exact, no fallback)
+/// * Identical geotransform (pixel boundaries match exactly)
+///
+/// Returns Ok(()) on success, Err(msg) on any mismatch.
+pub fn validate_raster_stack_strict(rasters: &[Raster]) -> Result<(), String> {
+    if rasters.is_empty() {
+        return Err("Raster stack is empty".to_string());
+    }
+
+    let first = &rasters[0];
+    let first_rows = first.rows;
+    let first_cols = first.cols;
+    let first_crs = &first.crs;
+    let first_x_min = first.x_min;
+    let first_y_min = first.y_min;
+    let first_cell_size_x = first.cell_size_x;
+    let first_cell_size_y = first.cell_size_y;
+
+    for (idx, raster) in rasters.iter().enumerate().skip(1) {
+        // Check dimensions match exactly
+        if raster.rows != first_rows || raster.cols != first_cols {
+            return Err(format!(
+                "Raster {} dimension mismatch: {} rows × {} cols (expected {} × {})",
+                idx, raster.rows, raster.cols, first_rows, first_cols
+            ));
+        }
+
+        // Check CRS match exactly (no auto-reproject for spectral tools)
+        if !crs_compatible(first_crs, &raster.crs) {
+            return Err(format!(
+                "Raster {} CRS mismatch: {} (expected {}). Spectral analysis tools require pre-aligned inputs.",
+                idx,
+                format_crs(&raster.crs),
+                format_crs(first_crs)
+            ));
+        }
+
+        // Check geotransform (upper-left corner and pixel size) match exactly
+        let eps = 1e-10;
+        if (raster.x_min - first_x_min).abs() > eps || (raster.y_min - first_y_min).abs() > eps {
+            return Err(format!(
+                "Raster {} has misaligned geotransform: upper-left ({}, {}) (expected ({}, {})). All inputs must be spatially co-registered.",
+                idx, raster.x_min, raster.y_min, first_x_min, first_y_min
+            ));
+        }
+
+        if (raster.cell_size_x - first_cell_size_x).abs() > eps || 
+           (raster.cell_size_y - first_cell_size_y).abs() > eps {
+            return Err(format!(
+                "Raster {} has mismatched pixel size: ({}, {}) (expected ({}, {})).",
+                idx, raster.cell_size_x, raster.cell_size_y, first_cell_size_x, first_cell_size_y
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 /// Validates a stack of rasters for compatibility.
 ///
 /// Checks:

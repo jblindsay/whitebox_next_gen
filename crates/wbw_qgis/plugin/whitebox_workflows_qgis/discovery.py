@@ -673,11 +673,13 @@ _SUBCATEGORY_DISPLAY: dict[str, str] = {
     "classification": "Classification",
     "change_detection": "Change Detection",
     "radiometric_correction": "Radiometric Correction",
+    "thermal_emissivity": "Thermal & Emissivity",
     "edge_feature_detection": "Edge & Feature Detection",
     "enhancement_contrast": "Enhancement & Contrast",
     "filters": "Filters",
     "sar": "SAR",
     "spectral": "Spectral",
+    "spectral_analytics": "Spectral Analytics",
     "multiscale_signatures": "Multiscale Signatures",
     "workflow_products": "Workflow Products",
     "derivatives": "Derivatives",
@@ -735,10 +737,7 @@ def _load_taxonomy_index() -> dict[str, tuple[str, str]]:
     if env_path:
         candidate_paths.append(Path(env_path).expanduser())
 
-    # 2. Adjacent to this file (bundled with the plugin)
-    candidate_paths.append(Path(__file__).parent / "tool_taxonomy.resolved.json")
-
-    # 3. Source tree location (for development without a sync step)
+    # 2. Source tree location (prefer canonical wbw_python taxonomy during development)
     here = Path(__file__).resolve().parent
     for _ in range(8):
         candidate = here / "crates/wbw_python/tool_taxonomy.resolved.json"
@@ -746,6 +745,9 @@ def _load_taxonomy_index() -> dict[str, tuple[str, str]]:
             candidate_paths.append(candidate)
             break
         here = here.parent
+
+    # 3. Adjacent to this file (bundled with the plugin)
+    candidate_paths.append(Path(__file__).parent / "tool_taxonomy.resolved.json")
 
     idx: dict[str, tuple[str, str]] = {}
     for path in candidate_paths:

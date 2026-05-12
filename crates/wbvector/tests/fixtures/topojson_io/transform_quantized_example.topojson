@@ -1,0 +1,23 @@
+{
+  "type": "Topology",
+  "transform": {
+    "scale": [0.5, 0.5],
+    "translate": [100.0, 200.0]
+  },
+  "objects": {
+    "layer": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "id": 9,
+          "properties": {"name": "qline"},
+          "geometry": {"type": "LineString", "arcs": [0]}
+        }
+      ]
+    }
+  },
+  "arcs": [
+    [[0, 0], [2, 0], [2, 2]]
+  ]
+}

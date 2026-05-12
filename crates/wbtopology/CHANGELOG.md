@@ -9,11 +9,59 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Added
 - Added `BufferOp` staged dissolve orchestration API (`BufferOp`, `BufferOpOptions`, `BufferOpResult`, `BufferOpStats`) and crate-root exports for restart-safe GEOS-style buffering flow.
 - Added `tests/buffer_op_pipeline_tests.rs` to validate staged line/polygon dissolve behavior, stats invariants, and invalid-distance guards.
+- Expanded GEOS/JTS parity fixture scaffold coverage in overlay audit tests with touching, disjoint, overlap, containment, and partial-overlap polygon cases.
 
 ### Changed
 - BufferOp dissolve pipeline now executes explicit staged flow: raw curve generation, global noding, planar graph bounded-face extraction, edge-delta + BFS face depth labeling, depth-selected face-ring polygonization, and final dissolve.
 - `buffer_vector` dissolve integration now routes pure line, pure polygon, and mixed line/polygon/point flows through BufferOp staging in `wbtools_oss`, with merged final dissolve output.
 - Reinstated `buffer_vector` in curated frontend taxonomy (`wbw_python` source taxonomy and synced Python/R/QGIS resolved artifacts).
+- Depth-propagation classifiers in overlay and BufferOp now account for face-ring winding direction when seeding and propagating face depths.
+- Overlay face selection now deduplicates equivalent cycles (rotation/reversal-invariant) and removes the exterior cycle explicitly by maximum absolute area before depth classification.
+- Added explicit pre-noded graph construction (`TopologyGraph::from_noded_linestrings`) and updated BufferOp/constructive graph stages to avoid accidental double noding.
+- Added containment fast-paths for pairwise and unary union (`polygon_union`, `polygon_unary_union_with_options`) so nested-polygon cases short-circuit to the containing shell.
+- Positive round polygon buffering now routes holed inputs through the direct offset-ring path (instead of segment-union assembly) to preserve inward hole contraction semantics.
+- Natural-neighbour interpolation now uses a robust located-triangle barycentric fast-path in `interpolate_with_scratch` and `weights_with_scratch`, with Sibson overlap weighting retained as fallback.
+- Unary dissolve/union heuristic component partitioning now uses non-point source connectivity instead of envelope-only connectivity, restoring point-touch separation for cascaded dissolve outputs.
+- Face-depth classification now reseeds and propagates isolated bounded-face components before conservative fallback in `classify_faces_by_depth`, reducing unreached-face ambiguity in complex overlay/dissolve topologies.
+
+### Fixed
+- Fixed graph construction behavior that collapsed coincident undirected segment multiplicity in `TopologyGraph::build_from_noded`; multiplicity is now preserved to match GEOS/JTS-style depth accounting expectations.
+- Fixed BufferOp duplicate-coincident-line area drift by deduplicating identical curve-role pairs prior to global noding.
+- Corrected GEOS parity fixture expectation for `partial_overlap_rectangles` union area from 10.0 to 11.0.
+- Fixed strict positive holed-buffer parity regression (`strict_positive_hole_survives_d05`) by avoiding hole-ring outward segment buffering in the round positive path.
+- Fixed the remaining hole-rich overlay identity mismatch in `overlay_all_matches_individual_ops` by clipping 4-hole special-case intersection components against per-component outside-of-A / outside-of-B differences, ensuring stable set-theoretic consistency.
+- Fixed cascaded unary-dissolve point-touch collapse regression (`unary_dissolve_cascaded_strategy_preserves_point_touch_separation`) uncovered during full `wbtopology` suite validation.
+- Fixed a brittle representative-point rejection in the 4-hole intersection special branch by deferring acceptance to the existing clipping stage (`I subset A` and `I subset B` enforcement), reducing frontier identity drift in the cross-ladder case.
+- Fixed residual 4-hole intersection branch area loss by adding a guarded direct-overlay fallback: both special-path and direct-path candidates are subset-clipped, then the higher-area valid candidate is selected.
+
+### Testing
+- Promoted coincident-segment multiplicity parity probe (`graph::tests::geos_parity_preserve_coincident_segment_multiplicity`) from ignored to active; currently passing.
+- Promoted overlay parity fixture scaffold and touching-square unary-union probe from ignored to active; both are now passing.
+- Promoted BufferOp duplicate-coincident-line parity probe from ignored to active; now passing.
+- `buffer_geos_parity_harness` strict fixture suite now passes for current corpus, including positive-holed survival and closure thresholds.
+- Previously failing `natural_neighbour` linear-reproduction tests now pass (`sibson_reproduces_linear_field_inside_triangle`, `sibson_reproduces_linear_field_on_scattered_sites`).
+- Promoted shallow-angle noding parity probe (`geos_parity_shallow_angle_intersection_should_survive`) from ignored to active; now passing in standard test runs.
+- Updated DE-9IM differential fixture metadata: `line_line_cross` parity status is now marked `converge` (no longer `known_diff`).
+- Hardened DE-9IM differential harness to fail fast if any fixture row reintroduces `known_diff` status.
+- Hardened active overlay fixture corpus invariants: strict cases now enforce set-theoretic area identities and operand-order determinism; relaxed cases retain non-blocking area-stability checks.
+- Added isolated bounded-face island stress fixtures (hole-rich nested overlap / cross-ladder patterns) to the active overlay invariant corpus.
+- Added non-blocking delta diagnostics for relaxed overlay fixture cases to report strict-identity drift magnitudes during routine test runs.
+- Added a dedicated cross-ladder frontier diagnostics test that reports per-operation areas, component counts, hole counts, vertex totals, and operand-order area deltas for targeted parity triage.
+- Added overlay hole-bearing debug accounting (`WB_OVERLAY_DEBUG`) for per-operation face-area totals (`total/keep/drop`) and an opt-in per-face trace mode (`WB_OVERLAY_TRACE_FACES`) to localize identity drift.
+- Expanded 4-hole intersection diagnostics (`intersection4h`) with staged area/count logging (`strict_faces`, `base`, `clip cuts`, `clipped`) to isolate residual drift during targeted frontier triage.
+- Extended the cross-ladder operation trace test to compare `polygon_intersection` (4-hole branch) against direct `polygon_overlay(..., Intersection)` and report area/component deltas.
+- Cross-ladder frontier trace now converges on strict area identities after guarded 4-hole branch candidate selection (intersection area 40, identity deltas near machine epsilon).
+- Promoted `island_hole_rich_cross_ladder` in the active overlay invariant corpus from `relaxed` to `strict` after convergence.
+- Updated dedicated cross-ladder diagnostics/trace tests to run in both strict and relaxed fixture modes (mode-agnostic assertions).
+- Added strict 4-hole intersection parity guard test to assert area agreement between the special `polygon_intersection` branch and direct `polygon_overlay(..., Intersection)` path.
+- Added strict 4-hole core-ops parity guard test to assert API-vs-direct area agreement for intersection, union, and difference paths.
+- Added non-blocking strict 4-hole symmetric-difference direct-path diagnostics test to surface residual API-vs-direct area drift without failing CI.
+- Added noding regression tests to preserve duplicate coincident segment multiplicity both before and after crossing splits.
+- Added a strict shallow-angle and near-coincident noding corpus regression covering micro-offset, mixed-scale, and large-coordinate crossing cases.
+- Expanded strict 4-hole symmetric-difference diagnostics with side-by-side API-vs-direct operation signatures (component, hole, vertex, area summaries).
+- Added a graph precision differential harness test comparing bounded face-ring counts and total area between floating and snap-rounded noding paths.
+- Added a file-backed noding corpus fixture import path (`tests/fixtures/noding_shallow_angle_cases.txt`) so shallow-angle and near-coincident parity cases can be expanded without editing test code.
+- Added a provenance-tagged reference parity noding fixture corpus (`tests/fixtures/noding_reference_parity_cases.txt`) and strict import test that validates offline GEOS/JTS trace expectations without introducing runtime GEOS/JTS dependencies.
 
 ## [0.1.2] – 2026-05-09
 

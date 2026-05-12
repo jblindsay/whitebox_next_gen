@@ -1,0 +1,29 @@
+{
+  "type": "Topology",
+  "objects": {
+    "layer": {
+      "type": "GeometryCollection",
+      "geometries": [
+        {
+          "type": "Polygon",
+          "properties": {"name": "west"},
+          "arcs": [[0, 1, 2, 3]]
+        },
+        {
+          "type": "Polygon",
+          "properties": {"name": "east"},
+          "arcs": [[4, 5, -2, 6]]
+        }
+      ]
+    }
+  },
+  "arcs": [
+    [[0, 0], [0, 1]],
+    [[0, 1], [1, 1]],
+    [[1, 1], [1, 0]],
+    [[1, 0], [0, 0]],
+    [[1, 0], [2, 0]],
+    [[2, 0], [2, 1]],
+    [[2, 1], [1, 1]]
+  ]
+}

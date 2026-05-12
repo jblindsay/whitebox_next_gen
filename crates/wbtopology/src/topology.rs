@@ -594,7 +594,10 @@ pub fn overlaps(a: &Geometry, b: &Geometry) -> bool {
         (Geometry::LineString(a_ls), Geometry::LineString(b_ls)) => {
             let ga = Geometry::LineString(a_ls.clone());
             let gb = Geometry::LineString(b_ls.clone());
-            !contains(&ga, &gb) && !contains(&gb, &ga) && !touches(&ga, &gb)
+            !contains(&ga, &gb)
+                && !contains(&gb, &ga)
+                && !touches(&ga, &gb)
+                && !crosses(&ga, &gb)
         }
         (Geometry::Polygon(a_poly), Geometry::Polygon(b_poly)) => {
             let ga = Geometry::Polygon(a_poly.clone());
@@ -626,6 +629,7 @@ pub fn overlaps_with_epsilon(a: &Geometry, b: &Geometry, eps: f64) -> bool {
             !contains_with_epsilon(&ga, &gb, eps)
                 && !contains_with_epsilon(&gb, &ga, eps)
                 && !touches_with_epsilon(&ga, &gb, eps)
+                && !crosses_with_epsilon(&ga, &gb, eps)
         }
         (Geometry::Polygon(a_poly), Geometry::Polygon(b_poly)) => {
             let ga = Geometry::Polygon(a_poly.clone());

@@ -365,7 +365,6 @@
       "category": "vector",
       "subcategory": "geometry_processing",
       "tools": [
-        "buffer_vector",
         "centroid_vector",
         "concave_hull",
         "densify_features",
@@ -1124,10 +1123,6 @@
       "source_crate": "wbtools_oss"
     },
     "buffer_raster": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "buffer_vector": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },

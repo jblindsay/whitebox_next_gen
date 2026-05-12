@@ -8,6 +8,13 @@ as geometry itself. The patterns in this chapter emphasize inspecting structure
 early, applying deterministic edits, and validating outputs after persistence so
 downstream analysis remains predictable.
 
+## See Also: Online Sources
+
+If your workflow starts by downloading vectors from web providers (starting with
+OSM Overpass), use the dedicated chapter:
+
+- [Online Data Downloads](./online-data-downloads.md)
+
 ## Read and Inspect
 
 Begin with schema and metadata inspection so edits are grounded in the actual
@@ -52,11 +59,11 @@ schema <- v$schema()
 meta <- v$metadata()
 
 # Pass to spatial tools
-buffered_path <- wbw_buffer_vector(input = v$path, output = 'buffered', distance = 10.0)
+centroid_path <- wbw_centroid_vector(input = v$path, output = 'centroids')
 
 # Export to disk when ready
-result <- wbw_read_vector(buffered_path)
-result$write('buffered_final.gpkg')
+result <- wbw_read_vector(centroid_path)
+result$write('centroids_final.gpkg')
 ```
 
 ### Vector Memory Lifecycle
@@ -99,11 +106,11 @@ wbe <- wbw_make_session()
 roads <- wbw_read_vector('roads.gpkg')
 
 # No output path — result is stored in memory automatically
-buffered <- wbe$buffer_vector(input = roads$path, distance = 15.0)
-cat(buffered$path, '\n')  # prints: memory://vector/...
+centroids <- wbe$centroid_vector(input = roads$path)
+cat(centroids$path, '\n')  # prints: memory://vector/...
 
 # Chain operations without any intermediate files
-clipped <- wbe$clip(input = buffered$path, clip = 'boundary.gpkg')
+clipped <- wbe$clip(input = centroids$path, clip = 'boundary.gpkg')
 cat(clipped$path, '\n')  # also memory://vector/...
 
 # Persist the final result only
@@ -169,10 +176,10 @@ library(whiteboxworkflows)
 s <- wbw_session()
 roads <- wbw_read_vector('roads.gpkg')
 
-wbw_buffer_vector(input = roads$file_path(), output = 'roads_buffer.gpkg', distance = 15.0)
+wbw_centroid_vector(input = roads$file_path(), output = 'roads_centroids.gpkg')
 
-buffered <- wbw_read_vector('roads_buffer.gpkg')
-print(buffered$metadata())
+centroids <- wbw_read_vector('roads_centroids.gpkg')
+print(centroids$metadata())
 ```
 
 ## Practical Notes

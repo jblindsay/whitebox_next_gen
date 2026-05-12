@@ -137,6 +137,117 @@ Export the selection as `priority_parcels.shp` using
 
 ---
 
+## TopoJSON Conversion Chain (QGIS Interop)
+
+Use this workflow when you need to exchange shared-boundary vector data with
+web clients while keeping a GeoPackage working copy for analysis.
+
+### Inputs
+
+| Layer | Format | Notes |
+|-------|--------|-------|
+| `zones.gpkg` | Polygon vector | Authoritative analysis dataset |
+
+### Step 1 — Run a Whitebox vector operation and emit TopoJSON
+
+**Processing Toolbox → Whitebox Workflows → Vector Analysis →
+`Add Geometry Attributes`**
+
+| Parameter | Recommended value |
+|-----------|------------------|
+| Input vector | `zones.gpkg` |
+| Units | `Metres` |
+| Output | `zones_metrics.topojson` |
+
+This confirms the plugin accepts `.topojson` output targets in a normal vector
+processing chain.
+
+### Step 2 — Re-open TopoJSON and convert back to GeoPackage
+
+1. Add `zones_metrics.topojson` to the QGIS project.
+2. Right-click the layer, then choose **Export → Save Features As...**.
+3. Set format to **GeoPackage** and save as `zones_metrics_roundtrip.gpkg`.
+
+### Step 3 — Validate roundtrip integrity
+
+Check these before publishing or reusing the roundtrip layer:
+
+- Feature count matches source layer.
+- Core attributes (e.g., ID fields and geometry metrics) are preserved.
+- CRS is correctly populated on the roundtrip GeoPackage.
+
+### Recommended use pattern
+
+- Keep `.gpkg` as the editable analysis master.
+- Generate `.topojson` as interchange or web-delivery artifacts.
+- Re-import to `.gpkg` for heavier downstream spatial analysis.
+
+## TopoJSON Boundary-Preserving Generalization Chain
+
+Use this chain when you need smaller delivery payloads while preserving shared
+boundary consistency during simplification.
+
+### Inputs
+
+| Layer | Format | Notes |
+|-------|--------|-------|
+| `admin_units.gpkg` | Polygon vector | Shared boundaries between adjacent polygons |
+
+### Step 1 — Simplify and emit TopoJSON
+
+**Processing Toolbox → Whitebox Workflows → Vector Analysis →
+`Simplify Features`**
+
+| Parameter | Recommended value |
+|-----------|------------------|
+| Input vector | `admin_units.gpkg` |
+| Algorithm | `Douglas-Peucker` |
+| Tolerance | `25.0` (adjust to target scale) |
+| Output | `admin_units_simplified.topojson` |
+
+### Step 2 — Inspect topology consistency in QGIS
+
+1. Add `admin_units_simplified.topojson` to the map.
+2. Inspect shared boundaries at high zoom for slivers/gaps.
+3. Validate feature count versus source before publication.
+
+### Step 3 — Export analysis copy
+
+Export to `admin_units_simplified.gpkg` for downstream joins/overlay work.
+
+## TopoJSON Transport + Enrichment Return Chain
+
+Use this chain when TopoJSON is used only for transport and you need to return
+to an analysis-grade format for attribute enrichment.
+
+### Inputs
+
+| Layer | Format | Notes |
+|-------|--------|-------|
+| `transport_in.topojson` | Topology-preserving vector | Interchange input received from external system |
+
+### Step 1 — Convert transport input to GeoPackage
+
+1. Add `transport_in.topojson` to the project.
+2. Export as `transport_stage.gpkg`.
+
+### Step 2 — Apply enrichment tools
+
+Run Whitebox vector tools against `transport_stage.gpkg`:
+
+- `Add Geometry Attributes` for geometry metrics.
+- `Spatial Join` for contextual attribute enrichment.
+- `Near` for proximity attributes.
+
+### Step 3 — Emit deliverables
+
+Write two outputs:
+
+- `transport_enriched.gpkg` for analytic persistence.
+- `transport_enriched.topojson` for interchange/web handoff.
+
+---
+
 ## Python Console Equivalent
 
 ```python

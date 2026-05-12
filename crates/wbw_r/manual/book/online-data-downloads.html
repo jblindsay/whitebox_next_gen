@@ -1,0 +1,379 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Online Data Downloads - Whitebox Workflows for R User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+        <!-- MathJax -->
+        <script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">12.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">13.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">14.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">18.</strong> Terrain Analysis and Geomorphometry</a></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">19.</strong> Spatial Hydrology</a></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">20.</strong> LiDAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">21.</strong> Remote Sensing Analysis</a></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">22.</strong> Raster Analysis</a></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">23.</strong> Vector Analysis</a></li><li class="chapter-item expanded "><a href="online-data-downloads.html" class="active"><strong aria-hidden="true">24.</strong> Online Data Downloads</a></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">25.</strong> Network Analysis</a></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">26.</strong> Linear Referencing</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">27.</strong> Script Index</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for R User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="online-data-downloads"><a class="header" href="#online-data-downloads">Online Data Downloads</a></h1>
+<p>This chapter covers downloading vector data directly from online providers into WbW-R workflows. The first provider is OpenStreetMap (OSM) through the Overpass API using tool ID <code>download_osm_vector</code>.</p>
+<h2 id="scope-and-current-provider"><a class="header" href="#scope-and-current-provider">Scope and Current Provider</a></h2>
+<p>Current online-data tool:</p>
+<ul>
+<li><code>download_osm_vector</code></li>
+</ul>
+<p>In R, use <code>wbw_run_tool(...)</code> with explicit argument lists.</p>
+<h2 id="quick-start"><a class="header" href="#quick-start">Quick Start</a></h2>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+session &lt;- wbw_session()
+
+result &lt;- wbw_run_tool(
+  "download_osm_vector",
+  args = list(
+    west = -80.54,
+    south = 43.41,
+    east = -80.47,
+    north = 43.47,
+    filter_preset = "roads",
+    include_points = FALSE,
+    include_lines = TRUE,
+    include_polygons = FALSE,
+    output = "kitchener_roads.geojson"
+  ),
+  session = session
+)
+
+print(result$outputs$path)
+</code></pre>
+<h2 id="presets-and-filters"><a class="header" href="#presets-and-filters">Presets and Filters</a></h2>
+<p>Preset classes:</p>
+<ul>
+<li><code>all</code></li>
+<li><code>roads</code></li>
+<li><code>buildings</code></li>
+<li><code>water</code></li>
+<li><code>landuse</code></li>
+<li><code>trails</code></li>
+<li><code>parks</code></li>
+<li><code>rail</code></li>
+<li><code>amenities</code></li>
+<li><code>boundaries</code></li>
+<li><code>transit</code></li>
+<li><code>poi</code></li>
+</ul>
+<p>Optional custom filters:</p>
+<ul>
+<li><code>filter_key = "amenity"</code></li>
+<li><code>filter_key_value = "amenity=school"</code></li>
+</ul>
+<p>When custom filters are provided, they are used instead of preset filtering.</p>
+<h2 id="geometry-controls"><a class="header" href="#geometry-controls">Geometry Controls</a></h2>
+<p>Use geometry toggles to reduce payload and output complexity:</p>
+<ul>
+<li><code>include_points</code></li>
+<li><code>include_lines</code></li>
+<li><code>include_polygons</code></li>
+</ul>
+<p>Examples:</p>
+<ul>
+<li>Streets only: points off, lines on, polygons off</li>
+<li>Building footprints: points off, lines off, polygons on</li>
+</ul>
+<p>Phase 2 options:</p>
+<ul>
+<li><code>split_output_by_geometry = TRUE</code> writes separate files with <code>_points</code>, <code>_lines</code>, and <code>_polygons</code> suffixes.</li>
+</ul>
+<h2 id="caching-and-provenance"><a class="header" href="#caching-and-provenance">Caching and Provenance</a></h2>
+<p>Use optional caching when running repeated AOI/filter requests:</p>
+<ul>
+<li><code>cache_dir = ".wbw_cache/osm"</code></li>
+<li><code>cache_ttl_hours = 24</code> (set <code>0</code> to disable TTL checks)</li>
+</ul>
+<p>Use <code>provenance_output</code> to write a JSON sidecar with endpoint, bbox, filters, feature counts, and cache usage metadata.</p>
+<pre><code class="language-r">wbw_run_tool(
+  "download_osm_vector",
+  args = list(
+    west = -80.54,
+    south = 43.41,
+    east = -80.47,
+    north = 43.47,
+    filter_preset = "trails",
+    include_points = FALSE,
+    include_lines = TRUE,
+    include_polygons = FALSE,
+    split_output_by_geometry = TRUE,
+    cache_dir = ".wbw_cache/osm",
+    cache_ttl_hours = 24,
+    provenance_output = "kitchener_trails_provenance.json",
+    output = "kitchener_trails.geojson"
+  ),
+  session = session
+)
+</code></pre>
+<h2 id="projection-and-output"><a class="header" href="#projection-and-output">Projection and Output</a></h2>
+<p>Rules:</p>
+<ul>
+<li>Query extent is in EPSG:4326 (longitude/latitude).</li>
+<li>Set <code>input_extent_epsg</code> to provide west/south/east/north in another CRS
+(the bbox is transformed to EPSG:4326 before querying Overpass).</li>
+<li>Use <code>output_epsg</code> to reproject output.</li>
+<li>Output format is inferred from output extension.</li>
+</ul>
+<p>Endpoint selection:</p>
+<ul>
+<li><code>overpass_profile</code> supports: <code>main</code>, <code>kumi</code>, <code>fr</code>, <code>custom</code>.</li>
+<li><code>overpass_url</code> overrides the selected profile URL when provided.</li>
+</ul>
+<p>Large-AOI chunking:</p>
+<ul>
+<li><code>chunk_large_aoi = TRUE</code> (default) automatically tiles large query extents.</li>
+<li><code>chunk_max_area_deg2 = 4.0</code> controls maximum area per chunk.</li>
+<li><code>max_chunk_count = 64</code> caps the number of generated chunk requests.</li>
+<li><code>chunk_parallel_requests = 1</code> (default) controls bounded parallel chunk fetch; set &gt;1 to fetch chunks concurrently.</li>
+</ul>
+<pre><code class="language-r">wbw_run_tool(
+  "download_osm_vector",
+  args = list(
+    west = -80.54,
+    south = 43.41,
+    east = -80.47,
+    north = 43.47,
+    filter_preset = "buildings",
+    include_points = FALSE,
+    include_lines = FALSE,
+    include_polygons = TRUE,
+    output_epsg = 32617,
+    output = "kitchener_buildings_utm17n.gpkg"
+  ),
+  session = session
+)
+</code></pre>
+<h2 id="operational-guidance"><a class="header" href="#operational-guidance">Operational Guidance</a></h2>
+<p>Overpass public endpoints have rate limits and shared infrastructure constraints.</p>
+<p>Recommended practice:</p>
+<ul>
+<li>Use smaller AOIs</li>
+<li>Prefer thematic filters</li>
+<li>Cap responses with <code>max_elements</code></li>
+<li>Increase <code>timeout_seconds</code> only when needed</li>
+</ul>
+<h2 id="attribution-and-licensing"><a class="header" href="#attribution-and-licensing">Attribution and Licensing</a></h2>
+<p>OSM data are licensed under ODbL. Ensure appropriate OpenStreetMap attribution and verify obligations for redistributed outputs.</p>
+<h2 id="companion-example"><a class="header" href="#companion-example">Companion Example</a></h2>
+<p>See:</p>
+<ul>
+<li><code>crates/wbw_r/examples/osm_download_vector.R</code></li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="vector-analysis.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="network-analysis.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="vector-analysis.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="network-analysis.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

@@ -463,11 +463,11 @@ for i in range(min(3, roads.num_records())):
     print(f'Record {i}: {attrs}')
 
 # Process and persist
-buffered = wbe.gis.buffer_vector(roads, distance=10)
-wbe.write_vector(buffered, 'roads_buffer.shp')
+centroids = wbe.vector.geometry_processing.centroid_vector(roads)
+wbe.write_vector(centroids, 'roads_centroids.shp')
 
 # Extensionless path defaults to GeoPackage
-wbe.write_vector(buffered, 'roads_buffer')  # writes roads_buffer.gpkg
+wbe.write_vector(centroids, 'roads_centroids')  # writes roads_centroids.gpkg
 ```
 
 ### Vector output controls

@@ -1,0 +1,37 @@
+{
+  "type": "Topology",
+  "objects": {
+    "layer": {
+      "type": "GeometryCollection",
+      "geometries": [
+        {
+          "type": "Point",
+          "properties": {"kind": "node"},
+          "coordinates": [5, 6]
+        },
+        {
+          "type": "MultiPoint",
+          "properties": {"kind": "stations"},
+          "coordinates": [[1, 1], [2, 2], [3, 3]]
+        },
+        {
+          "type": "LineString",
+          "properties": {"kind": "edge"},
+          "arcs": [0]
+        },
+        {
+          "type": "Polygon",
+          "properties": {"kind": "cell"},
+          "arcs": [[1, 2, 3, 4]]
+        }
+      ]
+    }
+  },
+  "arcs": [
+    [[0, 0], [2, 1], [4, 1]],
+    [[0, 0], [0, 2]],
+    [[0, 2], [2, 2]],
+    [[2, 2], [2, 0]],
+    [[2, 0], [0, 0]]
+  ]
+}

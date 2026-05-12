@@ -174,6 +174,19 @@ impl PreparedSibsonInterpolator {
             }
         }
 
+        // Robust fast-path: if query lies in a Delaunay triangle, use
+        // barycentric interpolation over that triangle. This preserves exact
+        // linear-field reproduction and avoids rare Voronoi-clip degeneracies.
+        if let Some(tri_idx) = self.locate_triangle_with_scratch(query, scratch) {
+            if let Some(ws) = self.triangle_barycentric_weights(query, tri_idx) {
+                let mut sum = 0.0;
+                for (idx, w) in ws {
+                    sum += values[idx] * w;
+                }
+                return Some(sum);
+            }
+        }
+
         self.natural_neighbor_indices_with_scratch(query, scratch);
         if scratch.neighbors.is_empty() {
             return None;
@@ -186,7 +199,7 @@ impl PreparedSibsonInterpolator {
             return None;
         }
         let query_cell = Polygon::new(LinearRing::new(scratch.cell_a.clone()), vec![]);
-        let query_area = polygon_area(&query_cell);
+        let query_area = polygon_area(&query_cell).abs();
         if query_area <= self.epsilon {
             scratch.neighbors = neighbors;
             return None;
@@ -196,7 +209,7 @@ impl PreparedSibsonInterpolator {
         let mut area_sum = 0.0;
         for &idx in &neighbors {
             let overlap = polygon_intersection(&query_cell, &self.cells[idx], self.epsilon);
-            let area = overlap.iter().map(polygon_area).sum::<f64>();
+            let area = overlap.iter().map(|p| polygon_area(p).abs()).sum::<f64>();
             if area > self.epsilon {
                 weighted_sum += values[idx] * area;
                 area_sum += area;
@@ -233,6 +246,12 @@ impl PreparedSibsonInterpolator {
             }
         }
 
+        if let Some(tri_idx) = self.locate_triangle_with_scratch(query, scratch) {
+            if let Some(ws) = self.triangle_barycentric_weights(query, tri_idx) {
+                return ws.into_iter().collect();
+            }
+        }
+
         self.natural_neighbor_indices_with_scratch(query, scratch);
         if scratch.neighbors.is_empty() {
             return Vec::new();
@@ -245,7 +264,7 @@ impl PreparedSibsonInterpolator {
             return Vec::new();
         }
         let query_cell = Polygon::new(LinearRing::new(scratch.cell_a.clone()), vec![]);
-        let query_area = polygon_area(&query_cell);
+        let query_area = polygon_area(&query_cell).abs();
         if query_area <= self.epsilon {
             scratch.neighbors = neighbors;
             return Vec::new();
@@ -255,7 +274,7 @@ impl PreparedSibsonInterpolator {
         let mut sum = 0.0;
         for &idx in &neighbors {
             let overlap = polygon_intersection(&query_cell, &self.cells[idx], self.epsilon);
-            let area = overlap.iter().map(polygon_area).sum::<f64>();
+            let area = overlap.iter().map(|p| polygon_area(p).abs()).sum::<f64>();
             if area > self.epsilon {
                 let w = area / query_area;
                 weights.push((idx, w));
@@ -445,6 +464,37 @@ impl PreparedSibsonInterpolator {
             }
         }
         None
+    }
+
+    fn triangle_barycentric_weights(
+        &self,
+        query: Coord,
+        tri_idx: usize,
+    ) -> Option<[(usize, f64); 3]> {
+        if tri_idx >= self.triangles.len() {
+            return None;
+        }
+        let tri = self.triangles[tri_idx];
+        let a_idx = tri[0];
+        let b_idx = tri[1];
+        let c_idx = tri[2];
+        if a_idx >= self.points.len() || b_idx >= self.points.len() || c_idx >= self.points.len() {
+            return None;
+        }
+
+        let a = self.points[a_idx];
+        let b = self.points[b_idx];
+        let c = self.points[c_idx];
+        let denom = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
+        if denom.abs() <= self.epsilon {
+            return None;
+        }
+
+        let w0 = ((b.y - c.y) * (query.x - c.x) + (c.x - b.x) * (query.y - c.y)) / denom;
+        let w1 = ((c.y - a.y) * (query.x - c.x) + (a.x - c.x) * (query.y - c.y)) / denom;
+        let w2 = 1.0 - w0 - w1;
+
+        Some([(a_idx, w0), (b_idx, w1), (c_idx, w2)])
     }
 }
 

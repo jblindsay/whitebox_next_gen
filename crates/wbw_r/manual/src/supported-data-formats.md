@@ -55,6 +55,7 @@ Exhaustive vector format support in the current WbW-R build:
 |---|---|---|---|
 | FlatGeobuf | Yes | Yes | `.fgb` |
 | GeoJSON | Yes | Yes | `.geojson`, `.json` |
+| TopoJSON | Yes | Yes | `.topojson` |
 | GeoPackage | Yes | Yes | `.gpkg` |
 | GeoParquet | Yes | Yes | `.parquet` |
 | GML | Yes | Yes | `.gml` |

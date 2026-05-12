@@ -243,6 +243,9 @@ for the task.</p>
 <tr><td>Compute distance to nearest feature</td><td><a href="vector-analysis.html">Vector Analysis — Step 4</a></td><td><code>whitebox_workflows:near</code></td></tr>
 <tr><td>Select features by spatial predicate</td><td><a href="vector-analysis.html">Vector Analysis — Step 5</a></td><td>QGIS Select by Expression</td></tr>
 <tr><td>Simplify polygon boundaries</td><td><a href="vector-analysis.html">Vector Analysis — Simplify</a></td><td><code>whitebox_workflows:simplify_features</code></td></tr>
+<tr><td>Convert GeoPackage to TopoJSON and back</td><td><a href="vector-analysis.html">Vector Analysis — TopoJSON Conversion Chain</a></td><td><code>whitebox_workflows:add_geometry_attributes</code>, QGIS Export</td></tr>
+<tr><td>Simplify shared boundaries and emit TopoJSON</td><td><a href="vector-analysis.html">Vector Analysis — TopoJSON Boundary-Preserving Generalization Chain</a></td><td><code>whitebox_workflows:simplify_features</code>, QGIS Export</td></tr>
+<tr><td>Convert TopoJSON transport input, enrich, and re-emit</td><td><a href="vector-analysis.html">Vector Analysis — TopoJSON Transport + Enrichment Return Chain</a></td><td>QGIS Export, <code>whitebox_workflows:add_geometry_attributes</code>, <code>whitebox_workflows:spatial_join</code>, <code>whitebox_workflows:near</code></td></tr>
 </tbody></table>
 </div>
 <hr />

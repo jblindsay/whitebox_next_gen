@@ -9,6 +9,13 @@ analysis remains trustworthy. The patterns below emphasize validating structure
 first, then applying deterministic edits, then persisting to stable interchange
 formats for downstream tools.
 
+## See Also: Online Sources
+
+If you need to acquire vectors directly from web providers (starting with OSM
+Overpass), see the dedicated chapter:
+
+- [Online Data Downloads](./online-data-downloads.md)
+
 ## Read and Inspect
 
 This step establishes the schema contract your downstream edits depend on.
@@ -57,10 +64,10 @@ schema = v.schema()
 meta = v.metadata()
 
 # Pass to spatial tools
-buffered = wbe.vector.geometry_processing.buffer_vector(v, distance=10.0)
+centroids = wbe.vector.geometry_processing.centroid_vector(v)
 
 # Export to disk when ready
-wbe.write_vector(buffered, 'buffered_final.gpkg')
+wbe.write_vector(centroids, 'centroids_final.gpkg')
 ```
 
 ### Vector Memory Lifecycle
@@ -105,11 +112,11 @@ wbe = wb.WbEnvironment()
 roads = wbe.read_vector('roads.gpkg')
 
 # No output path — result is stored in memory automatically
-buffered = wbe.vector.geometry_processing.buffer_vector(roads, distance=15.0)
-print(buffered.file_path)  # prints: memory://vector/...
+centroids = wbe.vector.geometry_processing.centroid_vector(roads)
+print(centroids.file_path)  # prints: memory://vector/...
 
 # Chain operations without any intermediate files
-clipped = wbe.vector.overlay_analysis.clip(buffered, 'boundary.gpkg')
+clipped = wbe.vector.overlay_analysis.clip(centroids, 'boundary.gpkg')
 print(clipped.file_path)  # also memory://vector/...
 
 # Persist the final result only
@@ -182,10 +189,10 @@ import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
 roads = wbe.read_vector('roads.gpkg')
-buffered = wbe.vector.geometry_processing.buffer_vector(roads, distance=15.0)
+centroids = wbe.vector.geometry_processing.centroid_vector(roads)
 
 # Extensionless output defaults to GeoPackage
-wbe.write_vector(buffered, 'roads_buffer')
+wbe.write_vector(centroids, 'roads_centroids')
 
 # Explicit output format
 wbe.write_vector(buffered, 'roads_buffer.parquet', options={

@@ -817,6 +817,158 @@ change_map = wbe.raster.general.raster_calculator(
 wbe.write_raster(change_map, 'change_map.tif')
 ```
 
+### Advanced Change Detection Tools
+
+The sprint additions expose dedicated change tools that return richer diagnostics than simple raster subtraction:
+
+```python
+# Multiband image differencing with optional signed and mask outputs
+diff_result = wbe.remote_sensing.change_detection.image_difference_change_detection(
+    t1_inputs=[red_t1, nir_t1, swir1_t1],
+    t2_inputs=[red_t2, nir_t2, swir1_t2],
+    output='img_diff_mag.tif',
+    options={
+        'mode': 'magnitude',
+        'threshold_sigma': 2.0,
+        'output_signed': 'img_diff_signed.tif',
+        'output_mask': 'img_diff_mask.tif'
+    }
+)
+
+# Post-classification transition table + remap support
+post_class_result = wbe.remote_sensing.change_detection.post_classification_change(
+    t1_classified=classified_t1,
+    t2_classified=classified_t2,
+    output='post_class_transition.tif',
+    options={
+        'transition_scale': 1000,
+        't1_class_remap': {'11': 1, '12': 1},
+        't2_class_remap': {'41': 4, '42': 4}
+    }
+)
+
+# PCA-based change with optional mask/report outputs
+pca_change_result = wbe.remote_sensing.change_detection.pca_based_change_detection(
+    t1_inputs=[red_t1, nir_t1, swir1_t1],
+    t2_inputs=[red_t2, nir_t2, swir1_t2],
+    output='pca_change_pc1.tif',
+    options={
+        'component': 1,
+        'threshold_sigma': 2.0,
+        'output_mask': 'pca_change_mask.tif',
+        'output_report': 'pca_change_report.json'
+    }
+)
+```
+
+### Radiometric and Thermal Emissivity Tools
+
+For physically grounded thermal workflows, run radiometric correction and emissivity estimation before LST:
+
+```python
+# Atmospheric haze reduction
+dos_result = wbe.remote_sensing.radiometric_correction.dark_object_subtraction(
+    inputs=[blue, green, red, nir],
+    output='dos_stack.tif',
+    options={'percentile': 1.0, 'output_diagnostic_offsets': 'dos_offsets.tif'}
+)
+
+# DN to TOA reflectance using bundle metadata where available
+toa_result = wbe.remote_sensing.radiometric_correction.dn_to_toa_reflectance(
+    inputs=[blue, green, red, nir],
+    output='toa_stack.tif',
+    options={'sensor_bundle_root': '/data/LC09_L1TP_017030_20240420_20240426_02_T1'}
+)
+
+# NDVI-based emissivity + LST products
+emiss_result = wbe.remote_sensing.thermal_emissivity.ndvi_based_emissivity(
+    red_input=red,
+    nir_input=nir,
+    output='emissivity.tif'
+)
+
+lst_sc_result = wbe.remote_sensing.thermal_emissivity.land_surface_temperature_single_channel(
+    thermal_input=wbe.read_raster('LC09_B10.TIF'),
+    output='lst_single_channel.tif',
+    options={'sensor_bundle_root': '/data/LC09_L1TP_017030_20240420_20240426_02_T1'}
+)
+
+lst_sw_result = wbe.remote_sensing.thermal_emissivity.land_surface_temperature_split_window(
+    thermal1_input=wbe.read_raster('LC09_B10.TIF'),
+    thermal2_input=wbe.read_raster('LC09_B11.TIF'),
+    output='lst_split_window.tif',
+    options={'emissivity_mean_constant': 0.98, 'emissivity_delta_constant': 0.0}
+)
+```
+
+### Spectral Analytics and PolSAR Decomposition
+
+The new spectral analytics subcategory covers endmember-driven and denoising workflows:
+
+```python
+sam_result = wbe.remote_sensing.spectral_analytics.spectral_angle_mapper(
+    inputs=[blue, green, red, nir],
+    output='sam_classes.tif',
+    options={
+        'endmembers': [
+            {'name': 'water', 'values': [0.03, 0.02, 0.01, 0.00]},
+            {'name': 'veg', 'values': [0.05, 0.10, 0.06, 0.40]}
+        ],
+        'output_angle': 'sam_angle.tif'
+    }
+)
+
+cont_result = wbe.remote_sensing.spectral_analytics.continuum_removal(
+    inputs=[wbe.read_raster('hyp_b1.tif'), wbe.read_raster('hyp_b2.tif'), wbe.read_raster('hyp_b3.tif')],
+    output='continuum_removed.tif',
+    options={'wavelengths': [450.0, 550.0, 650.0]}
+)
+
+unmix_result = wbe.remote_sensing.spectral_analytics.linear_spectral_unmixing(
+    inputs=[blue, green, red, nir],
+    output='unmix_frac.tif',
+    options={
+        'endmembers': [
+            {'name': 'soil', 'values': [0.18, 0.20, 0.22, 0.24]},
+            {'name': 'veg', 'values': [0.05, 0.09, 0.06, 0.40]}
+        ],
+        'output_residual': 'unmix_residual.tif'
+    }
+)
+
+mnf_result = wbe.remote_sensing.spectral_analytics.minimum_noise_fraction(
+    inputs=[blue, green, red, nir],
+    output='mnf_components.tif',
+    options={'num_components': 3, 'output_inverse': 'mnf_inverse.tif'}
+)
+
+lib_result = wbe.remote_sensing.spectral_analytics.spectral_library_matching(
+    inputs=[blue, green, red, nir],
+    output='lib_class.tif',
+    options={
+        'metric': 'sam',
+        'library': [
+            {'name': 'water', 'values': [0.03, 0.02, 0.01, 0.00]},
+            {'name': 'soil', 'values': [0.18, 0.20, 0.22, 0.24]}
+        ],
+        'output_score': 'lib_score.tif'
+    }
+)
+
+# SAR decomposition tools are available under remote_sensing.sar
+cp_result = wbe.remote_sensing.sar.cloude_pottier_decomposition(
+    inputs=[wbe.read_raster('t11.tif'), wbe.read_raster('t22.tif'), wbe.read_raster('t33.tif')],
+    output='cloude_pottier_haa.tif',
+    options={'matrix_format': 'diag3'}
+)
+
+fd_result = wbe.remote_sensing.sar.freeman_durden_decomposition(
+    inputs=[wbe.read_raster('c11.tif'), wbe.read_raster('c22.tif'), wbe.read_raster('c33.tif')],
+    output='freeman_durden.tif',
+    options={'matrix_format': 'diag3', 'output_clip_mask': 'freeman_clip.tif'}
+)
+```
+
 ---
 
 ## Water Extraction and River Mapping

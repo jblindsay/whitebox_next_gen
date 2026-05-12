@@ -1937,6 +1937,24 @@ fn run_tool_response_with_args(
     }
 }
 
+fn merge_optional_json_object_args(
+    args: &mut serde_json::Map<String, serde_json::Value>,
+    options: Option<&Bound<'_, PyAny>>,
+) -> PyResult<()> {
+    if let Some(opts) = options {
+        let value = py_any_to_json_value(opts)?;
+        let Some(map) = value.as_object() else {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "options must be a dictionary-like object",
+            ));
+        };
+        for (k, v) in map {
+            args.insert(k.clone(), v.clone());
+        }
+    }
+    Ok(())
+}
+
 fn run_binary_tool_runtime_with_callback(
     runtime: &PythonToolRuntime,
     tool_id: &str,
@@ -2118,7 +2136,6 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("breach_single_cell_pits", "hydrology", "depressions_storage"),
     ("breakline_mapping", "terrain", "general"),
     ("buffer_raster", "raster", "distance_cost"),
-    ("buffer_vector", "vector", "geometry_processing"),
     ("build_object_hierarchy_multiscale", "remote_sensing", "obia"),
     ("burn_streams", "hydrology", "depressions_storage"),
     ("burn_streams_at_roads", "hydrology", "depressions_storage"),
@@ -2197,6 +2214,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("distance_to_outlet", "hydrology", "hydrologic_indices"),
     ("diversity_filter", "remote_sensing", "filters"),
     ("divide", "raster", "overlay_math"),
+    ("download_osm_vector", "vector", "online_data"),
     ("downslope_distance_to_stream", "hydrology", "hydrologic_indices"),
     ("downslope_flowpath_length", "hydrology", "flow_routing"),
     ("downslope_index", "hydrology", "hydrologic_indices"),
@@ -2786,6 +2804,21 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("wilcoxon_signed_rank_test", "raster", "general"),
     ("wildfire_fuel_loading_and_risk_matrix", "terrain", "workflow_products"),
     ("wind_turbine_siting", "terrain", "workflow_products"),
+    ("cloude_pottier_decomposition", "remote_sensing", "sar"),
+    ("continuum_removal", "remote_sensing", "spectral_analytics"),
+    ("dark_object_subtraction", "remote_sensing", "radiometric_correction"),
+    ("dn_to_toa_reflectance", "remote_sensing", "radiometric_correction"),
+    ("freeman_durden_decomposition", "remote_sensing", "sar"),
+    ("image_difference_change_detection", "remote_sensing", "change_detection"),
+    ("land_surface_temperature_single_channel", "remote_sensing", "thermal_emissivity"),
+    ("land_surface_temperature_split_window", "remote_sensing", "thermal_emissivity"),
+    ("linear_spectral_unmixing", "remote_sensing", "spectral_analytics"),
+    ("minimum_noise_fraction", "remote_sensing", "spectral_analytics"),
+    ("ndvi_based_emissivity", "remote_sensing", "thermal_emissivity"),
+    ("pca_based_change_detection", "remote_sensing", "change_detection"),
+    ("post_classification_change", "remote_sensing", "change_detection"),
+    ("spectral_angle_mapper", "remote_sensing", "spectral_analytics"),
+    ("spectral_library_matching", "remote_sensing", "spectral_analytics"),
     ("write_function_memory_insertion", "remote_sensing", "change_detection"),
     ("yield_data_conditioning_and_qa", "precision_agriculture", "general"),
     ("z_scores", "raster", "general"),
@@ -2931,6 +2964,8 @@ fn known_subcategories_for_category(category_slug: &str) -> &'static [&'static s
             "classification",
             "change_detection",
             "radiometric_correction",
+            "thermal_emissivity",
+            "spectral_analytics",
             "edge_feature_detection",
             "enhancement_contrast",
             "filters",
@@ -2953,6 +2988,7 @@ fn known_subcategories_for_category(category_slug: &str) -> &'static [&'static s
             "sampling_gridding",
             "attribute_analysis",
             "workflow_products",
+            "online_data",
         ],
         "projection_georeferencing" => &[
             "general",
@@ -4004,7 +4040,7 @@ fn infer_data_object_kind(category: &str, path: &str) -> Option<&'static str> {
                 return Some("raster")
             }
             // Common vector formats.
-            "shp" | "geojson" | "gpkg" | "json" => return Some("vector"),
+            "shp" | "geojson" | "gpkg" | "json" | "topojson" => return Some("vector"),
             // Common lidar formats.
             "las" | "laz" | "zlidar" => return Some("lidar"),
             _ => {}
@@ -13616,6 +13652,344 @@ impl WbEnvironment {
             Raster { file_path: magnitude, active_band: 0 },
             Raster { file_path: direction, active_band: 0 },
         ))
+    }
+
+    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    fn dark_object_subtraction(
+        &self,
+        inputs: &Bound<'_, PyList>,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let input_paths = extract_raster_input_paths(inputs, "inputs")?;
+        let mut args = serde_json::Map::new();
+        args.insert("inputs".to_string(), json!(input_paths));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "dark_object_subtraction", args, callback)?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        Python::attach(|py| json_value_to_pyobject(py, outputs))
+    }
+
+    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    fn dn_to_toa_reflectance(
+        &self,
+        inputs: &Bound<'_, PyList>,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let input_paths = extract_raster_input_paths(inputs, "inputs")?;
+        let mut args = serde_json::Map::new();
+        args.insert("inputs".to_string(), json!(input_paths));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "dn_to_toa_reflectance", args, callback)?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        Python::attach(|py| json_value_to_pyobject(py, outputs))
+    }
+
+    #[pyo3(signature = (red_input, nir_input, output_path=None, options=None, callback=None))]
+    fn ndvi_based_emissivity(
+        &self,
+        red_input: &Raster,
+        nir_input: &Raster,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let mut args = serde_json::Map::new();
+        args.insert("red_input".to_string(), json!(red_input.file_path.to_string_lossy().to_string()));
+        args.insert("nir_input".to_string(), json!(nir_input.file_path.to_string_lossy().to_string()));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "ndvi_based_emissivity", args, callback)?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        Python::attach(|py| json_value_to_pyobject(py, outputs))
+    }
+
+    #[pyo3(signature = (thermal_input, output_path=None, options=None, callback=None))]
+    fn land_surface_temperature_single_channel(
+        &self,
+        thermal_input: &Raster,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let mut args = serde_json::Map::new();
+        args.insert(
+            "thermal_input".to_string(),
+            json!(thermal_input.file_path.to_string_lossy().to_string()),
+        );
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(
+            &self.runtime,
+            "land_surface_temperature_single_channel",
+            args,
+            callback,
+        )?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        Python::attach(|py| json_value_to_pyobject(py, outputs))
+    }
+
+    #[pyo3(signature = (thermal1_input, thermal2_input, output_path=None, options=None, callback=None))]
+    fn land_surface_temperature_split_window(
+        &self,
+        thermal1_input: &Raster,
+        thermal2_input: &Raster,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let mut args = serde_json::Map::new();
+        args.insert(
+            "thermal1_input".to_string(),
+            json!(thermal1_input.file_path.to_string_lossy().to_string()),
+        );
+        args.insert(
+            "thermal2_input".to_string(),
+            json!(thermal2_input.file_path.to_string_lossy().to_string()),
+        );
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(
+            &self.runtime,
+            "land_surface_temperature_split_window",
+            args,
+            callback,
+        )?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        Python::attach(|py| json_value_to_pyobject(py, outputs))
+    }
+
+    #[pyo3(signature = (t1_inputs, t2_inputs, output_path=None, options=None, callback=None))]
+    fn image_difference_change_detection(
+        &self,
+        t1_inputs: &Bound<'_, PyList>,
+        t2_inputs: &Bound<'_, PyList>,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let t1_paths = extract_raster_input_paths(t1_inputs, "t1_inputs")?;
+        let t2_paths = extract_raster_input_paths(t2_inputs, "t2_inputs")?;
+        let mut args = serde_json::Map::new();
+        args.insert("t1_inputs".to_string(), json!(t1_paths));
+        args.insert("t2_inputs".to_string(), json!(t2_paths));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(
+            &self.runtime,
+            "image_difference_change_detection",
+            args,
+            callback,
+        )?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        Python::attach(|py| json_value_to_pyobject(py, outputs))
+    }
+
+    #[pyo3(signature = (t1_classified, t2_classified, output_path=None, options=None, callback=None))]
+    fn post_classification_change(
+        &self,
+        t1_classified: &Raster,
+        t2_classified: &Raster,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let mut args = serde_json::Map::new();
+        args.insert(
+            "t1_classified".to_string(),
+            json!(t1_classified.file_path.to_string_lossy().to_string()),
+        );
+        args.insert(
+            "t2_classified".to_string(),
+            json!(t2_classified.file_path.to_string_lossy().to_string()),
+        );
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "post_classification_change", args, callback)?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        Python::attach(|py| json_value_to_pyobject(py, outputs))
+    }
+
+    #[pyo3(signature = (t1_inputs, t2_inputs, output_path=None, options=None, callback=None))]
+    fn pca_based_change_detection(
+        &self,
+        t1_inputs: &Bound<'_, PyList>,
+        t2_inputs: &Bound<'_, PyList>,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let t1_paths = extract_raster_input_paths(t1_inputs, "t1_inputs")?;
+        let t2_paths = extract_raster_input_paths(t2_inputs, "t2_inputs")?;
+        let mut args = serde_json::Map::new();
+        args.insert("t1_inputs".to_string(), json!(t1_paths));
+        args.insert("t2_inputs".to_string(), json!(t2_paths));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "pca_based_change_detection", args, callback)?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        Python::attach(|py| json_value_to_pyobject(py, outputs))
+    }
+
+    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    fn spectral_angle_mapper(
+        &self,
+        inputs: &Bound<'_, PyList>,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let input_paths = extract_raster_input_paths(inputs, "inputs")?;
+        let mut args = serde_json::Map::new();
+        args.insert("inputs".to_string(), json!(input_paths));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "spectral_angle_mapper", args, callback)?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        Python::attach(|py| json_value_to_pyobject(py, outputs))
+    }
+
+    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    fn continuum_removal(
+        &self,
+        inputs: &Bound<'_, PyList>,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let input_paths = extract_raster_input_paths(inputs, "inputs")?;
+        let mut args = serde_json::Map::new();
+        args.insert("inputs".to_string(), json!(input_paths));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "continuum_removal", args, callback)?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        Python::attach(|py| json_value_to_pyobject(py, outputs))
+    }
+
+    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    fn linear_spectral_unmixing(
+        &self,
+        inputs: &Bound<'_, PyList>,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let input_paths = extract_raster_input_paths(inputs, "inputs")?;
+        let mut args = serde_json::Map::new();
+        args.insert("inputs".to_string(), json!(input_paths));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "linear_spectral_unmixing", args, callback)?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        Python::attach(|py| json_value_to_pyobject(py, outputs))
+    }
+
+    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    fn minimum_noise_fraction(
+        &self,
+        inputs: &Bound<'_, PyList>,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let input_paths = extract_raster_input_paths(inputs, "inputs")?;
+        let mut args = serde_json::Map::new();
+        args.insert("inputs".to_string(), json!(input_paths));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "minimum_noise_fraction", args, callback)?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        Python::attach(|py| json_value_to_pyobject(py, outputs))
+    }
+
+    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    fn spectral_library_matching(
+        &self,
+        inputs: &Bound<'_, PyList>,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let input_paths = extract_raster_input_paths(inputs, "inputs")?;
+        let mut args = serde_json::Map::new();
+        args.insert("inputs".to_string(), json!(input_paths));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "spectral_library_matching", args, callback)?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        Python::attach(|py| json_value_to_pyobject(py, outputs))
+    }
+
+    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    fn cloude_pottier_decomposition(
+        &self,
+        inputs: &Bound<'_, PyList>,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let input_paths = extract_raster_input_paths(inputs, "inputs")?;
+        let mut args = serde_json::Map::new();
+        args.insert("inputs".to_string(), json!(input_paths));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "cloude_pottier_decomposition", args, callback)?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        Python::attach(|py| json_value_to_pyobject(py, outputs))
+    }
+
+    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    fn freeman_durden_decomposition(
+        &self,
+        inputs: &Bound<'_, PyList>,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let input_paths = extract_raster_input_paths(inputs, "inputs")?;
+        let mut args = serde_json::Map::new();
+        args.insert("inputs".to_string(), json!(input_paths));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "freeman_durden_decomposition", args, callback)?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
     #[pyo3(signature = (input, pp, focal_length=304.8, image_width=228.6, n=4.0, output_path=None, callback=None))]

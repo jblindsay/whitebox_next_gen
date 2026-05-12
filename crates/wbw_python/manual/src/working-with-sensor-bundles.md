@@ -103,6 +103,19 @@ for loader, path in [
 4. Build previews/composites for QA.
 5. Persist derived rasters and document source family + key choices.
 
+## Calibration Contract Notes (Landsat/Sentinel-2)
+
+Remote-sensing radiometric and thermal tools in WbW-Python now rely on a
+standardized sensor-bundle calibration contract in `wbraster`.
+
+- Sentinel-2 bundle metadata provides quantification values used for DN to TOA
+    reflectance scaling.
+- Landsat bundles provide typed per-band reflectance and thermal constants used
+    in TOA reflectance and LST workflows.
+
+For best results, keep original SAFE/MTL metadata with scene rasters when
+moving or staging bundle data for analysis.
+
 ## Sensor Bundle Object Method Reference
 
 Common bundle properties such as `family` and `bundle_root` are omitted here so

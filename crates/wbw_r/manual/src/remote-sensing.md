@@ -569,6 +569,138 @@ wbw_change_vector_analysis(date1     = paste(c('t1_b2.tif','t1_b3.tif','t1_b4.ti
   direction = 'cva_direction.tif')
 ```
 
+### Additional Change, Thermal, and Spectral Sprint Tools
+
+The newest remote sensing tools are available through session tool execution, which is useful while dedicated R helper wrappers are still catching up:
+
+```r
+# Image difference change detection
+img_diff <- s$run_tool('image_difference_change_detection', list(
+  t1_inputs = c('t1_b2.tif', 't1_b3.tif', 't1_b4.tif'),
+  t2_inputs = c('t2_b2.tif', 't2_b3.tif', 't2_b4.tif'),
+  mode = 'magnitude',
+  threshold_sigma = 2.0,
+  output = 'img_diff_mag.tif',
+  output_signed = 'img_diff_signed.tif',
+  output_mask = 'img_diff_mask.tif'
+))
+
+# Post-classification change with class remapping
+post_class <- s$run_tool('post_classification_change', list(
+  t1_classified = 'lulc_t1.tif',
+  t2_classified = 'lulc_t2.tif',
+  transition_scale = 1000,
+  t1_class_remap = list('11' = 1, '12' = 1),
+  t2_class_remap = list('41' = 4, '42' = 4),
+  output = 'post_class_transition.tif'
+))
+
+# PCA-based change detection
+pca_change <- s$run_tool('pca_based_change_detection', list(
+  t1_inputs = c('t1_b2.tif', 't1_b3.tif', 't1_b4.tif'),
+  t2_inputs = c('t2_b2.tif', 't2_b3.tif', 't2_b4.tif'),
+  component = 1,
+  threshold_sigma = 2.0,
+  output = 'pca_change_pc1.tif',
+  output_mask = 'pca_change_mask.tif',
+  output_report = 'pca_change_report.json'
+))
+
+# Dark object subtraction and DN->TOA reflectance
+dos <- s$run_tool('dark_object_subtraction', list(
+  inputs = c('B02.tif', 'B03.tif', 'B04.tif', 'B08.tif'),
+  percentile = 1.0,
+  output = 'dos_stack.tif',
+  output_diagnostic_offsets = 'dos_offsets.tif'
+))
+
+toa <- s$run_tool('dn_to_toa_reflectance', list(
+  inputs = c('B02.tif', 'B03.tif', 'B04.tif', 'B08.tif'),
+  sensor_bundle_root = '/data/LC09_L1TP_017030_20240420_20240426_02_T1',
+  output = 'toa_stack.tif'
+))
+
+# Thermal emissivity and LST
+emiss <- s$run_tool('ndvi_based_emissivity', list(
+  red_input = 'B04.tif',
+  nir_input = 'B08.tif',
+  output = 'emissivity.tif'
+))
+
+lst_sc <- s$run_tool('land_surface_temperature_single_channel', list(
+  thermal_input = 'B10.tif',
+  sensor_bundle_root = '/data/LC09_L1TP_017030_20240420_20240426_02_T1',
+  output = 'lst_single_channel.tif'
+))
+
+lst_sw <- s$run_tool('land_surface_temperature_split_window', list(
+  thermal1_input = 'B10.tif',
+  thermal2_input = 'B11.tif',
+  emissivity_mean_constant = 0.98,
+  emissivity_delta_constant = 0.0,
+  output = 'lst_split_window.tif'
+))
+
+# Spectral analytics
+sam <- s$run_tool('spectral_angle_mapper', list(
+  inputs = c('B02.tif', 'B03.tif', 'B04.tif', 'B08.tif'),
+  endmembers = list(
+    list(name = 'water', values = c(0.03, 0.02, 0.01, 0.00)),
+    list(name = 'veg', values = c(0.05, 0.10, 0.06, 0.40))
+  ),
+  output = 'sam_classes.tif',
+  output_angle = 'sam_angle.tif'
+))
+
+cont <- s$run_tool('continuum_removal', list(
+  inputs = c('hyp_b1.tif', 'hyp_b2.tif', 'hyp_b3.tif'),
+  wavelengths = c(450.0, 550.0, 650.0),
+  output = 'continuum_removed.tif'
+))
+
+unmix <- s$run_tool('linear_spectral_unmixing', list(
+  inputs = c('B02.tif', 'B03.tif', 'B04.tif', 'B08.tif'),
+  endmembers = list(
+    list(name = 'soil', values = c(0.18, 0.20, 0.22, 0.24)),
+    list(name = 'veg', values = c(0.05, 0.09, 0.06, 0.40))
+  ),
+  output = 'unmix_frac.tif',
+  output_residual = 'unmix_residual.tif'
+))
+
+mnf <- s$run_tool('minimum_noise_fraction', list(
+  inputs = c('B02.tif', 'B03.tif', 'B04.tif', 'B08.tif'),
+  num_components = 3,
+  output = 'mnf_components.tif',
+  output_inverse = 'mnf_inverse.tif'
+))
+
+lib_match <- s$run_tool('spectral_library_matching', list(
+  inputs = c('B02.tif', 'B03.tif', 'B04.tif', 'B08.tif'),
+  metric = 'sam',
+  library = list(
+    list(name = 'water', values = c(0.03, 0.02, 0.01, 0.00)),
+    list(name = 'soil', values = c(0.18, 0.20, 0.22, 0.24))
+  ),
+  output = 'lib_class.tif',
+  output_score = 'lib_score.tif'
+))
+
+# PolSAR decomposition tools
+cp <- s$run_tool('cloude_pottier_decomposition', list(
+  inputs = c('t11.tif', 't22.tif', 't33.tif'),
+  matrix_format = 'diag3',
+  output = 'cloude_pottier_haa.tif'
+))
+
+fd <- s$run_tool('freeman_durden_decomposition', list(
+  inputs = c('c11.tif', 'c22.tif', 'c33.tif'),
+  matrix_format = 'diag3',
+  output = 'freeman_durden.tif',
+  output_clip_mask = 'freeman_clip.tif'
+))
+```
+
 ---
 
 ## WbW-Pro Spotlight: In-Season Crop Stress Intervention Planning

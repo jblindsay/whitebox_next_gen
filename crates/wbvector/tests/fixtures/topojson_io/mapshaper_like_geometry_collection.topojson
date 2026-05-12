@@ -1,0 +1,32 @@
+{
+  "type": "Topology",
+  "bbox": [-123.6, 48.2, -123.1, 48.6],
+  "objects": {
+    "counties": {
+      "type": "GeometryCollection",
+      "geometries": [
+        {
+          "type": "Polygon",
+          "id": "c-101",
+          "properties": {"name": "west", "pop": 1000},
+          "arcs": [[0, 1, 2, 3]]
+        },
+        {
+          "type": "Polygon",
+          "id": "c-102",
+          "properties": {"name": "east", "pop": 1200},
+          "arcs": [[4, 5, -2, 6]]
+        }
+      ]
+    }
+  },
+  "arcs": [
+    [[0, 0], [0, 4]],
+    [[0, 4], [4, 4]],
+    [[4, 4], [4, 0]],
+    [[4, 0], [0, 0]],
+    [[4, 0], [8, 0]],
+    [[8, 0], [8, 4]],
+    [[8, 4], [4, 4]]
+  ]
+}

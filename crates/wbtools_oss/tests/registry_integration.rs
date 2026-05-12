@@ -134,6 +134,7 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"cost_pathway"));
     assert!(ids.contains(&"create_plane"));
     assert!(ids.contains(&"difference"));
+    assert!(ids.contains(&"download_osm_vector"));
     assert!(ids.contains(&"dissolve"));
     assert!(ids.contains(&"deviation_from_regional_direction"));
     assert!(ids.contains(&"edge_proportion"));
@@ -10448,7 +10449,7 @@ fn modified_shepard_quadratic_basis_changes_output_surface() {
     assert_eq!(out_false.rows, out_true.rows);
     assert_eq!(out_false.cols, out_true.cols);
 
-    let mut max_abs_diff = 0.0;
+    let mut max_abs_diff: f64 = 0.0;
     for row in 0..out_false.rows as isize {
         for col in 0..out_false.cols as isize {
             let a = out_false.get(0, row, col);

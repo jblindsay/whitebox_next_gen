@@ -1,0 +1,33 @@
+{
+  "type": "Topology",
+  "objects": {
+    "roads": {
+      "type": "GeometryCollection",
+      "geometries": [
+        {
+          "type": "LineString",
+          "properties": {"name": "spine"},
+          "arcs": [0]
+        },
+        {
+          "type": "LineString",
+          "properties": {"name": "branch"},
+          "arcs": [1, -1]
+        }
+      ]
+    },
+    "boundary": {
+      "type": "Polygon",
+      "properties": {"name": "tile"},
+      "arcs": [[2, 3, 4, 5]]
+    }
+  },
+  "arcs": [
+    [[0, 0], [2, 0], [4, 0]],
+    [[4, 0], [5, 1]],
+    [[0, 0], [0, 4]],
+    [[0, 4], [4, 4]],
+    [[4, 4], [4, 0]],
+    [[4, 0], [0, 0]]
+  ]
+}

@@ -907,7 +907,7 @@ wbw_infer_data_object_kind <- function(path, value = NULL) {
   if (ext %in% c("tif", "tiff", "dep", "bil", "flt", "sdat", "rdc", "asc")) {
     return("raster")
   }
-  if (ext %in% c("shp", "geojson", "gpkg", "json")) {
+  if (ext %in% c("shp", "geojson", "gpkg", "json", "topojson")) {
     return("vector")
   }
   if (ext %in% c("las", "laz", "zlidar")) {

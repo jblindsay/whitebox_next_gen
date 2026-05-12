@@ -187,10 +187,15 @@
 <h2 id="raster-formats"><a class="header" href="#raster-formats">Raster Formats</a></h2>
 <p>Raster support in Whitebox is provided by <code>wbraster</code>.</p>
 <div class="table-wrapper"><table><thead><tr><th>Format</th><th>Extension(s)</th><th style="text-align: center">Read</th><th style="text-align: center">Write</th><th>Notes</th></tr></thead><tbody>
+<tr><td>DTED</td><td><code>.dt0</code>, <code>.dt1</code>, <code>.dt2</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>DTED 0/1/2 elevation; WGS-84 geographic only</td></tr>
 <tr><td>ENVI HDR Labelled</td><td><code>.hdr</code> + sidecar data</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Multi-band (<code>BSQ</code> / <code>BIL</code> / <code>BIP</code>)</td></tr>
 <tr><td>ER Mapper</td><td><code>.ers</code> + data</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Hierarchical header</td></tr>
+<tr><td>ERDAS IMAGINE (HFA)</td><td><code>.img</code></td><td style="text-align: center">Yes</td><td style="text-align: center">No</td><td>Read-only MVP; RLC compression supported</td></tr>
 <tr><td>Esri ASCII Grid</td><td><code>.asc</code>, <code>.grd</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Handles <code>xllcorner</code> and <code>xllcenter</code></td></tr>
 <tr><td>Esri Binary Grid</td><td>workspace dir / <code>.adf</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Single-band float32, big-endian</td></tr>
+<tr><td>Esri Float Grid</td><td><code>.flt</code>, <code>.hdr</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Single-band float grid with header</td></tr>
+<tr><td>JPEG + World File</td><td><code>.jpg</code>, <code>.jpeg</code> + <code>.jgw</code>/<code>.wld</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Non-rotated georeferencing</td></tr>
+<tr><td>PNG + World File</td><td><code>.png</code> + <code>.pgw</code>/<code>.wld</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Non-rotated georeferencing</td></tr>
 <tr><td>GeoTIFF / BigTIFF / COG</td><td><code>.tif</code>, <code>.tiff</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Stripped/tiled GeoTIFF, BigTIFF, COG</td></tr>
 <tr><td>GeoPackage Raster (Phase 4)</td><td><code>.gpkg</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Multi-band tiled raster</td></tr>
 <tr><td>GRASS ASCII Raster</td><td><code>.asc</code>, <code>.txt</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td><code>north/south/east/west</code>, <code>rows/cols</code> headers</td></tr>
@@ -200,6 +205,7 @@
 <tr><td>SAGA GIS Binary</td><td><code>.sgrd</code>, <code>.sdat</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>SAGA data types supported</td></tr>
 <tr><td>Surfer GRD</td><td><code>.grd</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>DSAA and DSRB</td></tr>
 <tr><td>Zarr v2/v3</td><td><code>.zarr</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>2D and 3D (<code>band,y,x</code>) chunked arrays</td></tr>
+<tr><td>XYZ ASCII Grid</td><td><code>.xyz</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Whitespace or comma-delimited X Y Z points</td></tr>
 </tbody></table>
 </div>
 <p>Notes:</p>
@@ -213,6 +219,7 @@
 <div class="table-wrapper"><table><thead><tr><th>Format</th><th style="text-align: center">Read</th><th style="text-align: center">Write</th><th>Notes</th></tr></thead><tbody>
 <tr><td>FlatGeobuf (<code>.fgb</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>High-performance binary interchange</td></tr>
 <tr><td>GeoJSON (<code>.geojson</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Web-friendly text format</td></tr>
+<tr><td>TopoJSON (<code>.topojson</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Topology-preserving JSON format</td></tr>
 <tr><td>GeoPackage (<code>.gpkg</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>SQLite container; multi-layer workflows</td></tr>
 <tr><td>GML (<code>.gml</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Standards-based XML exchange</td></tr>
 <tr><td>GPX (<code>.gpx</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>GPS tracks/routes/waypoints</td></tr>

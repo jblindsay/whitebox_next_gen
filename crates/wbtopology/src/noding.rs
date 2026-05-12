@@ -507,3 +507,61 @@ fn segment_intersection_point(a1: Coord, a2: Coord, b1: Coord, b2: Coord, eps: f
 
     Some(Coord::interpolate_segment(a1, a2, t))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ls(coords: &[(f64, f64)]) -> LineString {
+        LineString::new(coords.iter().map(|(x, y)| Coord::xy(*x, *y)).collect())
+    }
+
+    fn has_coord_eps(lines: &[LineString], p: Coord, eps: f64) -> bool {
+        lines.iter().any(|l| {
+            l.coords
+                .iter()
+                .any(|c| (c.x - p.x).abs() <= eps && (c.y - p.y).abs() <= eps)
+        })
+    }
+
+    #[test]
+    fn t_junction_splits_main_segment() {
+        let lines = vec![
+            ls(&[(0.0, 0.0), (10.0, 0.0)]),
+            ls(&[(5.0, 0.0), (5.0, 5.0)]),
+        ];
+
+        let out = node_linestrings(&lines, 1.0e-9);
+        // Horizontal should split into two segments, vertical remains one -> at least 3.
+        assert!(
+            out.len() >= 3,
+            "expected T-junction noding to split the through segment"
+        );
+        assert!(
+            has_coord_eps(&out, Coord::xy(5.0, 0.0), 1.0e-9),
+            "expected split node at T-junction coordinate"
+        );
+    }
+
+    #[test]
+    fn geos_parity_shallow_angle_intersection_should_survive() {
+        let lines = vec![
+            ls(&[(0.0, 0.0), (1_000_000.0, 1.0)]),
+            ls(&[(500_000.0, -1.0), (500_000.0, 2.0)]),
+        ];
+
+        let out = node_linestrings_with_options(
+            &lines,
+            NodingOptions {
+                epsilon: 1.0e-9,
+                strategy: NodingStrategy::SnapRounding,
+                precision: None,
+            },
+        );
+
+        assert!(
+            has_coord_eps(&out, Coord::xy(500_000.0, 0.5), 1.0e-3),
+            "expected an explicit split near the shallow-angle crossing"
+        );
+    }
+}

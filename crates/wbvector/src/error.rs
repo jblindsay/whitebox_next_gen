@@ -43,6 +43,25 @@ pub enum GeoError {
     /// Unknown GeoJSON `type` token.
     GeoJsonType(String),
 
+    // TopoJSON
+    #[error("TopoJSON parse error at offset {offset}: {msg}")]
+    /// TopoJSON parse error with byte offset and parser detail.
+    TopoJsonParse {
+        /// Byte offset near where parsing failed.
+        offset: usize,
+        /// Human-readable parse failure message.
+        msg: String,
+    },
+    #[error("TopoJSON missing required field '{0}'")]
+    /// Required TopoJSON property or object member is missing.
+    TopoJsonMissing(String),
+    #[error("Unknown TopoJSON type '{0}'")]
+    /// Unknown TopoJSON `type` token.
+    TopoJsonType(String),
+    #[error("Invalid TopoJSON topology: {0}")]
+    /// Topology graph/object resolution error.
+    TopoJsonTopology(String),
+
     // GML
     #[error("GML parse error at offset {offset}: {msg}")]
     /// GML parse error with byte offset and parser detail.

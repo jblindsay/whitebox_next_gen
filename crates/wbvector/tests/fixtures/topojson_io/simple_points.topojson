@@ -1,0 +1,23 @@
+{
+  "type": "Topology",
+  "objects": {
+    "layer": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "id": "p1",
+          "properties": {"name": "alpha"},
+          "geometry": {"type": "Point", "coordinates": [10.0, 20.0]}
+        },
+        {
+          "type": "Feature",
+          "id": "p2",
+          "properties": {"name": "beta"},
+          "geometry": {"type": "Point", "coordinates": [11.5, 21.25]}
+        }
+      ]
+    }
+  },
+  "arcs": []
+}

@@ -775,7 +775,6 @@ These tools perform vector overlay, line splitting/merging, and polygon generati
 
 ### Vector Overlay And Linework Tool Index
 
-- `buffer_vector`
 - `centroid_vector`
 - `clip`
 - `difference`
@@ -800,24 +799,6 @@ These tools perform vector overlay, line splitting/merging, and polygon generati
 - `travelling_salesman_problem`
 - `construct_vector_tin`
 - `vector_hex_binning`
-
-### buffer_vector
-
-```
-buffer_vector(input, distance, quadrant_segments=8, cap_style="round", join_style="round", mitre_limit=5.0, output_path=None, callback=None)
-```
-
-Creates polygon buffers around vector geometries with configurable cap and join styles.
-
-Parameters:
-- `input`: Input vector layer.
-- `distance`: Buffer distance in map units.
-- `quadrant_segments`: Arc resolution in segments per quadrant.
-- `cap_style`: Line cap style (`"round"`, `"flat"`, or `"square"`).
-- `join_style`: Corner join style (`"round"`, `"bevel"`, or `"mitre"`).
-- `mitre_limit`: Mitre join limit when `join_style="mitre"`.
-- `output_path`: Optional output vector path. If omitted, an auto-derived output path is used.
-- `callback`: Optional progress callback receiving JSON events.
 
 ### extract_by_attribute
 

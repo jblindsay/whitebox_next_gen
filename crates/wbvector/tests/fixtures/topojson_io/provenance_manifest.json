@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "file": "simple_points.topojson",
+      "source_type": "synthetic_local",
+      "source_ref": null,
+      "notes": "Minimal point feature collection baseline fixture."
+    },
+    {
+      "file": "shared_boundary_polygons.topojson",
+      "source_type": "synthetic_local",
+      "source_ref": null,
+      "notes": "Shared-boundary polygon arcs and reversed-arc reuse case."
+    },
+    {
+      "file": "multilines_shared_arcs.topojson",
+      "source_type": "synthetic_local",
+      "source_ref": null,
+      "notes": "Multiline arc-sharing baseline."
+    },
+    {
+      "file": "transform_quantized_example.topojson",
+      "source_type": "synthetic_local",
+      "source_ref": null,
+      "notes": "Quantized transform decode baseline."
+    },
+    {
+      "file": "mixed_geometry_collection.topojson",
+      "source_type": "synthetic_local",
+      "source_ref": null,
+      "notes": "Mixed geometry collection coverage fixture."
+    },
+    {
+      "file": "object_map_multi_member.topojson",
+      "source_type": "synthetic_local",
+      "source_ref": null,
+      "notes": "Multiple named objects map fixture."
+    },
+    {
+      "file": "foreign_members_bbox.topojson",
+      "source_type": "synthetic_local",
+      "source_ref": null,
+      "notes": "Foreign member and bbox tolerance fixture."
+    },
+    {
+      "file": "reversed_arc_lines.topojson",
+      "source_type": "synthetic_local",
+      "source_ref": null,
+      "notes": "Negative arc index reversal behavior."
+    },
+    {
+      "file": "mapshaper_like_geometry_collection.topojson",
+      "source_type": "synthetic_local",
+      "source_ref": null,
+      "notes": "Mapshaper-style geometry collection variant."
+    },
+    {
+      "file": "topojson_server_quantized_like.topojson",
+      "source_type": "synthetic_local",
+      "source_ref": null,
+      "notes": "TopoJSON-server-like quantized transform variant."
+    },
+    {
+      "file": "feature_collection_with_null_geometry.topojson",
+      "source_type": "synthetic_local",
+      "source_ref": null,
+      "notes": "FeatureCollection with null geometry member."
+    }
+  ]
+}

@@ -8,6 +8,7 @@
 //! |-------------|------|-------|-----------|
 //! | FlatGeobuf  | ✓    | ✓     | `.fgb`    |
 //! | GeoJSON     | ✓    | ✓     | `.geojson`|
+//! | TopoJSON    | ✓    | ✓     | `.topojson`|
 //! | GeoPackage  | ✓    | ✓     | `.gpkg`   |
 //! | GeoParquet* | ✓    | ✓     | `.parquet`|
 //! | GML         | ✓    | ✓     | `.gml`    |
@@ -124,6 +125,7 @@ pub mod flatgeobuf;
 pub mod geojson;
 pub mod geometry;
 pub mod geopackage;
+pub mod topojson;
 /// In-process vector memory store for passing vectors between tools without disk I/O.
 pub mod memory_store;
 #[cfg(feature = "geoparquet")]
@@ -151,6 +153,8 @@ pub enum VectorFormat {
 	FlatGeobuf,
 	/// GeoJSON text format (`.geojson`).
 	GeoJson,
+	/// TopoJSON topology-preserving JSON format (`.topojson`).
+	TopoJson,
 	/// GeoPackage SQLite container format (`.gpkg`).
 	GeoPackage,
 	#[cfg(feature = "geoparquet")]
@@ -205,6 +209,7 @@ impl VectorFormat {
 		match ext_lc.as_str() {
 			"fgb" => return Ok(Self::FlatGeobuf),
 			"geojson" => return Ok(Self::GeoJson),
+			"topojson" => return Ok(Self::TopoJson),
 			"gpkg" => return Ok(Self::GeoPackage),
 			"gml" => return Ok(Self::Gml),
 			"gpx" => return Ok(Self::Gpx),
@@ -235,7 +240,12 @@ impl VectorFormat {
 					));
 				}
 			}
-			"json" => return Ok(Self::GeoJson),
+			"json" => {
+				if let Some(kind) = sniff_json(path)? {
+					return Ok(kind);
+				}
+				return Ok(Self::GeoJson);
+			}
 			"xml" => {
 				if let Some(kind) = sniff_xml(path)? {
 					return Ok(kind);
@@ -285,6 +295,7 @@ impl VectorFormat {
 		match self {
 			Self::FlatGeobuf => flatgeobuf::read(path),
 			Self::GeoJson => geojson::read(path),
+			Self::TopoJson => topojson::read(path),
 			Self::GeoPackage => geopackage::read(path),
 			#[cfg(feature = "geoparquet")]
 			Self::GeoParquet => geoparquet::read(path),
@@ -305,6 +316,7 @@ impl VectorFormat {
 		match self {
 			Self::FlatGeobuf => flatgeobuf::write(layer, path),
 			Self::GeoJson => geojson::write(layer, path),
+			Self::TopoJson => topojson::write(layer, path),
 			Self::GeoPackage => geopackage::write(layer, path),
 			#[cfg(feature = "geoparquet")]
 			Self::GeoParquet => geoparquet::write(layer, path),
@@ -361,6 +373,27 @@ fn sniff_xml(path: &std::path::Path) -> Result<Option<VectorFormat>> {
 	}
 	if txt.contains("<gml") || txt.contains("opengis.net/gml") {
 		return Ok(Some(VectorFormat::Gml));
+	}
+	Ok(None)
+}
+
+fn sniff_json(path: &std::path::Path) -> Result<Option<VectorFormat>> {
+	use std::io::Read;
+	let mut f = match std::fs::File::open(path) {
+		Ok(f) => f,
+		Err(_) => return Ok(None),
+	};
+	let mut buf = vec![0u8; 4096];
+	let n = f.read(&mut buf)?;
+	buf.truncate(n);
+	let txt = String::from_utf8_lossy(&buf).to_ascii_lowercase();
+	if txt.contains("\"type\"") && txt.contains("\"topology\"") {
+		return Ok(Some(VectorFormat::TopoJson));
+	}
+	if txt.contains("\"type\"")
+		&& (txt.contains("\"featurecollection\"") || txt.contains("\"feature\""))
+	{
+		return Ok(Some(VectorFormat::GeoJson));
 	}
 	Ok(None)
 }

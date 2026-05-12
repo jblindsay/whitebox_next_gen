@@ -52,6 +52,7 @@ Vector support in Whitebox is provided by `wbvector`.
 |---|:---:|:---:|---|
 | FlatGeobuf (`.fgb`) | Yes | Yes | High-performance binary interchange |
 | GeoJSON (`.geojson`) | Yes | Yes | Web-friendly text format |
+| TopoJSON (`.topojson`) | Yes | Yes | Topology-preserving JSON format |
 | GeoPackage (`.gpkg`) | Yes | Yes | SQLite container; multi-layer workflows |
 | GML (`.gml`) | Yes | Yes | Standards-based XML exchange |
 | GPX (`.gpx`) | Yes | Yes | GPS tracks/routes/waypoints |

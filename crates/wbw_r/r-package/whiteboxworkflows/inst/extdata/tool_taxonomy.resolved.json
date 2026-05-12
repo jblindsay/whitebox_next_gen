@@ -367,7 +367,6 @@
       "category": "vector",
       "subcategory": "geometry_processing",
       "tools": [
-        "buffer_vector",
         "centroid_vector",
         "concave_hull",
         "densify_features",
@@ -453,6 +452,13 @@
         "parcel_and_land_fabric_topology_compliance_workflow",
         "emergency_scenario_routing_and_accessibility_simulator",
         "market_access_and_site_intelligence_workflow"
+      ]
+    },
+    {
+      "category": "vector",
+      "subcategory": "online_data",
+      "tools": [
+        "download_osm_vector"
       ]
     },
     {
@@ -1180,10 +1186,6 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
-    "buffer_vector": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
     "build_object_hierarchy_multiscale": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -1495,6 +1497,10 @@
     "divide": {
       "license_tier": "open",
       "source_crate": "unknown"
+    },
+    "download_osm_vector": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
     },
     "downslope_distance_to_stream": {
       "license_tier": "open",

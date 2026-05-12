@@ -22,6 +22,7 @@ Pure-Rust library for reading and writing common vector GIS formats with a singl
 - [Examples](#examples)
 - [OSM Examples](#osm-examples)
 - [Known Limitations](#known-limitations)
+- [TopoJSON Plan](#topojson-plan)
 - [Development](#development)
 - [License](#license)
 
@@ -74,6 +75,7 @@ No. `wbvector` is developed primarily to support Whitebox, but it is not restric
 |--------|:----:|:-----:|-------|
 | **FlatGeobuf** (`.fgb`) | ✓ | ✓ | High-performance binary interchange |
 | **GeoJSON** (`.geojson`) | ✓ | ✓ | Web-friendly JSON text format |
+| **TopoJSON** (`.topojson`) | ✓ | ✓ | Topology-preserving JSON format |
 | **GeoPackage** (`.gpkg`) | ✓ | ✓ | SQLite container; supports multi-layer workflows |
 | **Geography Markup Language** (`.gml`) | ✓ | ✓ | Standards-based XML exchange |
 | **GPS Exchange Format** (`.gpx`) | ✓ | ✓ | GPS tracks/routes/waypoints |
@@ -93,6 +95,7 @@ Supported formats are summarized above; this section provides deeper trade-off g
 | GeoPackage (`.gpkg`) | Binary SQLite container | Yes | High (Simple Features + collections) | Yes | Yes (multiple layers/tables) | Good for larger datasets and mixed table/layer projects | Project archives and multi-layer desktop workflows | Read + Write |
 | FlatGeobuf (`.fgb`) | Binary | Yes | High (Simple Features + collections) | Yes | Single layer per file | Compact and fast for sequential/stream-like workflows | High-performance interchange and large vector delivery | Read + Write |
 | GeoJSON (`.geojson`) | ASCII/UTF-8 JSON text | Yes | High (Simple Features + collections) | Limited in RFC 7946 practice | FeatureCollection in one document | Verbose text; great interoperability, usually larger/slower than binary | Web APIs, debugging, and human-readable exchange | Read + Write |
+| TopoJSON (`.topojson`) | ASCII/UTF-8 JSON text | Yes | High (topology-preserving arcs + objects) | Limited (format-level metadata conventions vary) | Topology object with named object members | Usually smaller than GeoJSON for shared-boundary datasets; extra encode/decode complexity | Web/topology interchange with shared boundaries and compact payloads | Read + Write |
 | ESRI Shapefile (`.shp` + sidecars) | Mixed binary (`.shp/.shx/.dbf`) + optional text `.prj` | Yes | Medium (no native GeometryCollection) | Limited (`.prj`) | Single layer per dataset | Fast and widely supported, but constrained schema/geometry model | Maximum compatibility with legacy GIS tools | Read + Write |
 | KML (`.kml`) | ASCII/UTF-8 XML text | Yes (name/description/ExtendedData) | Medium-High (including MultiGeometry) | Implicit lon/lat WGS84 | Document/Folder hierarchy | Good for visualization exchange; text/XML overhead | Google Earth-style visualization and sharing | Read + Write |
 | KMZ (`.kmz`) | Binary ZIP container with KML | Yes (via embedded KML) | Medium-High (KML geometry model) | Implicit lon/lat WGS84 | KML document packaged in ZIP | Smaller transfer size than KML due to compression | Compressed KML distribution and email/web transfer | Read + Write *(optional `kmz` feature)* |
@@ -178,6 +181,8 @@ Each format module follows a similar API style:
 
 - `flatgeobuf::read(path)`, `flatgeobuf::write(&layer, path)`, `flatgeobuf::from_bytes(bytes)`, `flatgeobuf::to_bytes(&layer)`
 - `geojson::read(path)`, `geojson::write(&layer, path)`, `geojson::parse_str(text)`, `geojson::to_string(&layer)`
+- `topojson::read(path)`, `topojson::write(&layer, path)`, `topojson::parse_str(text)`, `topojson::to_string(&layer)`
+- `topojson::write_with_options(&layer, path, options)`, `topojson::to_string_with_options(&layer, options)`
     - `geojson::write` enforces RFC 7946 output coordinates (EPSG:4326 lon/lat) by auto-reprojecting when input CRS metadata is present and not already WGS 84.
 - `geopackage::read(path)`, `geopackage::write(&layer, path)`, `geopackage::list_layers(path)`, `geopackage::read_layer(path, name)`, `geopackage::write_layers(&[...], path)`
 - `geoparquet::read(path)`, `geoparquet::write(&layer, path)`, `geoparquet::write_with_options(&layer, path, &options)`, `GeoParquetWriteOptions` (row-group/page/batch/compression tuning; includes `for_large_files()` and `for_interactive_files()` presets) *(requires `geoparquet` feature)*
@@ -420,6 +425,12 @@ wbvector/
 - GeoParquet read compatibility targets GeoParquet 1.0 canonical patterns; some producer-specific extensions or alternate geometry column conventions may require workarounds.
 - WKT-based CRS inference uses `wbprojection` adaptive matching; authority-marker-free WKT strings may produce ambiguous EPSG identification.
 - In-memory geometry is flat (XY or XYZ); M values are not preserved through round-trips.
+
+## TopoJSON Plan
+
+Planned TopoJSON support with both read and write from the initial milestone, while avoiding new dependencies, is documented in:
+
+- [docs/TOPOJSON_READ_WRITE_IMPLEMENTATION_PLAN_2026-05-12.md](docs/TOPOJSON_READ_WRITE_IMPLEMENTATION_PLAN_2026-05-12.md)
 
 ## Development
 

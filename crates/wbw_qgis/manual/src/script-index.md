@@ -83,6 +83,9 @@ for the task.
 | Compute distance to nearest feature | [Vector Analysis — Step 4](vector-analysis.md) | `whitebox_workflows:near` |
 | Select features by spatial predicate | [Vector Analysis — Step 5](vector-analysis.md) | QGIS Select by Expression |
 | Simplify polygon boundaries | [Vector Analysis — Simplify](vector-analysis.md) | `whitebox_workflows:simplify_features` |
+| Convert GeoPackage to TopoJSON and back | [Vector Analysis — TopoJSON Conversion Chain](vector-analysis.md) | `whitebox_workflows:add_geometry_attributes`, QGIS Export |
+| Simplify shared boundaries and emit TopoJSON | [Vector Analysis — TopoJSON Boundary-Preserving Generalization Chain](vector-analysis.md) | `whitebox_workflows:simplify_features`, QGIS Export |
+| Convert TopoJSON transport input, enrich, and re-emit | [Vector Analysis — TopoJSON Transport + Enrichment Return Chain](vector-analysis.md) | QGIS Export, `whitebox_workflows:add_geometry_attributes`, `whitebox_workflows:spatial_join`, `whitebox_workflows:near` |
 
 ---
 

@@ -16,6 +16,16 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Formal Landsat calibration contract API on `LandsatBundle`:
+  - `reflectance_coefficients_for_band(band_number)` -> `LandsatReflectanceCoefficients`
+  - `thermal_constants_for_band(band_number)` -> `LandsatThermalConstants`
+  providing typed bundle-level calibration access for TOA/LST workflows.
+- `Sentinel2SafePackage` now parses reflectance quantification metadata when present:
+  `QUANTIFICATION_VALUE`, `L1C_TOA_QUANTIFICATION_VALUE`,
+  `REFLECTANCE_QUANTIFICATION_VALUE`, `BOA_QUANTIFICATION_VALUE`, and
+  `L2A_BOA_QUANTIFICATION_VALUE`.
+- New helper `Sentinel2SafePackage::reflectance_scale_factor()` returning a
+  multiplicative scale (e.g. `1/10000`) derived from SAFE quantification metadata.
 - Public `Jpeg2000ColorSpace` re-export (alias of the internal JPEG2000 core
   color-space enum) for downstream bindings that need typed `Jpeg2000WriteOptions`
   color-space control.

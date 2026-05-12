@@ -1,0 +1,33 @@
+{
+  "type": "Topology",
+  "bbox": [0, 0, 10, 10],
+  "x-source": "interop-variant",
+  "objects": {
+    "layer": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "id": "f-1",
+          "properties": {
+            "name": "box",
+            "weight": 2.5,
+            "active": true,
+            "meta": {"class": "A"}
+          },
+          "bbox": [0, 0, 2, 2],
+          "geometry": {
+            "type": "Polygon",
+            "arcs": [[0, 1, 2, 3]]
+          }
+        }
+      ]
+    }
+  },
+  "arcs": [
+    [[0, 0], [0, 2]],
+    [[0, 2], [2, 2]],
+    [[2, 2], [2, 0]],
+    [[2, 0], [0, 0]]
+  ]
+}

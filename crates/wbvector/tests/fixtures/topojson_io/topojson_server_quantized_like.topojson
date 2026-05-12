@@ -1,0 +1,30 @@
+{
+  "type": "Topology",
+  "transform": {
+    "scale": [0.01, 0.01],
+    "translate": [10.0, 20.0]
+  },
+  "objects": {
+    "roads": {
+      "type": "GeometryCollection",
+      "geometries": [
+        {
+          "type": "LineString",
+          "id": 1,
+          "properties": {"class": "primary"},
+          "arcs": [0, 1]
+        },
+        {
+          "type": "LineString",
+          "id": 2,
+          "properties": {"class": "secondary"},
+          "arcs": [-2]
+        }
+      ]
+    }
+  },
+  "arcs": [
+    [[0, 0], [50, 0], [50, 50]],
+    [[100, 50], [0, 25], [-20, 5]]
+  ]
+}

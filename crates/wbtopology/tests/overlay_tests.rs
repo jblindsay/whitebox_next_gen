@@ -681,6 +681,7 @@ fn overlay_hole_boundary_touch_invariants() {
     let area_a = poly_area(&a);
     let area_b = poly_area(&b);
 
+
     assert!(i >= -1.0e-12);
     assert!(u >= -1.0e-12);
     assert!(d >= -1.0e-12);
@@ -839,6 +840,7 @@ fn overlay_all_matches_individual_ops() {
     let area_a = poly_area(&a);
     let area_b = poly_area(&b);
     let d_ba = area_sum(&polygon_difference(&b, &a, eps));
+
 
     assert!((u - (i + x)).abs() <= tol);
     assert!((u - (area_a + area_b - i)).abs() <= tol);

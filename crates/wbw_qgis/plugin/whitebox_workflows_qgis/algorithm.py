@@ -189,7 +189,7 @@ def _looks_like_filepath_default(value: Any) -> bool:
 
     # Common geospatial and table/document file extensions used by tools.
     if re.search(
-        r"\.(shp|gpkg|geojson|json|csv|txt|tif|tiff|img|bil|flt|sdat|rdc|las|laz|zlidar|copc|e57|ply|html|htm|xml|sqlite|dbf|shx|prj|vrt)$",
+        r"\.(shp|gpkg|geojson|topojson|json|csv|txt|tif|tiff|img|bil|flt|sdat|rdc|las|laz|zlidar|copc|e57|ply|html|htm|xml|sqlite|dbf|shx|prj|vrt)$",
         lower,
     ):
         return True
@@ -496,7 +496,7 @@ def _infer_kind(name: str, description: str, default_value: Any = None) -> str:
     if _looks_like_output(n, d):
         if any(tok in n or tok in d for tok in ("raster", "dem", "grid", "geotiff", "tif")):
             return "raster_out"
-        if any(tok in n or tok in d for tok in ("vector", "shp", "geojson", "geopackage", "features")):
+        if any(tok in n or tok in d for tok in ("vector", "shp", "geojson", "topojson", "geopackage", "features")):
             return "vector_out"
         if any(tok in n or tok in d for tok in ("lidar", "las", "laz", "zlidar", "copc", "e57", "ply")):
             return "lidar_out"
@@ -545,7 +545,7 @@ def _infer_kind(name: str, description: str, default_value: Any = None) -> str:
     if (
         any(tok in n for tok in vector_input_name_tokens)
         and (
-            any(tok in n or tok in d for tok in ("shp", "geojson", "geopackage"))
+            any(tok in n or tok in d for tok in ("shp", "geojson", "topojson", "geopackage"))
             or any(
                 tok in d
                 for tok in (
@@ -962,6 +962,7 @@ def _looks_like_vector_file_path(path: str) -> bool:
         ".gpkg",
         ".shp",
         ".geojson",
+        ".topojson",
         ".json",
         ".sqlite",
         ".gml",

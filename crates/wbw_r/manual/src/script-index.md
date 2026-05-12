@@ -21,6 +21,8 @@ usually produces safer and more maintainable scripts.
 ## Vector Workflows
 
 - `crates/wbw_r/r-package/whiteboxworkflows/inst/examples/vector_object_quickstart.R` - schema-first vector workflow baseline
+- `crates/wbw_r/examples/vector_topojson_roundtrip.R` - TopoJSON read/write roundtrip workflow
+- `crates/wbw_r/examples/osm_download_vector.R` - OpenStreetMap download workflow via Overpass API
 
 ## Lidar Workflows
 

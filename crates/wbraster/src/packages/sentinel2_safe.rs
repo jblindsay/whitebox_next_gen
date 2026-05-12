@@ -35,6 +35,10 @@ pub struct Sentinel2SafePackage {
     pub mean_solar_zenith_deg: Option<f64>,
     /// Mean solar azimuth angle in degrees when present in metadata.
     pub mean_solar_azimuth_deg: Option<f64>,
+    /// TOA/reflectance quantification value from product metadata when present.
+    pub reflectance_quantification_value: Option<f64>,
+    /// BOA quantification value from product metadata when present.
+    pub boa_quantification_value: Option<f64>,
     /// Tile identifier when present.
     pub tile_id: Option<String>,
     /// Cloud coverage percentage (0–100) when present in product metadata.
@@ -83,6 +87,18 @@ impl Sentinel2SafePackage {
             &product_xml_text,
             &["AZIMUTH_ANGLE", "Mean_Sun_Angle_Azimuth", "SUN_AZIMUTH"],
         );
+        let reflectance_quantification_value = extract_first_number(
+            &product_xml_text,
+            &[
+                "QUANTIFICATION_VALUE",
+                "L1C_TOA_QUANTIFICATION_VALUE",
+                "REFLECTANCE_QUANTIFICATION_VALUE",
+            ],
+        );
+        let boa_quantification_value = extract_first_number(
+            &product_xml_text,
+            &["BOA_QUANTIFICATION_VALUE", "L2A_BOA_QUANTIFICATION_VALUE"],
+        );
         let tile_id = extract_first_text(&product_xml_text, &["TILE_ID", "MGRS_TILE"]);
 
         let mut bands: BTreeMap<String, PathBuf> = BTreeMap::new();
@@ -122,6 +138,8 @@ impl Sentinel2SafePackage {
             acquisition_datetime_utc,
             mean_solar_zenith_deg,
             mean_solar_azimuth_deg,
+            reflectance_quantification_value,
+            boa_quantification_value,
             tile_id,
             cloud_coverage_assessment,
             processing_baseline,
@@ -129,6 +147,22 @@ impl Sentinel2SafePackage {
             qa_layers,
             aux_layers,
         })
+    }
+
+    /// Returns a multiplicative scale factor to convert Sentinel-2 integer reflectance
+    /// values to unit reflectance when quantification metadata is available.
+    pub fn reflectance_scale_factor(&self) -> Option<f64> {
+        if let Some(q) = self.reflectance_quantification_value {
+            if q > 0.0 {
+                return Some(1.0 / q);
+            }
+        }
+        if let Some(q) = self.boa_quantification_value {
+            if q > 0.0 {
+                return Some(1.0 / q);
+            }
+        }
+        None
     }
 
     /// List canonical spectral band keys available in this package.
@@ -410,6 +444,8 @@ mod tests {
                                     <PROCESSING_BASELINE>05.09</PROCESSING_BASELINE>
                 </Product_Info>
                 <Product_Image_Characteristics>
+                                    <QUANTIFICATION_VALUE>10000</QUANTIFICATION_VALUE>
+                                    <BOA_QUANTIFICATION_VALUE>10000</BOA_QUANTIFICATION_VALUE>
                   <Mean_Sun_Angle>
                     <ZENITH_ANGLE unit=\"deg\">34.2</ZENITH_ANGLE>
                     <AZIMUTH_ANGLE unit=\"deg\">158.7</AZIMUTH_ANGLE>
@@ -445,6 +481,9 @@ mod tests {
         assert!(!pkg.list_qa_keys().is_empty());
         assert_eq!(pkg.mean_solar_zenith_deg, Some(34.2));
         assert_eq!(pkg.mean_solar_azimuth_deg, Some(158.7));
+        assert_eq!(pkg.reflectance_quantification_value, Some(10000.0));
+        assert_eq!(pkg.boa_quantification_value, Some(10000.0));
+        assert_eq!(pkg.reflectance_scale_factor(), Some(0.0001));
         assert!(pkg.acquisition_datetime_utc.is_some());
         assert_eq!(pkg.cloud_coverage_assessment, Some(12.5));
         assert_eq!(pkg.processing_baseline.as_deref(), Some("05.09"));

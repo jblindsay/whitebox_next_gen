@@ -105,6 +105,19 @@ for (i in seq_along(loaders)) {
 4. Generate preview/composite rasters for QA.
 5. Persist derived outputs and record source family + key choices.
 
+## Calibration Contract Notes (Landsat/Sentinel-2)
+
+Remote-sensing radiometric and thermal tools in WbW-R now rely on a
+standardized sensor-bundle calibration contract in `wbraster`.
+
+- Sentinel-2 bundle metadata provides quantification values used for DN to TOA
+  reflectance scaling.
+- Landsat bundles provide typed per-band reflectance and thermal constants used
+  in TOA reflectance and LST workflows.
+
+For best results, keep original SAFE/MTL metadata with scene rasters when
+moving or staging bundle data for analysis.
+
 ## Sensor Bundle Object Method Reference
 
 ### Metadata and Key Discovery

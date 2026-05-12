@@ -1,0 +1,8 @@
+# name|reference|eps|expected_segments|junction|lines
+# reference is provenance only (captured offline GEOS/JTS trace), not an executable dependency.
+# junction format: x:y
+# lines format: x1:y1,x2:y2[,...];x1:y1,x2:y2[,...]
+cross_plus|geos_jts_trace|1e-9|4|5.0:5.0|0.0:5.0,10.0:5.0;5.0:0.0,5.0:10.0
+collinear_overlap|geos_jts_trace|1e-9|4|2.0:0.0|0.0:0.0,10.0:0.0;2.0:0.0,8.0:0.0
+duplicate_cross|geos_jts_trace|1e-9|6|5.0:0.0|0.0:0.0,10.0:0.0;10.0:0.0,0.0:0.0;5.0:-5.0,5.0:5.0
+shallow_micro_cross|geos_jts_trace|1e-9|4|50.0:0.0005|0.0:0.0,100.0:0.001;0.0:0.001,100.0:0.0

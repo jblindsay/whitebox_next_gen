@@ -1142,7 +1142,7 @@ impl FastAlmostGaussianFilterTool {
                 out
             }
             Phase3Op::RefinedLee => {
-                let (_sx, _sy, mx, my) = Self::parse_window_sizes(args, 11, 11);
+                let (_sx, _sy, _mx, _my) = Self::parse_window_sizes(args, 11, 11);
                 let rows = input.rows;
                 let cols = input.cols;
                 let bands = input.bands;

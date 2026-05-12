@@ -5563,24 +5563,41 @@ impl Tool for YamaguchiDecompositionTool {
                 let mut ph_row = vec![nodata; cols];
 
                 for c in 0..cols {
-                    let mut vals = vec![0.0_f64; rasters.len()];
-                    let mut valid = true;
-                    for i in 0..rasters.len() {
-                        let v = band_rows[i][c];
-                        if rasters[i].is_nodata(v) || v.is_nan() {
-                            valid = false;
-                            break;
+                    let (c11, c22, c33, c13_re) = if band_rows.len() == 3 {
+                        let v11 = band_rows[0][c];
+                        let v22 = band_rows[1][c];
+                        let v33 = band_rows[2][c];
+                        if rasters[0].is_nodata(v11)
+                            || rasters[1].is_nodata(v22)
+                            || rasters[2].is_nodata(v33)
+                            || v11.is_nan()
+                            || v22.is_nan()
+                            || v33.is_nan()
+                        {
+                            continue;
                         }
-                        vals[i] = v;
-                    }
-                    if !valid {
-                        continue;
-                    }
-
-                    let c11 = vals[0].max(0.0);
-                    let c22 = vals[4].max(0.0);
-                    let c33 = vals[8].max(0.0);
-                    let c13_re = 0.5 * (vals[2] + vals[6]);
+                        (v11.max(0.0), v22.max(0.0), v33.max(0.0), 0.0)
+                    } else {
+                        let v11 = band_rows[0][c];
+                        let v13 = band_rows[2][c];
+                        let v22 = band_rows[4][c];
+                        let v31 = band_rows[6][c];
+                        let v33 = band_rows[8][c];
+                        if rasters[0].is_nodata(v11)
+                            || rasters[2].is_nodata(v13)
+                            || rasters[4].is_nodata(v22)
+                            || rasters[6].is_nodata(v31)
+                            || rasters[8].is_nodata(v33)
+                            || v11.is_nan()
+                            || v13.is_nan()
+                            || v22.is_nan()
+                            || v31.is_nan()
+                            || v33.is_nan()
+                        {
+                            continue;
+                        }
+                        (v11.max(0.0), v22.max(0.0), v33.max(0.0), 0.5 * (v13 + v31))
+                    };
 
                     let span = (c11 + c22 + c33).max(0.0);
                     if span <= 0.0 {
@@ -5775,6 +5792,9 @@ impl Tool for HAlphaWisartClassificationTool {
             .map_err(|e| ToolError::Validation(format!("raster stack alignment failed: {}", e)))?;
         h_raster = rasters[0].clone();
         alpha_raster = rasters[1].clone();
+        for warning in warnings {
+            ctx.progress.info(&format!("h_alpha_wisart_classification: {warning}"));
+        }
 
         let rows = h_raster.rows;
         let cols = h_raster.cols;
@@ -5783,43 +5803,66 @@ impl Tool for HAlphaWisartClassificationTool {
         let mut output = h_raster.clone();
         output.bands = 1;
 
-        for r in 0..rows {
-            let h_row = h_raster.row_slice(0, r as isize);
-            let alpha_row = alpha_raster.row_slice(0, r as isize);
+        let mut zone_values = vec![nodata; rows * cols];
+        zone_values
+            .par_chunks_mut(cols)
+            .enumerate()
+            .for_each(|(r, zone_row)| {
+                let h_row = h_raster.row_slice(0, r as isize);
+                let alpha_row = alpha_raster.row_slice(0, r as isize);
 
-            let zone_row: Vec<f64> = (0..cols)
-                .map(|c| {
+                for c in 0..cols {
                     let h_val = h_row[c];
                     let alpha_val = alpha_row[c];
 
                     if h_raster.is_nodata(h_val) || alpha_raster.is_nodata(alpha_val) {
-                        return nodata;
+                        zone_row[c] = nodata;
+                        continue;
                     }
 
                     let h = h_val.clamp(0.0, 1.0);
                     let alpha = alpha_val.clamp(0.0, 90.0);
 
-                    // Wisart zone mapping: zones 1-9 based on H and alpha thresholds
-                    let zone = if h < 0.73 {
-                        if alpha < 30.0 { 1.0 } else if alpha < 45.0 { 2.0 } else { 3.0 }
+                    zone_row[c] = if h < 0.73 {
+                        if alpha < 30.0 {
+                            1.0
+                        } else if alpha < 45.0 {
+                            2.0
+                        } else {
+                            3.0
+                        }
                     } else if h < 0.90 {
-                        if alpha < 30.0 { 4.0 } else if alpha < 45.0 { 5.0 } else { 6.0 }
+                        if alpha < 30.0 {
+                            4.0
+                        } else if alpha < 45.0 {
+                            5.0
+                        } else {
+                            6.0
+                        }
                     } else if h < 1.0 {
-                        if alpha < 30.0 { 7.0 } else if alpha < 45.0 { 8.0 } else { 9.0 }
+                        if alpha < 30.0 {
+                            7.0
+                        } else if alpha < 45.0 {
+                            8.0
+                        } else {
+                            9.0
+                        }
                     } else {
                         9.0
                     };
-                    zone
-                })
-                .collect();
+                }
+            });
 
+        let coalescer = PercentCoalescer::new(1, 98);
+        for r in 0..rows {
+            let start = r * cols;
+            let end = start + cols;
             output
-                .set_row_slice(0, r as isize, &zone_row)
+                .set_row_slice(0, r as isize, &zone_values[start..end])
                 .map_err(|e| ToolError::Execution(format!("failed writing classification row {}: {e}", r)))?;
-
-            let coalescer = PercentCoalescer::new(1, 98);
             coalescer.emit_unit_fraction(ctx.progress, (r + 1) as f64 / rows as f64);
         }
+        coalescer.finish(ctx.progress);
 
         let locator = write_or_store_output(output, output_path)?;
 
@@ -5996,69 +6039,106 @@ impl Tool for WishartIterativeClusteringTool {
             .map_err(|e| ToolError::Validation(format!("raster stack alignment failed: {}", e)))?;
         h_raster = rasters[0].clone();
         alpha_raster = rasters[1].clone();
+        for warning in warnings {
+            ctx.progress.info(&format!("wisart_iterative_clustering: {warning}"));
+        }
 
         let rows = h_raster.rows;
         let cols = h_raster.cols;
         let nodata = h_raster.nodata;
         let total_pixels = rows * cols;
 
-        // Initialize clusters from H-alpha zones
-        let mut clusters = vec![0u8; total_pixels];
+        let mut h_vals = vec![nodata; total_pixels];
+        let mut alpha_vals = vec![nodata; total_pixels];
         for r in 0..rows {
             let h_row = h_raster.row_slice(0, r as isize);
             let alpha_row = alpha_raster.row_slice(0, r as isize);
-            for c in 0..cols {
-                let idx = r * cols + c;
-                let h = h_row[c];
-                let alpha = alpha_row[c];
+            let start = r * cols;
+            let end = start + cols;
+            h_vals[start..end].copy_from_slice(&h_row);
+            alpha_vals[start..end].copy_from_slice(&alpha_row);
+        }
+
+        // Initialize clusters from H-alpha zones
+        let mut clusters = vec![0u8; total_pixels];
+        clusters
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(idx, cluster)| {
+                let h = h_vals[idx];
+                let alpha = alpha_vals[idx];
 
                 if h_raster.is_nodata(h) || alpha_raster.is_nodata(alpha) {
-                    clusters[idx] = 0;
-                    continue;
+                    *cluster = 0;
+                    return;
                 }
 
                 let h_clamped = h.clamp(0.0, 1.0);
                 let alpha_clamped = alpha.clamp(0.0, 90.0);
 
-                clusters[idx] = if h_clamped < 0.73 {
-                    if alpha_clamped < 30.0 { 1 } else if alpha_clamped < 45.0 { 2 } else { 3 }
+                *cluster = if h_clamped < 0.73 {
+                    if alpha_clamped < 30.0 {
+                        1
+                    } else if alpha_clamped < 45.0 {
+                        2
+                    } else {
+                        3
+                    }
                 } else if h_clamped < 0.90 {
-                    if alpha_clamped < 30.0 { 4 } else if alpha_clamped < 45.0 { 5 } else { 6 }
+                    if alpha_clamped < 30.0 {
+                        4
+                    } else if alpha_clamped < 45.0 {
+                        5
+                    } else {
+                        6
+                    }
                 } else if h_clamped < 1.0 {
-                    if alpha_clamped < 30.0 { 7 } else if alpha_clamped < 45.0 { 8 } else { 9 }
+                    if alpha_clamped < 30.0 {
+                        7
+                    } else if alpha_clamped < 45.0 {
+                        8
+                    } else {
+                        9
+                    }
                 } else {
                     9
                 };
-            }
-        }
+            });
 
         // Iterative clustering
-        let mut prev_clusters = clusters.clone();
         for iteration in 0..max_iterations {
             ctx.progress.info(&format!("wisart_iterative_clustering: iteration {}/{}", iteration + 1, max_iterations));
 
             // Recompute cluster centers (simplified: mean H and alpha per cluster)
-            let mut cluster_h = vec![0.0; 10];
-            let mut cluster_alpha = vec![0.0; 10];
-            let mut cluster_count = vec![0usize; 10];
-
-            for r in 0..rows {
-                let h_row = h_raster.row_slice(0, r as isize);
-                let alpha_row = alpha_raster.row_slice(0, r as isize);
-                for c in 0..cols {
-                    let idx = r * cols + c;
-                    let cluster_id = clusters[idx] as usize;
-                    if cluster_id > 0 && cluster_id <= 9 {
-                        let h = h_row[c];
-                        let alpha = alpha_row[c];
-                        if !h_raster.is_nodata(h) && !alpha_raster.is_nodata(alpha) {
-                            cluster_h[cluster_id] += h;
-                            cluster_alpha[cluster_id] += alpha;
-                            cluster_count[cluster_id] += 1;
+            let (mut cluster_h, mut cluster_alpha, cluster_count) = (0..total_pixels)
+                .into_par_iter()
+                .fold(
+                    || ([0.0_f64; 10], [0.0_f64; 10], [0usize; 10]),
+                    |(mut sum_h, mut sum_alpha, mut counts), idx| {
+                        let cluster_id = clusters[idx] as usize;
+                        if cluster_id > 0 && cluster_id <= 9 {
+                            let h = h_vals[idx];
+                            let alpha = alpha_vals[idx];
+                            if !h_raster.is_nodata(h) && !alpha_raster.is_nodata(alpha) {
+                                sum_h[cluster_id] += h;
+                                sum_alpha[cluster_id] += alpha;
+                                counts[cluster_id] += 1;
+                            }
                         }
-                    }
-                }
-            }
+                        (sum_h, sum_alpha, counts)
+                    },
+                )
+                .reduce(
+                    || ([0.0_f64; 10], [0.0_f64; 10], [0usize; 10]),
+                    |(mut ah, mut aa, mut ac), (bh, ba, bc)| {
+                        for i in 1..=9 {
+                            ah[i] += bh[i];
+                            aa[i] += ba[i];
+                            ac[i] += bc[i];
+                        }
+                        (ah, aa, ac)
+                    },
+                );
 
             for i in 1..=9 {
                 if cluster_count[i] > 0 {
@@ -6068,17 +6148,17 @@ impl Tool for WishartIterativeClusteringTool {
             }
 
             // Reassign pixels to nearest cluster
-            for r in 0..rows {
-                let h_row = h_raster.row_slice(0, r as isize);
-                let alpha_row = alpha_raster.row_slice(0, r as isize);
-                for c in 0..cols {
-                    let idx = r * cols + c;
-                    let h = h_row[c];
-                    let alpha = alpha_row[c];
+            let mut new_clusters = vec![0u8; total_pixels];
+            new_clusters
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(idx, cluster)| {
+                    let h = h_vals[idx];
+                    let alpha = alpha_vals[idx];
 
                     if h_raster.is_nodata(h) || alpha_raster.is_nodata(alpha) {
-                        clusters[idx] = 0;
-                        continue;
+                        *cluster = 0;
+                        return;
                     }
 
                     let mut best_cluster = clusters[idx];
@@ -6094,42 +6174,41 @@ impl Tool for WishartIterativeClusteringTool {
                         }
                     }
 
-                    clusters[idx] = best_cluster;
-                }
-            }
+                    *cluster = best_cluster;
+                });
 
             // Check convergence
             let unchanged = clusters
-                .iter()
-                .zip(prev_clusters.iter())
-                .filter(|(c, p)| c == p)
+                .par_iter()
+                .zip(new_clusters.par_iter())
+                .filter(|(c, n)| c == n)
                 .count();
             let convergence_ratio = unchanged as f64 / total_pixels as f64;
             ctx.progress.info(&format!("wisart_iterative_clustering: convergence ratio {:.2}%", convergence_ratio * 100.0));
+
+            clusters = new_clusters;
 
             if convergence_ratio >= convergence_threshold {
                 ctx.progress.info("wisart_iterative_clustering: converged");
                 break;
             }
-
-            prev_clusters = clusters.clone();
         }
 
         // Write output
         let mut output = h_raster.clone();
         output.bands = 1;
 
+        let cluster_values: Vec<f64> = clusters.iter().map(|&c| c as f64).collect();
+        let coalescer = PercentCoalescer::new(1, 98);
         for r in 0..rows {
-            let cluster_row: Vec<f64> = clusters[r * cols..(r + 1) * cols]
-                .iter()
-                .map(|&c| c as f64)
-                .collect();
+            let start = r * cols;
+            let end = start + cols;
             output
-                .set_row_slice(0, r as isize, &cluster_row)
+                .set_row_slice(0, r as isize, &cluster_values[start..end])
                 .map_err(|e| ToolError::Execution(format!("failed writing clustering row {}: {e}", r)))?;
-            let coalescer = PercentCoalescer::new(1, 98);
             coalescer.emit_unit_fraction(ctx.progress, (r + 1) as f64 / rows as f64);
         }
+        coalescer.finish(ctx.progress);
 
         let locator = write_or_store_output(output, output_path)?;
 

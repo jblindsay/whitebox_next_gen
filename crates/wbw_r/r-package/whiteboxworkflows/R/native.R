@@ -227,6 +227,44 @@ run_tool_json_with_progress_floating_license_id_options <- function(tool_id,
   )
 }
 
+activate_license <- function(key,
+                             firstname,
+                             lastname,
+                             email,
+                             agree_to_license_terms,
+                             provider_url = NULL,
+                             machine_id = NULL,
+                             customer_id = NULL,
+                             include_pro = TRUE,
+                             fallback_tier = "open") {
+  .Call(
+    "wrap__activate_license",
+    key,
+    firstname,
+    lastname,
+    email,
+    agree_to_license_terms,
+    provider_url,
+    machine_id,
+    customer_id,
+    include_pro,
+    fallback_tier,
+    PACKAGE = "whiteboxworkflows"
+  )
+}
+
+deactivate_license <- function(from_transfer = FALSE) {
+  .Call("wrap__deactivate_license", from_transfer, PACKAGE = "whiteboxworkflows")
+}
+
+transfer_license <- function() {
+  .Call("wrap__transfer_license", PACKAGE = "whiteboxworkflows")
+}
+
+license_info <- function() {
+  .Call("wrap__license_info", PACKAGE = "whiteboxworkflows")
+}
+
 generate_r_wrapper_module_with_options <- function(include_pro = FALSE, tier = "open") {
   .Call(
     "wrap__generate_r_wrapper_module_with_options",

@@ -725,6 +725,109 @@ fn entitlement_capabilities_from_floating_provider(
     machine_id: Option<&str>,
     customer_id: Option<&str>,
 ) -> Result<EntitlementCapabilities, ToolError> {
+    let (signed_entitlement_json, kid, public_key_b64url, _, _) = floating_activation_bundle(
+        floating_license_id,
+        provider_url,
+        machine_id,
+        customer_id,
+    )?;
+    entitlement_capabilities_from_json(&signed_entitlement_json, &kid, &public_key_b64url)
+}
+
+fn current_unix() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn map_license_error(err: LicenseError) -> ToolError {
+    ToolError::LicenseDenied(err.to_string())
+}
+
+fn default_license_state_path() -> PathBuf {
+    if let Ok(path) = std::env::var("WBW_LICENSE_STATE_PATH") {
+        let trimmed = path.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".to_string());
+    PathBuf::from(home)
+        .join(".whitebox")
+        .join("wbw_ng_license_state.json")
+}
+
+fn write_license_state_json(state: &Value) -> Result<PathBuf, ToolError> {
+    let path = default_license_state_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            ToolError::Execution(format!(
+                "failed to create license state directory '{}': {e}",
+                parent.display()
+            ))
+        })?;
+    }
+
+    let text = serde_json::to_string_pretty(state)
+        .map_err(|e| ToolError::Execution(format!("failed to serialize license state: {e}")))?;
+    std::fs::write(&path, text).map_err(|e| {
+        ToolError::Execution(format!(
+            "failed to write license state '{}': {e}",
+            path.display()
+        ))
+    })?;
+    Ok(path)
+}
+
+fn read_license_state_json() -> Result<Value, ToolError> {
+    let path = default_license_state_path();
+    let text = std::fs::read_to_string(&path).map_err(|e| {
+        ToolError::InvalidRequest(format!(
+            "failed to read license state '{}': {e}",
+            path.display()
+        ))
+    })?;
+    serde_json::from_str(&text).map_err(|e| {
+        ToolError::InvalidRequest(format!(
+            "invalid license state json '{}': {e}",
+            path.display()
+        ))
+    })
+}
+
+fn read_license_state_string_field(state: &Value, field: &str) -> Result<String, ToolError> {
+    state
+        .get(field)
+        .and_then(|v| v.as_str())
+        .map(|v| v.to_string())
+        .ok_or_else(|| ToolError::InvalidRequest(format!("license state missing '{field}'")))
+}
+
+fn remove_local_license_state() -> Result<bool, ToolError> {
+    let path = default_license_state_path();
+    if !path.exists() {
+        return Ok(false);
+    }
+    std::fs::remove_file(&path).map_err(|e| {
+        ToolError::Execution(format!(
+            "failed to remove license state '{}': {e}",
+            path.display()
+        ))
+    })?;
+    Ok(true)
+}
+
+#[cfg(feature = "pro")]
+fn floating_activation_bundle(
+    floating_license_id: &str,
+    provider_url: Option<&str>,
+    machine_id: Option<&str>,
+    customer_id: Option<&str>,
+) -> Result<(String, String, String, String, Option<String>), ToolError> {
     let base = provider_url
         .map(|s| s.to_string())
         .or_else(|| env::var("WBW_LICENSE_PROVIDER_URL").ok())
@@ -744,13 +847,16 @@ fn entitlement_capabilities_from_floating_provider(
         .map(|s| s.to_string())
         .or_else(|| env::var("WBW_CUSTOMER_ID").ok());
 
-    let activation_url = format!("{}/api/v2/entitlements/activate-floating", base.trim_end_matches('/'));
+    let activation_url = format!(
+        "{}/api/v2/entitlements/activate-floating",
+        base.trim_end_matches('/')
+    );
     let mut body = json!({
         "floating_license_id": floating_license_id,
         "machine_id": machine,
         "product": "whitebox_next_gen"
     });
-    if let Some(customer_id) = customer {
+    if let Some(customer_id) = customer.clone() {
         body["customer_id"] = Value::String(customer_id);
     }
 
@@ -795,18 +901,42 @@ fn entitlement_capabilities_from_floating_provider(
             ))
         })?;
 
-    entitlement_capabilities_from_json(&signed_entitlement_json, kid, public_key_b64url)
+    Ok((
+        signed_entitlement_json,
+        kid.to_string(),
+        public_key_b64url.to_string(),
+        base,
+        customer,
+    ))
 }
 
-fn current_unix() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
-}
+fn runtime_from_local_license_state(
+    include_pro: bool,
+    fallback_tier: LicenseTier,
+) -> Result<PythonToolRuntime, ToolError> {
+    if !include_pro {
+        return PythonToolRuntime::new_with_options(include_pro, fallback_tier);
+    }
 
-fn map_license_error(err: LicenseError) -> ToolError {
-    ToolError::LicenseDenied(err.to_string())
+    let state = match read_license_state_json() {
+        Ok(v) => v,
+        Err(_) => return PythonToolRuntime::new_with_options(include_pro, fallback_tier),
+    };
+
+    let signed_entitlement_json = read_license_state_string_field(&state, "signed_entitlement_json")?;
+    let public_key_kid = read_license_state_string_field(&state, "public_key_kid")?;
+    let public_key_b64url = read_license_state_string_field(&state, "public_key_b64url")?;
+
+    match PythonToolRuntime::new_with_entitlement_json(
+        include_pro,
+        fallback_tier,
+        &signed_entitlement_json,
+        &public_key_kid,
+        &public_key_b64url,
+    ) {
+        Ok(runtime) => Ok(runtime),
+        Err(_) => PythonToolRuntime::new_with_options(include_pro, fallback_tier),
+    }
 }
 
 fn read_entitlement_file(path: &str) -> Result<String, ToolError> {
@@ -1156,7 +1286,7 @@ impl RuntimeSession {
     fn new(include_pro: bool, tier: &str) -> PyResult<Self> {
         let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
         Ok(Self {
-            runtime: PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+            runtime: runtime_from_local_license_state(include_pro, parsed_tier)
                 .map_err(map_tool_error)?,
         })
     }
@@ -1826,7 +1956,7 @@ fn whitebox_tools(
             )
             .map_err(map_tool_error)?
         } else {
-            PythonToolRuntime::new_with_options(resolved_include_pro, parsed_tier)
+            runtime_from_local_license_state(resolved_include_pro, parsed_tier)
                 .map_err(map_tool_error)?
         };
         return Ok(WbEnvironment::from_runtime(runtime, resolved_include_pro));
@@ -1840,10 +1970,223 @@ fn whitebox_tools(
             ));
         }
         let _ = (provider_url, machine_id, customer_id);
-        let runtime = PythonToolRuntime::new_with_options(resolved_include_pro, parsed_tier)
+        let runtime = runtime_from_local_license_state(resolved_include_pro, parsed_tier)
             .map_err(map_tool_error)?;
         Ok(WbEnvironment::from_runtime(runtime, resolved_include_pro))
     }
+}
+
+#[pyfunction]
+#[cfg(feature = "pro")]
+#[pyo3(signature = (key, firstname, lastname, email, agree_to_license_terms, provider_url=None, machine_id=None, customer_id=None, include_pro=true, fallback_tier="open"))]
+fn activate_license(
+    key: &str,
+    firstname: &str,
+    lastname: &str,
+    email: &str,
+    agree_to_license_terms: bool,
+    provider_url: Option<&str>,
+    machine_id: Option<&str>,
+    customer_id: Option<&str>,
+    include_pro: bool,
+    fallback_tier: &str,
+) -> PyResult<String> {
+    if !agree_to_license_terms {
+        return Err(PyValueError::new_err(
+            "agree_to_license_terms must be True to activate a license",
+        ));
+    }
+    if key.trim().is_empty()
+        || firstname.trim().is_empty()
+        || lastname.trim().is_empty()
+        || email.trim().is_empty()
+    {
+        return Err(PyValueError::new_err(
+            "key, firstname, lastname, and email are required",
+        ));
+    }
+
+    let parsed_tier = parse_tier(fallback_tier).map_err(map_tool_error)?;
+    let (
+        signed_entitlement_json,
+        public_key_kid,
+        public_key_b64url,
+        resolved_provider_url,
+        resolved_customer_id,
+    ) = floating_activation_bundle(key, provider_url, machine_id, customer_id)
+        .map_err(map_tool_error)?;
+
+    PythonToolRuntime::new_with_entitlement_json(
+        include_pro,
+        parsed_tier,
+        &signed_entitlement_json,
+        &public_key_kid,
+        &public_key_b64url,
+    )
+    .map_err(map_tool_error)?;
+
+    let state = json!({
+        "schema_version": 1,
+        "activated_at_unix": current_unix(),
+        "floating_license_id": key,
+        "firstname": firstname,
+        "lastname": lastname,
+        "email": email,
+        "provider_url": resolved_provider_url,
+        "machine_id": machine_id,
+        "customer_id": resolved_customer_id,
+        "include_pro": include_pro,
+        "fallback_tier": fallback_tier,
+        "public_key_kid": public_key_kid,
+        "public_key_b64url": public_key_b64url,
+        "signed_entitlement_json": signed_entitlement_json,
+    });
+
+    let state_path = write_license_state_json(&state).map_err(map_tool_error)?;
+    Ok(format!(
+        "License activated and saved to {}",
+        state_path.display()
+    ))
+}
+
+#[pyfunction]
+#[cfg(not(feature = "pro"))]
+#[pyo3(signature = (key, firstname, lastname, email, agree_to_license_terms, provider_url=None, machine_id=None, customer_id=None, include_pro=true, fallback_tier="open"))]
+fn activate_license(
+    key: &str,
+    firstname: &str,
+    lastname: &str,
+    email: &str,
+    agree_to_license_terms: bool,
+    provider_url: Option<&str>,
+    machine_id: Option<&str>,
+    customer_id: Option<&str>,
+    include_pro: bool,
+    fallback_tier: &str,
+) -> PyResult<String> {
+    let _ = (
+        key,
+        firstname,
+        lastname,
+        email,
+        agree_to_license_terms,
+        provider_url,
+        machine_id,
+        customer_id,
+        include_pro,
+        fallback_tier,
+    );
+    Err(PyValueError::new_err(
+        "activate_license requires a Pro-enabled build",
+    ))
+}
+
+#[pyfunction]
+#[pyo3(signature = (from_transfer=false))]
+fn deactivate_license(from_transfer: bool) -> PyResult<String> {
+    let removed = remove_local_license_state().map_err(map_tool_error)?;
+    if removed {
+        if from_transfer {
+            Ok("License deactivated locally for transfer.".to_string())
+        } else {
+            Ok("License deactivated locally.".to_string())
+        }
+    } else {
+        Ok("No local license state was found.".to_string())
+    }
+}
+
+#[pyfunction]
+fn transfer_license() -> PyResult<String> {
+    let state = read_license_state_json().map_err(map_tool_error)?;
+    let key = read_license_state_string_field(&state, "floating_license_id").map_err(map_tool_error)?;
+    let provider_url = state
+        .get("provider_url")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let machine_id = state
+        .get("machine_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let customer_id = state
+        .get("customer_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    let _ = remove_local_license_state().map_err(map_tool_error)?;
+
+    serde_json::to_string(&json!({
+        "message": "License deactivated on this machine. Use this activation payload on the destination machine.",
+        "floating_license_id": key,
+        "provider_url": provider_url,
+        "machine_id": machine_id,
+        "customer_id": customer_id,
+    }))
+    .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+#[pyfunction]
+fn license_info() -> PyResult<String> {
+    let path = default_license_state_path();
+    let state = match read_license_state_json() {
+        Ok(v) => v,
+        Err(_) => {
+            return Ok(json!({
+                "active": false,
+                "state_path": path.display().to_string(),
+                "message": "No local license state found.",
+            })
+            .to_string())
+        }
+    };
+
+    let signed_entitlement_json = read_license_state_string_field(&state, "signed_entitlement_json")
+        .map_err(map_tool_error)?;
+    let public_key_kid = read_license_state_string_field(&state, "public_key_kid")
+        .map_err(map_tool_error)?;
+    let public_key_b64url = read_license_state_string_field(&state, "public_key_b64url")
+        .map_err(map_tool_error)?;
+
+    let validity = entitlement_capabilities_from_json(
+        &signed_entitlement_json,
+        &public_key_kid,
+        &public_key_b64url,
+    )
+    .map(|caps| {
+        let seconds_remaining = if caps.now_unix >= caps.expires_at_unix {
+            0u64
+        } else {
+            caps.expires_at_unix - caps.now_unix
+        };
+        json!({
+            "valid": true,
+            "effective_tier": license_tier_to_str(caps.max_tier),
+            "expires_at_unix": caps.expires_at_unix,
+            "now_unix": caps.now_unix,
+            "seconds_remaining": seconds_remaining,
+        })
+    })
+    .unwrap_or_else(|e| {
+        json!({
+            "valid": false,
+            "error": e.to_string(),
+        })
+    });
+
+    Ok(json!({
+        "active": true,
+        "state_path": path.display().to_string(),
+        "floating_license_id": state.get("floating_license_id"),
+        "provider_url": state.get("provider_url"),
+        "machine_id": state.get("machine_id"),
+        "customer_id": state.get("customer_id"),
+        "activated_at_unix": state.get("activated_at_unix"),
+        "validity": validity,
+    })
+    .to_string())
 }
 
 #[pymodule]
@@ -1890,6 +2233,10 @@ fn whitebox_workflows(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     m.add_function(wrap_pyfunction!(run_tool_stream_options, m)?)?;
     m.add_function(wrap_pyfunction!(generate_wrapper_stubs_json, m)?)?;
     m.add_function(wrap_pyfunction!(whitebox_tools, m)?)?;
+    m.add_function(wrap_pyfunction!(activate_license, m)?)?;
+    m.add_function(wrap_pyfunction!(deactivate_license, m)?)?;
+    m.add_function(wrap_pyfunction!(transfer_license, m)?)?;
+    m.add_function(wrap_pyfunction!(license_info, m)?)?;
     
     // Convenience functions for unary raster math tools
     m.add_function(wrap_pyfunction!(abs, m)?)?;

@@ -2513,6 +2513,109 @@ fn entitlement_capabilities_from_floating_provider(
     machine_id: Option<&str>,
     customer_id: Option<&str>,
 ) -> Result<EntitlementCapabilities, ToolError> {
+    let (signed_entitlement_json, kid, public_key_b64url, _, _) = floating_activation_bundle(
+        floating_license_id,
+        provider_url,
+        machine_id,
+        customer_id,
+    )?;
+    entitlement_capabilities_from_json(&signed_entitlement_json, &kid, &public_key_b64url)
+}
+
+fn current_unix() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn map_license_error(err: LicenseError) -> ToolError {
+    ToolError::LicenseDenied(err.to_string())
+}
+
+fn default_license_state_path() -> PathBuf {
+    if let Ok(path) = std::env::var("WBW_LICENSE_STATE_PATH") {
+        let trimmed = path.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".to_string());
+    PathBuf::from(home)
+        .join(".whitebox")
+        .join("wbw_ng_license_state.json")
+}
+
+fn write_license_state_json(state: &Value) -> Result<PathBuf, ToolError> {
+    let path = default_license_state_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            ToolError::Execution(format!(
+                "failed to create license state directory '{}': {e}",
+                parent.display()
+            ))
+        })?;
+    }
+
+    let text = serde_json::to_string_pretty(state)
+        .map_err(|e| ToolError::Execution(format!("failed to serialize license state: {e}")))?;
+    std::fs::write(&path, text).map_err(|e| {
+        ToolError::Execution(format!(
+            "failed to write license state '{}': {e}",
+            path.display()
+        ))
+    })?;
+    Ok(path)
+}
+
+fn read_license_state_json() -> Result<Value, ToolError> {
+    let path = default_license_state_path();
+    let text = std::fs::read_to_string(&path).map_err(|e| {
+        ToolError::InvalidRequest(format!(
+            "failed to read license state '{}': {e}",
+            path.display()
+        ))
+    })?;
+    serde_json::from_str(&text).map_err(|e| {
+        ToolError::InvalidRequest(format!(
+            "invalid license state json '{}': {e}",
+            path.display()
+        ))
+    })
+}
+
+fn read_license_state_string_field(state: &Value, field: &str) -> Result<String, ToolError> {
+    state
+        .get(field)
+        .and_then(|v| v.as_str())
+        .map(|v| v.to_string())
+        .ok_or_else(|| ToolError::InvalidRequest(format!("license state missing '{field}'")))
+}
+
+fn remove_local_license_state() -> Result<bool, ToolError> {
+    let path = default_license_state_path();
+    if !path.exists() {
+        return Ok(false);
+    }
+    std::fs::remove_file(&path).map_err(|e| {
+        ToolError::Execution(format!(
+            "failed to remove license state '{}': {e}",
+            path.display()
+        ))
+    })?;
+    Ok(true)
+}
+
+#[cfg(feature = "pro")]
+fn floating_activation_bundle(
+    floating_license_id: &str,
+    provider_url: Option<&str>,
+    machine_id: Option<&str>,
+    customer_id: Option<&str>,
+) -> Result<(String, String, String, String, Option<String>), ToolError> {
     let base = provider_url
         .map(|s| s.to_string())
         .or_else(|| env::var("WBW_LICENSE_PROVIDER_URL").ok())
@@ -2532,13 +2635,16 @@ fn entitlement_capabilities_from_floating_provider(
         .map(|s| s.to_string())
         .or_else(|| env::var("WBW_CUSTOMER_ID").ok());
 
-    let activation_url = format!("{}/api/v2/entitlements/activate-floating", base.trim_end_matches('/'));
+    let activation_url = format!(
+        "{}/api/v2/entitlements/activate-floating",
+        base.trim_end_matches('/')
+    );
     let mut body = json!({
         "floating_license_id": floating_license_id,
         "machine_id": machine,
         "product": "whitebox_next_gen"
     });
-    if let Some(customer_id) = customer {
+    if let Some(customer_id) = customer.clone() {
         body["customer_id"] = Value::String(customer_id);
     }
 
@@ -2583,18 +2689,42 @@ fn entitlement_capabilities_from_floating_provider(
             ))
         })?;
 
-    entitlement_capabilities_from_json(&signed_entitlement_json, kid, public_key_b64url)
+    Ok((
+        signed_entitlement_json,
+        kid.to_string(),
+        public_key_b64url.to_string(),
+        base,
+        customer,
+    ))
 }
 
-fn current_unix() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
-}
+fn runtime_from_local_license_state(
+    include_pro: bool,
+    fallback_tier: LicenseTier,
+) -> Result<RToolRuntime, ToolError> {
+    if !include_pro {
+        return RToolRuntime::new_with_options(include_pro, fallback_tier);
+    }
 
-fn map_license_error(err: LicenseError) -> ToolError {
-    ToolError::LicenseDenied(err.to_string())
+    let state = match read_license_state_json() {
+        Ok(v) => v,
+        Err(_) => return RToolRuntime::new_with_options(include_pro, fallback_tier),
+    };
+
+    let signed_entitlement_json = read_license_state_string_field(&state, "signed_entitlement_json")?;
+    let public_key_kid = read_license_state_string_field(&state, "public_key_kid")?;
+    let public_key_b64url = read_license_state_string_field(&state, "public_key_b64url")?;
+
+    match RToolRuntime::new_with_entitlement_json(
+        include_pro,
+        fallback_tier,
+        &signed_entitlement_json,
+        &public_key_kid,
+        &public_key_b64url,
+    ) {
+        Ok(runtime) => Ok(runtime),
+        Err(_) => RToolRuntime::new_with_options(include_pro, fallback_tier),
+    }
 }
 
 fn read_entitlement_file(path: &str) -> Result<String, ToolError> {
@@ -3031,6 +3161,195 @@ pub fn generate_r_wrapper_module_with_options(
 }
 
 #[cfg(feature = "pro")]
+pub fn activate_license(
+    key: &str,
+    firstname: &str,
+    lastname: &str,
+    email: &str,
+    agree_to_license_terms: bool,
+    provider_url: Option<&str>,
+    machine_id: Option<&str>,
+    customer_id: Option<&str>,
+    include_pro: bool,
+    fallback_tier: &str,
+) -> Result<String, ToolError> {
+    if !agree_to_license_terms {
+        return Err(ToolError::InvalidRequest(
+            "agree_to_license_terms must be TRUE to activate a license".to_string(),
+        ));
+    }
+    if key.trim().is_empty()
+        || firstname.trim().is_empty()
+        || lastname.trim().is_empty()
+        || email.trim().is_empty()
+    {
+        return Err(ToolError::InvalidRequest(
+            "key, firstname, lastname, and email are required".to_string(),
+        ));
+    }
+
+    let parsed_tier = parse_tier(fallback_tier)?;
+    let (
+        signed_entitlement_json,
+        public_key_kid,
+        public_key_b64url,
+        resolved_provider_url,
+        resolved_customer_id,
+    ) = floating_activation_bundle(key, provider_url, machine_id, customer_id)?;
+
+    RToolRuntime::new_with_entitlement_json(
+        include_pro,
+        parsed_tier,
+        &signed_entitlement_json,
+        &public_key_kid,
+        &public_key_b64url,
+    )?;
+
+    let state = json!({
+        "schema_version": 1,
+        "activated_at_unix": current_unix(),
+        "floating_license_id": key,
+        "firstname": firstname,
+        "lastname": lastname,
+        "email": email,
+        "provider_url": resolved_provider_url,
+        "machine_id": machine_id,
+        "customer_id": resolved_customer_id,
+        "include_pro": include_pro,
+        "fallback_tier": fallback_tier,
+        "public_key_kid": public_key_kid,
+        "public_key_b64url": public_key_b64url,
+        "signed_entitlement_json": signed_entitlement_json,
+    });
+
+    let state_path = write_license_state_json(&state)?;
+    Ok(format!(
+        "License activated and saved to {}",
+        state_path.display()
+    ))
+}
+
+#[cfg(not(feature = "pro"))]
+pub fn activate_license(
+    _key: &str,
+    _firstname: &str,
+    _lastname: &str,
+    _email: &str,
+    _agree_to_license_terms: bool,
+    _provider_url: Option<&str>,
+    _machine_id: Option<&str>,
+    _customer_id: Option<&str>,
+    _include_pro: bool,
+    _fallback_tier: &str,
+) -> Result<String, ToolError> {
+    Err(ToolError::InvalidRequest(
+        "activate_license requires a Pro-enabled build".to_string(),
+    ))
+}
+
+pub fn deactivate_license(from_transfer: bool) -> Result<String, ToolError> {
+    let removed = remove_local_license_state()?;
+    if removed {
+        if from_transfer {
+            Ok("License deactivated locally for transfer.".to_string())
+        } else {
+            Ok("License deactivated locally.".to_string())
+        }
+    } else {
+        Ok("No local license state was found.".to_string())
+    }
+}
+
+pub fn transfer_license() -> Result<String, ToolError> {
+    let state = read_license_state_json()?;
+    let key = read_license_state_string_field(&state, "floating_license_id")?;
+    let provider_url = state
+        .get("provider_url")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let machine_id = state
+        .get("machine_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let customer_id = state
+        .get("customer_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    let _ = remove_local_license_state()?;
+
+    serde_json::to_string(&json!({
+        "message": "License deactivated on this machine. Use this activation payload on the destination machine.",
+        "floating_license_id": key,
+        "provider_url": provider_url,
+        "machine_id": machine_id,
+        "customer_id": customer_id,
+    }))
+    .map_err(|e| ToolError::Execution(format!("serialization error: {e}")))
+}
+
+pub fn license_info() -> Result<String, ToolError> {
+    let path = default_license_state_path();
+    let state = match read_license_state_json() {
+        Ok(v) => v,
+        Err(_) => {
+            return Ok(json!({
+                "active": false,
+                "state_path": path.display().to_string(),
+                "message": "No local license state found.",
+            })
+            .to_string())
+        }
+    };
+
+    let signed_entitlement_json = read_license_state_string_field(&state, "signed_entitlement_json")?;
+    let public_key_kid = read_license_state_string_field(&state, "public_key_kid")?;
+    let public_key_b64url = read_license_state_string_field(&state, "public_key_b64url")?;
+
+    let validity = entitlement_capabilities_from_json(
+        &signed_entitlement_json,
+        &public_key_kid,
+        &public_key_b64url,
+    )
+    .map(|caps| {
+        let tier_str = format!("{:?}", caps.max_tier).to_lowercase();
+        let seconds_remaining = if caps.now_unix >= caps.expires_at_unix {
+            0u64
+        } else {
+            caps.expires_at_unix - caps.now_unix
+        };
+        json!({
+            "valid": true,
+            "effective_tier": tier_str,
+            "expires_at_unix": caps.expires_at_unix,
+            "now_unix": caps.now_unix,
+            "seconds_remaining": seconds_remaining,
+        })
+    })
+    .unwrap_or_else(|e| {
+        json!({
+            "valid": false,
+            "error": e.to_string(),
+        })
+    });
+
+    Ok(json!({
+        "active": true,
+        "state_path": path.display().to_string(),
+        "floating_license_id": state.get("floating_license_id"),
+        "provider_url": state.get("provider_url"),
+        "machine_id": state.get("machine_id"),
+        "customer_id": state.get("customer_id"),
+        "activated_at_unix": state.get("activated_at_unix"),
+        "validity": validity,
+    })
+    .to_string())
+}
+
+#[cfg(feature = "pro")]
 pub fn whitebox_tools(
     floating_license_id: Option<&str>,
     include_pro: Option<bool>,
@@ -3052,7 +3371,7 @@ pub fn whitebox_tools(
             customer_id,
         )
     } else {
-        RToolRuntime::new_with_options(resolved_include_pro, parsed_tier)
+        runtime_from_local_license_state(resolved_include_pro, parsed_tier)
     }
 }
 
@@ -3067,7 +3386,7 @@ pub fn whitebox_tools(
 ) -> Result<RToolRuntime, ToolError> {
     let parsed_tier = parse_tier(tier)?;
     let resolved_include_pro = include_pro.unwrap_or(false);
-    RToolRuntime::new_with_options(resolved_include_pro, parsed_tier)
+    runtime_from_local_license_state(resolved_include_pro, parsed_tier)
 }
 
 mod native_exports {
@@ -3662,6 +3981,52 @@ mod native_exports {
         super::topology_buffer_wkt(wkt, distance).map_err(map_extendr_err)
     }
 
+    #[extendr]
+    fn activate_license(
+        key: &str,
+        firstname: &str,
+        lastname: &str,
+        email: &str,
+        agree_to_license_terms: bool,
+        provider_url: Nullable<String>,
+        machine_id: Nullable<String>,
+        customer_id: Nullable<String>,
+        include_pro: bool,
+        fallback_tier: &str,
+    ) -> extendr_api::Result<String> {
+        let provider_url = nullable_string_to_option(provider_url);
+        let machine_id = nullable_string_to_option(machine_id);
+        let customer_id = nullable_string_to_option(customer_id);
+        super::activate_license(
+            key,
+            firstname,
+            lastname,
+            email,
+            agree_to_license_terms,
+            provider_url.as_deref(),
+            machine_id.as_deref(),
+            customer_id.as_deref(),
+            include_pro,
+            fallback_tier,
+        )
+        .map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn deactivate_license(from_transfer: bool) -> extendr_api::Result<String> {
+        super::deactivate_license(from_transfer).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn transfer_license() -> extendr_api::Result<String> {
+        super::transfer_license().map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn license_info() -> extendr_api::Result<String> {
+        super::license_info().map_err(map_extendr_err)
+    }
+
     extendr_module! {
         mod wbw_r;
         fn list_tools_json;
@@ -3731,6 +4096,10 @@ mod native_exports {
         fn topology_is_valid_polygon_wkt;
         fn topology_make_valid_polygon_wkt;
         fn topology_buffer_wkt;
+        fn activate_license;
+        fn deactivate_license;
+        fn transfer_license;
+        fn license_info;
     }
 }
 

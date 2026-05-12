@@ -332,14 +332,22 @@ class PluginPanelWiringTests(unittest.TestCase):
         self.assertIsNotNone(instance._diagnostics_action)
         self.assertIsNotNone(instance._refresh_action)
         self.assertIsNotNone(instance._panel_action)
+        self.assertIsNotNone(instance._settings_action)
+        self.assertIsNotNone(instance._activate_license_action)
+        self.assertIsNotNone(instance._deactivate_license_action)
+        self.assertIsNotNone(instance._transfer_license_action)
 
-        self.assertEqual(len(registered), 3)
+        self.assertEqual(len(registered), 7)
         self.assertEqual(
             [item[0].text for item in registered],
             [
                 "Show Whitebox Panel",
                 "Refresh Catalog + Help",
                 "Runtime Diagnostics",
+                "Plugin Settings",
+                "Activate License",
+                "Deactivate License",
+                "Transfer License",
             ],
         )
         self.assertTrue(all(item[1] == instance._menu_label for item in registered))
@@ -347,12 +355,24 @@ class PluginPanelWiringTests(unittest.TestCase):
         diagnostics_cb = instance._diagnostics_action.triggered.callback
         refresh_cb = instance._refresh_action.triggered.callback
         panel_cb = instance._panel_action.triggered.callback
+        settings_cb = instance._settings_action.triggered.callback
+        activate_cb = instance._activate_license_action.triggered.callback
+        deactivate_cb = instance._deactivate_license_action.triggered.callback
+        transfer_cb = instance._transfer_license_action.triggered.callback
         self.assertIsNotNone(diagnostics_cb)
         self.assertIsNotNone(refresh_cb)
         self.assertIsNotNone(panel_cb)
+        self.assertIsNotNone(settings_cb)
+        self.assertIsNotNone(activate_cb)
+        self.assertIsNotNone(deactivate_cb)
+        self.assertIsNotNone(transfer_cb)
         self.assertEqual(diagnostics_cb.__func__.__name__, "_show_diagnostics")
         self.assertEqual(refresh_cb.__func__.__name__, "_refresh_catalog")
         self.assertEqual(panel_cb.__func__.__name__, "_toggle_panel")
+        self.assertEqual(settings_cb.__func__.__name__, "_show_settings")
+        self.assertEqual(activate_cb.__func__.__name__, "_activate_license")
+        self.assertEqual(deactivate_cb.__func__.__name__, "_deactivate_license")
+        self.assertEqual(transfer_cb.__func__.__name__, "_transfer_license")
 
     def test_init_gui_runs_install_and_refresh_on_supported_host(self):
         iface = _FakeIface()
@@ -574,11 +594,19 @@ class PluginPanelWiringTests(unittest.TestCase):
         panel_action = object()
         refresh_action = object()
         diagnostics_action = object()
+        settings_action = object()
+        activate_license_action = object()
+        deactivate_license_action = object()
+        transfer_license_action = object()
 
         instance._dock_panel = panel_obj
         instance._panel_action = panel_action
         instance._refresh_action = refresh_action
         instance._diagnostics_action = diagnostics_action
+        instance._settings_action = settings_action
+        instance._activate_license_action = activate_license_action
+        instance._deactivate_license_action = deactivate_license_action
+        instance._transfer_license_action = transfer_license_action
         instance._provider_registered = True
 
         dock_calls = []
@@ -604,6 +632,10 @@ class PluginPanelWiringTests(unittest.TestCase):
             self.assertIsNone(instance._panel_action)
             self.assertIsNone(instance._refresh_action)
             self.assertIsNone(instance._diagnostics_action)
+            self.assertIsNone(instance._settings_action)
+            self.assertIsNone(instance._activate_license_action)
+            self.assertIsNone(instance._deactivate_license_action)
+            self.assertIsNone(instance._transfer_license_action)
             self.assertFalse(instance._provider_registered)
 
             self.assertEqual(dock_calls, [panel_obj])
@@ -613,6 +645,10 @@ class PluginPanelWiringTests(unittest.TestCase):
                     (panel_action, instance._menu_label),
                     (refresh_action, instance._menu_label),
                     (diagnostics_action, instance._menu_label),
+                    (settings_action, instance._menu_label),
+                    (activate_license_action, instance._menu_label),
+                    (deactivate_license_action, instance._menu_label),
+                    (transfer_license_action, instance._menu_label),
                 ],
             )
             self.assertEqual(provider_calls, ["provider"])
@@ -626,6 +662,10 @@ class PluginPanelWiringTests(unittest.TestCase):
                 (panel_action, instance._menu_label),
                 (refresh_action, instance._menu_label),
                 (diagnostics_action, instance._menu_label),
+                (settings_action, instance._menu_label),
+                (activate_license_action, instance._menu_label),
+                (deactivate_license_action, instance._menu_label),
+                (transfer_license_action, instance._menu_label),
             ],
         )
         self.assertEqual(provider_calls, ["provider"])

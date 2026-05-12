@@ -3316,6 +3316,58 @@ wbw_make_entitlement_file_session <- function(entitlement_file,
   session
 }
 
+#' Activate a Whitebox NG license and persist local entitlement state.
+#'
+#' @export
+wbw_activate_license <- function(key,
+                                 firstname,
+                                 lastname,
+                                 email,
+                                 agree_to_license_terms = TRUE,
+                                 provider_url = NULL,
+                                 machine_id = NULL,
+                                 customer_id = NULL,
+                                 include_pro = TRUE,
+                                 fallback_tier = "open") {
+  activate_license(
+    key = key,
+    firstname = firstname,
+    lastname = lastname,
+    email = email,
+    agree_to_license_terms = agree_to_license_terms,
+    provider_url = provider_url,
+    machine_id = machine_id,
+    customer_id = customer_id,
+    include_pro = include_pro,
+    fallback_tier = fallback_tier
+  )
+}
+
+#' Deactivate the local Whitebox NG license state.
+#'
+#' @export
+wbw_deactivate_license <- function(from_transfer = FALSE) {
+  deactivate_license(from_transfer = from_transfer)
+}
+
+#' Transfer a Whitebox NG license off this machine.
+#'
+#' Returns a list containing activation payload details for the destination machine.
+#'
+#' @export
+wbw_transfer_license <- function() {
+  out <- transfer_license()
+  jsonlite::fromJSON(out, simplifyVector = FALSE)
+}
+
+#' Inspect local Whitebox NG license state and validity.
+#'
+#' @export
+wbw_license_info <- function() {
+  out <- license_info()
+  jsonlite::fromJSON(out, simplifyVector = FALSE)
+}
+
 #' Convert a geospatial raster file into an R matrix or array.
 #'
 #' Single-band rasters return a matrix by default. Multiband rasters return

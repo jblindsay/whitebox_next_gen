@@ -4,6 +4,7 @@ import json
 import os
 from datetime import datetime
 
+from .bootstrap import load_whitebox_workflows
 from .diagnostics import diagnostics_text, gather_runtime_diagnostics
 from .host_api import (
     open_processing_algorithm_dialog,
@@ -30,7 +31,7 @@ from .settings import WhiteboxPluginSettings, WhiteboxSettingsDialog
 try:
     from qgis.PyQt.QtGui import QAction, QIcon
     from qgis.PyQt.QtCore import QSettings
-    from qgis.PyQt.QtWidgets import QApplication, QMenu, QMessageBox
+    from qgis.PyQt.QtWidgets import QApplication, QInputDialog, QLineEdit, QMenu, QMessageBox
 except Exception:  # pragma: no cover
     class QAction:  # type: ignore[override]
         def __init__(self, *_args, **_kwargs):
@@ -46,6 +47,10 @@ except Exception:  # pragma: no cover
     class QMessageBox:  # type: ignore[override]
         @staticmethod
         def information(*_args, **_kwargs):
+            return None
+
+        @staticmethod
+        def warning(*_args, **_kwargs):
             return None
 
     class QApplication:  # type: ignore[override]
@@ -74,6 +79,15 @@ except Exception:  # pragma: no cover
         def exec_(self, *_args, **_kwargs):
             return None
 
+    class QInputDialog:  # type: ignore[override]
+        @staticmethod
+        def getText(*_args, **_kwargs):
+            return "", False
+
+    class QLineEdit:  # type: ignore[override]
+        class EchoMode:
+            Normal = 0
+
     class QSettings:  # type: ignore[override]
         def value(self, *_args, **_kwargs):
             return ""
@@ -95,6 +109,9 @@ class WhiteboxWorkflowsPlugin:
         self._diagnostics_action = None
         self._refresh_action = None
         self._panel_action = None
+        self._activate_license_action = None
+        self._deactivate_license_action = None
+        self._transfer_license_action = None
         self._dock_panel = None
         self._recipe_index: dict[str, dict] = {}
         self._recent_tool_ids: list[str] = []
@@ -162,6 +179,9 @@ class WhiteboxWorkflowsPlugin:
     def _settings_action_icon(self):
         return self._plugin_icon_named("WbW_settings")
 
+    def _license_action_icon(self):
+        return self._plugin_icon_named("WbW_settings")
+
     def initGui(self):
         # QGIS 4 is the primary target; avoid hard-fail in unknown hosts.
         major = qgis_major_version()
@@ -221,6 +241,125 @@ class WhiteboxWorkflowsPlugin:
         settings_action.triggered.connect(self._show_settings)
         if register_plugin_action(self.iface, settings_action, self._menu_label):
             self._settings_action = settings_action
+
+        activate_license_action = QAction("Activate License", self.iface.mainWindow())
+        if hasattr(activate_license_action, "setIcon"):
+            activate_license_action.setIcon(self._license_action_icon())
+        activate_license_action.triggered.connect(self._activate_license)
+        if register_plugin_action(self.iface, activate_license_action, self._menu_label):
+            self._activate_license_action = activate_license_action
+
+        deactivate_license_action = QAction("Deactivate License", self.iface.mainWindow())
+        if hasattr(deactivate_license_action, "setIcon"):
+            deactivate_license_action.setIcon(self._license_action_icon())
+        deactivate_license_action.triggered.connect(self._deactivate_license)
+        if register_plugin_action(self.iface, deactivate_license_action, self._menu_label):
+            self._deactivate_license_action = deactivate_license_action
+
+        transfer_license_action = QAction("Transfer License", self.iface.mainWindow())
+        if hasattr(transfer_license_action, "setIcon"):
+            transfer_license_action.setIcon(self._license_action_icon())
+        transfer_license_action.triggered.connect(self._transfer_license)
+        if register_plugin_action(self.iface, transfer_license_action, self._menu_label):
+            self._transfer_license_action = transfer_license_action
+
+    def _prompt_text(self, title: str, label: str, default: str = "", password: bool = False):
+        try:
+            mode = QLineEdit.EchoMode.Normal
+            if password and hasattr(QLineEdit.EchoMode, "Password"):
+                mode = QLineEdit.EchoMode.Password
+            value, ok = QInputDialog.getText(self.iface.mainWindow(), title, label, mode, default)
+            return str(value).strip(), bool(ok)
+        except Exception:
+            return "", False
+
+    def _activate_license(self, *_args):
+        wbw = None
+        try:
+            wbw = load_whitebox_workflows()
+        except Exception as exc:
+            self._notify_warning(f"Unable to load whitebox_workflows runtime: {exc}")
+            return
+
+        required_api = getattr(wbw, "activate_license", None)
+        if not callable(required_api):
+            self._notify_warning("This whitebox_workflows build does not expose activate_license().")
+            return
+
+        key, ok = self._prompt_text("Activate Whitebox License", "License key")
+        if not ok or not key:
+            return
+        firstname, ok = self._prompt_text("Activate Whitebox License", "First name")
+        if not ok or not firstname:
+            return
+        lastname, ok = self._prompt_text("Activate Whitebox License", "Last name")
+        if not ok or not lastname:
+            return
+        email, ok = self._prompt_text("Activate Whitebox License", "Email")
+        if not ok or not email:
+            return
+
+        provider_url_default = os.environ.get("WBW_LICENSE_PROVIDER_URL", "")
+        provider_url, _ = self._prompt_text(
+            "Activate Whitebox License",
+            "Provider URL (optional)",
+            provider_url_default,
+        )
+
+        try:
+            message = wbw.activate_license(
+                key=key,
+                firstname=firstname,
+                lastname=lastname,
+                email=email,
+                agree_to_license_terms=True,
+                provider_url=provider_url or None,
+                include_pro=True,
+                fallback_tier=self.provider.tier,
+            )
+            self._notify_info(str(message))
+            self._refresh_catalog(silent=True)
+        except Exception as exc:
+            self._notify_warning(f"License activation failed: {exc}")
+
+    def _deactivate_license(self, *_args):
+        try:
+            wbw = load_whitebox_workflows()
+            fn = getattr(wbw, "deactivate_license", None)
+            if not callable(fn):
+                self._notify_warning("This whitebox_workflows build does not expose deactivate_license().")
+                return
+            message = fn(from_transfer=False)
+            self._notify_info(str(message))
+            self._refresh_catalog(silent=True)
+        except Exception as exc:
+            self._notify_warning(f"License deactivation failed: {exc}")
+
+    def _transfer_license(self, *_args):
+        try:
+            wbw = load_whitebox_workflows()
+            fn = getattr(wbw, "transfer_license", None)
+            if not callable(fn):
+                self._notify_warning("This whitebox_workflows build does not expose transfer_license().")
+                return
+            payload_raw = fn()
+            payload = payload_raw
+            if isinstance(payload_raw, str):
+                try:
+                    payload = json.loads(payload_raw)
+                except Exception:
+                    payload = {"message": payload_raw}
+
+            message = str(payload.get("message", "License transferred.")) if isinstance(payload, dict) else str(payload)
+            if isinstance(payload, dict):
+                try:
+                    QApplication.clipboard().setText(json.dumps(payload, indent=2))
+                except Exception:
+                    pass
+            self._notify_info(message)
+            self._refresh_catalog(silent=True)
+        except Exception as exc:
+            self._notify_warning(f"License transfer failed: {exc}")
 
     def _install_panel(self):
         panel = WhiteboxDockPanel(self.iface.mainWindow())
@@ -1095,6 +1234,15 @@ class WhiteboxWorkflowsPlugin:
         if self._settings_action is not None:
             unregister_plugin_action(self.iface, self._settings_action, self._menu_label)
             self._settings_action = None
+        if self._activate_license_action is not None:
+            unregister_plugin_action(self.iface, self._activate_license_action, self._menu_label)
+            self._activate_license_action = None
+        if self._deactivate_license_action is not None:
+            unregister_plugin_action(self.iface, self._deactivate_license_action, self._menu_label)
+            self._deactivate_license_action = None
+        if self._transfer_license_action is not None:
+            unregister_plugin_action(self.iface, self._transfer_license_action, self._menu_label)
+            self._transfer_license_action = None
         if not self._provider_registered:
             return
         if unregister_provider(self.iface, self.provider):

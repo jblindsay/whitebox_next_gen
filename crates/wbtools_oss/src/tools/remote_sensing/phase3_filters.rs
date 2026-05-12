@@ -21,6 +21,8 @@ pub struct UnsharpMaskingTool;
 pub struct DiffOfGaussiansFilterTool;
 pub struct AdaptiveFilterTool;
 pub struct LeeFilterTool;
+pub struct RefinedLeeFilterTool;
+pub struct EnhancedLeeFilterTool;
 pub struct ConservativeSmoothingFilterTool;
 pub struct OlympicFilterTool;
 pub struct KNearestMeanFilterTool;
@@ -35,6 +37,8 @@ enum Phase3Op {
     DiffOfGaussians,
     Adaptive,
     Lee,
+    RefinedLee,
+    EnhancedLee,
     ConservativeSmoothing,
     Olympic,
     KNearestMean,
@@ -51,6 +55,8 @@ impl Phase3Op {
             Self::DiffOfGaussians => "diff_of_gaussians_filter",
             Self::Adaptive => "adaptive_filter",
             Self::Lee => "lee_filter",
+            Self::RefinedLee => "refined_lee_filter",
+            Self::EnhancedLee => "enhanced_lee_filter",
             Self::ConservativeSmoothing => "conservative_smoothing_filter",
             Self::Olympic => "olympic_filter",
             Self::KNearestMean => "k_nearest_mean_filter",
@@ -67,6 +73,8 @@ impl Phase3Op {
             Self::DiffOfGaussians => "Difference of Gaussians Filter",
             Self::Adaptive => "Adaptive Filter",
             Self::Lee => "Lee Filter",
+            Self::RefinedLee => "Refined Lee Filter",
+            Self::EnhancedLee => "Enhanced Lee Filter",
             Self::ConservativeSmoothing => "Conservative Smoothing Filter",
             Self::Olympic => "Olympic Filter",
             Self::KNearestMean => "K-Nearest Mean Filter",
@@ -90,6 +98,12 @@ impl Phase3Op {
             }
             Self::Lee => {
                 "Performs Lee sigma filtering using in-range neighborhood averaging."
+            }
+            Self::RefinedLee => {
+                "Performs Refined Lee filtering with edge-preserving sub-window homogeneity classification."
+            }
+            Self::EnhancedLee => {
+                "Performs Enhanced Lee filtering using sigma-ratio weighting and ENL-dependent blending."
             }
             Self::ConservativeSmoothing => {
                 "Performs conservative smoothing by clipping impulse outliers to neighborhood bounds."
@@ -251,6 +265,35 @@ impl FastAlmostGaussianFilterTool {
                     required: false,
                 });
             }
+            Phase3Op::RefinedLee => {
+                params.push(ToolParamSpec {
+                    name: "filter_size_x",
+                    description: "Neighborhood width in pixels (odd integer, default 11).",
+                    required: false,
+                });
+                params.push(ToolParamSpec {
+                    name: "filter_size_y",
+                    description: "Neighborhood height in pixels (odd integer, default 11).",
+                    required: false,
+                });
+            }
+            Phase3Op::EnhancedLee => {
+                params.push(ToolParamSpec {
+                    name: "filter_size_x",
+                    description: "Neighborhood width in pixels (odd integer, default 11).",
+                    required: false,
+                });
+                params.push(ToolParamSpec {
+                    name: "filter_size_y",
+                    description: "Neighborhood height in pixels (odd integer, default 11).",
+                    required: false,
+                });
+                params.push(ToolParamSpec {
+                    name: "enl",
+                    description: "Equivalent number of looks parameter for sigma-ratio weighting (default 4.0).",
+                    required: false,
+                });
+            }
             Phase3Op::ConservativeSmoothing => {
                 params.push(ToolParamSpec {
                     name: "filter_size_x",
@@ -386,6 +429,15 @@ impl FastAlmostGaussianFilterTool {
             }
             Phase3Op::LaplacianOfGaussians => {
                 defaults.insert("sigma".to_string(), json!(0.75));
+            }
+            Phase3Op::RefinedLee => {
+                defaults.insert("filter_size_x".to_string(), json!(11));
+                defaults.insert("filter_size_y".to_string(), json!(11));
+            }
+            Phase3Op::EnhancedLee => {
+                defaults.insert("filter_size_x".to_string(), json!(11));
+                defaults.insert("filter_size_y".to_string(), json!(11));
+                defaults.insert("enl".to_string(), json!(4.0));
             }
         }
 
@@ -1078,6 +1130,151 @@ impl FastAlmostGaussianFilterTool {
                                     if n2 > 0.0 {
                                         out_row[c] = s2 / n2;
                                     }
+                                }
+                            }
+                        });
+                        out
+                    })
+                    .collect();
+
+                let mut out = input.as_ref().clone();
+                Self::write_values_into_output(&input, &mut out, &out_vals, packed_rgb)?;
+                out
+            }
+            Phase3Op::RefinedLee => {
+                let (_sx, _sy, mx, my) = Self::parse_window_sizes(args, 11, 11);
+                let rows = input.rows;
+                let cols = input.cols;
+                let bands = input.bands;
+                let nodata = input.nodata;
+
+                let out_vals: Vec<Vec<f64>> = (0..bands)
+                    .into_par_iter()
+                    .map(|band_idx| {
+                        let band = band_idx as isize;
+                        let mut out = vec![nodata; rows * cols];
+                        out.par_chunks_mut(cols).enumerate().for_each(|(r, out_row)| {
+                            let row = r as isize;
+                            for c in 0..cols {
+                                let col = c as isize;
+                                let z_raw = input.get(band, row, col);
+                                if input.is_nodata(z_raw) {
+                                    continue;
+                                }
+                                let z = if packed_rgb { value2i(z_raw) } else { z_raw };
+
+                                // Scan 3x3 sub-windows within the filter kernel
+                                let mut min_cov = f64::INFINITY;
+                                let mut best_window_sum = 0.0;
+                                let mut best_window_count = 0.0;
+
+                                // 8 directional 3x3 windows centered at different positions
+                                let window_offsets = [
+                                    (-1, -1), (0, -1), (-1, 0), (0, 0),
+                                    (-1, 1), (0, 1), (1, -1), (1, 0),
+                                ];
+
+                                for (wy, wx) in &window_offsets {
+                                    let mut sum = 0.0;
+                                    let mut sum2 = 0.0;
+                                    let mut n = 0.0;
+                                    for dy in -1..=1 {
+                                        for dx in -1..=1 {
+                                            let ny = row + *wy + dy;
+                                            let nx = col + *wx + dx;
+                                            let zn_raw = input.get(band, ny, nx);
+                                            if input.is_nodata(zn_raw) {
+                                                continue;
+                                            }
+                                            let zn = if packed_rgb { value2i(zn_raw) } else { zn_raw };
+                                            sum += zn;
+                                            sum2 += zn * zn;
+                                            n += 1.0;
+                                        }
+                                    }
+                                    if n > 0.0 {
+                                        let mean = sum / n;
+                                        let variance = (sum2 - (sum * sum) / n) / n.max(1.0);
+                                        let cov = if mean.abs() > f64::EPSILON {
+                                            (variance.sqrt()) / mean.abs()
+                                        } else {
+                                            f64::INFINITY
+                                        };
+                                        if cov < min_cov {
+                                            min_cov = cov;
+                                            best_window_sum = sum;
+                                            best_window_count = n;
+                                        }
+                                    }
+                                }
+
+                                if best_window_count > 0.0 {
+                                    out_row[c] = best_window_sum / best_window_count;
+                                } else {
+                                    out_row[c] = z;
+                                }
+                            }
+                        });
+                        out
+                    })
+                    .collect();
+
+                let mut out = input.as_ref().clone();
+                Self::write_values_into_output(&input, &mut out, &out_vals, packed_rgb)?;
+                out
+            }
+            Phase3Op::EnhancedLee => {
+                let (_sx, _sy, mx, my) = Self::parse_window_sizes(args, 11, 11);
+                let enl = args
+                    .get("enl")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(4.0)
+                    .max(0.1);
+
+                let rows = input.rows;
+                let cols = input.cols;
+                let bands = input.bands;
+                let nodata = input.nodata;
+
+                let out_vals: Vec<Vec<f64>> = (0..bands)
+                    .into_par_iter()
+                    .map(|band_idx| {
+                        let band = band_idx as isize;
+                        let mut out = vec![nodata; rows * cols];
+                        out.par_chunks_mut(cols).enumerate().for_each(|(r, out_row)| {
+                            let row = r as isize;
+                            for c in 0..cols {
+                                let col = c as isize;
+                                let z_raw = input.get(band, row, col);
+                                if input.is_nodata(z_raw) {
+                                    continue;
+                                }
+                                let z = if packed_rgb { value2i(z_raw) } else { z_raw };
+
+                                let mut sum = 0.0;
+                                let mut sum2 = 0.0;
+                                let mut n = 0.0;
+                                for ny in (row - my)..=(row + my) {
+                                    for nx in (col - mx)..=(col + mx) {
+                                        let zn_raw = input.get(band, ny, nx);
+                                        if input.is_nodata(zn_raw) {
+                                            continue;
+                                        }
+                                        let zn = if packed_rgb { value2i(zn_raw) } else { zn_raw };
+                                        sum += zn;
+                                        sum2 += zn * zn;
+                                        n += 1.0;
+                                    }
+                                }
+
+                                if n > 1.0 {
+                                    let mean = sum / n;
+                                    let variance = (sum2 - (sum * sum) / n) / n;
+                                    let sigma_ratio = variance / (mean.abs() + 1e-12);
+                                    let weight = 1.0 / (1.0 + sigma_ratio * enl);
+                                    out_row[c] = (1.0 - weight) * z + weight * mean;
+                                } else {
+                                    out_row[c] = z;
                                 }
                             }
                         });
@@ -1827,6 +2024,8 @@ define_phase3_tool!(UnsharpMaskingTool, Phase3Op::Unsharp);
 define_phase3_tool!(DiffOfGaussiansFilterTool, Phase3Op::DiffOfGaussians);
 define_phase3_tool!(AdaptiveFilterTool, Phase3Op::Adaptive);
 define_phase3_tool!(LeeFilterTool, Phase3Op::Lee);
+define_phase3_tool!(RefinedLeeFilterTool, Phase3Op::RefinedLee);
+define_phase3_tool!(EnhancedLeeFilterTool, Phase3Op::EnhancedLee);
 define_phase3_tool!(ConservativeSmoothingFilterTool, Phase3Op::ConservativeSmoothing);
 define_phase3_tool!(OlympicFilterTool, Phase3Op::Olympic);
 define_phase3_tool!(KNearestMeanFilterTool, Phase3Op::KNearestMean);

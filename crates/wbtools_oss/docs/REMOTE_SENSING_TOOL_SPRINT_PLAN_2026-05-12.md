@@ -3,7 +3,8 @@
 Date: 2026-05-12
 Scope: `wbtools_oss` remote sensing sprint for teaching-critical gaps that do not overlap current Pro functionality.
 Owner: Whitebox Next Gen (`wbtools_oss`)
-Planned tool count: 15 (excluding intentionally skipped Pro-overlap tools).
+Planned tool count: 20 (excluding intentionally skipped Pro-overlap tools).
+Sprint extended 2026-05-12: +5 tools (Refined Lee, Enhanced Lee, Yamaguchi 4-component, H-alpha Wishart classification, Wishart iterative clustering).
 
 ## 1) Sprint Goals
 
@@ -190,6 +191,54 @@ Status: `done`
 - [x] Surface/double-bounce/volume outputs
 - [x] Non-physical component clipping diagnostics
 
+## F. SAR Speckle Filtering (OSS-safe)
+
+16. Refined Lee Filter (`refined_lee_filter`)  
+Status: `not-started`
+- [ ] Rust implementation in `phase3_filters.rs` alongside existing `lee_filter`
+- [ ] Local region classification using sub-window homogeneity (Lee 1981 refinement)
+- [ ] Edge-preserving class-conditional estimation (8 directional edge models)
+- [ ] Minimum coefficient of variation class selection per pixel
+- [ ] Kernel size parameter; nodata propagation
+
+17. Enhanced Lee Filter (`enhanced_lee_filter`)  
+Status: `not-started`
+- [ ] Rust implementation in `phase3_filters.rs`
+- [ ] Sigma-ratio weighting (Enhanced Lee = weighted blend of local mean and center value)
+- [ ] ENL (equivalent number of looks) parameter
+- [ ] Degrades gracefully to boxcar in homogeneous regions
+- [ ] Kernel size parameter; nodata propagation
+
+## G. Extended PolSAR
+
+18. Yamaguchi 4-Component Decomposition (`yamaguchi_4component_decomposition`)  
+Status: `not-started`
+- [ ] Rust implementation in `radiometric_tools.rs` alongside Freeman-Durden
+- [ ] Reuse `parse_polsar_real_symmetric_inputs()` (diag3 / full3x3 format contract)
+- [ ] Surface + double-bounce + volume + helix components
+- [ ] Helix component from negative cross-pol sign of (C13 + C13*) residual
+- [ ] Non-physical component clipping and residual diagnostics
+- [ ] 4-band output raster
+
+19. H-Alpha Wishart Zone Classification (`h_alpha_wishart_classification`)  
+Status: `not-started`
+- [ ] Rust implementation in `radiometric_tools.rs`
+- [ ] Inputs: H (entropy) raster + alpha raster from `cloude_pottier_decomposition`
+- [ ] Maps each pixel to one of 9 canonical Wishart scattering zones (Cloude & Pottier 1997)
+- [ ] Zone boundary definitions (H and alpha thresholds) as published
+- [ ] Class label raster output (1–9; 0 = unclassified/nodata)
+- [ ] Optional per-class colour legend JSON sidecar
+
+20. Wishart Iterative Clustering (`wishart_iterative_clustering`)  
+Status: `not-started`
+- [ ] Rust implementation in `radiometric_tools.rs`
+- [ ] Unsupervised: initialise cluster centres from H-alpha zone classification output
+- [ ] Iterative pixel reassignment to nearest cluster using complex Wishart distance
+- [ ] Max iterations + convergence threshold parameters
+- [ ] Operates on real-symmetric coherency matrix stack (diag3 / full3x3 format)
+- [ ] Output: cluster label raster + per-iteration convergence log
+- [ ] Note: supervised Wishart (training-sample-driven) deferred to Pro tier (see `wbtools_pro/docs/internal/development/REMOTE_SENSING_PRO_TIER_ROADMAP.md`)
+
 ## 4) Namespace/Integration Checklist (per tool)
 
 - [x] Add tool implementation under `wbtools_oss/src/tools/remote_sensing/`
@@ -249,11 +298,23 @@ For each tool before marking `done`:
 - Cloude-Pottier Decomposition
 - Freeman-Durden Decomposition
 
+## Phase 5 (SAR speckle + extended PolSAR)
+
+- Refined Lee Filter
+- Enhanced Lee Filter
+- Yamaguchi 4-Component Decomposition
+- H-Alpha Wishart Zone Classification
+- Wishart Iterative Clustering
+
 ## 7) Pro Boundary Notes
 
 To avoid overlap with existing Pro differentiation:
 
 - Exclude topographic C-correction/cosine correction style optical terrain correction from OSS sprint scope.
+  - **Clarification (2026-05-12):** The Pro `terrain_corrected_optical_analytics` tool implements full C-correction (DEM-driven topographic illumination normalisation using per-band OLS regression of reflectance vs. cos(incidence angle), with cloud/shadow masking and multi-profile correction weighting). OSS tools in this sprint operate on inputs that are already atmospherically and topographically corrected, or produce TOA reflectance only. OSS does not implement C-correction, cosine correction, or any variant of terrain-induced illumination normalisation. This boundary is intentional and must not be blurred.
+- Supervised PolSAR classification (Wishart training-sample-driven) is deferred to Pro. OSS Wishart iterative clustering is unsupervised-only (no training samples, no per-class PDF estimation).
+- Automated endmember extraction (N-FINDR, VCA, ATGP) is a candidate Pro complement to OSS `linear_spectral_unmixing`. OSS unmixing itself (NNLS with user-supplied endmembers) remains OSS — it is a fundamental, pedagogically transparent algorithm taught universally.
+- See `wbtools_pro/docs/internal/development/REMOTE_SENSING_PRO_TIER_ROADMAP.md` for Pro-tier RS tool ideas.
 - Keep OSS tools focused on broadly taught, reusable foundations and transparent algorithms.
 
 ## 8) Working Notes
@@ -288,3 +349,8 @@ Use these rules to avoid retrofit parallelization:
 - Minimum Noise Fraction: parallel covariance accumulation and projection passes.
 - Spectral Library Matching: parallel per-pixel signature-to-library similarity scoring.
 - Cloude-Pottier/Freeman-Durden: parallel per-pixel matrix decomposition with careful NaN/conditioning guards.
+- Refined Lee: parallel per-pixel sub-window homogeneity scan and class selection; pre-compute per-kernel mean/variance once per window position via sliding sum tables where feasible.
+- Enhanced Lee: parallel per-pixel weighted blend using precomputed local mean/variance; sigma-ratio lookup precomputed per ENL.
+- Yamaguchi 4-component: parallel per-pixel 4-component decomposition; reuse Freeman-Durden covariance parsing path; clipping pass in parallel.
+- H-alpha Wishart classification: parallel per-pixel zone lookup (pure threshold table — no iteration needed).
+- Wishart iterative clustering: parallel pixel reassignment per iteration; cluster centre update sequential between iterations; convergence check after each full pass.

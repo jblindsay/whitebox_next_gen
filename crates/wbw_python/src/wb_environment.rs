@@ -2808,7 +2808,9 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("continuum_removal", "remote_sensing", "spectral_analytics"),
     ("dark_object_subtraction", "remote_sensing", "radiometric_correction"),
     ("dn_to_toa_reflectance", "remote_sensing", "radiometric_correction"),
+    ("enhanced_lee_filter", "remote_sensing", "sar"),
     ("freeman_durden_decomposition", "remote_sensing", "sar"),
+    ("h_alpha_wisart_classification", "remote_sensing", "sar"),
     ("image_difference_change_detection", "remote_sensing", "change_detection"),
     ("land_surface_temperature_single_channel", "remote_sensing", "thermal_emissivity"),
     ("land_surface_temperature_split_window", "remote_sensing", "thermal_emissivity"),
@@ -2817,9 +2819,12 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("ndvi_based_emissivity", "remote_sensing", "thermal_emissivity"),
     ("pca_based_change_detection", "remote_sensing", "change_detection"),
     ("post_classification_change", "remote_sensing", "change_detection"),
+    ("refined_lee_filter", "remote_sensing", "sar"),
     ("spectral_angle_mapper", "remote_sensing", "spectral_analytics"),
     ("spectral_library_matching", "remote_sensing", "spectral_analytics"),
+    ("wisart_iterative_clustering", "remote_sensing", "sar"),
     ("write_function_memory_insertion", "remote_sensing", "change_detection"),
+    ("yamaguchi_4component_decomposition", "remote_sensing", "sar"),
     ("yield_data_conditioning_and_qa", "precision_agriculture", "general"),
     ("z_scores", "raster", "general"),
     ("zonal_statistics", "raster", "general"),
@@ -13990,6 +13995,119 @@ impl WbEnvironment {
         let response = run_tool_response_with_args(&self.runtime, "freeman_durden_decomposition", args, callback)?;
         let outputs = response.get("outputs").unwrap_or(&response);
         Python::attach(|py| json_value_to_pyobject(py, outputs))
+    }
+
+    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    fn yamaguchi_4component_decomposition(
+        &self,
+        inputs: &Bound<'_, PyList>,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let input_paths = extract_raster_input_paths(inputs, "inputs")?;
+        let mut args = serde_json::Map::new();
+        args.insert("inputs".to_string(), json!(input_paths));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "yamaguchi_4component_decomposition", args, callback)?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        Python::attach(|py| json_value_to_pyobject(py, outputs))
+    }
+
+    #[pyo3(signature = (h_raster, alpha_raster, output_path=None, options=None, callback=None))]
+    fn h_alpha_wisart_classification(
+        &self,
+        h_raster: &Raster,
+        alpha_raster: &Raster,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Raster> {
+        let resolved_output = self.resolve_output_path_for_wd(output_path);
+
+        let mut args = serde_json::Map::new();
+        args.insert("h_raster".to_string(), json!(h_raster.file_path.to_string_lossy().to_string()));
+        args.insert("alpha_raster".to_string(), json!(alpha_raster.file_path.to_string_lossy().to_string()));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = &resolved_output {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "h_alpha_wisart_classification", args, callback)?;
+        let out_path = extract_typed_output_path("h_alpha_wisart_classification", &response)?;
+        Ok(Raster { file_path: out_path, active_band: 0 })
+    }
+
+    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    fn wisart_iterative_clustering(
+        &self,
+        inputs: &Bound<'_, PyList>,
+        output_path: Option<&str>,
+        options: Option<&Bound<'_, PyAny>>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Raster> {
+        let input_paths = extract_raster_input_paths(inputs, "inputs")?;
+        let resolved_output = self.resolve_output_path_for_wd(output_path);
+
+        let mut args = serde_json::Map::new();
+        args.insert("inputs".to_string(), json!(input_paths));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = &resolved_output {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "wisart_iterative_clustering", args, callback)?;
+        let out_path = extract_typed_output_path("wisart_iterative_clustering", &response)?;
+        Ok(Raster { file_path: out_path, active_band: 0 })
+    }
+
+    #[pyo3(signature = (input, filter_size=5, options=None, output_path=None, callback=None))]
+    fn refined_lee_filter(
+        &self,
+        input: &Raster,
+        filter_size: i32,
+        options: Option<&Bound<'_, PyAny>>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Raster> {
+        let resolved_output = self.resolve_output_path_for_wd(output_path);
+
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("filter_size".to_string(), json!(filter_size));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = &resolved_output {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "refined_lee_filter", args, callback)?;
+        let out_path = extract_typed_output_path("refined_lee_filter", &response)?;
+        Ok(Raster { file_path: out_path, active_band: 0 })
+    }
+
+    #[pyo3(signature = (input, filter_size=5, enl=4.0, options=None, output_path=None, callback=None))]
+    fn enhanced_lee_filter(
+        &self,
+        input: &Raster,
+        filter_size: i32,
+        enl: f64,
+        options: Option<&Bound<'_, PyAny>>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Raster> {
+        let resolved_output = self.resolve_output_path_for_wd(output_path);
+
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("filter_size".to_string(), json!(filter_size));
+        args.insert("enl".to_string(), json!(enl));
+        merge_optional_json_object_args(&mut args, options)?;
+        if let Some(out) = &resolved_output {
+            args.insert("output".to_string(), json!(out));
+        }
+        let response = run_tool_response_with_args(&self.runtime, "enhanced_lee_filter", args, callback)?;
+        let out_path = extract_typed_output_path("enhanced_lee_filter", &response)?;
+        Ok(Raster { file_path: out_path, active_band: 0 })
     }
 
     #[pyo3(signature = (input, pp, focal_length=304.8, image_width=228.6, n=4.0, output_path=None, callback=None))]

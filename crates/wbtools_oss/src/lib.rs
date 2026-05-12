@@ -86,6 +86,8 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::DirectDecorrelationStretchTool));
     registry.register(Box::new(tools::AdaptiveFilterTool));
     registry.register(Box::new(tools::LeeFilterTool));
+    registry.register(Box::new(tools::RefinedLeeFilterTool));
+    registry.register(Box::new(tools::EnhancedLeeFilterTool));
     registry.register(Box::new(tools::ConservativeSmoothingFilterTool));
     registry.register(Box::new(tools::OlympicFilterTool));
     registry.register(Box::new(tools::KNearestMeanFilterTool));
@@ -139,6 +141,9 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::PostClassificationChangeTool));
     registry.register(Box::new(tools::SpectralAngleMapperTool));
     registry.register(Box::new(tools::SpectralLibraryMatchingTool));
+    registry.register(Box::new(tools::YamaguchiDecompositionTool));
+    registry.register(Box::new(tools::HAlphaWisartClassificationTool));
+    registry.register(Box::new(tools::WishartIterativeClusteringTool));
     registry.register(Box::new(tools::ImageSliderTool));
     registry.register(Box::new(tools::ImageStackProfileTool));
     registry.register(Box::new(tools::PiecewiseContrastStretchTool));

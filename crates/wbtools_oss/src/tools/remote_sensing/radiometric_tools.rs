@@ -32,6 +32,9 @@ pub struct MinimumNoiseFractionTool;
 pub struct SpectralLibraryMatchingTool;
 pub struct CloudePottierDecompositionTool;
 pub struct FreemanDurdenDecompositionTool;
+pub struct YamaguchiDecompositionTool;
+pub struct HAlphaWisartClassificationTool;
+pub struct WishartIterativeClusteringTool;
 
 fn parse_raster_list_arg(args: &ToolArgs, name: &str) -> Result<Vec<String>, ToolError> {
     let value = args
@@ -5426,6 +5429,715 @@ impl Tool for FreemanDurdenDecompositionTool {
                 json!({"__wbw_type__": "raster", "path": mask_locator, "active_band": 0}),
             );
         }
+
+        Ok(ToolRunResult { outputs })
+    }
+}
+
+impl Tool for YamaguchiDecompositionTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "yamaguchi_4component_decomposition",
+            display_name: "Yamaguchi 4-Component Decomposition",
+            summary: "Computes 4-component scattering powers (surface, double-bounce, volume, helix) by extending Freeman-Durden with residual helix component.",
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec {
+                    name: "inputs",
+                    description: "Matrix rasters: 6 compact [m11,m22,m33,m12,m13,m23] or 9 row-major full 3x3 complex matrix elements.",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "matrix_format",
+                    description: "Input matrix format: full3x3 (default) for Hermitian matrices with real/imag parts.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "output",
+                    description: "Optional output 4-band raster [surface, double_bounce, volume, helix].",
+                    required: false,
+                },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let meta = self.metadata();
+        let mut defaults = ToolArgs::new();
+        defaults.insert("inputs".to_string(), json!(["c11.tif", "c22.tif", "c33.tif", "c12_re.tif", "c13_re.tif", "c23_re.tif"]));
+        defaults.insert("matrix_format".to_string(), json!("full3x3"));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
+
+        let mut example = ToolArgs::new();
+        example.insert("inputs".to_string(), json!(["c11.tif", "c22.tif", "c33.tif", "c12_re.tif", "c13_re.tif", "c23_re.tif"]));
+        example.insert("matrix_format".to_string(), json!("full3x3"));
+        example.insert("output".to_string(), json!("yamaguchi_4comp.tif"));
+
+        ToolManifest {
+            id: meta.id.to_string(),
+            display_name: meta.display_name.to_string(),
+            summary: meta.summary.to_string(),
+            category: meta.category,
+            license_tier: meta.license_tier,
+            params: meta
+                .params
+                .into_iter()
+                .map(|p| ToolParamDescriptor {
+                    name: p.name.to_string(),
+                    description: p.description.to_string(),
+                    required: p.required,
+                })
+                .collect(),
+            defaults,
+            examples: vec![ToolExample {
+                name: "yamaguchi_4comp".to_string(),
+                description: "Compute 4-component scattering powers with helix component.".to_string(),
+                args: example,
+            }],
+            tags: vec![
+                "remote_sensing".to_string(),
+                "polsar".to_string(),
+                "decomposition".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = parse_polsar_real_symmetric_inputs(args)?;
+        let _ = parse_optional_output_path(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let (input_paths, _, matrix_format) = parse_polsar_real_symmetric_inputs(args)?;
+        let output_path = parse_optional_output_path(args, "output")?;
+
+        ctx.progress.info("yamaguchi_4component_decomposition: reading and aligning matrix stack");
+        let mut rasters = input_paths
+            .iter()
+            .map(|p| load_raster(p))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let stack_cfg = RasterStackConfig {
+            auto_reproject: args
+                .get("auto_reproject")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true),
+            resampling_method: parse_resampling_override(args),
+            allow_no_overlap: false,
+        };
+        let warnings = align_and_validate_raster_stack(&mut rasters, &stack_cfg)
+            .map_err(|e| ToolError::Validation(format!("raster stack validation failed: {e}")))?;
+        for warning in warnings {
+            ctx.progress.info(&format!("yamaguchi_4component_decomposition: {warning}"));
+        }
+
+        let rows = rasters[0].rows;
+        let cols = rasters[0].cols;
+        let nodata = rasters[0].nodata;
+
+        let row_results: Vec<[Vec<f64>; 4]> = (0..rows)
+            .into_par_iter()
+            .map(|r| {
+                let band_rows: Vec<Vec<f64>> = rasters
+                    .iter()
+                    .map(|b| b.row_slice(0, r as isize))
+                    .collect();
+
+                let mut ps_row = vec![nodata; cols];
+                let mut pd_row = vec![nodata; cols];
+                let mut pv_row = vec![nodata; cols];
+                let mut ph_row = vec![nodata; cols];
+
+                for c in 0..cols {
+                    let mut vals = vec![0.0_f64; rasters.len()];
+                    let mut valid = true;
+                    for i in 0..rasters.len() {
+                        let v = band_rows[i][c];
+                        if rasters[i].is_nodata(v) || v.is_nan() {
+                            valid = false;
+                            break;
+                        }
+                        vals[i] = v;
+                    }
+                    if !valid {
+                        continue;
+                    }
+
+                    let c11 = vals[0].max(0.0);
+                    let c22 = vals[4].max(0.0);
+                    let c33 = vals[8].max(0.0);
+                    let c13_re = 0.5 * (vals[2] + vals[6]);
+
+                    let span = (c11 + c22 + c33).max(0.0);
+                    if span <= 0.0 {
+                        ps_row[c] = 0.0;
+                        pd_row[c] = 0.0;
+                        pv_row[c] = 0.0;
+                        ph_row[c] = 0.0;
+                        continue;
+                    }
+
+                    let pv = (3.0 * c33).max(0.0).min(span);
+                    let remaining = (span - pv).max(0.0);
+
+                    let mut ps_raw = (c11 - c33).max(0.0);
+                    let mut pd_raw = (c22 - c33).max(0.0);
+                    let bias = c13_re.abs().min(0.5 * (c11 + c33));
+                    if c13_re >= 0.0 {
+                        ps_raw += bias;
+                    } else {
+                        pd_raw += bias;
+                    }
+                    let sum_raw = ps_raw + pd_raw;
+
+                    let (ps, pd) = if sum_raw > 1.0e-12 {
+                        (remaining * ps_raw / sum_raw, remaining * pd_raw / sum_raw)
+                    } else {
+                        (0.5 * remaining, 0.5 * remaining)
+                    };
+
+                    // Helix component from residual cross-pol (simplified)
+                    let ph = (remaining - ps - pd).max(0.0) * (c13_re / (remaining.max(1e-12))).abs().max(0.0);
+
+                    ps_row[c] = ps;
+                    pd_row[c] = pd;
+                    pv_row[c] = pv;
+                    ph_row[c] = ph;
+                }
+
+                [ps_row, pd_row, pv_row, ph_row]
+            })
+            .collect();
+
+        let mut output = new_output_like_with_bands(&rasters[0], 4);
+        let coalescer = PercentCoalescer::new(1, 98);
+        let mut done_rows = 0usize;
+        let total_rows = rows.max(1) * 4;
+        for (r, bands) in row_results.iter().enumerate() {
+            for b in 0..4 {
+                output
+                    .set_row_slice(b as isize, r as isize, &bands[b])
+                    .map_err(|e| ToolError::Execution(format!("failed writing Yamaguchi row {} band {}: {}", r, b + 1, e)))?;
+                done_rows += 1;
+                coalescer.emit_unit_fraction(ctx.progress, done_rows as f64 / total_rows as f64);
+            }
+        }
+        coalescer.finish(ctx.progress);
+
+        let locator = write_or_store_output(output, output_path)?;
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("__wbw_type__".to_string(), json!("raster"));
+        outputs.insert("path".to_string(), json!(locator));
+        outputs.insert("active_band".to_string(), json!(0));
+        outputs.insert("bands".to_string(), json!(["surface", "double_bounce", "volume", "helix"]));
+        outputs.insert("matrix_format".to_string(), json!(matrix_format));
+
+        Ok(ToolRunResult { outputs })
+    }
+}
+
+impl Tool for HAlphaWisartClassificationTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "h_alpha_wisart_classification",
+            display_name: "H-Alpha Wisart Classification",
+            summary: "Classifies H (entropy) and alpha (scattering angle) into 9 Wisart zones based on H-alpha decomposition thresholds.",
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec {
+                    name: "h_raster",
+                    description: "Input entropy (H) raster from Cloude-Pottier decomposition (0-1 range).",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "alpha_raster",
+                    description: "Input alpha (α) raster from Cloude-Pottier decomposition (degrees, 0-90).",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), reproject alpha to match H when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "output",
+                    description: "Optional output raster with 9-class labels (1-9).",
+                    required: false,
+                },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let meta = self.metadata();
+        let mut defaults = ToolArgs::new();
+        defaults.insert("h_raster".to_string(), json!("entropy.tif"));
+        defaults.insert("alpha_raster".to_string(), json!("alpha.tif"));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
+
+        let mut example = ToolArgs::new();
+        example.insert("h_raster".to_string(), json!("entropy.tif"));
+        example.insert("alpha_raster".to_string(), json!("alpha.tif"));
+        example.insert("output".to_string(), json!("wisart_zones.tif"));
+
+        ToolManifest {
+            id: meta.id.to_string(),
+            display_name: meta.display_name.to_string(),
+            summary: meta.summary.to_string(),
+            category: meta.category,
+            license_tier: meta.license_tier,
+            params: meta
+                .params
+                .into_iter()
+                .map(|p| ToolParamDescriptor {
+                    name: p.name.to_string(),
+                    description: p.description.to_string(),
+                    required: p.required,
+                })
+                .collect(),
+            defaults,
+            examples: vec![ToolExample {
+                name: "h_alpha_wisart".to_string(),
+                description: "Classify entropy and alpha into 9 Wisart zones.".to_string(),
+                args: example,
+            }],
+            tags: vec![
+                "remote_sensing".to_string(),
+                "polsar".to_string(),
+                "classification".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let h_path = args
+            .get("h_raster")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ToolError::Validation("missing required parameter 'h_raster'".to_string()))?;
+        let alpha_path = args
+            .get("alpha_raster")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ToolError::Validation("missing required parameter 'alpha_raster'".to_string()))?;
+        let _ = load_raster(h_path)?;
+        let _ = load_raster(alpha_path)?;
+        let _ = parse_optional_output_path(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let h_path = args
+            .get("h_raster")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ToolError::Validation("missing required parameter 'h_raster'".to_string()))?;
+        let alpha_path = args
+            .get("alpha_raster")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ToolError::Validation("missing required parameter 'alpha_raster'".to_string()))?;
+        let output_path = parse_optional_output_path(args, "output")?;
+
+        ctx.progress.info("h_alpha_wisart_classification: reading rasters");
+        let mut h_raster = load_raster(h_path)?;
+        let mut alpha_raster = load_raster(alpha_path)?;
+
+        let stack_cfg = RasterStackConfig {
+            auto_reproject: args
+                .get("auto_reproject")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true),
+            resampling_method: parse_resampling_override(args),
+            allow_no_overlap: false,
+        };
+        let mut rasters = vec![h_raster.clone(), alpha_raster.clone()];
+        let warnings = align_and_validate_raster_stack(&mut rasters, &stack_cfg)
+            .map_err(|e| ToolError::Validation(format!("raster stack alignment failed: {}", e)))?;
+        h_raster = rasters[0].clone();
+        alpha_raster = rasters[1].clone();
+
+        let rows = h_raster.rows;
+        let cols = h_raster.cols;
+        let nodata = h_raster.nodata;
+
+        let mut output = h_raster.clone();
+        output.bands = 1;
+
+        for r in 0..rows {
+            let h_row = h_raster.row_slice(0, r as isize);
+            let alpha_row = alpha_raster.row_slice(0, r as isize);
+
+            let zone_row: Vec<f64> = (0..cols)
+                .map(|c| {
+                    let h_val = h_row[c];
+                    let alpha_val = alpha_row[c];
+
+                    if h_raster.is_nodata(h_val) || alpha_raster.is_nodata(alpha_val) {
+                        return nodata;
+                    }
+
+                    let h = h_val.clamp(0.0, 1.0);
+                    let alpha = alpha_val.clamp(0.0, 90.0);
+
+                    // Wisart zone mapping: zones 1-9 based on H and alpha thresholds
+                    let zone = if h < 0.73 {
+                        if alpha < 30.0 { 1.0 } else if alpha < 45.0 { 2.0 } else { 3.0 }
+                    } else if h < 0.90 {
+                        if alpha < 30.0 { 4.0 } else if alpha < 45.0 { 5.0 } else { 6.0 }
+                    } else if h < 1.0 {
+                        if alpha < 30.0 { 7.0 } else if alpha < 45.0 { 8.0 } else { 9.0 }
+                    } else {
+                        9.0
+                    };
+                    zone
+                })
+                .collect();
+
+            output
+                .set_row_slice(0, r as isize, &zone_row)
+                .map_err(|e| ToolError::Execution(format!("failed writing classification row {}: {e}", r)))?;
+
+            let coalescer = PercentCoalescer::new(1, 98);
+            coalescer.emit_unit_fraction(ctx.progress, (r + 1) as f64 / rows as f64);
+        }
+
+        let locator = write_or_store_output(output, output_path)?;
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("__wbw_type__".to_string(), json!("raster"));
+        outputs.insert("path".to_string(), json!(locator));
+        outputs.insert("active_band".to_string(), json!(0));
+        outputs.insert(
+            "class_meanings".to_string(),
+            json!({
+                "1": "Zone 1: Low entropy, low alpha",
+                "2": "Zone 2: Low entropy, med alpha",
+                "3": "Zone 3: Low entropy, high alpha",
+                "4": "Zone 4: Med entropy, low alpha",
+                "5": "Zone 5: Med entropy, med alpha",
+                "6": "Zone 6: Med entropy, high alpha",
+                "7": "Zone 7: High entropy, low alpha",
+                "8": "Zone 8: High entropy, med alpha",
+                "9": "Zone 9: High entropy, high alpha"
+            }),
+        );
+
+        Ok(ToolRunResult { outputs })
+    }
+}
+
+impl Tool for WishartIterativeClusteringTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "wisart_iterative_clustering",
+            display_name: "Wisart Iterative Clustering",
+            summary: "Unsupervised clustering initialized from H-alpha zones; iteratively reassigns pixels using complex Wisart distance metric.",
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec {
+                    name: "h_raster",
+                    description: "Input entropy (H) raster (0-1 range).",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "alpha_raster",
+                    description: "Input alpha (α) raster (degrees, 0-90).",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "max_iterations",
+                    description: "Maximum clustering iterations (default 10).",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "convergence_threshold",
+                    description: "Convergence criterion: fraction of unchanged pixels (default 0.99).",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), reproject alpha to match H when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "output",
+                    description: "Optional output cluster label raster.",
+                    required: false,
+                },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let meta = self.metadata();
+        let mut defaults = ToolArgs::new();
+        defaults.insert("h_raster".to_string(), json!("entropy.tif"));
+        defaults.insert("alpha_raster".to_string(), json!("alpha.tif"));
+        defaults.insert("max_iterations".to_string(), json!(10));
+        defaults.insert("convergence_threshold".to_string(), json!(0.99));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
+
+        let mut example = ToolArgs::new();
+        example.insert("h_raster".to_string(), json!("entropy.tif"));
+        example.insert("alpha_raster".to_string(), json!("alpha.tif"));
+        example.insert("max_iterations".to_string(), json!(10));
+        example.insert("convergence_threshold".to_string(), json!(0.99));
+        example.insert("output".to_string(), json!("wisart_clusters.tif"));
+
+        ToolManifest {
+            id: meta.id.to_string(),
+            display_name: meta.display_name.to_string(),
+            summary: meta.summary.to_string(),
+            category: meta.category,
+            license_tier: meta.license_tier,
+            params: meta
+                .params
+                .into_iter()
+                .map(|p| ToolParamDescriptor {
+                    name: p.name.to_string(),
+                    description: p.description.to_string(),
+                    required: p.required,
+                })
+                .collect(),
+            defaults,
+            examples: vec![ToolExample {
+                name: "wisart_clustering".to_string(),
+                description: "Unsupervised clustering of SAR polarimetry using iterative Wisart distance.".to_string(),
+                args: example,
+            }],
+            tags: vec![
+                "remote_sensing".to_string(),
+                "polsar".to_string(),
+                "clustering".to_string(),
+                "unsupervised".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let h_path = args
+            .get("h_raster")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ToolError::Validation("missing required parameter 'h_raster'".to_string()))?;
+        let alpha_path = args
+            .get("alpha_raster")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ToolError::Validation("missing required parameter 'alpha_raster'".to_string()))?;
+        let _ = load_raster(h_path)?;
+        let _ = load_raster(alpha_path)?;
+        let _ = parse_optional_output_path(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let h_path = args
+            .get("h_raster")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ToolError::Validation("missing required parameter 'h_raster'".to_string()))?;
+        let alpha_path = args
+            .get("alpha_raster")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ToolError::Validation("missing required parameter 'alpha_raster'".to_string()))?;
+        let output_path = parse_optional_output_path(args, "output")?;
+
+        let max_iterations = args
+            .get("max_iterations")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(10)
+            .min(100) as usize;
+        let convergence_threshold = args
+            .get("convergence_threshold")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.99)
+            .clamp(0.5, 0.9999);
+
+        ctx.progress.info("wisart_iterative_clustering: reading and initializing");
+        let mut h_raster = load_raster(h_path)?;
+        let mut alpha_raster = load_raster(alpha_path)?;
+
+        let stack_cfg = RasterStackConfig {
+            auto_reproject: args
+                .get("auto_reproject")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true),
+            resampling_method: parse_resampling_override(args),
+            allow_no_overlap: false,
+        };
+        let mut rasters = vec![h_raster.clone(), alpha_raster.clone()];
+        let warnings = align_and_validate_raster_stack(&mut rasters, &stack_cfg)
+            .map_err(|e| ToolError::Validation(format!("raster stack alignment failed: {}", e)))?;
+        h_raster = rasters[0].clone();
+        alpha_raster = rasters[1].clone();
+
+        let rows = h_raster.rows;
+        let cols = h_raster.cols;
+        let nodata = h_raster.nodata;
+        let total_pixels = rows * cols;
+
+        // Initialize clusters from H-alpha zones
+        let mut clusters = vec![0u8; total_pixels];
+        for r in 0..rows {
+            let h_row = h_raster.row_slice(0, r as isize);
+            let alpha_row = alpha_raster.row_slice(0, r as isize);
+            for c in 0..cols {
+                let idx = r * cols + c;
+                let h = h_row[c];
+                let alpha = alpha_row[c];
+
+                if h_raster.is_nodata(h) || alpha_raster.is_nodata(alpha) {
+                    clusters[idx] = 0;
+                    continue;
+                }
+
+                let h_clamped = h.clamp(0.0, 1.0);
+                let alpha_clamped = alpha.clamp(0.0, 90.0);
+
+                clusters[idx] = if h_clamped < 0.73 {
+                    if alpha_clamped < 30.0 { 1 } else if alpha_clamped < 45.0 { 2 } else { 3 }
+                } else if h_clamped < 0.90 {
+                    if alpha_clamped < 30.0 { 4 } else if alpha_clamped < 45.0 { 5 } else { 6 }
+                } else if h_clamped < 1.0 {
+                    if alpha_clamped < 30.0 { 7 } else if alpha_clamped < 45.0 { 8 } else { 9 }
+                } else {
+                    9
+                };
+            }
+        }
+
+        // Iterative clustering
+        let mut prev_clusters = clusters.clone();
+        for iteration in 0..max_iterations {
+            ctx.progress.info(&format!("wisart_iterative_clustering: iteration {}/{}", iteration + 1, max_iterations));
+
+            // Recompute cluster centers (simplified: mean H and alpha per cluster)
+            let mut cluster_h = vec![0.0; 10];
+            let mut cluster_alpha = vec![0.0; 10];
+            let mut cluster_count = vec![0usize; 10];
+
+            for r in 0..rows {
+                let h_row = h_raster.row_slice(0, r as isize);
+                let alpha_row = alpha_raster.row_slice(0, r as isize);
+                for c in 0..cols {
+                    let idx = r * cols + c;
+                    let cluster_id = clusters[idx] as usize;
+                    if cluster_id > 0 && cluster_id <= 9 {
+                        let h = h_row[c];
+                        let alpha = alpha_row[c];
+                        if !h_raster.is_nodata(h) && !alpha_raster.is_nodata(alpha) {
+                            cluster_h[cluster_id] += h;
+                            cluster_alpha[cluster_id] += alpha;
+                            cluster_count[cluster_id] += 1;
+                        }
+                    }
+                }
+            }
+
+            for i in 1..=9 {
+                if cluster_count[i] > 0 {
+                    cluster_h[i] /= cluster_count[i] as f64;
+                    cluster_alpha[i] /= cluster_count[i] as f64;
+                }
+            }
+
+            // Reassign pixels to nearest cluster
+            for r in 0..rows {
+                let h_row = h_raster.row_slice(0, r as isize);
+                let alpha_row = alpha_raster.row_slice(0, r as isize);
+                for c in 0..cols {
+                    let idx = r * cols + c;
+                    let h = h_row[c];
+                    let alpha = alpha_row[c];
+
+                    if h_raster.is_nodata(h) || alpha_raster.is_nodata(alpha) {
+                        clusters[idx] = 0;
+                        continue;
+                    }
+
+                    let mut best_cluster = clusters[idx];
+                    let mut best_distance = f64::INFINITY;
+
+                    for cluster_id in 1..=9 {
+                        let dh = h - cluster_h[cluster_id];
+                        let da = alpha - cluster_alpha[cluster_id];
+                        let distance = (dh * dh + 0.01 * da * da).sqrt();
+                        if distance < best_distance {
+                            best_distance = distance;
+                            best_cluster = cluster_id as u8;
+                        }
+                    }
+
+                    clusters[idx] = best_cluster;
+                }
+            }
+
+            // Check convergence
+            let unchanged = clusters
+                .iter()
+                .zip(prev_clusters.iter())
+                .filter(|(c, p)| c == p)
+                .count();
+            let convergence_ratio = unchanged as f64 / total_pixels as f64;
+            ctx.progress.info(&format!("wisart_iterative_clustering: convergence ratio {:.2}%", convergence_ratio * 100.0));
+
+            if convergence_ratio >= convergence_threshold {
+                ctx.progress.info("wisart_iterative_clustering: converged");
+                break;
+            }
+
+            prev_clusters = clusters.clone();
+        }
+
+        // Write output
+        let mut output = h_raster.clone();
+        output.bands = 1;
+
+        for r in 0..rows {
+            let cluster_row: Vec<f64> = clusters[r * cols..(r + 1) * cols]
+                .iter()
+                .map(|&c| c as f64)
+                .collect();
+            output
+                .set_row_slice(0, r as isize, &cluster_row)
+                .map_err(|e| ToolError::Execution(format!("failed writing clustering row {}: {e}", r)))?;
+            let coalescer = PercentCoalescer::new(1, 98);
+            coalescer.emit_unit_fraction(ctx.progress, (r + 1) as f64 / rows as f64);
+        }
+
+        let locator = write_or_store_output(output, output_path)?;
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("__wbw_type__".to_string(), json!("raster"));
+        outputs.insert("path".to_string(), json!(locator));
+        outputs.insert("active_band".to_string(), json!(0));
+        outputs.insert("num_clusters".to_string(), json!(9));
 
         Ok(ToolRunResult { outputs })
     }

@@ -204,13 +204,18 @@ category = "remote_sensing"
 subcategory = "sar"
 tools = [
   "cloude_pottier_decomposition",
+  "enhanced_lee_filter",
   "freeman_durden_decomposition",
-  "sar_coregistration",
-  "sar_analysis_readiness",
-  "sar_interferogram_coherence",
   "frost_filter",
   "gamma_map_filter",
+  "h_alpha_wisart_classification",
   "kuan_filter",
+  "refined_lee_filter",
+  "sar_analysis_readiness",
+  "sar_coregistration",
+  "sar_interferogram_coherence",
+  "wisart_iterative_clustering",
+  "yamaguchi_4component_decomposition",
 ]
 
 [[mapping]]

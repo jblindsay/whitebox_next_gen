@@ -761,28 +761,6 @@ fn default_license_state_path() -> PathBuf {
         .join("wbw_ng_license_state.json")
 }
 
-fn write_license_state_json(state: &Value) -> Result<PathBuf, ToolError> {
-    let path = default_license_state_path();
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| {
-            ToolError::Execution(format!(
-                "failed to create license state directory '{}': {e}",
-                parent.display()
-            ))
-        })?;
-    }
-
-    let text = serde_json::to_string_pretty(state)
-        .map_err(|e| ToolError::Execution(format!("failed to serialize license state: {e}")))?;
-    std::fs::write(&path, text).map_err(|e| {
-        ToolError::Execution(format!(
-            "failed to write license state '{}': {e}",
-            path.display()
-        ))
-    })?;
-    Ok(path)
-}
-
 fn read_license_state_json() -> Result<Value, ToolError> {
     let path = default_license_state_path();
     let text = std::fs::read_to_string(&path).map_err(|e| {

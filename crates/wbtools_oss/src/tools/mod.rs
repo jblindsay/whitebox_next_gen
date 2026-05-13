@@ -9,6 +9,9 @@ mod flow_algorithms;
 mod lidar_processing;
 pub mod raster_stack_validator;
 
+pub use remote_sensing::TerrainCorrectedOpticalTool;
+pub use remote_sensing::BrdfNormalizationTool;
+pub use remote_sensing::OrthorectificationTool;
 pub use remote_sensing::BilateralFilterTool;
 pub use remote_sensing::HighPassBilateralFilterTool;
 pub use remote_sensing::AdaptiveFilterTool;

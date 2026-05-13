@@ -80,9 +80,11 @@ category = "remote_sensing"
 subcategory = "radiometric_correction"
 tools = [
   "brdf_surface_reflectance_consistency",
+  "brdf_normalization",
   "correct_vignetting",
   "dark_object_subtraction",
   "dn_to_toa_reflectance",
+  "terrain_corrected_optical_analytics",
 ]
 
 [[mapping]]
@@ -222,7 +224,6 @@ tools = [
 category = "remote_sensing"
 subcategory = "workflow_products"
 tools = [
-  "terrain_corrected_optical_analytics",
   "multi_sensor_fusion_monitoring",
   "guided_uav_image_intake_workflow",
   "registration_oriented_feature_workflow",
@@ -504,6 +505,7 @@ tools = [
   "reproject_lidar",
   "reproject_raster",
   "reproject_vector",
+  "orthorectification",
 ]
 
 [[mapping]]

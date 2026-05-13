@@ -2549,6 +2549,7 @@ fn default_license_state_path() -> PathBuf {
         .join("wbw_ng_license_state.json")
 }
 
+#[allow(dead_code)]
 fn write_license_state_json(state: &Value) -> Result<PathBuf, ToolError> {
     let path = default_license_state_path();
     if let Some(parent) = path.parent() {

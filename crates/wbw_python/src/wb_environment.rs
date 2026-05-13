@@ -2132,6 +2132,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("bool_xor", "raster", "overlay_math"),
     ("boundary_shape_complexity", "raster", "general"),
     ("brdf_surface_reflectance_consistency", "remote_sensing", "radiometric_correction"),
+    ("brdf_normalization", "remote_sensing", "radiometric_correction"),
     ("breach_depressions_least_cost", "hydrology", "depressions_storage"),
     ("breach_single_cell_pits", "hydrology", "depressions_storage"),
     ("breakline_mapping", "terrain", "general"),
@@ -2309,6 +2310,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("generating_function", "terrain", "derivatives"),
     ("geomorphons", "terrain", "landform_indices"),
     ("georeference_raster_from_control_points", "projection_georeferencing", "general"),
+    ("orthorectification", "projection_georeferencing", "general"),
     ("glcm_texture", "remote_sensing", "filters"),
     ("greater_than", "raster", "general"),
     ("guided_filter", "remote_sensing", "filters"),
@@ -2743,7 +2745,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("tanh", "raster", "general"),
     ("terrain_constraint_and_conflict_analysis", "terrain", "workflow_products"),
     ("terrain_constructability_and_cost_analysis", "terrain", "workflow_products"),
-    ("terrain_corrected_optical_analytics", "remote_sensing", "workflow_products"),
+    ("terrain_corrected_optical_analytics", "remote_sensing", "radiometric_correction"),
     ("thicken_raster_line", "remote_sensing", "filters"),
     ("time_in_daylight", "terrain", "visibility"),
     ("time_series_change_intelligence", "remote_sensing", "change_detection"),
@@ -13659,11 +13661,16 @@ impl WbEnvironment {
         ))
     }
 
-    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (inputs, percentile=1.0, clamp_non_negative=true, auto_reproject=true, auto_reproject_method="", output=None, output_diagnostic_offsets=None, options=None, callback=None))]
     fn dark_object_subtraction(
         &self,
         inputs: &Bound<'_, PyList>,
-        output_path: Option<&str>,
+        percentile: f64,
+        clamp_non_negative: bool,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
+        output: Option<&str>,
+        output_diagnostic_offsets: Option<&str>,
         options: Option<&Bound<'_, PyAny>>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
@@ -13671,19 +13678,36 @@ impl WbEnvironment {
         let mut args = serde_json::Map::new();
         args.insert("inputs".to_string(), json!(input_paths));
         merge_optional_json_object_args(&mut args, options)?;
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+        args.insert("percentile".to_string(), json!(percentile));
+        args.insert("clamp_non_negative".to_string(), json!(clamp_non_negative));
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output) {
             args.insert("output".to_string(), json!(out));
+        }
+        if let Some(diag_out) = self.resolve_output_path_for_wd(output_diagnostic_offsets) {
+            args.insert("output_diagnostic_offsets".to_string(), json!(diag_out));
         }
         let response = run_tool_response_with_args(&self.runtime, "dark_object_subtraction", args, callback)?;
         let outputs = response.get("outputs").unwrap_or(&response);
         Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
-    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (inputs, reflectance_mult=None, reflectance_add=None, sensor_bundle_root=None, sun_elevation_deg=None, apply_solar_correction=true, clamp_unit_interval=true, auto_reproject=true, auto_reproject_method="", output=None, options=None, callback=None))]
     fn dn_to_toa_reflectance(
         &self,
         inputs: &Bound<'_, PyList>,
-        output_path: Option<&str>,
+        reflectance_mult: Option<&Bound<'_, PyAny>>,
+        reflectance_add: Option<&Bound<'_, PyAny>>,
+        sensor_bundle_root: Option<&str>,
+        sun_elevation_deg: Option<f64>,
+        apply_solar_correction: bool,
+        clamp_unit_interval: bool,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
+        output: Option<&str>,
         options: Option<&Bound<'_, PyAny>>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
@@ -13691,7 +13715,25 @@ impl WbEnvironment {
         let mut args = serde_json::Map::new();
         args.insert("inputs".to_string(), json!(input_paths));
         merge_optional_json_object_args(&mut args, options)?;
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+        if let Some(v) = reflectance_mult {
+            args.insert("reflectance_mult".to_string(), py_any_to_json_value(v)?);
+        }
+        if let Some(v) = reflectance_add {
+            args.insert("reflectance_add".to_string(), py_any_to_json_value(v)?);
+        }
+        if let Some(v) = sensor_bundle_root {
+            args.insert("sensor_bundle_root".to_string(), json!(v));
+        }
+        if let Some(v) = sun_elevation_deg {
+            args.insert("sun_elevation_deg".to_string(), json!(v));
+        }
+        args.insert("apply_solar_correction".to_string(), json!(apply_solar_correction));
+        args.insert("clamp_unit_interval".to_string(), json!(clamp_unit_interval));
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output) {
             args.insert("output".to_string(), json!(out));
         }
         let response = run_tool_response_with_args(&self.runtime, "dn_to_toa_reflectance", args, callback)?;
@@ -13699,12 +13741,18 @@ impl WbEnvironment {
         Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
-    #[pyo3(signature = (red_input, nir_input, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (red_input, nir_input, ndvi_soil=0.2, ndvi_vegetation=0.5, emissivity_soil=0.97, emissivity_vegetation=0.99, auto_reproject=true, auto_reproject_method="", output=None, options=None, callback=None))]
     fn ndvi_based_emissivity(
         &self,
         red_input: &Raster,
         nir_input: &Raster,
-        output_path: Option<&str>,
+        ndvi_soil: f64,
+        ndvi_vegetation: f64,
+        emissivity_soil: f64,
+        emissivity_vegetation: f64,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
+        output: Option<&str>,
         options: Option<&Bound<'_, PyAny>>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
@@ -13712,7 +13760,15 @@ impl WbEnvironment {
         args.insert("red_input".to_string(), json!(red_input.file_path.to_string_lossy().to_string()));
         args.insert("nir_input".to_string(), json!(nir_input.file_path.to_string_lossy().to_string()));
         merge_optional_json_object_args(&mut args, options)?;
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+        args.insert("ndvi_soil".to_string(), json!(ndvi_soil));
+        args.insert("ndvi_vegetation".to_string(), json!(ndvi_vegetation));
+        args.insert("emissivity_soil".to_string(), json!(emissivity_soil));
+        args.insert("emissivity_vegetation".to_string(), json!(emissivity_vegetation));
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output) {
             args.insert("output".to_string(), json!(out));
         }
         let response = run_tool_response_with_args(&self.runtime, "ndvi_based_emissivity", args, callback)?;
@@ -13720,11 +13776,24 @@ impl WbEnvironment {
         Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
-    #[pyo3(signature = (thermal_input, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (thermal_input, input_is_brightness_temp=false, emissivity_input=None, emissivity_constant=0.98, sensor_bundle_root=None, thermal_band_number=10, radiance_mult=None, radiance_add=None, k1_constant=None, k2_constant=None, wavelength_um=None, output_units="celsius", auto_reproject=true, auto_reproject_method="", output=None, options=None, callback=None))]
     fn land_surface_temperature_single_channel(
         &self,
         thermal_input: &Raster,
-        output_path: Option<&str>,
+        input_is_brightness_temp: bool,
+        emissivity_input: Option<&Raster>,
+        emissivity_constant: f64,
+        sensor_bundle_root: Option<&str>,
+        thermal_band_number: u64,
+        radiance_mult: Option<f64>,
+        radiance_add: Option<f64>,
+        k1_constant: Option<f64>,
+        k2_constant: Option<f64>,
+        wavelength_um: Option<f64>,
+        output_units: &str,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
+        output: Option<&str>,
         options: Option<&Bound<'_, PyAny>>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
@@ -13734,7 +13803,36 @@ impl WbEnvironment {
             json!(thermal_input.file_path.to_string_lossy().to_string()),
         );
         merge_optional_json_object_args(&mut args, options)?;
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+        args.insert("input_is_brightness_temp".to_string(), json!(input_is_brightness_temp));
+        if let Some(v) = emissivity_input {
+            args.insert("emissivity_input".to_string(), json!(v.file_path.to_string_lossy().to_string()));
+        }
+        args.insert("emissivity_constant".to_string(), json!(emissivity_constant));
+        if let Some(v) = sensor_bundle_root {
+            args.insert("sensor_bundle_root".to_string(), json!(v));
+        }
+        args.insert("thermal_band_number".to_string(), json!(thermal_band_number));
+        if let Some(v) = radiance_mult {
+            args.insert("radiance_mult".to_string(), json!(v));
+        }
+        if let Some(v) = radiance_add {
+            args.insert("radiance_add".to_string(), json!(v));
+        }
+        if let Some(v) = k1_constant {
+            args.insert("k1_constant".to_string(), json!(v));
+        }
+        if let Some(v) = k2_constant {
+            args.insert("k2_constant".to_string(), json!(v));
+        }
+        if let Some(v) = wavelength_um {
+            args.insert("wavelength_um".to_string(), json!(v));
+        }
+        args.insert("output_units".to_string(), json!(output_units));
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output) {
             args.insert("output".to_string(), json!(out));
         }
         let response = run_tool_response_with_args(
@@ -13747,12 +13845,37 @@ impl WbEnvironment {
         Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
-    #[pyo3(signature = (thermal1_input, thermal2_input, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (thermal1_input, thermal2_input, input_is_brightness_temp=false, emissivity_mean_input=None, emissivity_delta_input=None, emissivity_mean_constant=0.98, emissivity_delta_constant=0.0, sensor_bundle_root=None, thermal_band1_number=10, thermal_band2_number=11, radiance1_mult=None, radiance1_add=None, k1_1=None, k2_1=None, radiance2_mult=None, radiance2_add=None, k1_2=None, k2_2=None, coeff_a0=0.0, coeff_a1=1.0, coeff_a2=0.0, coeff_a3=0.0, coeff_a4=0.0, coeff_a5=0.0, output_units="celsius", auto_reproject=true, auto_reproject_method="", output=None, options=None, callback=None))]
     fn land_surface_temperature_split_window(
         &self,
         thermal1_input: &Raster,
         thermal2_input: &Raster,
-        output_path: Option<&str>,
+        input_is_brightness_temp: bool,
+        emissivity_mean_input: Option<&Raster>,
+        emissivity_delta_input: Option<&Raster>,
+        emissivity_mean_constant: f64,
+        emissivity_delta_constant: f64,
+        sensor_bundle_root: Option<&str>,
+        thermal_band1_number: u64,
+        thermal_band2_number: u64,
+        radiance1_mult: Option<f64>,
+        radiance1_add: Option<f64>,
+        k1_1: Option<f64>,
+        k2_1: Option<f64>,
+        radiance2_mult: Option<f64>,
+        radiance2_add: Option<f64>,
+        k1_2: Option<f64>,
+        k2_2: Option<f64>,
+        coeff_a0: f64,
+        coeff_a1: f64,
+        coeff_a2: f64,
+        coeff_a3: f64,
+        coeff_a4: f64,
+        coeff_a5: f64,
+        output_units: &str,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
+        output: Option<&str>,
         options: Option<&Bound<'_, PyAny>>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
@@ -13766,7 +13889,40 @@ impl WbEnvironment {
             json!(thermal2_input.file_path.to_string_lossy().to_string()),
         );
         merge_optional_json_object_args(&mut args, options)?;
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+        args.insert("input_is_brightness_temp".to_string(), json!(input_is_brightness_temp));
+        if let Some(v) = emissivity_mean_input {
+            args.insert("emissivity_mean_input".to_string(), json!(v.file_path.to_string_lossy().to_string()));
+        }
+        if let Some(v) = emissivity_delta_input {
+            args.insert("emissivity_delta_input".to_string(), json!(v.file_path.to_string_lossy().to_string()));
+        }
+        args.insert("emissivity_mean_constant".to_string(), json!(emissivity_mean_constant));
+        args.insert("emissivity_delta_constant".to_string(), json!(emissivity_delta_constant));
+        if let Some(v) = sensor_bundle_root {
+            args.insert("sensor_bundle_root".to_string(), json!(v));
+        }
+        args.insert("thermal_band1_number".to_string(), json!(thermal_band1_number));
+        args.insert("thermal_band2_number".to_string(), json!(thermal_band2_number));
+        if let Some(v) = radiance1_mult { args.insert("radiance1_mult".to_string(), json!(v)); }
+        if let Some(v) = radiance1_add { args.insert("radiance1_add".to_string(), json!(v)); }
+        if let Some(v) = k1_1 { args.insert("k1_1".to_string(), json!(v)); }
+        if let Some(v) = k2_1 { args.insert("k2_1".to_string(), json!(v)); }
+        if let Some(v) = radiance2_mult { args.insert("radiance2_mult".to_string(), json!(v)); }
+        if let Some(v) = radiance2_add { args.insert("radiance2_add".to_string(), json!(v)); }
+        if let Some(v) = k1_2 { args.insert("k1_2".to_string(), json!(v)); }
+        if let Some(v) = k2_2 { args.insert("k2_2".to_string(), json!(v)); }
+        args.insert("coeff_a0".to_string(), json!(coeff_a0));
+        args.insert("coeff_a1".to_string(), json!(coeff_a1));
+        args.insert("coeff_a2".to_string(), json!(coeff_a2));
+        args.insert("coeff_a3".to_string(), json!(coeff_a3));
+        args.insert("coeff_a4".to_string(), json!(coeff_a4));
+        args.insert("coeff_a5".to_string(), json!(coeff_a5));
+        args.insert("output_units".to_string(), json!(output_units));
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output) {
             args.insert("output".to_string(), json!(out));
         }
         let response = run_tool_response_with_args(
@@ -13779,13 +13935,19 @@ impl WbEnvironment {
         Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
-    #[pyo3(signature = (t1_inputs, t2_inputs, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (t1_inputs, t2_inputs, mode="magnitude", threshold_sigma=None, output=None, output_absolute=None, output_signed=None, output_mask=None, auto_reproject=true, auto_reproject_method="", callback=None))]
     fn image_difference_change_detection(
         &self,
         t1_inputs: &Bound<'_, PyList>,
         t2_inputs: &Bound<'_, PyList>,
-        output_path: Option<&str>,
-        options: Option<&Bound<'_, PyAny>>,
+        mode: &str,
+        threshold_sigma: Option<f64>,
+        output: Option<&str>,
+        output_absolute: Option<&str>,
+        output_signed: Option<&str>,
+        output_mask: Option<&str>,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
         let t1_paths = extract_raster_input_paths(t1_inputs, "t1_inputs")?;
@@ -13793,9 +13955,25 @@ impl WbEnvironment {
         let mut args = serde_json::Map::new();
         args.insert("t1_inputs".to_string(), json!(t1_paths));
         args.insert("t2_inputs".to_string(), json!(t2_paths));
-        merge_optional_json_object_args(&mut args, options)?;
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+        args.insert("mode".to_string(), json!(mode));
+        if let Some(ts) = threshold_sigma {
+            args.insert("threshold_sigma".to_string(), json!(ts));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output) {
             args.insert("output".to_string(), json!(out));
+        }
+        if let Some(out_abs) = output_absolute {
+            args.insert("output_absolute".to_string(), json!(out_abs));
+        }
+        if let Some(out_signed) = output_signed {
+            args.insert("output_signed".to_string(), json!(out_signed));
+        }
+        if let Some(out_mask) = output_mask {
+            args.insert("output_mask".to_string(), json!(out_mask));
+        }
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
         }
         let response = run_tool_response_with_args(
             &self.runtime,
@@ -13807,13 +13985,17 @@ impl WbEnvironment {
         Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
-    #[pyo3(signature = (t1_classified, t2_classified, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (t1_classified, t2_classified, transition_scale=1000, auto_reproject=true, auto_reproject_method="", output=None, t1_class_remap=None, t2_class_remap=None, callback=None))]
     fn post_classification_change(
         &self,
         t1_classified: &Raster,
         t2_classified: &Raster,
-        output_path: Option<&str>,
-        options: Option<&Bound<'_, PyAny>>,
+        transition_scale: i64,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
+        output: Option<&str>,
+        t1_class_remap: Option<&Bound<'_, PyAny>>,
+        t2_class_remap: Option<&Bound<'_, PyAny>>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
         let mut args = serde_json::Map::new();
@@ -13825,22 +14007,38 @@ impl WbEnvironment {
             "t2_classified".to_string(),
             json!(t2_classified.file_path.to_string_lossy().to_string()),
         );
-        merge_optional_json_object_args(&mut args, options)?;
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+        args.insert("transition_scale".to_string(), json!(transition_scale));
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output) {
             args.insert("output".to_string(), json!(out));
+        }
+        if let Some(t1_remap) = t1_class_remap {
+            args.insert("t1_class_remap".to_string(), py_any_to_json_value(t1_remap)?);
+        }
+        if let Some(t2_remap) = t2_class_remap {
+            args.insert("t2_class_remap".to_string(), py_any_to_json_value(t2_remap)?);
         }
         let response = run_tool_response_with_args(&self.runtime, "post_classification_change", args, callback)?;
         let outputs = response.get("outputs").unwrap_or(&response);
         Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
-    #[pyo3(signature = (t1_inputs, t2_inputs, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (t1_inputs, t2_inputs, component=1, standardized=false, threshold_sigma=None, output=None, output_mask=None, output_report=None, auto_reproject=true, auto_reproject_method="", callback=None))]
     fn pca_based_change_detection(
         &self,
         t1_inputs: &Bound<'_, PyList>,
         t2_inputs: &Bound<'_, PyList>,
-        output_path: Option<&str>,
-        options: Option<&Bound<'_, PyAny>>,
+        component: u64,
+        standardized: bool,
+        threshold_sigma: Option<f64>,
+        output: Option<&str>,
+        output_mask: Option<&str>,
+        output_report: Option<&str>,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
         let t1_paths = extract_raster_input_paths(t1_inputs, "t1_inputs")?;
@@ -13848,20 +14046,39 @@ impl WbEnvironment {
         let mut args = serde_json::Map::new();
         args.insert("t1_inputs".to_string(), json!(t1_paths));
         args.insert("t2_inputs".to_string(), json!(t2_paths));
-        merge_optional_json_object_args(&mut args, options)?;
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+        args.insert("component".to_string(), json!(component));
+        args.insert("standardized".to_string(), json!(standardized));
+        if let Some(ts) = threshold_sigma {
+            args.insert("threshold_sigma".to_string(), json!(ts));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output) {
             args.insert("output".to_string(), json!(out));
+        }
+        if let Some(out_mask) = output_mask {
+            args.insert("output_mask".to_string(), json!(out_mask));
+        }
+        if let Some(out_report) = output_report {
+            args.insert("output_report".to_string(), json!(out_report));
+        }
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
         }
         let response = run_tool_response_with_args(&self.runtime, "pca_based_change_detection", args, callback)?;
         let outputs = response.get("outputs").unwrap_or(&response);
         Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
-    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (inputs, endmembers, threshold_angle_deg=None, auto_reproject=true, auto_reproject_method="", output=None, output_angle=None, options=None, callback=None))]
     fn spectral_angle_mapper(
         &self,
         inputs: &Bound<'_, PyList>,
-        output_path: Option<&str>,
+        endmembers: &Bound<'_, PyAny>,
+        threshold_angle_deg: Option<f64>,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
+        output: Option<&str>,
+        output_angle: Option<&str>,
         options: Option<&Bound<'_, PyAny>>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
@@ -13869,19 +14086,33 @@ impl WbEnvironment {
         let mut args = serde_json::Map::new();
         args.insert("inputs".to_string(), json!(input_paths));
         merge_optional_json_object_args(&mut args, options)?;
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+        args.insert("endmembers".to_string(), py_any_to_json_value(endmembers)?);
+        if let Some(v) = threshold_angle_deg {
+            args.insert("threshold_angle_deg".to_string(), json!(v));
+        }
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output) {
             args.insert("output".to_string(), json!(out));
+        }
+        if let Some(out_ang) = self.resolve_output_path_for_wd(output_angle) {
+            args.insert("output_angle".to_string(), json!(out_ang));
         }
         let response = run_tool_response_with_args(&self.runtime, "spectral_angle_mapper", args, callback)?;
         let outputs = response.get("outputs").unwrap_or(&response);
         Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
-    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (inputs, wavelengths=None, auto_reproject=true, auto_reproject_method="", output=None, options=None, callback=None))]
     fn continuum_removal(
         &self,
         inputs: &Bound<'_, PyList>,
-        output_path: Option<&str>,
+        wavelengths: Option<&Bound<'_, PyAny>>,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
+        output: Option<&str>,
         options: Option<&Bound<'_, PyAny>>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
@@ -13889,7 +14120,14 @@ impl WbEnvironment {
         let mut args = serde_json::Map::new();
         args.insert("inputs".to_string(), json!(input_paths));
         merge_optional_json_object_args(&mut args, options)?;
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+        if let Some(v) = wavelengths {
+            args.insert("wavelengths".to_string(), py_any_to_json_value(v)?);
+        }
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output) {
             args.insert("output".to_string(), json!(out));
         }
         let response = run_tool_response_with_args(&self.runtime, "continuum_removal", args, callback)?;
@@ -13897,11 +14135,18 @@ impl WbEnvironment {
         Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
-    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (inputs, endmembers, sum_to_one=true, iterations=80, step_size=0.05, auto_reproject=true, auto_reproject_method="", output=None, output_residual=None, options=None, callback=None))]
     fn linear_spectral_unmixing(
         &self,
         inputs: &Bound<'_, PyList>,
-        output_path: Option<&str>,
+        endmembers: &Bound<'_, PyAny>,
+        sum_to_one: bool,
+        iterations: i64,
+        step_size: f64,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
+        output: Option<&str>,
+        output_residual: Option<&str>,
         options: Option<&Bound<'_, PyAny>>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
@@ -13909,19 +14154,35 @@ impl WbEnvironment {
         let mut args = serde_json::Map::new();
         args.insert("inputs".to_string(), json!(input_paths));
         merge_optional_json_object_args(&mut args, options)?;
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+        args.insert("endmembers".to_string(), py_any_to_json_value(endmembers)?);
+        args.insert("sum_to_one".to_string(), json!(sum_to_one));
+        args.insert("iterations".to_string(), json!(iterations));
+        args.insert("step_size".to_string(), json!(step_size));
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output) {
             args.insert("output".to_string(), json!(out));
+        }
+        if let Some(out_res) = self.resolve_output_path_for_wd(output_residual) {
+            args.insert("output_residual".to_string(), json!(out_res));
         }
         let response = run_tool_response_with_args(&self.runtime, "linear_spectral_unmixing", args, callback)?;
         let outputs = response.get("outputs").unwrap_or(&response);
         Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
-    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (inputs, num_components=None, noise_mode="difference_x", auto_reproject=true, auto_reproject_method="", output=None, output_inverse=None, options=None, callback=None))]
     fn minimum_noise_fraction(
         &self,
         inputs: &Bound<'_, PyList>,
-        output_path: Option<&str>,
+        num_components: Option<i64>,
+        noise_mode: &str,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
+        output: Option<&str>,
+        output_inverse: Option<&str>,
         options: Option<&Bound<'_, PyAny>>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
@@ -13929,19 +14190,36 @@ impl WbEnvironment {
         let mut args = serde_json::Map::new();
         args.insert("inputs".to_string(), json!(input_paths));
         merge_optional_json_object_args(&mut args, options)?;
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+        if let Some(v) = num_components {
+            args.insert("num_components".to_string(), json!(v));
+        }
+        args.insert("noise_mode".to_string(), json!(noise_mode));
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output) {
             args.insert("output".to_string(), json!(out));
+        }
+        if let Some(out_inv) = self.resolve_output_path_for_wd(output_inverse) {
+            args.insert("output_inverse".to_string(), json!(out_inv));
         }
         let response = run_tool_response_with_args(&self.runtime, "minimum_noise_fraction", args, callback)?;
         let outputs = response.get("outputs").unwrap_or(&response);
         Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
-    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (inputs, library=None, library_csv=None, metric="sam", auto_reproject=true, auto_reproject_method="", output=None, output_score=None, options=None, callback=None))]
     fn spectral_library_matching(
         &self,
         inputs: &Bound<'_, PyList>,
-        output_path: Option<&str>,
+        library: Option<&Bound<'_, PyAny>>,
+        library_csv: Option<&str>,
+        metric: &str,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
+        output: Option<&str>,
+        output_score: Option<&str>,
         options: Option<&Bound<'_, PyAny>>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
@@ -13949,19 +14227,36 @@ impl WbEnvironment {
         let mut args = serde_json::Map::new();
         args.insert("inputs".to_string(), json!(input_paths));
         merge_optional_json_object_args(&mut args, options)?;
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+        if let Some(v) = library {
+            args.insert("library".to_string(), py_any_to_json_value(v)?);
+        }
+        if let Some(v) = library_csv {
+            args.insert("library_csv".to_string(), json!(v));
+        }
+        args.insert("metric".to_string(), json!(metric));
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output) {
             args.insert("output".to_string(), json!(out));
+        }
+        if let Some(out_score) = self.resolve_output_path_for_wd(output_score) {
+            args.insert("output_score".to_string(), json!(out_score));
         }
         let response = run_tool_response_with_args(&self.runtime, "spectral_library_matching", args, callback)?;
         let outputs = response.get("outputs").unwrap_or(&response);
         Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
-    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (inputs, matrix_format="", auto_reproject=true, auto_reproject_method="", output=None, options=None, callback=None))]
     fn cloude_pottier_decomposition(
         &self,
         inputs: &Bound<'_, PyList>,
-        output_path: Option<&str>,
+        matrix_format: &str,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
+        output: Option<&str>,
         options: Option<&Bound<'_, PyAny>>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
@@ -13969,7 +14264,14 @@ impl WbEnvironment {
         let mut args = serde_json::Map::new();
         args.insert("inputs".to_string(), json!(input_paths));
         merge_optional_json_object_args(&mut args, options)?;
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+        if !matrix_format.is_empty() {
+            args.insert("matrix_format".to_string(), json!(matrix_format));
+        }
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output) {
             args.insert("output".to_string(), json!(out));
         }
         let response = run_tool_response_with_args(&self.runtime, "cloude_pottier_decomposition", args, callback)?;
@@ -13977,11 +14279,15 @@ impl WbEnvironment {
         Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
-    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (inputs, matrix_format="", auto_reproject=true, auto_reproject_method="", output=None, output_clip_mask=None, options=None, callback=None))]
     fn freeman_durden_decomposition(
         &self,
         inputs: &Bound<'_, PyList>,
-        output_path: Option<&str>,
+        matrix_format: &str,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
+        output: Option<&str>,
+        output_clip_mask: Option<&str>,
         options: Option<&Bound<'_, PyAny>>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
@@ -13989,19 +14295,32 @@ impl WbEnvironment {
         let mut args = serde_json::Map::new();
         args.insert("inputs".to_string(), json!(input_paths));
         merge_optional_json_object_args(&mut args, options)?;
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+        if !matrix_format.is_empty() {
+            args.insert("matrix_format".to_string(), json!(matrix_format));
+        }
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output) {
             args.insert("output".to_string(), json!(out));
+        }
+        if let Some(out_clip) = self.resolve_output_path_for_wd(output_clip_mask) {
+            args.insert("output_clip_mask".to_string(), json!(out_clip));
         }
         let response = run_tool_response_with_args(&self.runtime, "freeman_durden_decomposition", args, callback)?;
         let outputs = response.get("outputs").unwrap_or(&response);
         Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
-    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (inputs, matrix_format="", auto_reproject=true, auto_reproject_method="", output=None, options=None, callback=None))]
     fn yamaguchi_4component_decomposition(
         &self,
         inputs: &Bound<'_, PyList>,
-        output_path: Option<&str>,
+        matrix_format: &str,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
+        output: Option<&str>,
         options: Option<&Bound<'_, PyAny>>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
@@ -14009,7 +14328,14 @@ impl WbEnvironment {
         let mut args = serde_json::Map::new();
         args.insert("inputs".to_string(), json!(input_paths));
         merge_optional_json_object_args(&mut args, options)?;
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+        if !matrix_format.is_empty() {
+            args.insert("matrix_format".to_string(), json!(matrix_format));
+        }
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output) {
             args.insert("output".to_string(), json!(out));
         }
         let response = run_tool_response_with_args(&self.runtime, "yamaguchi_4component_decomposition", args, callback)?;
@@ -14017,21 +14343,27 @@ impl WbEnvironment {
         Python::attach(|py| json_value_to_pyobject(py, outputs))
     }
 
-    #[pyo3(signature = (h_raster, alpha_raster, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (h_raster, alpha_raster, auto_reproject=true, auto_reproject_method="", output=None, options=None, callback=None))]
     fn h_alpha_wisart_classification(
         &self,
         h_raster: &Raster,
         alpha_raster: &Raster,
-        output_path: Option<&str>,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
+        output: Option<&str>,
         options: Option<&Bound<'_, PyAny>>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Raster> {
-        let resolved_output = self.resolve_output_path_for_wd(output_path);
+        let resolved_output = self.resolve_output_path_for_wd(output);
 
         let mut args = serde_json::Map::new();
         args.insert("h_raster".to_string(), json!(h_raster.file_path.to_string_lossy().to_string()));
         args.insert("alpha_raster".to_string(), json!(alpha_raster.file_path.to_string_lossy().to_string()));
         merge_optional_json_object_args(&mut args, options)?;
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
+        }
         if let Some(out) = &resolved_output {
             args.insert("output".to_string(), json!(out));
         }
@@ -14040,20 +14372,31 @@ impl WbEnvironment {
         Ok(Raster { file_path: out_path, active_band: 0 })
     }
 
-    #[pyo3(signature = (inputs, output_path=None, options=None, callback=None))]
+    #[pyo3(signature = (h_raster, alpha_raster, max_iterations=10, convergence_threshold=0.99, auto_reproject=true, auto_reproject_method="", output=None, options=None, callback=None))]
     fn wisart_iterative_clustering(
         &self,
-        inputs: &Bound<'_, PyList>,
-        output_path: Option<&str>,
+        h_raster: &Raster,
+        alpha_raster: &Raster,
+        max_iterations: i64,
+        convergence_threshold: f64,
+        auto_reproject: bool,
+        auto_reproject_method: &str,
+        output: Option<&str>,
         options: Option<&Bound<'_, PyAny>>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Raster> {
-        let input_paths = extract_raster_input_paths(inputs, "inputs")?;
-        let resolved_output = self.resolve_output_path_for_wd(output_path);
+        let resolved_output = self.resolve_output_path_for_wd(output);
 
         let mut args = serde_json::Map::new();
-        args.insert("inputs".to_string(), json!(input_paths));
+        args.insert("h_raster".to_string(), json!(h_raster.file_path.to_string_lossy().to_string()));
+        args.insert("alpha_raster".to_string(), json!(alpha_raster.file_path.to_string_lossy().to_string()));
         merge_optional_json_object_args(&mut args, options)?;
+        args.insert("max_iterations".to_string(), json!(max_iterations));
+        args.insert("convergence_threshold".to_string(), json!(convergence_threshold));
+        args.insert("auto_reproject".to_string(), json!(auto_reproject));
+        if !auto_reproject_method.is_empty() {
+            args.insert("auto_reproject_method".to_string(), json!(auto_reproject_method));
+        }
         if let Some(out) = &resolved_output {
             args.insert("output".to_string(), json!(out));
         }

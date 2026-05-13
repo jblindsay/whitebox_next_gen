@@ -1,190 +1,187 @@
 # Network Analysis
 
-Network analysis models movement and connectivity through a graph of
-connected line features. It underpins routing, service-area delineation,
-travel-time catchment mapping, and infrastructure connectivity assessment.
-WbW-QGIS provides network-preparation tools, hydrologic network ordering
-tools, and connectivity metrics that complement the native QGIS network
-analysis framework.
+Network analysis in WbW-QGIS spans both transportation and hydrologic
+networks. This chapter is aligned with the Python and R manuals and now covers
+three common tracks:
 
-This chapter demonstrates a stream network ordering and connectivity
-workflow, and a road network service area example.
+- Transportation routing and service areas
+- OD and nearest-facility analysis
+- Stream-network hierarchy and connectivity
 
 ---
 
-## Key Concepts
+## Core Concepts You Should Know First
 
-- **Network topology**: Connectivity rules for a line network. Edges (lines)
-  connect at nodes (endpoints). A topologically clean network has no dangling
-  ends, no undershoots, and no overshoots at intended junctions.
-- **Directed network**: Edges have a direction (from-node to to-node).
-  Hydrologic networks are inherently directed (downstream). Road networks may
-  be directed (one-way streets) or undirected.
-- **Cost attribute**: A numeric field on each edge representing traversal cost
-  — distance, travel time, impedance, or a composite metric.
-- **Shortest path**: Minimum-cost route between two nodes. Dijkstra's
-  algorithm is the standard solver for non-negative edge weights.
-- **Service area / catchment**: Set of all network locations reachable within
-  a specified cost budget from an origin node.
-- **Strahler / Shreve order**: Integer stream ordering systems that summarise
-  network hierarchy from headwaters (order 1) to main channel. Strahler
-  increments only at equal-order confluences; Shreve is additive.
+- Network: A graph of edges (line segments) and nodes (junctions/endpoints).
+- Cost or impedance: Value minimized by routing (distance, minutes, or other
+  weighted friction).
+- OD pair: Origin and destination used in path queries.
+- Service area: All network locations reachable under a cost budget.
+- Closest facility: Nearest destination by network cost, not straight-line
+  distance.
+- Connectivity: Whether all required features are in connected components.
+- Directed network: Edge direction matters (one-way roads, downstream streams).
 
 ---
 
-## End-to-End Workflow: Stream Network Ordering and Connectivity
-
-### Inputs
+## Typical Inputs
 
 | Layer | Format | Notes |
 |-------|--------|-------|
-| `dem_conditioned.tif` | GeoTIFF raster | Hydrologically conditioned DEM |
-| `streams.tif` | GeoTIFF raster | Binary stream raster from flow accumulation threshold |
-| `d8_pointer.tif` | GeoTIFF raster | D8 flow direction raster |
+| roads.shp | Polyline vector | Cleaned road centerlines |
+| facilities.shp | Point vector | Hospitals, depots, schools, etc. |
+| demand_points.shp | Point vector | Incidents, customers, or population centroids |
+| streams.tif | Raster | Binary stream raster for hydrologic hierarchy |
+| d8_pointer.tif | Raster | D8 flow-direction raster |
 
 ---
 
-### Step 1 — Strahler Stream Order
+## Workflow A: Transportation Network Preparation
 
-**Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
-`Strahler Stream Order`**
+### Step 1 - Topology QA and Geometry Cleanup
 
-| Parameter | Recommended value |
-|-----------|------------------|
-| D8 pointer | `d8_pointer.tif` |
-| Streams raster | `streams.tif` |
-| Output | `strahler.tif` |
+Use standard QGIS cleanup first:
 
-Visualise using a sequential colour ramp from light (order 1) to dark (highest
-order). Inspect order transitions at confluences to confirm correct topology.
+- Check validity
+- Snap Geometries to Layer
+- Fix Geometries
 
----
+Then enrich network attributes with Whitebox tools:
 
-### Step 2 — Shreve Stream Magnitude
+Processing Toolbox -> Whitebox Workflows -> Vector Analysis ->
+Add Geometry Attributes
 
-**Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
-`Shreve Stream Magnitude`**
+This provides segment length fields needed for distance-based routing.
 
-| Parameter | Recommended value |
-|-----------|------------------|
-| D8 pointer | `d8_pointer.tif` |
-| Streams raster | `streams.tif` |
-| Output | `shreve.tif` |
+If travel-time routing is required, compute a time field such as:
 
-Shreve magnitude equals the count of first-order tributaries draining to each
-stream reach. High values indicate major channels.
+- TIME_MIN = LENGTH_M / SPEED_M_PER_MIN
+
+using Field Calculator.
 
 ---
 
-### Step 3 — Vector Stream Network with Order Attributes
+### Step 2 - Build Cost-Aware Road Layer
 
-Convert the Strahler raster to a vector network for cartographic display and
-downstream routing analysis.
+Recommended fields:
 
-**Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
-`Raster Streams to Vector`**
+- LENGTH_M (meters)
+- SPEED_KMH (if available)
+- TIME_MIN (derived)
+- ONEWAY (optional directional control)
 
-| Parameter | Recommended value |
-|-----------|------------------|
-| Streams raster | `strahler.tif` |
-| D8 pointer | `d8_pointer.tif` |
-| Output | `streams_vector.shp` |
-
-The output polyline feature class carries the Strahler order value as a
-field, enabling symbol classification by order.
+Use this prepared layer as the routing network for native QGIS algorithms.
 
 ---
 
-### Step 4 — Hack Stream Order (Optional)
+## Workflow B: Routing, Service Areas, and Closest Facility
 
-Hack ordering numbers stream reaches sequentially from outlet to headwaters —
-useful for long-profile analysis and channel numbering in reports.
+### Step 3 - Shortest Path
 
-**Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
-`Hack Stream Order`**
+Processing Toolbox -> Network Analysis:
 
-| Parameter | Recommended value |
-|-----------|------------------|
-| D8 pointer | `d8_pointer.tif` |
-| Streams raster | `streams.tif` |
-| Output | `hack.tif` |
+- Shortest Path (Point to Point)
+- Shortest Path (Layer to Point)
+- Shortest Path (Point to Layer)
+
+Use the prepared cost field (distance or time) consistently.
 
 ---
 
-## Python Console Equivalent
+### Step 4 - Service Area (Isochrone)
+
+Processing Toolbox -> Network Analysis -> Service Area (From Layer)
+
+Recommended parameters:
+
+| Parameter | Example |
+|-----------|---------|
+| Network layer | roads_prepared.shp |
+| Strategy | Shortest |
+| Start points | facilities.shp |
+| Travel cost | 5.0 (minutes) or 3000 (meters) |
+
+Export output lines and optional polygons for reporting.
+
+---
+
+### Step 5 - Closest Facility Pattern
+
+Use Service Area and shortest-path tools together:
+
+- Build candidate facilities
+- Route demand points to nearest reachable facilities
+- Summarize cost by facility catchment
+
+For large batches, run model-builder or Python Console loops.
+
+---
+
+## Workflow C: OD-Style Batch Analysis in QGIS
+
+QGIS does not provide a single OD matrix tool equivalent to the Python/R
+chapters, so the standard QGIS pattern is:
+
+- Iterate origins and destinations in batch
+- Run shortest path for each pair
+- Aggregate travel cost in an output table
+
+Use this when you need accessibility summaries or assignment baselines directly
+inside QGIS projects.
+
+---
+
+## Workflow D: Hydrologic Stream Networks
+
+Hydrologic network tools remain an important part of network analysis and are
+included here as a dedicated sub-workflow rather than the entire chapter.
+
+### Step 6 - Stream Hierarchy
+
+Processing Toolbox -> Whitebox Workflows -> Spatial Hydrology:
+
+- Strahler Stream Order
+- Shreve Stream Magnitude
+- Hack Stream Order
+
+These tools characterize stream position and downstream accumulation.
+
+### Step 7 - Stream Vectorization
+
+Processing Toolbox -> Whitebox Workflows -> Spatial Hydrology ->
+Raster Streams to Vector
+
+Convert ordered stream rasters to vector lines for cartography and further
+network operations.
+
+---
+
+## QGIS Python Console Equivalent
 
 ```python
 import processing
 
-# Strahler order
+# Add geometry attributes for road cost preparation
+processing.run('whitebox_workflows:add_geometry_attributes', {
+    'input': '/data/roads.shp',
+    'output': '/data/roads_prepared.shp',
+})
+
+# Service area from facilities
+processing.run('native:serviceareafromlayer', {
+    'INPUT': '/data/roads_prepared.shp',
+    'STRATEGY': 0,
+    'START_POINTS': '/data/facilities.shp',
+    'TRAVEL_COST': 5.0,
+    'OUTPUT_LINES': '/data/service_area_lines.shp',
+    'OUTPUT': 'TEMPORARY_OUTPUT',
+})
+
+# Stream order
 processing.run('whitebox_workflows:strahler_stream_order', {
     'd8_pntr': '/data/d8_pointer.tif',
     'streams': '/data/streams.tif',
     'output': '/data/strahler.tif',
-})
-
-# Shreve magnitude
-processing.run('whitebox_workflows:shreve_stream_magnitude', {
-    'd8_pntr': '/data/d8_pointer.tif',
-    'streams': '/data/streams.tif',
-    'output': '/data/shreve.tif',
-})
-
-# Vector stream network
-processing.run('whitebox_workflows:raster_streams_to_vector', {
-    'streams': '/data/strahler.tif',
-    'd8_pntr': '/data/d8_pointer.tif',
-    'output': '/data/streams_vector.shp',
-})
-
-print("Stream network ordering complete.")
-```
-
----
-
-## Road Network: Service Area in QGIS
-
-For road network routing (shortest path, service areas, turn restrictions),
-use the **QGIS Network Analysis** framework, with WbW used to prepare and
-enrich the road layer first.
-
-### Step 1 — Prepare Road Network
-
-**Processing Toolbox → Whitebox Workflows → Vector Analysis →
-`Add Geometry Attributes`**
-
-| Parameter | Recommended value |
-|-----------|------------------|
-| Input vector | `roads.shp` |
-| Units | `Metres` |
-| Output | `roads_length.shp` |
-
-This appends `LENGTH` (metres) to each road segment, which becomes the cost
-attribute for routing.
-
-### Step 2 — Service Area from Origin
-
-**Processing Toolbox → Network Analysis → `Service Area (From Layer)`**
-(QGIS native)
-
-| Parameter | Recommended value |
-|-----------|------------------|
-| Vector layer | `roads_length.shp` |
-| Path type | `Shortest` |
-| Start points | `facility_points.shp` |
-| Travel cost | `300` (metres — or seconds if using speed-adjusted cost) |
-| Direction field | *(leave blank for undirected)* |
-| Output convex hull | ☐ |
-| Output | `service_area.shp` |
-
-```python
-processing.run('native:serviceareafromlayer', {
-    'INPUT': '/data/roads_length.shp',
-    'STRATEGY': 0,  # 0 = Shortest
-    'START_POINTS': '/data/facility_points.shp',
-    'TRAVEL_COST': 300,
-    'OUTPUT_LINES': '/data/service_area_lines.shp',
-    'OUTPUT': 'TEMPORARY_OUTPUT',
 })
 ```
 
@@ -194,19 +191,19 @@ processing.run('native:serviceareafromlayer', {
 
 | Problem | Likely cause | Fix |
 |---------|-------------|-----|
-| Strahler order is 1 everywhere | D8 pointer and streams raster have different extents | Clip both to the same catchment extent |
-| Vector stream network has gaps | Raster-to-vector conversion missed isolated stream cells | Ensure streams raster is topologically connected (no isolated pixels) |
-| Road service area does not extend across a known bridge | Network has a topological gap at the bridge | Run `Snap Geometries to Layer` to close undershoots before analysis |
-| Shortest path reports no route found | Origin or destination is not snapped to the network | Snap start/end points to nearest line vertex before routing |
-| Stream order jumps unexpectedly | Confluence cell is misassigned in D8 pointer | Verify conditioned DEM and recheck flow direction around problem area |
+| No route found between known-connected points | Topology gaps or unsnapped endpoints | Run snapping and revalidate connectivity |
+| Service area too small or too large | Cost units inconsistent | Keep all costs in either meters or minutes |
+| One-way streets ignored | Direction field not configured | Verify direction settings in network algorithm |
+| Batch routing is slow | Unnecessary repeated reprojection or heavy geometry | Preprocess to common CRS and simplify where appropriate |
+| Stream order appears uniform | Bad stream threshold or mismatched d8/stream rasters | Rebuild streams and ensure matching extent/grid |
 
 ---
 
 ## Validation Checklist
 
-- [ ] Strahler order transitions occur only at confirmed tributary confluences.
-- [ ] Vector stream network is a connected graph with no isolated segments.
-- [ ] Road network geometry passes validity check before routing.
-- [ ] Cost field is non-negative and in consistent units across all edges.
-- [ ] Service area boundary is closed (no dangling open polygons).
-- [ ] Stream order rasters match expected hierarchy from 1:50 000 reference map.
+- [ ] Routing network passes geometry validity and snapping checks.
+- [ ] Cost field units are consistent across all analyses.
+- [ ] Directionality assumptions are documented (directed vs undirected).
+- [ ] Service-area outputs were spot-checked against known travel behavior.
+- [ ] Stream-order outputs were checked at confluences.
+- [ ] Workflow parameters were saved in model or processing history.

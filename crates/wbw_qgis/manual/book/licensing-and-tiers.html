@@ -174,25 +174,102 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="licensing-and-tiers"><a class="header" href="#licensing-and-tiers">Licensing and Tiers</a></h1>
-<p>WbW-QGIS is a frontend layer. Licensing authority lives in the backend runtime.</p>
-<h2 id="core-principle"><a class="header" href="#core-principle">Core Principle</a></h2>
-<p>The plugin reflects backend capabilities; it does not define licensing rules.</p>
-<h2 id="practical-behavior"><a class="header" href="#practical-behavior">Practical Behavior</a></h2>
+<p>Whitebox NG is available in two licensing tiers with different capabilities and
+licensing models.</p>
+<h2 id="license-tiers"><a class="header" href="#license-tiers">License Tiers</a></h2>
 <ul>
-<li>Open-tier tools are expected to run in standard public builds.</li>
-<li>Pro-tier tools may be visible but locked without eligible runtime capability.</li>
-<li>Requested tier and effective tier can differ based on environment and
+<li>
+<p><strong>Open Tier</strong> (free): Governed by MIT/Apache 2.0 dual licensing.
+All Open-tier tools are free and open-source with no entitlement or
+activation required. Use this tier for learning, research, and open
+development.</p>
+</li>
+<li>
+<p><strong>Pro Tier</strong> (commercial): Proprietary software governed by EULA.
+Pro-tier tools provide advanced capabilities and require activation with a
+valid license key. Once activated, the license persists locally so you do not
+need to re-authenticate on each QGIS session.</p>
+</li>
+</ul>
+<h2 id="how-qgis-reflects-licensing"><a class="header" href="#how-qgis-reflects-licensing">How QGIS Reflects Licensing</a></h2>
+<p>The Whitebox Workflows QGIS plugin is a frontend layer. Licensing authority and
+rules are enforced in the backend runtime.</p>
+<h3 id="core-principle"><a class="header" href="#core-principle">Core Principle</a></h3>
+<p>The plugin reflects backend capabilities; it does not define licensing rules.
+Runtime mode (open vs. pro) determines which tools are available and functional.</p>
+<h3 id="practical-behavior"><a class="header" href="#practical-behavior">Practical Behavior</a></h3>
+<ul>
+<li>Open-tier tools are expected to run in all standard public QGIS environments.</li>
+<li>Pro-tier tools may be visible in the plugin but locked without an active Pro
+license.</li>
+<li>You can request a specific tier, but the effective tier depends on your
 entitlement state.</li>
 </ul>
-<h2 id="why-this-matters"><a class="header" href="#why-this-matters">Why This Matters</a></h2>
+<h3 id="why-this-matters"><a class="header" href="#why-this-matters">Why This Matters</a></h3>
 <ul>
-<li>One plugin surface can adapt to multiple capability tiers.</li>
-<li>Discovery remains consistent across Python, R, and QGIS frontends.</li>
-<li>Execution decisions remain centralized in backend runtime logic.</li>
+<li>One plugin surface adapts to both open and pro capability tiers.</li>
+<li>Tool discovery remains consistent across Python, R, and QGIS frontends.</li>
+<li>Licensing decisions and enforcement remain centralized in backend logic.</li>
+</ul>
+<h2 id="interactive-license-management"><a class="header" href="#interactive-license-management">Interactive License Management</a></h2>
+<p>The plugin provides convenient menu actions for license management without
+requiring external tools or command lines.</p>
+<h3 id="activating-a-pro-license"><a class="header" href="#activating-a-pro-license">Activating a Pro License</a></h3>
+<ol>
+<li>In QGIS, navigate to <strong>Plugins &gt; Whitebox Workflows &gt; Activate License</strong>.</li>
+<li>Enter your license information when prompted:
+<ul>
+<li>License key (required)</li>
+<li>First name (required)</li>
+<li>Last name (required)</li>
+<li>Email (required)</li>
+<li>Provider URL (optional; defaults to production)</li>
+</ul>
+</li>
+<li>Accept the EULA terms.</li>
+<li>Click OK. The plugin will activate and persist your license locally.</li>
+<li>The tool catalog automatically refreshes to show Pro-tier tools.</li>
+</ol>
+<p><strong>Important:</strong> License activation is tied to your machine. See
+<a href="#transferring-a-license">Transferring a License</a> to move to another machine.</p>
+<h3 id="checking-license-status"><a class="header" href="#checking-license-status">Checking License Status</a></h3>
+<p>Navigate to <strong>Plugins &gt; Whitebox Workflows &gt; Plugin Settings</strong> (or look for
+diagnostics output) to see:</p>
+<ul>
+<li>License validity (active or expired)</li>
+<li>Effective tier (open or pro)</li>
+<li>License expiration time</li>
+</ul>
+<h3 id="transferring-a-license"><a class="header" href="#transferring-a-license">Transferring a License</a></h3>
+<p>If you need to use your Pro license on a different machine, you must first
+deactivate it on the current machine and then activate on the destination.</p>
+<ol>
+<li>On the <strong>current machine</strong>, navigate to <strong>Plugins &gt; Whitebox Workflows &gt;
+Transfer License</strong>. This generates a portable activation payload and clears
+your local license state.</li>
+<li>Share the activation payload with the destination machine (or keep it for
+your own use on the other machine).</li>
+<li>On the <strong>destination machine</strong>, navigate to <strong>Plugins &gt; Whitebox Workflows &gt;
+Activate License</strong> and enter your license key using the same process as
+above. The destination will obtain its own local license state.</li>
+</ol>
+<h3 id="deactivating-a-license"><a class="header" href="#deactivating-a-license">Deactivating a License</a></h3>
+<p>If you no longer plan to use Pro tools on this machine, navigate to
+<strong>Plugins &gt; Whitebox Workflows &gt; Deactivate License</strong>. This clears your local
+license state. Future sessions will fall back to Open-tier tools only.</p>
+<h2 id="local-license-state"><a class="header" href="#local-license-state">Local License State</a></h2>
+<p>Once activated, your license information is stored locally at
+<code>~/.whitebox/wbw_ng_license_state.json</code> (or override via the
+<code>WBW_LICENSE_STATE_PATH</code> environment variable). On each QGIS startup:</p>
+<ul>
+<li>If valid local state exists, it is automatically loaded.</li>
+<li>If local state is expired or missing, the plugin falls back to Open-tier mode.</li>
+<li>You do not need to re-authenticate in QGIS on every session.</li>
 </ul>
 <h2 id="expected-local-dev-outcome"><a class="header" href="#expected-local-dev-outcome">Expected Local-Dev Outcome</a></h2>
 <p>For most source-based setups, assume open-tier behavior unless your runtime
-environment is explicitly configured for Pro-enabled integration testing.</p>
+environment is explicitly configured for Pro-enabled integration testing or you
+have an active Pro license activated on your machine.</p>
 
                     </main>
 

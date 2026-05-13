@@ -1,129 +1,150 @@
 # Remote Sensing Analysis
 
-Remote sensing workflows transform multispectral and hyperspectral imagery
-into interpretable thematic products: spectral indices, vegetation and soil
-maps, change detection results, and classified land-cover rasters.
-WbW-QGIS surfaces these tools in the Processing Toolbox alongside standard
-QGIS raster operations.
+Remote sensing workflows in WbW-QGIS cover multispectral and hyperspectral
+image analysis: spectral index computation, image enhancement, principal
+component analysis (PCA), segmentation, and change detection.
 
-This chapter demonstrates a complete vegetation-mapping workflow using
-multispectral imagery.
+This chapter is aligned with the Python and R manuals while staying focused on
+QGIS Processing Toolbox execution patterns.
 
 ---
 
-## Key Concepts
+## Core Concepts You Should Know First
 
-- **Band**: A single-wavelength image channel. Common bands: Blue (B), Green
-  (G), Red (R), Red-Edge (RE), Near Infrared (NIR), Short-Wave Infrared (SWIR).
-- **Spectral index**: A band ratio or combination designed to highlight a
-  target surface type. Examples: NDVI (vegetation), NDWI (water), NDSI (snow),
-  SAVI (soil-adjusted vegetation).
-- **Atmosphericaly corrected reflectance**: Raw DN values converted to
-  surface reflectance. Required for reliable index thresholding and
-  multi-date comparisons.
-- **Image segmentation**: Partitioning an image into homogeneous regions.
-  Segments can be used as classification units or for object-based analysis.
-- **Change detection**: Comparing two images acquired at different times to
-  identify areas of changed land cover.
-- **Principal Component Analysis (PCA)**: Linear transform that concentrates
-  variance into uncorrelated bands. Useful for compression and feature
-  extraction before classification.
+- Spectral bands: Wavelength-specific image channels (for example blue, red,
+  NIR, SWIR) used to separate land-cover materials.
+- Spectral indices: Band combinations that highlight specific targets, such as
+  NDVI (vegetation), NDWI (water), and NBR (burn severity).
+- Spatial resolution: Pixel size affects detail and detectability of features.
+- Temporal resolution: Revisit interval controls change-detection sensitivity.
+- Atmospheric and cloud effects: Compare like-with-like by masking clouds and
+  shadows and using corrected imagery where possible.
+- Change detection: Compare index or class outputs across acquisition dates.
+- Dimensionality reduction: PCA reduces band redundancy before segmentation or
+  classification.
 
 ---
 
-## End-to-End Workflow: NDVI, Thresholding, and Change Detection
-
-### Inputs
+## Typical Inputs
 
 | Layer | Format | Notes |
 |-------|--------|-------|
-| `image_t1.tif` | Multiband GeoTIFF | Surface reflectance, time 1 |
-| `image_t2.tif` | Multiband GeoTIFF | Surface reflectance, time 2 |
-| Band mapping | — | NIR = band 4, Red = band 3 (Sentinel-2 / Landsat convention) |
+| image_t1.tif | Multiband GeoTIFF | Time-1 scene, reflectance preferred |
+| image_t2.tif | Multiband GeoTIFF | Time-2 scene, same sensor/preprocessing |
+| cloud_mask_t1.tif | Raster | Optional cloud or QA-derived mask |
+| cloud_mask_t2.tif | Raster | Optional cloud or QA-derived mask |
 
 ---
 
-### Step 1 — Inspect Image Statistics
+## End-to-End Workflow
 
-Before any analysis confirm that the input imagery has expected statistics.
+### Step 1 - Quality Check and Harmonize Inputs
 
-**Processing Toolbox → Raster Analysis → `Raster Layer Statistics`** (QGIS
-native)
+Before analysis:
 
-Or use the QGIS **Layer Properties → Histogram** to inspect per-band
-distribution. Reflectance imagery should have values in 0–1 (float) or
-0–10000 (scaled integer). DN-only imagery needs atmospheric correction before
-spectral indices.
+- Confirm both scenes use the same CRS, grid, and pixel size.
+- Confirm band order and data scale (for example 0-1 reflectance or scaled
+  integer reflectance).
+- Mask clouds/shadows using QA products or Raster Calculator conditions.
 
----
+Use QGIS Raster menu tools as needed:
 
-### Step 2 — Compute NDVI
-
-**Processing Toolbox → Whitebox Workflows → Remote Sensing →
-`NDVI`**
-
-| Parameter | Recommended value |
-|-----------|------------------|
-| Input image | `image_t1.tif` |
-| NIR band | `4` |
-| Red band | `3` |
-| Output | `ndvi_t1.tif` |
-
-NDVI output range: –1 to +1. Active vegetation: > 0.3. Bare soil: 0.1–0.2.
-Water: < 0.
-
-Repeat for `image_t2.tif` → `ndvi_t2.tif`.
+- Align Raster
+- Warp (Reproject)
+- Raster Calculator
 
 ---
 
-### Step 3 — Threshold Vegetation
+### Step 2 - Build Key Spectral Indices
 
-Convert the NDVI raster into a binary vegetation mask.
+Process both dates with the same settings.
 
-**Processing Toolbox → Whitebox Workflows → Raster Analysis →
-`Reclass From File`** or use QGIS **Raster Calculator**:
+Processing Toolbox -> Whitebox Workflows -> Remote Sensing:
 
-```
-"ndvi_t1@1" >= 0.3
-```
+- NDVI
+- Normalized Difference Index (for NDWI, NBR, NDSI, NDBI patterns)
 
-Output: `vegetation_mask_t1.tif` (1 = vegetated, 0 = non-vegetated).
+Recommended outputs:
 
----
+- ndvi_t1.tif, ndvi_t2.tif
+- ndwi_t1.tif, ndwi_t2.tif
+- nbr_t1.tif, nbr_t2.tif
 
-### Step 4 — Compute NDVI Change
+Example NDVI run:
 
-Subtract time-1 NDVI from time-2 NDVI to produce a change magnitude raster.
+| Parameter | Value |
+|-----------|-------|
+| Input image | image_t1.tif |
+| NIR band | sensor-specific (for example 4, 5, or 8 depending on product) |
+| Red band | sensor-specific |
+| Output | ndvi_t1.tif |
 
-**QGIS Raster Calculator:**
-
-```
-"ndvi_t2@1" - "ndvi_t1@1"
-```
-
-Output: `ndvi_change.tif`. Positive values indicate vegetation gain;
-negative values indicate vegetation loss.
-
-Apply a symmetric diverging colour ramp (red–white–green) centred on 0.
+Repeat for time 2.
 
 ---
 
-### Step 5 — Identify Significant Change Areas
+### Step 3 - Create Change Surfaces
 
-**Processing Toolbox → Whitebox Workflows → Raster Analysis →
-`Reclass`** (or Raster Calculator threshold)
+Use QGIS Raster Calculator for differencing:
 
-| Class | NDVI change threshold | Interpretation |
-|-------|----------------------|----------------|
-| –2 | < –0.20 | Significant vegetation loss |
-| –1 | –0.20 to –0.10 | Moderate vegetation loss |
-| 0 | –0.10 to +0.10 | No significant change |
-| +1 | +0.10 to +0.20 | Moderate vegetation gain |
-| +2 | > +0.20 | Significant vegetation gain |
+- NDVI change: ndvi_t2 - ndvi_t1
+- NBR change: nbr_t2 - nbr_t1
+
+Then classify into practical bins (loss, stable, gain) using:
+
+- Whitebox Workflows -> Raster Analysis -> Reclass
+- or Raster Calculator threshold expressions
+
+Suggested interpretation for NDVI change:
+
+| Class | Threshold |
+|-------|-----------|
+| Strong loss | < -0.20 |
+| Moderate loss | -0.20 to -0.10 |
+| Stable | -0.10 to 0.10 |
+| Moderate gain | 0.10 to 0.20 |
+| Strong gain | > 0.20 |
 
 ---
 
-## Python Console Equivalent
+### Step 4 - Dimensionality Reduction (PCA)
+
+Processing Toolbox -> Whitebox Workflows -> Remote Sensing ->
+Principal Component Analysis
+
+Use PCA when:
+
+- Bands are highly correlated.
+- You need compact inputs for segmentation or clustering.
+- You are preparing a classification feature stack.
+
+Inspect output variance/eigenvalue diagnostics and retain only the components
+needed for most variance.
+
+---
+
+### Step 5 - Segmentation and Classification Prep
+
+Processing Toolbox -> Whitebox Workflows -> Remote Sensing ->
+Image Segmentation
+
+Typical tuning:
+
+- Lower threshold -> more, smaller segments
+- Higher threshold -> fewer, larger segments
+- Minimum segment size removes speckle
+
+After segmentation:
+
+- Optionally polygonize segment rasters in QGIS.
+- Join zonal metrics from index layers.
+- Use resulting segment features for training/validation workflows.
+
+---
+
+## QGIS Python Console Equivalent
+
+Use this pattern for reproducible batch processing in QGIS:
 
 ```python
 import processing
@@ -131,7 +152,6 @@ import processing
 img_t1 = '/data/image_t1.tif'
 img_t2 = '/data/image_t2.tif'
 
-# NDVI for both dates
 for label, img in [('t1', img_t1), ('t2', img_t2)]:
     processing.run('whitebox_workflows:ndvi', {
         'input': img,
@@ -140,33 +160,12 @@ for label, img in [('t1', img_t1), ('t2', img_t2)]:
         'output': f'/data/ndvi_{label}.tif',
     })
 
-# NDVI change via Raster Calculator
 processing.run('qgis:rastercalculator', {
     'EXPRESSION': '"ndvi_t2@1" - "ndvi_t1@1"',
     'LAYERS': ['/data/ndvi_t1.tif', '/data/ndvi_t2.tif'],
     'OUTPUT': '/data/ndvi_change.tif',
 })
 
-print("Change detection complete.")
-```
-
----
-
-## Advanced: PCA for Dimensionality Reduction
-
-PCA is useful before unsupervised classification to reduce correlated band
-redundancy.
-
-**Processing Toolbox → Whitebox Workflows → Remote Sensing →
-`Principal Component Analysis`**
-
-| Parameter | Recommended value |
-|-----------|------------------|
-| Input image | `image_t1.tif` |
-| Number of components | `4` (captures > 95 % variance in most 8-band images) |
-| Output | `pca_t1.tif` |
-
-```python
 processing.run('whitebox_workflows:principal_component_analysis', {
     'input': '/data/image_t1.tif',
     'num_comp': 4,
@@ -174,48 +173,25 @@ processing.run('whitebox_workflows:principal_component_analysis', {
 })
 ```
 
-Inspect the eigenvalue table in the tool output log to confirm how many
-components are needed to explain > 95 % of the variance.
-
----
-
-## Advanced: Image Segmentation
-
-Object-based analysis begins with segmentation into spectrally homogeneous
-regions.
-
-**Processing Toolbox → Whitebox Workflows → Remote Sensing →
-`Image Segmentation`**
-
-| Parameter | Recommended value |
-|-----------|------------------|
-| Input image | `image_t1.tif` (or PCA output) |
-| Threshold | `25.0` (lower = smaller segments) |
-| Minimum segment size (px) | `50` |
-| Output | `segments_t1.tif` |
-
-Use QGIS **Polygonize** to convert the integer segment raster to vector
-polygons for attribute extraction and classification.
-
 ---
 
 ## Common Pitfalls
 
 | Problem | Likely cause | Fix |
 |---------|-------------|-----|
-| NDVI values outside –1 to +1 | DN imagery rather than reflectance | Convert DN to reflectance before computing index |
-| Change map shows artefacts at swath edges | Different acquisition geometries or BRDF | Normalise images before differencing |
-| PCA produces striped output | No-data mixed into statistics | Mask NoData before running PCA |
-| Segmentation produces single giant segment | Threshold too high | Halve threshold and rerun |
-| Band order mismatch | Tool expects specific band numbering | Verify band order in Layer Properties → Source |
+| Index values are outside expected ranges | Wrong bands or scale mismatch | Verify band mapping and value scale |
+| Apparent change is mostly cloud edges | Missing cloud/shadow masking | Mask QA classes before differencing |
+| PCA output looks unstable | NoData included in stats | Mask NoData consistently |
+| Segmentation over-merges features | Threshold too high | Lower threshold and retest |
+| Change map is noisy | Different spatial grids or radiometry | Align rasters and normalize radiometry |
 
 ---
 
 ## Validation Checklist
 
-- [ ] Input imagery is atmospherically corrected (reflectance, not DN).
-- [ ] Band assignments match sensor band order (confirm in metadata).
-- [ ] NDVI histogram peaks in expected range for land cover type.
-- [ ] Change map artefacts are not co-located with cloud/shadow masks.
-- [ ] Segment boundaries visually match spectral boundaries in original image.
-- [ ] PCA output eigenvalue table confirms component count captures > 95 % variance.
+- [ ] Inputs are co-registered and in a common CRS.
+- [ ] Band assignments match sensor metadata.
+- [ ] Cloud/shadow/no-data masking applied consistently across dates.
+- [ ] Index histograms are plausible for local land cover.
+- [ ] Change classes were reviewed visually against source imagery.
+- [ ] PCA/segmentation parameters were documented for reproducibility.

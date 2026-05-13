@@ -54,10 +54,10 @@ for the task.
 | Task | Chapter section | Key tools |
 |------|----------------|-----------|
 | Compute NDVI from multispectral image | [Remote Sensing — Step 2](remote-sensing.md) | `whitebox_workflows:ndvi` |
-| Threshold vegetation from NDVI | [Remote Sensing — Step 3](remote-sensing.md) | QGIS Raster Calculator |
-| NDVI-based change detection | [Remote Sensing — Steps 4–5](remote-sensing.md) | QGIS Raster Calculator |
-| Reduce bands with PCA | [Remote Sensing — PCA](remote-sensing.md) | `whitebox_workflows:principal_component_analysis` |
-| Segment image into homogeneous objects | [Remote Sensing — Segmentation](remote-sensing.md) | `whitebox_workflows:image_segmentation` |
+| Threshold vegetation and classify change bins | [Remote Sensing — Step 3](remote-sensing.md) | QGIS Raster Calculator, `whitebox_workflows:reclass` |
+| NDVI/NBR-based change detection | [Remote Sensing — Step 3](remote-sensing.md) | QGIS Raster Calculator |
+| Reduce bands with PCA | [Remote Sensing — Step 4](remote-sensing.md) | `whitebox_workflows:principal_component_analysis` |
+| Segment image into homogeneous objects | [Remote Sensing — Step 5](remote-sensing.md) | `whitebox_workflows:image_segmentation` |
 
 ---
 
@@ -90,11 +90,12 @@ for the task.
 
 | Task | Chapter section | Key tools |
 |------|----------------|-----------|
-| Compute Strahler stream order | [Network Analysis — Step 1](network-analysis.md) | `whitebox_workflows:strahler_stream_order` |
-| Compute Shreve stream magnitude | [Network Analysis — Step 2](network-analysis.md) | `whitebox_workflows:shreve_stream_magnitude` |
-| Convert raster stream network to vector | [Network Analysis — Step 3](network-analysis.md) | `whitebox_workflows:raster_streams_to_vector` |
-| Compute road segment lengths for routing | [Network Analysis — Road Service Area](network-analysis.md) | `whitebox_workflows:add_geometry_attributes` |
-| Delineate road service area | [Network Analysis — Road Service Area](network-analysis.md) | QGIS `native:serviceareafromlayer` |
+| Prepare road network geometry and costs | [Network Analysis — Workflow A](network-analysis.md) | `whitebox_workflows:add_geometry_attributes`, QGIS geometry tools |
+| Compute shortest path routes | [Network Analysis — Workflow B](network-analysis.md) | QGIS Network Analysis shortest path tools |
+| Delineate road service areas | [Network Analysis — Workflow B](network-analysis.md) | QGIS `native:serviceareafromlayer` |
+| Build OD-style batch travel-cost summaries | [Network Analysis — Workflow C](network-analysis.md) | QGIS shortest path batch/model workflows |
+| Compute Strahler and Shreve stream hierarchy | [Network Analysis — Workflow D](network-analysis.md) | `whitebox_workflows:strahler_stream_order`, `whitebox_workflows:shreve_stream_magnitude` |
+| Convert raster stream network to vector | [Network Analysis — Workflow D](network-analysis.md) | `whitebox_workflows:raster_streams_to_vector` |
 
 ---
 
@@ -125,5 +126,5 @@ for the task.
 
 ### Vector input tasks
 - Geometry validation, overlay, joins → see [Vector Analysis](vector-analysis.md)
-- Network ordering, service areas → see [Network Analysis](network-analysis.md)
+- Routing, service areas, and stream hierarchy → see [Network Analysis](network-analysis.md)
 - Route events, calibration → see [Linear Referencing](linear-referencing.md)

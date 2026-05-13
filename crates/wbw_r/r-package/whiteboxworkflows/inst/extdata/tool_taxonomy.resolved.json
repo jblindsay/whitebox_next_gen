@@ -67,6 +67,9 @@
       "subcategory": "change_detection",
       "tools": [
         "change_vector_analysis",
+        "image_difference_change_detection",
+        "pca_based_change_detection",
+        "post_classification_change",
         "remote_sensing_change_detection",
         "time_series_change_intelligence",
         "write_function_memory_insertion"
@@ -77,7 +80,31 @@
       "subcategory": "radiometric_correction",
       "tools": [
         "brdf_surface_reflectance_consistency",
-        "correct_vignetting"
+        "brdf_normalization",
+        "correct_vignetting",
+        "dark_object_subtraction",
+        "dn_to_toa_reflectance",
+        "terrain_corrected_optical_analytics"
+      ]
+    },
+    {
+      "category": "remote_sensing",
+      "subcategory": "thermal_emissivity",
+      "tools": [
+        "land_surface_temperature_single_channel",
+        "land_surface_temperature_split_window",
+        "ndvi_based_emissivity"
+      ]
+    },
+    {
+      "category": "remote_sensing",
+      "subcategory": "spectral_analytics",
+      "tools": [
+        "continuum_removal",
+        "linear_spectral_unmixing",
+        "minimum_noise_fraction",
+        "spectral_angle_mapper",
+        "spectral_library_matching"
       ]
     },
     {
@@ -178,19 +205,25 @@
       "category": "remote_sensing",
       "subcategory": "sar",
       "tools": [
-        "sar_coregistration",
-        "sar_analysis_readiness",
-        "sar_interferogram_coherence",
+        "cloude_pottier_decomposition",
+        "enhanced_lee_filter",
+        "freeman_durden_decomposition",
         "frost_filter",
         "gamma_map_filter",
-        "kuan_filter"
+        "h_alpha_wisart_classification",
+        "kuan_filter",
+        "refined_lee_filter",
+        "sar_analysis_readiness",
+        "sar_coregistration",
+        "sar_interferogram_coherence",
+        "wisart_iterative_clustering",
+        "yamaguchi_4component_decomposition"
       ]
     },
     {
       "category": "remote_sensing",
       "subcategory": "workflow_products",
       "tools": [
-        "terrain_corrected_optical_analytics",
         "multi_sensor_fusion_monitoring",
         "guided_uav_image_intake_workflow",
         "registration_oriented_feature_workflow"
@@ -471,7 +504,8 @@
         "georeference_raster_from_control_points",
         "reproject_lidar",
         "reproject_raster",
-        "reproject_vector"
+        "reproject_vector",
+        "orthorectification"
       ]
     },
     {
@@ -761,6 +795,7 @@
         "find_patch_edge_cells",
         "floor",
         "greater_than",
+        "greater_than_or_equal_to",
         "heat_map",
         "idw_interpolation",
         "image_autocorrelation",
@@ -777,6 +812,7 @@
         "kappa_index",
         "ks_normality_test",
         "less_than",
+        "less_than_or_equal_to",
         "list_unique_values_raster",
         "ln",
         "log10",
@@ -1166,6 +1202,10 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
+    "brdf_normalization": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "brdf_surface_reflectance_consistency": {
       "license_tier": "pro",
       "source_crate": "wbtools_pro"
@@ -1286,6 +1326,10 @@
       "license_tier": "open",
       "source_crate": "unknown"
     },
+    "cloude_pottier_decomposition": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "clump": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -1315,6 +1359,10 @@
       "source_crate": "unknown"
     },
     "construct_vector_tin": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "continuum_removal": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
@@ -1410,6 +1458,10 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
+    "dark_object_subtraction": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "dbscan": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -1498,6 +1550,10 @@
       "license_tier": "open",
       "source_crate": "unknown"
     },
+    "dn_to_toa_reflectance": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "download_osm_vector": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -1577,6 +1633,10 @@
     "emergency_scenario_routing_and_accessibility_simulator": {
       "license_tier": "pro",
       "source_crate": "wbtools_pro"
+    },
+    "enhanced_lee_filter": {
+      "license_tier": "open",
+      "source_crate": "unknown"
     },
     "equal_to": {
       "license_tier": "open",
@@ -1826,6 +1886,10 @@
       "license_tier": "open",
       "source_crate": "unknown"
     },
+    "freeman_durden_decomposition": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "frost_filter": {
       "license_tier": "open",
       "source_crate": "unknown"
@@ -1886,6 +1950,10 @@
       "license_tier": "open",
       "source_crate": "unknown"
     },
+    "greater_than_or_equal_to": {
+      "license_tier": "open",
+      "source_crate": "unknown"
+    },
     "guided_filter": {
       "license_tier": "open",
       "source_crate": "unknown"
@@ -1893,6 +1961,10 @@
     "guided_uav_image_intake_workflow": {
       "license_tier": "pro",
       "source_crate": "wbtools_pro"
+    },
+    "h_alpha_wisart_classification": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
     },
     "hack_stream_order": {
       "license_tier": "open",
@@ -2007,6 +2079,10 @@
       "source_crate": "wbtools_oss"
     },
     "image_correlation_neighbourhood_analysis": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "image_difference_change_detection": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
@@ -2138,6 +2214,14 @@
       "license_tier": "open",
       "source_crate": "unknown"
     },
+    "land_surface_temperature_single_channel": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "land_surface_temperature_split_window": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "landslide_susceptibility_assessment": {
       "license_tier": "pro",
       "source_crate": "wbtools_pro"
@@ -2175,6 +2259,10 @@
       "source_crate": "unknown"
     },
     "less_than": {
+      "license_tier": "open",
+      "source_crate": "unknown"
+    },
+    "less_than_or_equal_to": {
       "license_tier": "open",
       "source_crate": "unknown"
     },
@@ -2345,6 +2433,10 @@
     "line_thinning": {
       "license_tier": "open",
       "source_crate": "unknown"
+    },
+    "linear_spectral_unmixing": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
     },
     "linearity_index": {
       "license_tier": "open",
@@ -2578,6 +2670,10 @@
       "license_tier": "open",
       "source_crate": "unknown"
     },
+    "minimum_noise_fraction": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "modified_k_means_clustering": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -2687,6 +2783,10 @@
       "source_crate": "wbtools_oss"
     },
     "natural_neighbour_interpolation": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "ndvi_based_emissivity": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
@@ -2850,6 +2950,10 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
+    "orthorectification": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "otsu_thresholding": {
       "license_tier": "open",
       "source_crate": "unknown"
@@ -2871,6 +2975,10 @@
       "source_crate": "wbtools_pro"
     },
     "patch_orientation": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "pca_based_change_detection": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
@@ -2951,6 +3059,10 @@
       "source_crate": "wbtools_oss"
     },
     "polygons_to_segments": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "post_classification_change": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
@@ -3129,6 +3241,10 @@
     "rectangular_grid_from_vector_base": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
+    },
+    "refined_lee_filter": {
+      "license_tier": "open",
+      "source_crate": "unknown"
     },
     "registration_oriented_feature_workflow": {
       "license_tier": "pro",
@@ -3490,6 +3606,14 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
+    "spectral_angle_mapper": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "spectral_library_matching": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "spherical_std_dev_of_normals": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -3615,8 +3739,8 @@
       "source_crate": "wbtools_pro"
     },
     "terrain_corrected_optical_analytics": {
-      "license_tier": "pro",
-      "source_crate": "wbtools_pro"
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
     },
     "thicken_raster_line": {
       "license_tier": "open",
@@ -3858,7 +3982,15 @@
       "license_tier": "pro",
       "source_crate": "wbtools_pro"
     },
+    "wisart_iterative_clustering": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "write_function_memory_insertion": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "yamaguchi_4component_decomposition": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },

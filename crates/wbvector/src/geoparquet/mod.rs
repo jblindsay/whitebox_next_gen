@@ -15,10 +15,10 @@ use std::sync::Arc;
 
 use parquet::basic::{Compression, ConvertedType, Type as PhysicalType};
 use parquet::data_type::{ByteArray, ByteArrayType, DoubleType, Int64Type};
+use parquet::file::metadata::KeyValue;
 use parquet::file::properties::WriterProperties;
 use parquet::file::writer::SerializedFileWriter;
 use parquet::file::reader::{FileReader, SerializedFileReader};
-use parquet::format::KeyValue;
 use parquet::record::{Field, Row};
 use parquet::schema::types::{Type, TypePtr};
 use serde_json::Value;
@@ -245,7 +245,7 @@ pub fn write_with_options<P: AsRef<Path>>(
     let (schema, columns) = build_schema(layer)?;
 
     let props = WriterProperties::builder()
-        .set_max_row_group_size(options.max_rows_per_group.max(1))
+        .set_max_row_group_row_count(Some(options.max_rows_per_group.max(1)))
         .set_data_page_size_limit(options.data_page_size_limit.max(1))
         .set_write_batch_size(options.write_batch_size.max(1))
         .set_data_page_row_count_limit(options.data_page_row_count_limit.max(1))
@@ -698,7 +698,7 @@ fn build_wbvector_field_types_metadata(layer: &Layer) -> Value {
     Value::Object(obj)
 }
 
-fn parse_wbvector_field_types(kv: Option<&[parquet::format::KeyValue]>) -> Result<HashMap<String, FieldType>> {
+fn parse_wbvector_field_types(kv: Option<&[KeyValue]>) -> Result<HashMap<String, FieldType>> {
     let Some(kv_pairs) = kv else {
         return Ok(HashMap::new());
     };
@@ -783,7 +783,7 @@ struct GeoMeta {
     wkt: Option<String>,
 }
 
-fn parse_geo_metadata(kv: Option<&[parquet::format::KeyValue]>) -> Result<GeoMeta> {
+fn parse_geo_metadata(kv: Option<&[KeyValue]>) -> Result<GeoMeta> {
     let Some(kv_pairs) = kv else {
         return Ok(GeoMeta::default());
     };

@@ -4,6 +4,49 @@
 wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tier = "open", provider_url = NULL, machine_id = NULL, customer_id = NULL) {
   resolved_include_pro <- if (is.null(include_pro)) !is.null(floating_license_id) else include_pro
 
+  normalize_control_points <- function(control_points) {
+    if (is.character(control_points) && length(control_points) == 1L) {
+      return(control_points)
+    }
+
+    if (is.data.frame(control_points)) {
+      df <- control_points
+    } else if (is.matrix(control_points)) {
+      df <- as.data.frame(control_points, stringsAsFactors = FALSE)
+    } else if (is.list(control_points) && length(control_points) > 0L) {
+      df <- as.data.frame(control_points, stringsAsFactors = FALSE)
+    } else {
+      stop("control_points must be a CSV path or a data.frame/matrix/list with pixel_x, pixel_y, map_x, map_y columns")
+    }
+
+    lower_names <- tolower(names(df))
+    lookup <- function(candidates) {
+      hit <- match(candidates, lower_names, nomatch = 0L)
+      hit <- hit[hit > 0L]
+      if (length(hit) > 0L) hit[[1]] else NA_integer_
+    }
+
+    idx_px <- lookup(c("pixel_x", "source_col", "col", "x", "pixelcol"))
+    idx_py <- lookup(c("pixel_y", "source_row", "row", "y", "pixelrow"))
+    idx_mx <- lookup(c("map_x", "target_x", "x_map", "world_x"))
+    idx_my <- lookup(c("map_y", "target_y", "y_map", "world_y"))
+
+    if (any(is.na(c(idx_px, idx_py, idx_mx, idx_my)))) {
+      stop("control_points must contain pixel_x/pixel_y/map_x/map_y (or accepted aliases)")
+    }
+
+    tmp <- tempfile(pattern = "wbw_gcps_", fileext = ".csv")
+    out <- data.frame(
+      pixel_x = as.numeric(df[[idx_px]]),
+      pixel_y = as.numeric(df[[idx_py]]),
+      map_x = as.numeric(df[[idx_mx]]),
+      map_y = as.numeric(df[[idx_my]]),
+      stringsAsFactors = FALSE
+    )
+    utils::write.csv(out, tmp, row.names = FALSE, quote = FALSE)
+    tmp
+  }
+
   run_tool <- function(tool_id, args = list()) {
     args_json <- jsonlite::toJSON(args, auto_unbox = TRUE, null = "null")
     if (!is.null(floating_license_id)) {
@@ -2122,6 +2165,14 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$reproject_vector <- function(...) {
     # Reprojects an input vector layer to a destination EPSG code.
     run_tool("reproject_vector", list(...))
+  }
+  session$georeference_raster_from_control_points <- function(...) {
+    # Fits a transform from control points and warps a raster to georeferenced output.
+    args <- list(...)
+    if (!is.null(args$control_points)) {
+      args$control_points <- normalize_control_points(args$control_points)
+    }
+    run_tool("georeference_raster_from_control_points", args)
   }
   session$resample <- function(...) {
     # Resamples one or more input rasters to a base raster grid or to a user-defined output cell size.
@@ -8924,6 +8975,18 @@ reproject_vector <- function(...) {
   # Reprojects an input vector layer to a destination EPSG code.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$reproject_vector(...)
+}
+
+georeference_raster_from_control_points <- function(...) {
+  # Fits a transform from control points and warps a raster to georeferenced output.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$georeference_raster_from_control_points(...)
+}
+
+wbw_georeference_raster_from_control_points <- function(...) {
+  # Fits a transform from control points and warps a raster to georeferenced output.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$georeference_raster_from_control_points(...)
 }
 
 wbw_reproject_vector <- function(...) {

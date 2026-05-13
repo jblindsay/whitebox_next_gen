@@ -130,6 +130,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::DnToToaReflectanceTool));
     registry.register(Box::new(tools::TerrainCorrectedOpticalTool));
     registry.register(Box::new(tools::BrdfNormalizationTool));
+    registry.register(Box::new(tools::GeoreferenceRasterFromControlPointsTool));
     registry.register(Box::new(tools::OrthorectificationTool));
     registry.register(Box::new(tools::CloudePottierDecompositionTool));
     registry.register(Box::new(tools::ContinuumRemovalTool));

@@ -605,3 +605,28 @@ mod tests {
         assert!(p.to_string_lossy().contains("whitebox_next_gen"));
     }
 }
+
+/// Write a license state JSON value to the default path, creating parent directories as needed.
+/// Returns the path written to on success.
+pub fn write_license_state_json(state: &serde_json::Value) -> Result<std::path::PathBuf, LicenseError> {
+    let path = std::env::var("WBW_LICENSE_STATE_PATH")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var("HOME")
+                .or_else(|_| std::env::var("USERPROFILE"))
+                .ok()
+                .map(|home| std::path::PathBuf::from(home).join(".whitebox").join("wbw_ng_license_state.json"))
+        })
+        .ok_or_else(|| LicenseError::LicenseStateIo("Could not determine license state path".to_string()))?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| LicenseError::LicenseStateIo(format!("failed to create license state directory '{}': {e}", parent.display())))?;
+    }
+    let text = serde_json::to_string_pretty(state)
+        .map_err(|e| LicenseError::LicenseStateIo(format!("failed to serialize license state: {e}")))?;
+    std::fs::write(&path, text)
+        .map_err(|e| LicenseError::LicenseStateIo(format!("failed to write license state '{}': {e}", path.display())))?;
+    Ok(path)
+}

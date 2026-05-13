@@ -596,6 +596,18 @@ def run_projection_wrapper(
         src = wbe.read_raster(in_path)
         out_obj = wbe.reproject_raster(src, dst_epsg=epsg, resample=resample)
         wbe.write_raster(out_obj, out_path)
+    elif tool_id == "georeference_raster_from_control_points":
+        resample = str(args.get("resample", "bilinear")).strip() or "bilinear"
+        src = wbe.read_raster(in_path)
+        control_points = args.get("control_points")
+        out_obj = wbe.georeference_raster_from_control_points(
+            src,
+            control_points=control_points,
+            epsg=epsg,
+            output=out_path or None,
+            report=str(args.get("report", "")).strip() or None,
+            resample=resample,
+        )
     elif tool_id == "reproject_lidar":
         src = wbe.read_lidar(in_path)
         out_obj = wbe.reproject_lidar(src, dst_epsg=epsg)

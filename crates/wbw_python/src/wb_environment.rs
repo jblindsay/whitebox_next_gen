@@ -5,6 +5,8 @@ use rayon::prelude::*;
 use serde_json::json;
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -1592,6 +1594,38 @@ fn emit_progress_if_advanced(
     }
 }
 
+fn normalize_control_points_argument(control_points: &Bound<'_, PyAny>) -> PyResult<String> {
+    if let Ok(path) = control_points.extract::<String>() {
+        return Ok(path);
+    }
+
+    let temp_path = std::env::temp_dir().join(format!(
+        "wbw_gcps_{}_{}.csv",
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos(),
+        std::process::id(),
+    ));
+    let mut file = File::create(&temp_path).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("failed creating temp GCP csv: {e}"))
+    })?;
+    writeln!(file, "pixel_x,pixel_y,map_x,map_y").map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("failed writing temp GCP csv: {e}"))
+    })?;
+
+    let points: Vec<(f64, f64, f64, f64)> = control_points.extract().map_err(|_| {
+        PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+            "control_points must be a CSV path or an iterable of 4-tuples (pixel_x, pixel_y, map_x, map_y)",
+        )
+    })?;
+
+    for values in points {
+        writeln!(file, "{},{},{},{}", values.0, values.1, values.2, values.3).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("failed writing temp GCP csv: {e}"))
+        })?;
+    }
+
+    Ok(temp_path.to_string_lossy().to_string())
+}
+
 fn resolve_unary_value_op(tool_id: &str) -> PyResult<fn(f64) -> f64> {
     match tool_id {
         "abs" => Ok(f64::abs),
@@ -2313,6 +2347,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("orthorectification", "projection_georeferencing", "general"),
     ("glcm_texture", "remote_sensing", "filters"),
     ("greater_than", "raster", "general"),
+    ("greater_than_or_equal_to", "raster", "general"),
     ("guided_filter", "remote_sensing", "filters"),
     ("guided_uav_image_intake_workflow", "remote_sensing", "workflow_products"),
     ("hack_stream_order", "streams", "ordering_metrics"),
@@ -2386,6 +2421,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("lee_filter", "remote_sensing", "filters"),
     ("length_of_upstream_channels", "streams", "longitudinal_analysis"),
     ("less_than", "raster", "general"),
+    ("less_than_or_equal_to", "raster", "general"),
     ("lidar_block_maximum", "lidar", "interpolation_gridding"),
     ("lidar_block_minimum", "lidar", "interpolation_gridding"),
     ("lidar_change_and_disturbance_analysis", "lidar", "workflow_products"),
@@ -10086,6 +10122,7 @@ impl WbEnvironment {
             "raster".to_string(),
             "vector".to_string(),
             "lidar".to_string(),
+            "projection_georeferencing".to_string(),
             "topology".to_string(),
             "hydrology".to_string(),
             "remote_sensing".to_string(),
@@ -10106,6 +10143,9 @@ impl WbEnvironment {
             "raster_tools" => "raster",
             "vector_tools" => "vector",
             "lidar_tools" => "lidar",
+            "projection" | "projection_tools" | "projection_georeferencing" | "georeferencing" => {
+                "projection_georeferencing"
+            }
             "remote_sensing_tools" | "remote_sensing" | "remotesensing" => "remote_sensing",
             "stream" | "streams" | "stream_network" => "streams",
             other => other,
@@ -10141,6 +10181,16 @@ impl WbEnvironment {
     #[getter]
     fn projection(&self) -> WbProjectionNamespace {
         WbProjectionNamespace {}
+    }
+
+    #[getter]
+    fn projection_georeferencing(&self) -> WbToolCategory {
+        self.make_tool_category("projection_georeferencing")
+    }
+
+    #[getter]
+    fn projection_tools(&self) -> WbToolCategory {
+        self.make_tool_category("projection_georeferencing")
     }
 
     #[getter]
@@ -10786,13 +10836,14 @@ impl WbEnvironment {
     fn georeference_raster_from_control_points(
         &self,
         input: &Raster,
-        control_points: &str,
+        control_points: &Bound<'_, PyAny>,
         epsg: u32,
         output: Option<&str>,
         report: Option<&str>,
         callback: Option<Py<PyAny>>,
         resample: &str,
     ) -> PyResult<Raster> {
+        let control_points = normalize_control_points_argument(control_points)?;
         let mut args = serde_json::Map::new();
         args.insert(
             "input".to_string(),

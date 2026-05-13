@@ -2092,7 +2092,9 @@ fn activate_license(
         "signed_entitlement_json": signed_entitlement_json,
     });
 
-    let state_path = write_license_state_json(&state).map_err(map_tool_error)?;
+    let state_path = write_license_state_json(&state).map_err(|err| {
+        map_tool_error(ToolError::LicenseDenied(err.to_string()))
+    })?;
     Ok(format!(
         "License activated and saved to {}",
         state_path.display()

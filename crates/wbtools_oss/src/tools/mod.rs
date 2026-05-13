@@ -82,6 +82,7 @@ pub use remote_sensing::ModifiedKMeansClusteringTool;
 pub use remote_sensing::CorrectVignettingTool;
 pub use remote_sensing::DarkObjectSubtractionTool;
 pub use remote_sensing::DnToToaReflectanceTool;
+pub use remote_sensing::GeoreferenceRasterFromControlPointsTool;
 pub use remote_sensing::CloudePottierDecompositionTool;
 pub use remote_sensing::ContinuumRemovalTool;
 pub use remote_sensing::FreemanDurdenDecompositionTool;

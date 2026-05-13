@@ -1,0 +1,15 @@
+{
+  "called_runtime_tool_ids_count": 293,
+  "missing_called_runtime_tool_ids_count": 9,
+  "missing_called_runtime_tool_ids": [
+    "emergency_scenario_routing_and_accessibility_simulator",
+    "fleet_routing_and_dispatch_optimizer",
+    "georeference_raster_from_control_points",
+    "market_access_and_site_intelligence_workflow",
+    "network_readiness_and_diagnostics_intelligence",
+    "parcel_and_land_fabric_topology_compliance_workflow",
+    "route_event_governance_for_linear_assets",
+    "service_area_planning_and_coverage_optimization",
+    "utility_corridor_encroachment_and_access_planning"
+  ]
+}

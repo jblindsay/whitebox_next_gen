@@ -265,6 +265,10 @@ license_info <- function() {
   .Call("wrap__license_info", PACKAGE = "whiteboxworkflows")
 }
 
+license_time_remaining <- function() {
+  .Call("wrap__license_time_remaining", PACKAGE = "whiteboxworkflows")
+}
+
 generate_r_wrapper_module_with_options <- function(include_pro = FALSE, tier = "open") {
   .Call(
     "wrap__generate_r_wrapper_module_with_options",

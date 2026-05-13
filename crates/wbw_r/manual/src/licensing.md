@@ -74,6 +74,27 @@ print(info)
 # $now_unix: 1234567890
 ```
 
+### Querying Time Remaining Directly
+
+Use the dedicated helper when you only need remaining time values:
+
+```r
+library(whiteboxworkflows)
+
+remaining <- wbw_license_time_remaining()
+print(remaining)
+# List with fields:
+# $active: TRUE
+# $valid: TRUE
+# $seconds_remaining: 2592000
+# $days_remaining: 30
+# $expires_at_unix: 1234567890
+# $now_unix: 1234567890
+```
+
+If no local license exists, the call returns `active = FALSE` with
+`seconds_remaining = 0` and `days_remaining = 0`.
+
 ### Transferring a License
 
 To move a license to another machine, call transfer which returns a portable

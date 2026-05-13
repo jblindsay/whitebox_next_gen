@@ -3368,6 +3368,17 @@ wbw_license_info <- function() {
   jsonlite::fromJSON(out, simplifyVector = FALSE)
 }
 
+#' Query remaining time for the local Whitebox NG license.
+#'
+#' Returns a list containing `seconds_remaining` and `days_remaining` plus
+#' validity/status metadata.
+#'
+#' @export
+wbw_license_time_remaining <- function() {
+  out <- license_time_remaining()
+  jsonlite::fromJSON(out, simplifyVector = FALSE)
+}
+
 #' Convert a geospatial raster file into an R matrix or array.
 #'
 #' Single-band rasters return a matrix by default. Multiband rasters return

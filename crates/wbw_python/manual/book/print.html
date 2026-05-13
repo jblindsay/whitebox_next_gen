@@ -2696,6 +2696,23 @@ print(info)
 #   "now_unix": 1234567890
 # }
 </code></pre>
+<h3 id="querying-time-remaining-directly"><a class="header" href="#querying-time-remaining-directly">Querying Time Remaining Directly</a></h3>
+<p>Use the dedicated helper when you only need remaining time values:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+remaining = wb.license_time_remaining()
+print(remaining)
+# {
+#   "active": true,
+#   "valid": true,
+#   "seconds_remaining": 2592000,
+#   "days_remaining": 30,
+#   "expires_at_unix": 1234567890,
+#   "now_unix": 1234567890
+# }
+</code></pre>
+<p>If no local license exists, the call returns <code>active: false</code> with
+<code>seconds_remaining: 0</code> and <code>days_remaining: 0</code>.</p>
 <h3 id="transferring-a-license"><a class="header" href="#transferring-a-license">Transferring a License</a></h3>
 <p>To move a license to another machine, call transfer which returns a portable
 payload and clears local state:</p>

@@ -76,6 +76,28 @@ print(info)
 # }
 ```
 
+### Querying Time Remaining Directly
+
+Use the dedicated helper when you only need remaining time values:
+
+```python
+import whitebox_workflows as wb
+
+remaining = wb.license_time_remaining()
+print(remaining)
+# {
+#   "active": true,
+#   "valid": true,
+#   "seconds_remaining": 2592000,
+#   "days_remaining": 30,
+#   "expires_at_unix": 1234567890,
+#   "now_unix": 1234567890
+# }
+```
+
+If no local license exists, the call returns `active: false` with
+`seconds_remaining: 0` and `days_remaining: 0`.
+
 ### Transferring a License
 
 To move a license to another machine, call transfer which returns a portable

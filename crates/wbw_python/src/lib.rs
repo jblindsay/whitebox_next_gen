@@ -821,6 +821,109 @@ fn remove_local_license_state() -> Result<bool, ToolError> {
     Ok(true)
 }
 
+/// Shared helper: given a signed-entitlement JSON blob already received from
+/// the server, fetch the matching public key and return the full activation
+/// bundle `(signed_entitlement_json, kid, public_key_b64url, provider_url, customer_id)`.
+#[cfg(feature = "pro")]
+fn fetch_public_key_for_entitlement(
+    activation_json: &Value,
+    base: &str,
+) -> Result<(String, String, String), ToolError> {
+    let kid = activation_json
+        .get("kid")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ToolError::LicenseDenied("activation response missing 'kid'".to_string()))?;
+    let signed_entitlement_json = serde_json::to_string(activation_json)
+        .map_err(|e| ToolError::LicenseDenied(format!("failed to serialize entitlement envelope: {e}")))?;
+
+    let keys_url = format!("{}/api/v2/public-keys", base.trim_end_matches('/'));
+    let keys_resp = ureq::get(&keys_url)
+        .call()
+        .map_err(|e| ToolError::LicenseDenied(format!("public-key fetch failed: {e}")))?;
+    let keys_json: Value = keys_resp
+        .into_json()
+        .map_err(|e| ToolError::LicenseDenied(format!("invalid public-keys response json: {e}")))?;
+
+    let public_key_b64url = keys_json
+        .get("keys")
+        .and_then(|v| v.as_array())
+        .and_then(|keys| {
+            keys.iter().find_map(|k| {
+                let k_kid = k.get("kid")?.as_str()?;
+                if k_kid == kid {
+                    k.get("public_key_b64url")?.as_str().map(|s| s.to_string())
+                } else {
+                    None
+                }
+            })
+        })
+        .ok_or_else(|| {
+            ToolError::LicenseDenied(format!(
+                "provider did not return public key for kid '{kid}'"
+            ))
+        })?;
+
+    Ok((signed_entitlement_json, kid.to_string(), public_key_b64url))
+}
+
+/// Key-based activation bundle.  Calls `POST /api/v2/entitlements/activate`
+/// with the supplied key and returns
+/// `(signed_entitlement_json, kid, public_key_b64url, provider_url, customer_id)`.
+#[cfg(feature = "pro")]
+fn key_activation_bundle(
+    key: &str,
+    provider_url: Option<&str>,
+    machine_id: Option<&str>,
+    customer_id: Option<&str>,
+) -> Result<(String, String, String, String, Option<String>), ToolError> {
+    let base = provider_url
+        .map(|s| s.to_string())
+        .or_else(|| env::var("WBW_LICENSE_PROVIDER_URL").ok())
+        .ok_or_else(|| {
+            ToolError::LicenseDenied(
+                "key activation requires provider_url or WBW_LICENSE_PROVIDER_URL".to_string(),
+            )
+        })?;
+
+    let machine = machine_id
+        .map(|s| s.to_string())
+        .or_else(|| env::var("WBW_MACHINE_ID").ok())
+        .unwrap_or_else(|| "local-machine".to_string());
+
+    let customer = customer_id
+        .map(|s| s.to_string())
+        .or_else(|| env::var("WBW_CUSTOMER_ID").ok());
+
+    let activation_url = format!("{}/api/v2/entitlements/activate", base.trim_end_matches('/'));
+    let mut body = json!({
+        "key": key,
+        "machine_id": machine,
+    });
+    if let Some(ref cid) = customer {
+        body["customer_id"] = Value::String(cid.clone());
+    }
+
+    let activation_resp = ureq::post(&activation_url)
+        .send_json(body)
+        .map_err(|e| ToolError::LicenseDenied(format!("key activation failed: {e}")))?;
+    let activation_json: Value = activation_resp
+        .into_json()
+        .map_err(|e| ToolError::LicenseDenied(format!("invalid activation response json: {e}")))?;
+
+    let (signed_entitlement_json, kid, public_key_b64url) =
+        fetch_public_key_for_entitlement(&activation_json, &base)?;
+
+    Ok((signed_entitlement_json, kid, public_key_b64url, base, customer))
+}
+
+/// Best-effort server-side deactivation notification.  Silently ignores any
+/// network or server errors — local deactivation must always succeed regardless.
+#[cfg(feature = "pro")]
+fn notify_server_deactivation(key: &str, provider_url: &str) {
+    let url = format!("{}/api/v2/entitlements/deactivate", provider_url.trim_end_matches('/'));
+    let _ = ureq::post(&url).send_json(json!({ "key": key }));
+}
+
 #[cfg(feature = "pro")]
 fn floating_activation_bundle(
     floating_license_id: &str,
@@ -867,44 +970,13 @@ fn floating_activation_bundle(
         .into_json()
         .map_err(|e| ToolError::LicenseDenied(format!("invalid activation response json: {e}")))?;
 
-    let kid = activation_json
-        .get("kid")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| ToolError::LicenseDenied("activation response missing 'kid'".to_string()))?;
-    let signed_entitlement_json = serde_json::to_string(&activation_json)
-        .map_err(|e| ToolError::LicenseDenied(format!("failed to serialize entitlement envelope: {e}")))?;
-
-    let keys_url = format!("{}/api/v2/public-keys", base.trim_end_matches('/'));
-    let keys_resp = ureq::get(&keys_url)
-        .call()
-        .map_err(|e| ToolError::LicenseDenied(format!("public-key fetch failed: {e}")))?;
-    let keys_json: Value = keys_resp
-        .into_json()
-        .map_err(|e| ToolError::LicenseDenied(format!("invalid public-keys response json: {e}")))?;
-
-    let public_key_b64url = keys_json
-        .get("keys")
-        .and_then(|v| v.as_array())
-        .and_then(|keys| {
-            keys.iter().find_map(|k| {
-                let k_kid = k.get("kid")?.as_str()?;
-                if k_kid == kid {
-                    k.get("public_key_b64url")?.as_str()
-                } else {
-                    None
-                }
-            })
-        })
-        .ok_or_else(|| {
-            ToolError::LicenseDenied(format!(
-                "provider did not return public key for kid '{kid}'"
-            ))
-        })?;
+    let (signed_entitlement_json, kid, public_key_b64url) =
+        fetch_public_key_for_entitlement(&activation_json, &base)?;
 
     Ok((
         signed_entitlement_json,
-        kid.to_string(),
-        public_key_b64url.to_string(),
+        kid,
+        public_key_b64url,
         base,
         customer,
     ))
@@ -2013,7 +2085,7 @@ fn activate_license(
         public_key_b64url,
         resolved_provider_url,
         resolved_customer_id,
-    ) = floating_activation_bundle(key, provider_url, machine_id, customer_id)
+    ) = key_activation_bundle(key, provider_url, machine_id, customer_id)
         .map_err(map_tool_error)?;
 
     PythonToolRuntime::new_with_entitlement_json(
@@ -2084,12 +2156,23 @@ fn activate_license(
 #[pyfunction]
 #[pyo3(signature = (from_transfer=false))]
 fn deactivate_license(from_transfer: bool) -> PyResult<String> {
+    // Best-effort: notify server to release the activation slot before removing local state.
+    #[cfg(feature = "pro")]
+    {
+        if let Ok(state) = read_license_state_json() {
+            let key = state.get("floating_license_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let url = state.get("provider_url").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            if !key.is_empty() && !url.is_empty() {
+                notify_server_deactivation(&key, &url);
+            }
+        }
+    }
     let removed = remove_local_license_state().map_err(map_tool_error)?;
     if removed {
         if from_transfer {
             Ok("License deactivated locally for transfer.".to_string())
         } else {
-            Ok("License deactivated locally.".to_string())
+            Ok("License deactivated.".to_string())
         }
     } else {
         Ok("No local license state was found.".to_string())
@@ -2115,6 +2198,12 @@ fn transfer_license() -> PyResult<String> {
         .and_then(|v| v.as_str())
         .unwrap_or_default()
         .to_string();
+
+    // Best-effort: release the activation slot so the destination machine can activate.
+    #[cfg(feature = "pro")]
+    if !key.is_empty() && !provider_url.is_empty() {
+        notify_server_deactivation(&key, &provider_url);
+    }
 
     let _ = remove_local_license_state().map_err(map_tool_error)?;
 
@@ -2189,6 +2278,63 @@ fn license_info() -> PyResult<String> {
     .to_string())
 }
 
+#[pyfunction]
+fn license_time_remaining() -> PyResult<String> {
+    let path = default_license_state_path();
+    let state = match read_license_state_json() {
+        Ok(v) => v,
+        Err(_) => {
+            return Ok(json!({
+                "active": false,
+                "valid": false,
+                "seconds_remaining": 0u64,
+                "days_remaining": 0u64,
+                "state_path": path.display().to_string(),
+                "message": "No local license state found.",
+            })
+            .to_string())
+        }
+    };
+
+    let signed_entitlement_json = read_license_state_string_field(&state, "signed_entitlement_json")
+        .map_err(map_tool_error)?;
+    let public_key_kid = read_license_state_string_field(&state, "public_key_kid")
+        .map_err(map_tool_error)?;
+    let public_key_b64url = read_license_state_string_field(&state, "public_key_b64url")
+        .map_err(map_tool_error)?;
+
+    let payload = entitlement_capabilities_from_json(
+        &signed_entitlement_json,
+        &public_key_kid,
+        &public_key_b64url,
+    )
+    .map(|caps| {
+        let seconds_remaining = caps.expires_at_unix.saturating_sub(caps.now_unix);
+        let days_remaining = seconds_remaining.div_ceil(86_400);
+        json!({
+            "active": true,
+            "valid": true,
+            "seconds_remaining": seconds_remaining,
+            "days_remaining": days_remaining,
+            "expires_at_unix": caps.expires_at_unix,
+            "now_unix": caps.now_unix,
+            "state_path": path.display().to_string(),
+        })
+    })
+    .unwrap_or_else(|e| {
+        json!({
+            "active": true,
+            "valid": false,
+            "seconds_remaining": 0u64,
+            "days_remaining": 0u64,
+            "state_path": path.display().to_string(),
+            "error": e.to_string(),
+        })
+    });
+
+    Ok(payload.to_string())
+}
+
 #[pymodule]
 fn whitebox_workflows(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RuntimeSession>()?;
@@ -2237,6 +2383,7 @@ fn whitebox_workflows(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     m.add_function(wrap_pyfunction!(deactivate_license, m)?)?;
     m.add_function(wrap_pyfunction!(transfer_license, m)?)?;
     m.add_function(wrap_pyfunction!(license_info, m)?)?;
+    m.add_function(wrap_pyfunction!(license_time_remaining, m)?)?;
     
     // Convenience functions for unary raster math tools
     m.add_function(wrap_pyfunction!(abs, m)?)?;

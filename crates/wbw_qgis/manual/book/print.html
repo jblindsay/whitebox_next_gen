@@ -472,25 +472,102 @@ If a tool completes with warnings, inspect outputs before continuing.</p>
 <p>For teams, keep a shared recipe JSON under version control and point WBW_QGIS_USER_RECIPES to that path in your local environment setup.</p>
 <p>This gives you repeatable, reviewable workflow definitions without modifying plugin source files.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="licensing-and-tiers"><a class="header" href="#licensing-and-tiers">Licensing and Tiers</a></h1>
-<p>WbW-QGIS is a frontend layer. Licensing authority lives in the backend runtime.</p>
-<h2 id="core-principle"><a class="header" href="#core-principle">Core Principle</a></h2>
-<p>The plugin reflects backend capabilities; it does not define licensing rules.</p>
-<h2 id="practical-behavior"><a class="header" href="#practical-behavior">Practical Behavior</a></h2>
+<p>Whitebox NG is available in two licensing tiers with different capabilities and
+licensing models.</p>
+<h2 id="license-tiers"><a class="header" href="#license-tiers">License Tiers</a></h2>
 <ul>
-<li>Open-tier tools are expected to run in standard public builds.</li>
-<li>Pro-tier tools may be visible but locked without eligible runtime capability.</li>
-<li>Requested tier and effective tier can differ based on environment and
+<li>
+<p><strong>Open Tier</strong> (free): Governed by MIT/Apache 2.0 dual licensing.
+All Open-tier tools are free and open-source with no entitlement or
+activation required. Use this tier for learning, research, and open
+development.</p>
+</li>
+<li>
+<p><strong>Pro Tier</strong> (commercial): Proprietary software governed by EULA.
+Pro-tier tools provide advanced capabilities and require activation with a
+valid license key. Once activated, the license persists locally so you do not
+need to re-authenticate on each QGIS session.</p>
+</li>
+</ul>
+<h2 id="how-qgis-reflects-licensing"><a class="header" href="#how-qgis-reflects-licensing">How QGIS Reflects Licensing</a></h2>
+<p>The Whitebox Workflows QGIS plugin is a frontend layer. Licensing authority and
+rules are enforced in the backend runtime.</p>
+<h3 id="core-principle"><a class="header" href="#core-principle">Core Principle</a></h3>
+<p>The plugin reflects backend capabilities; it does not define licensing rules.
+Runtime mode (open vs. pro) determines which tools are available and functional.</p>
+<h3 id="practical-behavior"><a class="header" href="#practical-behavior">Practical Behavior</a></h3>
+<ul>
+<li>Open-tier tools are expected to run in all standard public QGIS environments.</li>
+<li>Pro-tier tools may be visible in the plugin but locked without an active Pro
+license.</li>
+<li>You can request a specific tier, but the effective tier depends on your
 entitlement state.</li>
 </ul>
-<h2 id="why-this-matters"><a class="header" href="#why-this-matters">Why This Matters</a></h2>
+<h3 id="why-this-matters"><a class="header" href="#why-this-matters">Why This Matters</a></h3>
 <ul>
-<li>One plugin surface can adapt to multiple capability tiers.</li>
-<li>Discovery remains consistent across Python, R, and QGIS frontends.</li>
-<li>Execution decisions remain centralized in backend runtime logic.</li>
+<li>One plugin surface adapts to both open and pro capability tiers.</li>
+<li>Tool discovery remains consistent across Python, R, and QGIS frontends.</li>
+<li>Licensing decisions and enforcement remain centralized in backend logic.</li>
+</ul>
+<h2 id="interactive-license-management"><a class="header" href="#interactive-license-management">Interactive License Management</a></h2>
+<p>The plugin provides convenient menu actions for license management without
+requiring external tools or command lines.</p>
+<h3 id="activating-a-pro-license"><a class="header" href="#activating-a-pro-license">Activating a Pro License</a></h3>
+<ol>
+<li>In QGIS, navigate to <strong>Plugins &gt; Whitebox Workflows &gt; Activate License</strong>.</li>
+<li>Enter your license information when prompted:
+<ul>
+<li>License key (required)</li>
+<li>First name (required)</li>
+<li>Last name (required)</li>
+<li>Email (required)</li>
+<li>Provider URL (optional; defaults to production)</li>
+</ul>
+</li>
+<li>Accept the EULA terms.</li>
+<li>Click OK. The plugin will activate and persist your license locally.</li>
+<li>The tool catalog automatically refreshes to show Pro-tier tools.</li>
+</ol>
+<p><strong>Important:</strong> License activation is tied to your machine. See
+<a href="licensing-and-tiers.html#transferring-a-license">Transferring a License</a> to move to another machine.</p>
+<h3 id="checking-license-status"><a class="header" href="#checking-license-status">Checking License Status</a></h3>
+<p>Navigate to <strong>Plugins &gt; Whitebox Workflows &gt; Plugin Settings</strong> (or look for
+diagnostics output) to see:</p>
+<ul>
+<li>License validity (active or expired)</li>
+<li>Effective tier (open or pro)</li>
+<li>License expiration time</li>
+</ul>
+<h3 id="transferring-a-license"><a class="header" href="#transferring-a-license">Transferring a License</a></h3>
+<p>If you need to use your Pro license on a different machine, you must first
+deactivate it on the current machine and then activate on the destination.</p>
+<ol>
+<li>On the <strong>current machine</strong>, navigate to <strong>Plugins &gt; Whitebox Workflows &gt;
+Transfer License</strong>. This generates a portable activation payload and clears
+your local license state.</li>
+<li>Share the activation payload with the destination machine (or keep it for
+your own use on the other machine).</li>
+<li>On the <strong>destination machine</strong>, navigate to <strong>Plugins &gt; Whitebox Workflows &gt;
+Activate License</strong> and enter your license key using the same process as
+above. The destination will obtain its own local license state.</li>
+</ol>
+<h3 id="deactivating-a-license"><a class="header" href="#deactivating-a-license">Deactivating a License</a></h3>
+<p>If you no longer plan to use Pro tools on this machine, navigate to
+<strong>Plugins &gt; Whitebox Workflows &gt; Deactivate License</strong>. This clears your local
+license state. Future sessions will fall back to Open-tier tools only.</p>
+<h2 id="local-license-state"><a class="header" href="#local-license-state">Local License State</a></h2>
+<p>Once activated, your license information is stored locally at
+<code>~/.whitebox/wbw_ng_license_state.json</code> (or override via the
+<code>WBW_LICENSE_STATE_PATH</code> environment variable). On each QGIS startup:</p>
+<ul>
+<li>If valid local state exists, it is automatically loaded.</li>
+<li>If local state is expired or missing, the plugin falls back to Open-tier mode.</li>
+<li>You do not need to re-authenticate in QGIS on every session.</li>
 </ul>
 <h2 id="expected-local-dev-outcome"><a class="header" href="#expected-local-dev-outcome">Expected Local-Dev Outcome</a></h2>
 <p>For most source-based setups, assume open-tier behavior unless your runtime
-environment is explicitly configured for Pro-enabled integration testing.</p>
+environment is explicitly configured for Pro-enabled integration testing or you
+have an active Pro license activated on your machine.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="supported-data-formats"><a class="header" href="#supported-data-formats">Supported Data Formats</a></h1>
 <p>This chapter documents format support exposed through WbW-QGIS.</p>
 <p>Authoritative backend support comes from Whitebox core crates:</p>
@@ -1628,101 +1705,131 @@ CHM values are 0 on roads and bare ground.</li>
 HAG-normalised cloud has all ground points at Z ≈ 0 (±0.1 m).</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="remote-sensing-analysis"><a class="header" href="#remote-sensing-analysis">Remote Sensing Analysis</a></h1>
-<p>Remote sensing workflows transform multispectral and hyperspectral imagery
-into interpretable thematic products: spectral indices, vegetation and soil
-maps, change detection results, and classified land-cover rasters.
-WbW-QGIS surfaces these tools in the Processing Toolbox alongside standard
-QGIS raster operations.</p>
-<p>This chapter demonstrates a complete vegetation-mapping workflow using
-multispectral imagery.</p>
+<p>Remote sensing workflows in WbW-QGIS cover multispectral and hyperspectral
+image analysis: spectral index computation, image enhancement, principal
+component analysis (PCA), segmentation, and change detection.</p>
+<p>This chapter is aligned with the Python and R manuals while staying focused on
+QGIS Processing Toolbox execution patterns.</p>
 <hr />
-<h2 id="key-concepts-4"><a class="header" href="#key-concepts-4">Key Concepts</a></h2>
+<h2 id="core-concepts-you-should-know-first"><a class="header" href="#core-concepts-you-should-know-first">Core Concepts You Should Know First</a></h2>
 <ul>
-<li><strong>Band</strong>: A single-wavelength image channel. Common bands: Blue (B), Green
-(G), Red (R), Red-Edge (RE), Near Infrared (NIR), Short-Wave Infrared (SWIR).</li>
-<li><strong>Spectral index</strong>: A band ratio or combination designed to highlight a
-target surface type. Examples: NDVI (vegetation), NDWI (water), NDSI (snow),
-SAVI (soil-adjusted vegetation).</li>
-<li><strong>Atmosphericaly corrected reflectance</strong>: Raw DN values converted to
-surface reflectance. Required for reliable index thresholding and
-multi-date comparisons.</li>
-<li><strong>Image segmentation</strong>: Partitioning an image into homogeneous regions.
-Segments can be used as classification units or for object-based analysis.</li>
-<li><strong>Change detection</strong>: Comparing two images acquired at different times to
-identify areas of changed land cover.</li>
-<li><strong>Principal Component Analysis (PCA)</strong>: Linear transform that concentrates
-variance into uncorrelated bands. Useful for compression and feature
-extraction before classification.</li>
+<li>Spectral bands: Wavelength-specific image channels (for example blue, red,
+NIR, SWIR) used to separate land-cover materials.</li>
+<li>Spectral indices: Band combinations that highlight specific targets, such as
+NDVI (vegetation), NDWI (water), and NBR (burn severity).</li>
+<li>Spatial resolution: Pixel size affects detail and detectability of features.</li>
+<li>Temporal resolution: Revisit interval controls change-detection sensitivity.</li>
+<li>Atmospheric and cloud effects: Compare like-with-like by masking clouds and
+shadows and using corrected imagery where possible.</li>
+<li>Change detection: Compare index or class outputs across acquisition dates.</li>
+<li>Dimensionality reduction: PCA reduces band redundancy before segmentation or
+classification.</li>
 </ul>
 <hr />
-<h2 id="end-to-end-workflow-ndvi-thresholding-and-change-detection"><a class="header" href="#end-to-end-workflow-ndvi-thresholding-and-change-detection">End-to-End Workflow: NDVI, Thresholding, and Change Detection</a></h2>
-<h3 id="inputs-3"><a class="header" href="#inputs-3">Inputs</a></h3>
+<h2 id="typical-inputs"><a class="header" href="#typical-inputs">Typical Inputs</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
-<tr><td><code>image_t1.tif</code></td><td>Multiband GeoTIFF</td><td>Surface reflectance, time 1</td></tr>
-<tr><td><code>image_t2.tif</code></td><td>Multiband GeoTIFF</td><td>Surface reflectance, time 2</td></tr>
-<tr><td>Band mapping</td><td>—</td><td>NIR = band 4, Red = band 3 (Sentinel-2 / Landsat convention)</td></tr>
+<tr><td>image_t1.tif</td><td>Multiband GeoTIFF</td><td>Time-1 scene, reflectance preferred</td></tr>
+<tr><td>image_t2.tif</td><td>Multiband GeoTIFF</td><td>Time-2 scene, same sensor/preprocessing</td></tr>
+<tr><td>cloud_mask_t1.tif</td><td>Raster</td><td>Optional cloud or QA-derived mask</td></tr>
+<tr><td>cloud_mask_t2.tif</td><td>Raster</td><td>Optional cloud or QA-derived mask</td></tr>
 </tbody></table>
 </div>
 <hr />
-<h3 id="step-1--inspect-image-statistics"><a class="header" href="#step-1--inspect-image-statistics">Step 1 — Inspect Image Statistics</a></h3>
-<p>Before any analysis confirm that the input imagery has expected statistics.</p>
-<p><strong>Processing Toolbox → Raster Analysis → <code>Raster Layer Statistics</code></strong> (QGIS
-native)</p>
-<p>Or use the QGIS <strong>Layer Properties → Histogram</strong> to inspect per-band
-distribution. Reflectance imagery should have values in 0–1 (float) or
-0–10000 (scaled integer). DN-only imagery needs atmospheric correction before
-spectral indices.</p>
+<h2 id="end-to-end-workflow"><a class="header" href="#end-to-end-workflow">End-to-End Workflow</a></h2>
+<h3 id="step-1---quality-check-and-harmonize-inputs"><a class="header" href="#step-1---quality-check-and-harmonize-inputs">Step 1 - Quality Check and Harmonize Inputs</a></h3>
+<p>Before analysis:</p>
+<ul>
+<li>Confirm both scenes use the same CRS, grid, and pixel size.</li>
+<li>Confirm band order and data scale (for example 0-1 reflectance or scaled
+integer reflectance).</li>
+<li>Mask clouds/shadows using QA products or Raster Calculator conditions.</li>
+</ul>
+<p>Use QGIS Raster menu tools as needed:</p>
+<ul>
+<li>Align Raster</li>
+<li>Warp (Reproject)</li>
+<li>Raster Calculator</li>
+</ul>
 <hr />
-<h3 id="step-2--compute-ndvi"><a class="header" href="#step-2--compute-ndvi">Step 2 — Compute NDVI</a></h3>
-<p><strong>Processing Toolbox → Whitebox Workflows → Remote Sensing →
-<code>NDVI</code></strong></p>
-<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
-<tr><td>Input image</td><td><code>image_t1.tif</code></td></tr>
-<tr><td>NIR band</td><td><code>4</code></td></tr>
-<tr><td>Red band</td><td><code>3</code></td></tr>
-<tr><td>Output</td><td><code>ndvi_t1.tif</code></td></tr>
+<h3 id="step-2---build-key-spectral-indices"><a class="header" href="#step-2---build-key-spectral-indices">Step 2 - Build Key Spectral Indices</a></h3>
+<p>Process both dates with the same settings.</p>
+<p>Processing Toolbox -&gt; Whitebox Workflows -&gt; Remote Sensing:</p>
+<ul>
+<li>NDVI</li>
+<li>Normalized Difference Index (for NDWI, NBR, NDSI, NDBI patterns)</li>
+</ul>
+<p>Recommended outputs:</p>
+<ul>
+<li>ndvi_t1.tif, ndvi_t2.tif</li>
+<li>ndwi_t1.tif, ndwi_t2.tif</li>
+<li>nbr_t1.tif, nbr_t2.tif</li>
+</ul>
+<p>Example NDVI run:</p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>Input image</td><td>image_t1.tif</td></tr>
+<tr><td>NIR band</td><td>sensor-specific (for example 4, 5, or 8 depending on product)</td></tr>
+<tr><td>Red band</td><td>sensor-specific</td></tr>
+<tr><td>Output</td><td>ndvi_t1.tif</td></tr>
 </tbody></table>
 </div>
-<p>NDVI output range: –1 to +1. Active vegetation: &gt; 0.3. Bare soil: 0.1–0.2.
-Water: &lt; 0.</p>
-<p>Repeat for <code>image_t2.tif</code> → <code>ndvi_t2.tif</code>.</p>
+<p>Repeat for time 2.</p>
 <hr />
-<h3 id="step-3--threshold-vegetation"><a class="header" href="#step-3--threshold-vegetation">Step 3 — Threshold Vegetation</a></h3>
-<p>Convert the NDVI raster into a binary vegetation mask.</p>
-<p><strong>Processing Toolbox → Whitebox Workflows → Raster Analysis →
-<code>Reclass From File</code></strong> or use QGIS <strong>Raster Calculator</strong>:</p>
-<pre><code>"ndvi_t1@1" &gt;= 0.3
-</code></pre>
-<p>Output: <code>vegetation_mask_t1.tif</code> (1 = vegetated, 0 = non-vegetated).</p>
-<hr />
-<h3 id="step-4--compute-ndvi-change"><a class="header" href="#step-4--compute-ndvi-change">Step 4 — Compute NDVI Change</a></h3>
-<p>Subtract time-1 NDVI from time-2 NDVI to produce a change magnitude raster.</p>
-<p><strong>QGIS Raster Calculator:</strong></p>
-<pre><code>"ndvi_t2@1" - "ndvi_t1@1"
-</code></pre>
-<p>Output: <code>ndvi_change.tif</code>. Positive values indicate vegetation gain;
-negative values indicate vegetation loss.</p>
-<p>Apply a symmetric diverging colour ramp (red–white–green) centred on 0.</p>
-<hr />
-<h3 id="step-5--identify-significant-change-areas"><a class="header" href="#step-5--identify-significant-change-areas">Step 5 — Identify Significant Change Areas</a></h3>
-<p><strong>Processing Toolbox → Whitebox Workflows → Raster Analysis →
-<code>Reclass</code></strong> (or Raster Calculator threshold)</p>
-<div class="table-wrapper"><table><thead><tr><th>Class</th><th>NDVI change threshold</th><th>Interpretation</th></tr></thead><tbody>
-<tr><td>–2</td><td>&lt; –0.20</td><td>Significant vegetation loss</td></tr>
-<tr><td>–1</td><td>–0.20 to –0.10</td><td>Moderate vegetation loss</td></tr>
-<tr><td>0</td><td>–0.10 to +0.10</td><td>No significant change</td></tr>
-<tr><td>+1</td><td>+0.10 to +0.20</td><td>Moderate vegetation gain</td></tr>
-<tr><td>+2</td><td>&gt; +0.20</td><td>Significant vegetation gain</td></tr>
+<h3 id="step-3---create-change-surfaces"><a class="header" href="#step-3---create-change-surfaces">Step 3 - Create Change Surfaces</a></h3>
+<p>Use QGIS Raster Calculator for differencing:</p>
+<ul>
+<li>NDVI change: ndvi_t2 - ndvi_t1</li>
+<li>NBR change: nbr_t2 - nbr_t1</li>
+</ul>
+<p>Then classify into practical bins (loss, stable, gain) using:</p>
+<ul>
+<li>Whitebox Workflows -&gt; Raster Analysis -&gt; Reclass</li>
+<li>or Raster Calculator threshold expressions</li>
+</ul>
+<p>Suggested interpretation for NDVI change:</p>
+<div class="table-wrapper"><table><thead><tr><th>Class</th><th>Threshold</th></tr></thead><tbody>
+<tr><td>Strong loss</td><td>&lt; -0.20</td></tr>
+<tr><td>Moderate loss</td><td>-0.20 to -0.10</td></tr>
+<tr><td>Stable</td><td>-0.10 to 0.10</td></tr>
+<tr><td>Moderate gain</td><td>0.10 to 0.20</td></tr>
+<tr><td>Strong gain</td><td>&gt; 0.20</td></tr>
 </tbody></table>
 </div>
 <hr />
-<h2 id="python-console-equivalent-3"><a class="header" href="#python-console-equivalent-3">Python Console Equivalent</a></h2>
+<h3 id="step-4---dimensionality-reduction-pca"><a class="header" href="#step-4---dimensionality-reduction-pca">Step 4 - Dimensionality Reduction (PCA)</a></h3>
+<p>Processing Toolbox -&gt; Whitebox Workflows -&gt; Remote Sensing -&gt;
+Principal Component Analysis</p>
+<p>Use PCA when:</p>
+<ul>
+<li>Bands are highly correlated.</li>
+<li>You need compact inputs for segmentation or clustering.</li>
+<li>You are preparing a classification feature stack.</li>
+</ul>
+<p>Inspect output variance/eigenvalue diagnostics and retain only the components
+needed for most variance.</p>
+<hr />
+<h3 id="step-5---segmentation-and-classification-prep"><a class="header" href="#step-5---segmentation-and-classification-prep">Step 5 - Segmentation and Classification Prep</a></h3>
+<p>Processing Toolbox -&gt; Whitebox Workflows -&gt; Remote Sensing -&gt;
+Image Segmentation</p>
+<p>Typical tuning:</p>
+<ul>
+<li>Lower threshold -&gt; more, smaller segments</li>
+<li>Higher threshold -&gt; fewer, larger segments</li>
+<li>Minimum segment size removes speckle</li>
+</ul>
+<p>After segmentation:</p>
+<ul>
+<li>Optionally polygonize segment rasters in QGIS.</li>
+<li>Join zonal metrics from index layers.</li>
+<li>Use resulting segment features for training/validation workflows.</li>
+</ul>
+<hr />
+<h2 id="qgis-python-console-equivalent"><a class="header" href="#qgis-python-console-equivalent">QGIS Python Console Equivalent</a></h2>
+<p>Use this pattern for reproducible batch processing in QGIS:</p>
 <pre><code class="language-python">import processing
 
 img_t1 = '/data/image_t1.tif'
 img_t2 = '/data/image_t2.tif'
 
-# NDVI for both dates
 for label, img in [('t1', img_t1), ('t2', img_t2)]:
     processing.run('whitebox_workflows:ndvi', {
         'input': img,
@@ -1731,75 +1838,43 @@ for label, img in [('t1', img_t1), ('t2', img_t2)]:
         'output': f'/data/ndvi_{label}.tif',
     })
 
-# NDVI change via Raster Calculator
 processing.run('qgis:rastercalculator', {
     'EXPRESSION': '"ndvi_t2@1" - "ndvi_t1@1"',
     'LAYERS': ['/data/ndvi_t1.tif', '/data/ndvi_t2.tif'],
     'OUTPUT': '/data/ndvi_change.tif',
 })
 
-print("Change detection complete.")
-</code></pre>
-<hr />
-<h2 id="advanced-pca-for-dimensionality-reduction"><a class="header" href="#advanced-pca-for-dimensionality-reduction">Advanced: PCA for Dimensionality Reduction</a></h2>
-<p>PCA is useful before unsupervised classification to reduce correlated band
-redundancy.</p>
-<p><strong>Processing Toolbox → Whitebox Workflows → Remote Sensing →
-<code>Principal Component Analysis</code></strong></p>
-<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
-<tr><td>Input image</td><td><code>image_t1.tif</code></td></tr>
-<tr><td>Number of components</td><td><code>4</code> (captures &gt; 95 % variance in most 8-band images)</td></tr>
-<tr><td>Output</td><td><code>pca_t1.tif</code></td></tr>
-</tbody></table>
-</div>
-<pre><code class="language-python">processing.run('whitebox_workflows:principal_component_analysis', {
+processing.run('whitebox_workflows:principal_component_analysis', {
     'input': '/data/image_t1.tif',
     'num_comp': 4,
     'output': '/data/pca_t1.tif',
 })
 </code></pre>
-<p>Inspect the eigenvalue table in the tool output log to confirm how many
-components are needed to explain &gt; 95 % of the variance.</p>
-<hr />
-<h2 id="advanced-image-segmentation"><a class="header" href="#advanced-image-segmentation">Advanced: Image Segmentation</a></h2>
-<p>Object-based analysis begins with segmentation into spectrally homogeneous
-regions.</p>
-<p><strong>Processing Toolbox → Whitebox Workflows → Remote Sensing →
-<code>Image Segmentation</code></strong></p>
-<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
-<tr><td>Input image</td><td><code>image_t1.tif</code> (or PCA output)</td></tr>
-<tr><td>Threshold</td><td><code>25.0</code> (lower = smaller segments)</td></tr>
-<tr><td>Minimum segment size (px)</td><td><code>50</code></td></tr>
-<tr><td>Output</td><td><code>segments_t1.tif</code></td></tr>
-</tbody></table>
-</div>
-<p>Use QGIS <strong>Polygonize</strong> to convert the integer segment raster to vector
-polygons for attribute extraction and classification.</p>
 <hr />
 <h2 id="common-pitfalls-3"><a class="header" href="#common-pitfalls-3">Common Pitfalls</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
-<tr><td>NDVI values outside –1 to +1</td><td>DN imagery rather than reflectance</td><td>Convert DN to reflectance before computing index</td></tr>
-<tr><td>Change map shows artefacts at swath edges</td><td>Different acquisition geometries or BRDF</td><td>Normalise images before differencing</td></tr>
-<tr><td>PCA produces striped output</td><td>No-data mixed into statistics</td><td>Mask NoData before running PCA</td></tr>
-<tr><td>Segmentation produces single giant segment</td><td>Threshold too high</td><td>Halve threshold and rerun</td></tr>
-<tr><td>Band order mismatch</td><td>Tool expects specific band numbering</td><td>Verify band order in Layer Properties → Source</td></tr>
+<tr><td>Index values are outside expected ranges</td><td>Wrong bands or scale mismatch</td><td>Verify band mapping and value scale</td></tr>
+<tr><td>Apparent change is mostly cloud edges</td><td>Missing cloud/shadow masking</td><td>Mask QA classes before differencing</td></tr>
+<tr><td>PCA output looks unstable</td><td>NoData included in stats</td><td>Mask NoData consistently</td></tr>
+<tr><td>Segmentation over-merges features</td><td>Threshold too high</td><td>Lower threshold and retest</td></tr>
+<tr><td>Change map is noisy</td><td>Different spatial grids or radiometry</td><td>Align rasters and normalize radiometry</td></tr>
 </tbody></table>
 </div>
 <hr />
 <h2 id="validation-checklist-4"><a class="header" href="#validation-checklist-4">Validation Checklist</a></h2>
 <ul>
 <li><input disabled="" type="checkbox"/>
-Input imagery is atmospherically corrected (reflectance, not DN).</li>
+Inputs are co-registered and in a common CRS.</li>
 <li><input disabled="" type="checkbox"/>
-Band assignments match sensor band order (confirm in metadata).</li>
+Band assignments match sensor metadata.</li>
 <li><input disabled="" type="checkbox"/>
-NDVI histogram peaks in expected range for land cover type.</li>
+Cloud/shadow/no-data masking applied consistently across dates.</li>
 <li><input disabled="" type="checkbox"/>
-Change map artefacts are not co-located with cloud/shadow masks.</li>
+Index histograms are plausible for local land cover.</li>
 <li><input disabled="" type="checkbox"/>
-Segment boundaries visually match spectral boundaries in original image.</li>
+Change classes were reviewed visually against source imagery.</li>
 <li><input disabled="" type="checkbox"/>
-PCA output eigenvalue table confirms component count captures &gt; 95 % variance.</li>
+PCA/segmentation parameters were documented for reproducibility.</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="raster-analysis"><a class="header" href="#raster-analysis">Raster Analysis</a></h1>
 <p>General raster analysis covers a broad set of cell-based operations: local
@@ -1809,7 +1884,7 @@ These tools form the computational backbone of many GIS modelling workflows.</p>
 <p>This chapter demonstrates an environmental suitability analysis that combines
 multiple raster datasets through reclassification and weighted overlay.</p>
 <hr />
-<h2 id="key-concepts-5"><a class="header" href="#key-concepts-5">Key Concepts</a></h2>
+<h2 id="key-concepts-4"><a class="header" href="#key-concepts-4">Key Concepts</a></h2>
 <ul>
 <li><strong>Local operations</strong>: Applied to each cell independently — arithmetic, logic,
 trigonometry, conditional assignment. Result depends only on the cell's own
@@ -1832,7 +1907,7 @@ NoData mask before combining them.</li>
 <h2 id="end-to-end-workflow-multi-criteria-habitat-suitability"><a class="header" href="#end-to-end-workflow-multi-criteria-habitat-suitability">End-to-End Workflow: Multi-Criteria Habitat Suitability</a></h2>
 <p>This workflow scores terrain for habitat suitability using slope, TWI, and
 distance from water as factors.</p>
-<h3 id="inputs-4"><a class="header" href="#inputs-4">Inputs</a></h3>
+<h3 id="inputs-3"><a class="header" href="#inputs-3">Inputs</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
 <tr><td><code>slope.tif</code></td><td>GeoTIFF raster</td><td>Degrees, from terrain analysis</td></tr>
 <tr><td><code>twi.tif</code></td><td>GeoTIFF raster</td><td>Topographic Wetness Index</td></tr>
@@ -1927,7 +2002,7 @@ Input: dist_water.tif → Output: dist_water_reclass.tif
 </tbody></table>
 </div>
 <hr />
-<h2 id="python-console-equivalent-4"><a class="header" href="#python-console-equivalent-4">Python Console Equivalent</a></h2>
+<h2 id="python-console-equivalent-3"><a class="header" href="#python-console-equivalent-3">Python Console Equivalent</a></h2>
 <pre><code class="language-python">import processing
 
 # Step 1: distance from water
@@ -2009,7 +2084,7 @@ high-performance tools built on the wbtopology spatial index.</p>
 <p>This chapter walks through a complete parcel-attribute enrichment workflow —
 a common task in land management and environmental assessment.</p>
 <hr />
-<h2 id="key-concepts-6"><a class="header" href="#key-concepts-6">Key Concepts</a></h2>
+<h2 id="key-concepts-5"><a class="header" href="#key-concepts-5">Key Concepts</a></h2>
 <ul>
 <li><strong>Geometry validity</strong>: Self-intersecting rings, duplicate vertices, and
 unclosed polygons cause silent failures in overlay tools. Always validate
@@ -2032,7 +2107,7 @@ contains, etc.) that produces a feature selection or a new filtered layer.</li>
 <h2 id="end-to-end-workflow-parcel-attribute-enrichment"><a class="header" href="#end-to-end-workflow-parcel-attribute-enrichment">End-to-End Workflow: Parcel Attribute Enrichment</a></h2>
 <p>This workflow assigns catchment statistics and proximity-to-road measurements
 to a parcel layer.</p>
-<h3 id="inputs-5"><a class="header" href="#inputs-5">Inputs</a></h3>
+<h3 id="inputs-4"><a class="header" href="#inputs-4">Inputs</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
 <tr><td><code>parcels.shp</code></td><td>Polygon vector</td><td>Land parcel boundaries</td></tr>
 <tr><td><code>catchments.shp</code></td><td>Polygon vector</td><td>Watershed polygons with area and slope stats</td></tr>
@@ -2109,7 +2184,7 @@ errors before proceeding.</p>
 <h2 id="topojson-conversion-chain-qgis-interop"><a class="header" href="#topojson-conversion-chain-qgis-interop">TopoJSON Conversion Chain (QGIS Interop)</a></h2>
 <p>Use this workflow when you need to exchange shared-boundary vector data with
 web clients while keeping a GeoPackage working copy for analysis.</p>
-<h3 id="inputs-6"><a class="header" href="#inputs-6">Inputs</a></h3>
+<h3 id="inputs-5"><a class="header" href="#inputs-5">Inputs</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
 <tr><td><code>zones.gpkg</code></td><td>Polygon vector</td><td>Authoritative analysis dataset</td></tr>
 </tbody></table>
@@ -2147,7 +2222,7 @@ processing chain.</p>
 <h2 id="topojson-boundary-preserving-generalization-chain"><a class="header" href="#topojson-boundary-preserving-generalization-chain">TopoJSON Boundary-Preserving Generalization Chain</a></h2>
 <p>Use this chain when you need smaller delivery payloads while preserving shared
 boundary consistency during simplification.</p>
-<h3 id="inputs-7"><a class="header" href="#inputs-7">Inputs</a></h3>
+<h3 id="inputs-6"><a class="header" href="#inputs-6">Inputs</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
 <tr><td><code>admin_units.gpkg</code></td><td>Polygon vector</td><td>Shared boundaries between adjacent polygons</td></tr>
 </tbody></table>
@@ -2173,7 +2248,7 @@ boundary consistency during simplification.</p>
 <h2 id="topojson-transport--enrichment-return-chain"><a class="header" href="#topojson-transport--enrichment-return-chain">TopoJSON Transport + Enrichment Return Chain</a></h2>
 <p>Use this chain when TopoJSON is used only for transport and you need to return
 to an analysis-grade format for attribute enrichment.</p>
-<h3 id="inputs-8"><a class="header" href="#inputs-8">Inputs</a></h3>
+<h3 id="inputs-7"><a class="header" href="#inputs-7">Inputs</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
 <tr><td><code>transport_in.topojson</code></td><td>Topology-preserving vector</td><td>Interchange input received from external system</td></tr>
 </tbody></table>
@@ -2197,7 +2272,7 @@ to an analysis-grade format for attribute enrichment.</p>
 <li><code>transport_enriched.topojson</code> for interchange/web handoff.</li>
 </ul>
 <hr />
-<h2 id="python-console-equivalent-5"><a class="header" href="#python-console-equivalent-5">Python Console Equivalent</a></h2>
+<h2 id="python-console-equivalent-4"><a class="header" href="#python-console-equivalent-4">Python Console Equivalent</a></h2>
 <pre><code class="language-python">import processing
 
 # Step 1: fix geometry
@@ -2279,182 +2354,176 @@ Simplified geometry does not self-intersect at the chosen tolerance.</li>
 Attribute field names in output do not exceed shapefile 10-character limit.</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="network-analysis"><a class="header" href="#network-analysis">Network Analysis</a></h1>
-<p>Network analysis models movement and connectivity through a graph of
-connected line features. It underpins routing, service-area delineation,
-travel-time catchment mapping, and infrastructure connectivity assessment.
-WbW-QGIS provides network-preparation tools, hydrologic network ordering
-tools, and connectivity metrics that complement the native QGIS network
-analysis framework.</p>
-<p>This chapter demonstrates a stream network ordering and connectivity
-workflow, and a road network service area example.</p>
-<hr />
-<h2 id="key-concepts-7"><a class="header" href="#key-concepts-7">Key Concepts</a></h2>
+<p>Network analysis in WbW-QGIS spans both transportation and hydrologic
+networks. This chapter is aligned with the Python and R manuals and now covers
+three common tracks:</p>
 <ul>
-<li><strong>Network topology</strong>: Connectivity rules for a line network. Edges (lines)
-connect at nodes (endpoints). A topologically clean network has no dangling
-ends, no undershoots, and no overshoots at intended junctions.</li>
-<li><strong>Directed network</strong>: Edges have a direction (from-node to to-node).
-Hydrologic networks are inherently directed (downstream). Road networks may
-be directed (one-way streets) or undirected.</li>
-<li><strong>Cost attribute</strong>: A numeric field on each edge representing traversal cost
-— distance, travel time, impedance, or a composite metric.</li>
-<li><strong>Shortest path</strong>: Minimum-cost route between two nodes. Dijkstra's
-algorithm is the standard solver for non-negative edge weights.</li>
-<li><strong>Service area / catchment</strong>: Set of all network locations reachable within
-a specified cost budget from an origin node.</li>
-<li><strong>Strahler / Shreve order</strong>: Integer stream ordering systems that summarise
-network hierarchy from headwaters (order 1) to main channel. Strahler
-increments only at equal-order confluences; Shreve is additive.</li>
+<li>Transportation routing and service areas</li>
+<li>OD and nearest-facility analysis</li>
+<li>Stream-network hierarchy and connectivity</li>
 </ul>
 <hr />
-<h2 id="end-to-end-workflow-stream-network-ordering-and-connectivity"><a class="header" href="#end-to-end-workflow-stream-network-ordering-and-connectivity">End-to-End Workflow: Stream Network Ordering and Connectivity</a></h2>
-<h3 id="inputs-9"><a class="header" href="#inputs-9">Inputs</a></h3>
+<h2 id="core-concepts-you-should-know-first-1"><a class="header" href="#core-concepts-you-should-know-first-1">Core Concepts You Should Know First</a></h2>
+<ul>
+<li>Network: A graph of edges (line segments) and nodes (junctions/endpoints).</li>
+<li>Cost or impedance: Value minimized by routing (distance, minutes, or other
+weighted friction).</li>
+<li>OD pair: Origin and destination used in path queries.</li>
+<li>Service area: All network locations reachable under a cost budget.</li>
+<li>Closest facility: Nearest destination by network cost, not straight-line
+distance.</li>
+<li>Connectivity: Whether all required features are in connected components.</li>
+<li>Directed network: Edge direction matters (one-way roads, downstream streams).</li>
+</ul>
+<hr />
+<h2 id="typical-inputs-1"><a class="header" href="#typical-inputs-1">Typical Inputs</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
-<tr><td><code>dem_conditioned.tif</code></td><td>GeoTIFF raster</td><td>Hydrologically conditioned DEM</td></tr>
-<tr><td><code>streams.tif</code></td><td>GeoTIFF raster</td><td>Binary stream raster from flow accumulation threshold</td></tr>
-<tr><td><code>d8_pointer.tif</code></td><td>GeoTIFF raster</td><td>D8 flow direction raster</td></tr>
+<tr><td>roads.shp</td><td>Polyline vector</td><td>Cleaned road centerlines</td></tr>
+<tr><td>facilities.shp</td><td>Point vector</td><td>Hospitals, depots, schools, etc.</td></tr>
+<tr><td>demand_points.shp</td><td>Point vector</td><td>Incidents, customers, or population centroids</td></tr>
+<tr><td>streams.tif</td><td>Raster</td><td>Binary stream raster for hydrologic hierarchy</td></tr>
+<tr><td>d8_pointer.tif</td><td>Raster</td><td>D8 flow-direction raster</td></tr>
 </tbody></table>
 </div>
 <hr />
-<h3 id="step-1--strahler-stream-order"><a class="header" href="#step-1--strahler-stream-order">Step 1 — Strahler Stream Order</a></h3>
-<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
-<code>Strahler Stream Order</code></strong></p>
-<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
-<tr><td>D8 pointer</td><td><code>d8_pointer.tif</code></td></tr>
-<tr><td>Streams raster</td><td><code>streams.tif</code></td></tr>
-<tr><td>Output</td><td><code>strahler.tif</code></td></tr>
+<h2 id="workflow-a-transportation-network-preparation"><a class="header" href="#workflow-a-transportation-network-preparation">Workflow A: Transportation Network Preparation</a></h2>
+<h3 id="step-1---topology-qa-and-geometry-cleanup"><a class="header" href="#step-1---topology-qa-and-geometry-cleanup">Step 1 - Topology QA and Geometry Cleanup</a></h3>
+<p>Use standard QGIS cleanup first:</p>
+<ul>
+<li>Check validity</li>
+<li>Snap Geometries to Layer</li>
+<li>Fix Geometries</li>
+</ul>
+<p>Then enrich network attributes with Whitebox tools:</p>
+<p>Processing Toolbox -&gt; Whitebox Workflows -&gt; Vector Analysis -&gt;
+Add Geometry Attributes</p>
+<p>This provides segment length fields needed for distance-based routing.</p>
+<p>If travel-time routing is required, compute a time field such as:</p>
+<ul>
+<li>TIME_MIN = LENGTH_M / SPEED_M_PER_MIN</li>
+</ul>
+<p>using Field Calculator.</p>
+<hr />
+<h3 id="step-2---build-cost-aware-road-layer"><a class="header" href="#step-2---build-cost-aware-road-layer">Step 2 - Build Cost-Aware Road Layer</a></h3>
+<p>Recommended fields:</p>
+<ul>
+<li>LENGTH_M (meters)</li>
+<li>SPEED_KMH (if available)</li>
+<li>TIME_MIN (derived)</li>
+<li>ONEWAY (optional directional control)</li>
+</ul>
+<p>Use this prepared layer as the routing network for native QGIS algorithms.</p>
+<hr />
+<h2 id="workflow-b-routing-service-areas-and-closest-facility"><a class="header" href="#workflow-b-routing-service-areas-and-closest-facility">Workflow B: Routing, Service Areas, and Closest Facility</a></h2>
+<h3 id="step-3---shortest-path"><a class="header" href="#step-3---shortest-path">Step 3 - Shortest Path</a></h3>
+<p>Processing Toolbox -&gt; Network Analysis:</p>
+<ul>
+<li>Shortest Path (Point to Point)</li>
+<li>Shortest Path (Layer to Point)</li>
+<li>Shortest Path (Point to Layer)</li>
+</ul>
+<p>Use the prepared cost field (distance or time) consistently.</p>
+<hr />
+<h3 id="step-4---service-area-isochrone"><a class="header" href="#step-4---service-area-isochrone">Step 4 - Service Area (Isochrone)</a></h3>
+<p>Processing Toolbox -&gt; Network Analysis -&gt; Service Area (From Layer)</p>
+<p>Recommended parameters:</p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Example</th></tr></thead><tbody>
+<tr><td>Network layer</td><td>roads_prepared.shp</td></tr>
+<tr><td>Strategy</td><td>Shortest</td></tr>
+<tr><td>Start points</td><td>facilities.shp</td></tr>
+<tr><td>Travel cost</td><td>5.0 (minutes) or 3000 (meters)</td></tr>
 </tbody></table>
 </div>
-<p>Visualise using a sequential colour ramp from light (order 1) to dark (highest
-order). Inspect order transitions at confluences to confirm correct topology.</p>
+<p>Export output lines and optional polygons for reporting.</p>
 <hr />
-<h3 id="step-2--shreve-stream-magnitude"><a class="header" href="#step-2--shreve-stream-magnitude">Step 2 — Shreve Stream Magnitude</a></h3>
-<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
-<code>Shreve Stream Magnitude</code></strong></p>
-<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
-<tr><td>D8 pointer</td><td><code>d8_pointer.tif</code></td></tr>
-<tr><td>Streams raster</td><td><code>streams.tif</code></td></tr>
-<tr><td>Output</td><td><code>shreve.tif</code></td></tr>
-</tbody></table>
-</div>
-<p>Shreve magnitude equals the count of first-order tributaries draining to each
-stream reach. High values indicate major channels.</p>
+<h3 id="step-5---closest-facility-pattern"><a class="header" href="#step-5---closest-facility-pattern">Step 5 - Closest Facility Pattern</a></h3>
+<p>Use Service Area and shortest-path tools together:</p>
+<ul>
+<li>Build candidate facilities</li>
+<li>Route demand points to nearest reachable facilities</li>
+<li>Summarize cost by facility catchment</li>
+</ul>
+<p>For large batches, run model-builder or Python Console loops.</p>
 <hr />
-<h3 id="step-3--vector-stream-network-with-order-attributes"><a class="header" href="#step-3--vector-stream-network-with-order-attributes">Step 3 — Vector Stream Network with Order Attributes</a></h3>
-<p>Convert the Strahler raster to a vector network for cartographic display and
-downstream routing analysis.</p>
-<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
-<code>Raster Streams to Vector</code></strong></p>
-<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
-<tr><td>Streams raster</td><td><code>strahler.tif</code></td></tr>
-<tr><td>D8 pointer</td><td><code>d8_pointer.tif</code></td></tr>
-<tr><td>Output</td><td><code>streams_vector.shp</code></td></tr>
-</tbody></table>
-</div>
-<p>The output polyline feature class carries the Strahler order value as a
-field, enabling symbol classification by order.</p>
+<h2 id="workflow-c-od-style-batch-analysis-in-qgis"><a class="header" href="#workflow-c-od-style-batch-analysis-in-qgis">Workflow C: OD-Style Batch Analysis in QGIS</a></h2>
+<p>QGIS does not provide a single OD matrix tool equivalent to the Python/R
+chapters, so the standard QGIS pattern is:</p>
+<ul>
+<li>Iterate origins and destinations in batch</li>
+<li>Run shortest path for each pair</li>
+<li>Aggregate travel cost in an output table</li>
+</ul>
+<p>Use this when you need accessibility summaries or assignment baselines directly
+inside QGIS projects.</p>
 <hr />
-<h3 id="step-4--hack-stream-order-optional"><a class="header" href="#step-4--hack-stream-order-optional">Step 4 — Hack Stream Order (Optional)</a></h3>
-<p>Hack ordering numbers stream reaches sequentially from outlet to headwaters —
-useful for long-profile analysis and channel numbering in reports.</p>
-<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
-<code>Hack Stream Order</code></strong></p>
-<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
-<tr><td>D8 pointer</td><td><code>d8_pointer.tif</code></td></tr>
-<tr><td>Streams raster</td><td><code>streams.tif</code></td></tr>
-<tr><td>Output</td><td><code>hack.tif</code></td></tr>
-</tbody></table>
-</div>
+<h2 id="workflow-d-hydrologic-stream-networks"><a class="header" href="#workflow-d-hydrologic-stream-networks">Workflow D: Hydrologic Stream Networks</a></h2>
+<p>Hydrologic network tools remain an important part of network analysis and are
+included here as a dedicated sub-workflow rather than the entire chapter.</p>
+<h3 id="step-6---stream-hierarchy"><a class="header" href="#step-6---stream-hierarchy">Step 6 - Stream Hierarchy</a></h3>
+<p>Processing Toolbox -&gt; Whitebox Workflows -&gt; Spatial Hydrology:</p>
+<ul>
+<li>Strahler Stream Order</li>
+<li>Shreve Stream Magnitude</li>
+<li>Hack Stream Order</li>
+</ul>
+<p>These tools characterize stream position and downstream accumulation.</p>
+<h3 id="step-7---stream-vectorization"><a class="header" href="#step-7---stream-vectorization">Step 7 - Stream Vectorization</a></h3>
+<p>Processing Toolbox -&gt; Whitebox Workflows -&gt; Spatial Hydrology -&gt;
+Raster Streams to Vector</p>
+<p>Convert ordered stream rasters to vector lines for cartography and further
+network operations.</p>
 <hr />
-<h2 id="python-console-equivalent-6"><a class="header" href="#python-console-equivalent-6">Python Console Equivalent</a></h2>
+<h2 id="qgis-python-console-equivalent-1"><a class="header" href="#qgis-python-console-equivalent-1">QGIS Python Console Equivalent</a></h2>
 <pre><code class="language-python">import processing
 
-# Strahler order
+# Add geometry attributes for road cost preparation
+processing.run('whitebox_workflows:add_geometry_attributes', {
+    'input': '/data/roads.shp',
+    'output': '/data/roads_prepared.shp',
+})
+
+# Service area from facilities
+processing.run('native:serviceareafromlayer', {
+    'INPUT': '/data/roads_prepared.shp',
+    'STRATEGY': 0,
+    'START_POINTS': '/data/facilities.shp',
+    'TRAVEL_COST': 5.0,
+    'OUTPUT_LINES': '/data/service_area_lines.shp',
+    'OUTPUT': 'TEMPORARY_OUTPUT',
+})
+
+# Stream order
 processing.run('whitebox_workflows:strahler_stream_order', {
     'd8_pntr': '/data/d8_pointer.tif',
     'streams': '/data/streams.tif',
     'output': '/data/strahler.tif',
 })
-
-# Shreve magnitude
-processing.run('whitebox_workflows:shreve_stream_magnitude', {
-    'd8_pntr': '/data/d8_pointer.tif',
-    'streams': '/data/streams.tif',
-    'output': '/data/shreve.tif',
-})
-
-# Vector stream network
-processing.run('whitebox_workflows:raster_streams_to_vector', {
-    'streams': '/data/strahler.tif',
-    'd8_pntr': '/data/d8_pointer.tif',
-    'output': '/data/streams_vector.shp',
-})
-
-print("Stream network ordering complete.")
-</code></pre>
-<hr />
-<h2 id="road-network-service-area-in-qgis"><a class="header" href="#road-network-service-area-in-qgis">Road Network: Service Area in QGIS</a></h2>
-<p>For road network routing (shortest path, service areas, turn restrictions),
-use the <strong>QGIS Network Analysis</strong> framework, with WbW used to prepare and
-enrich the road layer first.</p>
-<h3 id="step-1--prepare-road-network"><a class="header" href="#step-1--prepare-road-network">Step 1 — Prepare Road Network</a></h3>
-<p><strong>Processing Toolbox → Whitebox Workflows → Vector Analysis →
-<code>Add Geometry Attributes</code></strong></p>
-<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
-<tr><td>Input vector</td><td><code>roads.shp</code></td></tr>
-<tr><td>Units</td><td><code>Metres</code></td></tr>
-<tr><td>Output</td><td><code>roads_length.shp</code></td></tr>
-</tbody></table>
-</div>
-<p>This appends <code>LENGTH</code> (metres) to each road segment, which becomes the cost
-attribute for routing.</p>
-<h3 id="step-2--service-area-from-origin"><a class="header" href="#step-2--service-area-from-origin">Step 2 — Service Area from Origin</a></h3>
-<p><strong>Processing Toolbox → Network Analysis → <code>Service Area (From Layer)</code></strong>
-(QGIS native)</p>
-<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
-<tr><td>Vector layer</td><td><code>roads_length.shp</code></td></tr>
-<tr><td>Path type</td><td><code>Shortest</code></td></tr>
-<tr><td>Start points</td><td><code>facility_points.shp</code></td></tr>
-<tr><td>Travel cost</td><td><code>300</code> (metres — or seconds if using speed-adjusted cost)</td></tr>
-<tr><td>Direction field</td><td><em>(leave blank for undirected)</em></td></tr>
-<tr><td>Output convex hull</td><td>☐</td></tr>
-<tr><td>Output</td><td><code>service_area.shp</code></td></tr>
-</tbody></table>
-</div>
-<pre><code class="language-python">processing.run('native:serviceareafromlayer', {
-    'INPUT': '/data/roads_length.shp',
-    'STRATEGY': 0,  # 0 = Shortest
-    'START_POINTS': '/data/facility_points.shp',
-    'TRAVEL_COST': 300,
-    'OUTPUT_LINES': '/data/service_area_lines.shp',
-    'OUTPUT': 'TEMPORARY_OUTPUT',
-})
 </code></pre>
 <hr />
 <h2 id="common-pitfalls-6"><a class="header" href="#common-pitfalls-6">Common Pitfalls</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
-<tr><td>Strahler order is 1 everywhere</td><td>D8 pointer and streams raster have different extents</td><td>Clip both to the same catchment extent</td></tr>
-<tr><td>Vector stream network has gaps</td><td>Raster-to-vector conversion missed isolated stream cells</td><td>Ensure streams raster is topologically connected (no isolated pixels)</td></tr>
-<tr><td>Road service area does not extend across a known bridge</td><td>Network has a topological gap at the bridge</td><td>Run <code>Snap Geometries to Layer</code> to close undershoots before analysis</td></tr>
-<tr><td>Shortest path reports no route found</td><td>Origin or destination is not snapped to the network</td><td>Snap start/end points to nearest line vertex before routing</td></tr>
-<tr><td>Stream order jumps unexpectedly</td><td>Confluence cell is misassigned in D8 pointer</td><td>Verify conditioned DEM and recheck flow direction around problem area</td></tr>
+<tr><td>No route found between known-connected points</td><td>Topology gaps or unsnapped endpoints</td><td>Run snapping and revalidate connectivity</td></tr>
+<tr><td>Service area too small or too large</td><td>Cost units inconsistent</td><td>Keep all costs in either meters or minutes</td></tr>
+<tr><td>One-way streets ignored</td><td>Direction field not configured</td><td>Verify direction settings in network algorithm</td></tr>
+<tr><td>Batch routing is slow</td><td>Unnecessary repeated reprojection or heavy geometry</td><td>Preprocess to common CRS and simplify where appropriate</td></tr>
+<tr><td>Stream order appears uniform</td><td>Bad stream threshold or mismatched d8/stream rasters</td><td>Rebuild streams and ensure matching extent/grid</td></tr>
 </tbody></table>
 </div>
 <hr />
 <h2 id="validation-checklist-7"><a class="header" href="#validation-checklist-7">Validation Checklist</a></h2>
 <ul>
 <li><input disabled="" type="checkbox"/>
-Strahler order transitions occur only at confirmed tributary confluences.</li>
+Routing network passes geometry validity and snapping checks.</li>
 <li><input disabled="" type="checkbox"/>
-Vector stream network is a connected graph with no isolated segments.</li>
+Cost field units are consistent across all analyses.</li>
 <li><input disabled="" type="checkbox"/>
-Road network geometry passes validity check before routing.</li>
+Directionality assumptions are documented (directed vs undirected).</li>
 <li><input disabled="" type="checkbox"/>
-Cost field is non-negative and in consistent units across all edges.</li>
+Service-area outputs were spot-checked against known travel behavior.</li>
 <li><input disabled="" type="checkbox"/>
-Service area boundary is closed (no dangling open polygons).</li>
+Stream-order outputs were checked at confluences.</li>
 <li><input disabled="" type="checkbox"/>
-Stream order rasters match expected hierarchy from 1:50 000 reference map.</li>
+Workflow parameters were saved in model or processing history.</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="linear-referencing"><a class="header" href="#linear-referencing">Linear Referencing</a></h1>
 <p>Linear referencing (LRS) is a data model where features are located along
@@ -2465,7 +2534,7 @@ inspection data, accident records, and pavement condition databases.</p>
 locating point and line events along routes, and exporting event geometries
 for spatial analysis.</p>
 <hr />
-<h2 id="key-concepts-8"><a class="header" href="#key-concepts-8">Key Concepts</a></h2>
+<h2 id="key-concepts-6"><a class="header" href="#key-concepts-6">Key Concepts</a></h2>
 <ul>
 <li><strong>Route</strong>: A polyline feature with a unique, stable route identifier
 (<code>ROUTE_ID</code>) and a monotonically increasing measure value (M-value) along
@@ -2485,7 +2554,7 @@ for example, aligning stationing to kilometre posts.</li>
 <h2 id="end-to-end-workflow-locating-inspection-events-along-a-road-network"><a class="header" href="#end-to-end-workflow-locating-inspection-events-along-a-road-network">End-to-End Workflow: Locating Inspection Events Along a Road Network</a></h2>
 <p>This workflow builds measure fields on a road network, then locates a set of
 field inspection points as events on their respective routes.</p>
-<h3 id="inputs-10"><a class="header" href="#inputs-10">Inputs</a></h3>
+<h3 id="inputs-8"><a class="header" href="#inputs-8">Inputs</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
 <tr><td><code>roads.shp</code></td><td>Polyline vector</td><td>Road centrelines, unique <code>ROUTE_ID</code> field</td></tr>
 <tr><td><code>inspections.csv</code></td><td>CSV table</td><td>Columns: <code>ROUTE_ID</code>, <code>CHAINAGE_M</code>, <code>CONDITION</code></td></tr>
@@ -2569,7 +2638,7 @@ and confirm point positions against the road centreline.</p>
 matches the M-value of the nearest route vertex within acceptable tolerance
 (typically ± half the route vertex spacing).</p>
 <hr />
-<h2 id="python-console-equivalent-7"><a class="header" href="#python-console-equivalent-7">Python Console Equivalent</a></h2>
+<h2 id="python-console-equivalent-5"><a class="header" href="#python-console-equivalent-5">Python Console Equivalent</a></h2>
 <pre><code class="language-python">import processing
 
 # Step 3: locate point events
@@ -2683,10 +2752,10 @@ for the task.</p>
 <h2 id="remote-sensing"><a class="header" href="#remote-sensing">Remote Sensing</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Task</th><th>Chapter section</th><th>Key tools</th></tr></thead><tbody>
 <tr><td>Compute NDVI from multispectral image</td><td><a href="remote-sensing.html">Remote Sensing — Step 2</a></td><td><code>whitebox_workflows:ndvi</code></td></tr>
-<tr><td>Threshold vegetation from NDVI</td><td><a href="remote-sensing.html">Remote Sensing — Step 3</a></td><td>QGIS Raster Calculator</td></tr>
-<tr><td>NDVI-based change detection</td><td><a href="remote-sensing.html">Remote Sensing — Steps 4–5</a></td><td>QGIS Raster Calculator</td></tr>
-<tr><td>Reduce bands with PCA</td><td><a href="remote-sensing.html">Remote Sensing — PCA</a></td><td><code>whitebox_workflows:principal_component_analysis</code></td></tr>
-<tr><td>Segment image into homogeneous objects</td><td><a href="remote-sensing.html">Remote Sensing — Segmentation</a></td><td><code>whitebox_workflows:image_segmentation</code></td></tr>
+<tr><td>Threshold vegetation and classify change bins</td><td><a href="remote-sensing.html">Remote Sensing — Step 3</a></td><td>QGIS Raster Calculator, <code>whitebox_workflows:reclass</code></td></tr>
+<tr><td>NDVI/NBR-based change detection</td><td><a href="remote-sensing.html">Remote Sensing — Step 3</a></td><td>QGIS Raster Calculator</td></tr>
+<tr><td>Reduce bands with PCA</td><td><a href="remote-sensing.html">Remote Sensing — Step 4</a></td><td><code>whitebox_workflows:principal_component_analysis</code></td></tr>
+<tr><td>Segment image into homogeneous objects</td><td><a href="remote-sensing.html">Remote Sensing — Step 5</a></td><td><code>whitebox_workflows:image_segmentation</code></td></tr>
 </tbody></table>
 </div>
 <hr />
@@ -2716,11 +2785,12 @@ for the task.</p>
 <hr />
 <h2 id="network-analysis-1"><a class="header" href="#network-analysis-1">Network Analysis</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Task</th><th>Chapter section</th><th>Key tools</th></tr></thead><tbody>
-<tr><td>Compute Strahler stream order</td><td><a href="network-analysis.html">Network Analysis — Step 1</a></td><td><code>whitebox_workflows:strahler_stream_order</code></td></tr>
-<tr><td>Compute Shreve stream magnitude</td><td><a href="network-analysis.html">Network Analysis — Step 2</a></td><td><code>whitebox_workflows:shreve_stream_magnitude</code></td></tr>
-<tr><td>Convert raster stream network to vector</td><td><a href="network-analysis.html">Network Analysis — Step 3</a></td><td><code>whitebox_workflows:raster_streams_to_vector</code></td></tr>
-<tr><td>Compute road segment lengths for routing</td><td><a href="network-analysis.html">Network Analysis — Road Service Area</a></td><td><code>whitebox_workflows:add_geometry_attributes</code></td></tr>
-<tr><td>Delineate road service area</td><td><a href="network-analysis.html">Network Analysis — Road Service Area</a></td><td>QGIS <code>native:serviceareafromlayer</code></td></tr>
+<tr><td>Prepare road network geometry and costs</td><td><a href="network-analysis.html">Network Analysis — Workflow A</a></td><td><code>whitebox_workflows:add_geometry_attributes</code>, QGIS geometry tools</td></tr>
+<tr><td>Compute shortest path routes</td><td><a href="network-analysis.html">Network Analysis — Workflow B</a></td><td>QGIS Network Analysis shortest path tools</td></tr>
+<tr><td>Delineate road service areas</td><td><a href="network-analysis.html">Network Analysis — Workflow B</a></td><td>QGIS <code>native:serviceareafromlayer</code></td></tr>
+<tr><td>Build OD-style batch travel-cost summaries</td><td><a href="network-analysis.html">Network Analysis — Workflow C</a></td><td>QGIS shortest path batch/model workflows</td></tr>
+<tr><td>Compute Strahler and Shreve stream hierarchy</td><td><a href="network-analysis.html">Network Analysis — Workflow D</a></td><td><code>whitebox_workflows:strahler_stream_order</code>, <code>whitebox_workflows:shreve_stream_magnitude</code></td></tr>
+<tr><td>Convert raster stream network to vector</td><td><a href="network-analysis.html">Network Analysis — Workflow D</a></td><td><code>whitebox_workflows:raster_streams_to_vector</code></td></tr>
 </tbody></table>
 </div>
 <hr />
@@ -2751,7 +2821,7 @@ for the task.</p>
 <h3 id="vector-input-tasks"><a class="header" href="#vector-input-tasks">Vector input tasks</a></h3>
 <ul>
 <li>Geometry validation, overlay, joins → see <a href="vector-analysis.html">Vector Analysis</a></li>
-<li>Network ordering, service areas → see <a href="network-analysis.html">Network Analysis</a></li>
+<li>Routing, service areas, and stream hierarchy → see <a href="network-analysis.html">Network Analysis</a></li>
 <li>Route events, calibration → see <a href="linear-referencing.html">Linear Referencing</a></li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h1>

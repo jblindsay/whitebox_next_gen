@@ -218,10 +218,10 @@ for the task.</p>
 <h2 id="remote-sensing"><a class="header" href="#remote-sensing">Remote Sensing</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Task</th><th>Chapter section</th><th>Key tools</th></tr></thead><tbody>
 <tr><td>Compute NDVI from multispectral image</td><td><a href="remote-sensing.html">Remote Sensing — Step 2</a></td><td><code>whitebox_workflows:ndvi</code></td></tr>
-<tr><td>Threshold vegetation from NDVI</td><td><a href="remote-sensing.html">Remote Sensing — Step 3</a></td><td>QGIS Raster Calculator</td></tr>
-<tr><td>NDVI-based change detection</td><td><a href="remote-sensing.html">Remote Sensing — Steps 4–5</a></td><td>QGIS Raster Calculator</td></tr>
-<tr><td>Reduce bands with PCA</td><td><a href="remote-sensing.html">Remote Sensing — PCA</a></td><td><code>whitebox_workflows:principal_component_analysis</code></td></tr>
-<tr><td>Segment image into homogeneous objects</td><td><a href="remote-sensing.html">Remote Sensing — Segmentation</a></td><td><code>whitebox_workflows:image_segmentation</code></td></tr>
+<tr><td>Threshold vegetation and classify change bins</td><td><a href="remote-sensing.html">Remote Sensing — Step 3</a></td><td>QGIS Raster Calculator, <code>whitebox_workflows:reclass</code></td></tr>
+<tr><td>NDVI/NBR-based change detection</td><td><a href="remote-sensing.html">Remote Sensing — Step 3</a></td><td>QGIS Raster Calculator</td></tr>
+<tr><td>Reduce bands with PCA</td><td><a href="remote-sensing.html">Remote Sensing — Step 4</a></td><td><code>whitebox_workflows:principal_component_analysis</code></td></tr>
+<tr><td>Segment image into homogeneous objects</td><td><a href="remote-sensing.html">Remote Sensing — Step 5</a></td><td><code>whitebox_workflows:image_segmentation</code></td></tr>
 </tbody></table>
 </div>
 <hr />
@@ -251,11 +251,12 @@ for the task.</p>
 <hr />
 <h2 id="network-analysis"><a class="header" href="#network-analysis">Network Analysis</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Task</th><th>Chapter section</th><th>Key tools</th></tr></thead><tbody>
-<tr><td>Compute Strahler stream order</td><td><a href="network-analysis.html">Network Analysis — Step 1</a></td><td><code>whitebox_workflows:strahler_stream_order</code></td></tr>
-<tr><td>Compute Shreve stream magnitude</td><td><a href="network-analysis.html">Network Analysis — Step 2</a></td><td><code>whitebox_workflows:shreve_stream_magnitude</code></td></tr>
-<tr><td>Convert raster stream network to vector</td><td><a href="network-analysis.html">Network Analysis — Step 3</a></td><td><code>whitebox_workflows:raster_streams_to_vector</code></td></tr>
-<tr><td>Compute road segment lengths for routing</td><td><a href="network-analysis.html">Network Analysis — Road Service Area</a></td><td><code>whitebox_workflows:add_geometry_attributes</code></td></tr>
-<tr><td>Delineate road service area</td><td><a href="network-analysis.html">Network Analysis — Road Service Area</a></td><td>QGIS <code>native:serviceareafromlayer</code></td></tr>
+<tr><td>Prepare road network geometry and costs</td><td><a href="network-analysis.html">Network Analysis — Workflow A</a></td><td><code>whitebox_workflows:add_geometry_attributes</code>, QGIS geometry tools</td></tr>
+<tr><td>Compute shortest path routes</td><td><a href="network-analysis.html">Network Analysis — Workflow B</a></td><td>QGIS Network Analysis shortest path tools</td></tr>
+<tr><td>Delineate road service areas</td><td><a href="network-analysis.html">Network Analysis — Workflow B</a></td><td>QGIS <code>native:serviceareafromlayer</code></td></tr>
+<tr><td>Build OD-style batch travel-cost summaries</td><td><a href="network-analysis.html">Network Analysis — Workflow C</a></td><td>QGIS shortest path batch/model workflows</td></tr>
+<tr><td>Compute Strahler and Shreve stream hierarchy</td><td><a href="network-analysis.html">Network Analysis — Workflow D</a></td><td><code>whitebox_workflows:strahler_stream_order</code>, <code>whitebox_workflows:shreve_stream_magnitude</code></td></tr>
+<tr><td>Convert raster stream network to vector</td><td><a href="network-analysis.html">Network Analysis — Workflow D</a></td><td><code>whitebox_workflows:raster_streams_to_vector</code></td></tr>
 </tbody></table>
 </div>
 <hr />
@@ -286,7 +287,7 @@ for the task.</p>
 <h3 id="vector-input-tasks"><a class="header" href="#vector-input-tasks">Vector input tasks</a></h3>
 <ul>
 <li>Geometry validation, overlay, joins → see <a href="vector-analysis.html">Vector Analysis</a></li>
-<li>Network ordering, service areas → see <a href="network-analysis.html">Network Analysis</a></li>
+<li>Routing, service areas, and stream hierarchy → see <a href="network-analysis.html">Network Analysis</a></li>
 <li>Route events, calibration → see <a href="linear-referencing.html">Linear Referencing</a></li>
 </ul>
 

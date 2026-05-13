@@ -174,101 +174,131 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="remote-sensing-analysis"><a class="header" href="#remote-sensing-analysis">Remote Sensing Analysis</a></h1>
-<p>Remote sensing workflows transform multispectral and hyperspectral imagery
-into interpretable thematic products: spectral indices, vegetation and soil
-maps, change detection results, and classified land-cover rasters.
-WbW-QGIS surfaces these tools in the Processing Toolbox alongside standard
-QGIS raster operations.</p>
-<p>This chapter demonstrates a complete vegetation-mapping workflow using
-multispectral imagery.</p>
+<p>Remote sensing workflows in WbW-QGIS cover multispectral and hyperspectral
+image analysis: spectral index computation, image enhancement, principal
+component analysis (PCA), segmentation, and change detection.</p>
+<p>This chapter is aligned with the Python and R manuals while staying focused on
+QGIS Processing Toolbox execution patterns.</p>
 <hr />
-<h2 id="key-concepts"><a class="header" href="#key-concepts">Key Concepts</a></h2>
+<h2 id="core-concepts-you-should-know-first"><a class="header" href="#core-concepts-you-should-know-first">Core Concepts You Should Know First</a></h2>
 <ul>
-<li><strong>Band</strong>: A single-wavelength image channel. Common bands: Blue (B), Green
-(G), Red (R), Red-Edge (RE), Near Infrared (NIR), Short-Wave Infrared (SWIR).</li>
-<li><strong>Spectral index</strong>: A band ratio or combination designed to highlight a
-target surface type. Examples: NDVI (vegetation), NDWI (water), NDSI (snow),
-SAVI (soil-adjusted vegetation).</li>
-<li><strong>Atmosphericaly corrected reflectance</strong>: Raw DN values converted to
-surface reflectance. Required for reliable index thresholding and
-multi-date comparisons.</li>
-<li><strong>Image segmentation</strong>: Partitioning an image into homogeneous regions.
-Segments can be used as classification units or for object-based analysis.</li>
-<li><strong>Change detection</strong>: Comparing two images acquired at different times to
-identify areas of changed land cover.</li>
-<li><strong>Principal Component Analysis (PCA)</strong>: Linear transform that concentrates
-variance into uncorrelated bands. Useful for compression and feature
-extraction before classification.</li>
+<li>Spectral bands: Wavelength-specific image channels (for example blue, red,
+NIR, SWIR) used to separate land-cover materials.</li>
+<li>Spectral indices: Band combinations that highlight specific targets, such as
+NDVI (vegetation), NDWI (water), and NBR (burn severity).</li>
+<li>Spatial resolution: Pixel size affects detail and detectability of features.</li>
+<li>Temporal resolution: Revisit interval controls change-detection sensitivity.</li>
+<li>Atmospheric and cloud effects: Compare like-with-like by masking clouds and
+shadows and using corrected imagery where possible.</li>
+<li>Change detection: Compare index or class outputs across acquisition dates.</li>
+<li>Dimensionality reduction: PCA reduces band redundancy before segmentation or
+classification.</li>
 </ul>
 <hr />
-<h2 id="end-to-end-workflow-ndvi-thresholding-and-change-detection"><a class="header" href="#end-to-end-workflow-ndvi-thresholding-and-change-detection">End-to-End Workflow: NDVI, Thresholding, and Change Detection</a></h2>
-<h3 id="inputs"><a class="header" href="#inputs">Inputs</a></h3>
+<h2 id="typical-inputs"><a class="header" href="#typical-inputs">Typical Inputs</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
-<tr><td><code>image_t1.tif</code></td><td>Multiband GeoTIFF</td><td>Surface reflectance, time 1</td></tr>
-<tr><td><code>image_t2.tif</code></td><td>Multiband GeoTIFF</td><td>Surface reflectance, time 2</td></tr>
-<tr><td>Band mapping</td><td>—</td><td>NIR = band 4, Red = band 3 (Sentinel-2 / Landsat convention)</td></tr>
+<tr><td>image_t1.tif</td><td>Multiband GeoTIFF</td><td>Time-1 scene, reflectance preferred</td></tr>
+<tr><td>image_t2.tif</td><td>Multiband GeoTIFF</td><td>Time-2 scene, same sensor/preprocessing</td></tr>
+<tr><td>cloud_mask_t1.tif</td><td>Raster</td><td>Optional cloud or QA-derived mask</td></tr>
+<tr><td>cloud_mask_t2.tif</td><td>Raster</td><td>Optional cloud or QA-derived mask</td></tr>
 </tbody></table>
 </div>
 <hr />
-<h3 id="step-1--inspect-image-statistics"><a class="header" href="#step-1--inspect-image-statistics">Step 1 — Inspect Image Statistics</a></h3>
-<p>Before any analysis confirm that the input imagery has expected statistics.</p>
-<p><strong>Processing Toolbox → Raster Analysis → <code>Raster Layer Statistics</code></strong> (QGIS
-native)</p>
-<p>Or use the QGIS <strong>Layer Properties → Histogram</strong> to inspect per-band
-distribution. Reflectance imagery should have values in 0–1 (float) or
-0–10000 (scaled integer). DN-only imagery needs atmospheric correction before
-spectral indices.</p>
+<h2 id="end-to-end-workflow"><a class="header" href="#end-to-end-workflow">End-to-End Workflow</a></h2>
+<h3 id="step-1---quality-check-and-harmonize-inputs"><a class="header" href="#step-1---quality-check-and-harmonize-inputs">Step 1 - Quality Check and Harmonize Inputs</a></h3>
+<p>Before analysis:</p>
+<ul>
+<li>Confirm both scenes use the same CRS, grid, and pixel size.</li>
+<li>Confirm band order and data scale (for example 0-1 reflectance or scaled
+integer reflectance).</li>
+<li>Mask clouds/shadows using QA products or Raster Calculator conditions.</li>
+</ul>
+<p>Use QGIS Raster menu tools as needed:</p>
+<ul>
+<li>Align Raster</li>
+<li>Warp (Reproject)</li>
+<li>Raster Calculator</li>
+</ul>
 <hr />
-<h3 id="step-2--compute-ndvi"><a class="header" href="#step-2--compute-ndvi">Step 2 — Compute NDVI</a></h3>
-<p><strong>Processing Toolbox → Whitebox Workflows → Remote Sensing →
-<code>NDVI</code></strong></p>
-<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
-<tr><td>Input image</td><td><code>image_t1.tif</code></td></tr>
-<tr><td>NIR band</td><td><code>4</code></td></tr>
-<tr><td>Red band</td><td><code>3</code></td></tr>
-<tr><td>Output</td><td><code>ndvi_t1.tif</code></td></tr>
+<h3 id="step-2---build-key-spectral-indices"><a class="header" href="#step-2---build-key-spectral-indices">Step 2 - Build Key Spectral Indices</a></h3>
+<p>Process both dates with the same settings.</p>
+<p>Processing Toolbox -&gt; Whitebox Workflows -&gt; Remote Sensing:</p>
+<ul>
+<li>NDVI</li>
+<li>Normalized Difference Index (for NDWI, NBR, NDSI, NDBI patterns)</li>
+</ul>
+<p>Recommended outputs:</p>
+<ul>
+<li>ndvi_t1.tif, ndvi_t2.tif</li>
+<li>ndwi_t1.tif, ndwi_t2.tif</li>
+<li>nbr_t1.tif, nbr_t2.tif</li>
+</ul>
+<p>Example NDVI run:</p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>Input image</td><td>image_t1.tif</td></tr>
+<tr><td>NIR band</td><td>sensor-specific (for example 4, 5, or 8 depending on product)</td></tr>
+<tr><td>Red band</td><td>sensor-specific</td></tr>
+<tr><td>Output</td><td>ndvi_t1.tif</td></tr>
 </tbody></table>
 </div>
-<p>NDVI output range: –1 to +1. Active vegetation: &gt; 0.3. Bare soil: 0.1–0.2.
-Water: &lt; 0.</p>
-<p>Repeat for <code>image_t2.tif</code> → <code>ndvi_t2.tif</code>.</p>
+<p>Repeat for time 2.</p>
 <hr />
-<h3 id="step-3--threshold-vegetation"><a class="header" href="#step-3--threshold-vegetation">Step 3 — Threshold Vegetation</a></h3>
-<p>Convert the NDVI raster into a binary vegetation mask.</p>
-<p><strong>Processing Toolbox → Whitebox Workflows → Raster Analysis →
-<code>Reclass From File</code></strong> or use QGIS <strong>Raster Calculator</strong>:</p>
-<pre><code>"ndvi_t1@1" &gt;= 0.3
-</code></pre>
-<p>Output: <code>vegetation_mask_t1.tif</code> (1 = vegetated, 0 = non-vegetated).</p>
-<hr />
-<h3 id="step-4--compute-ndvi-change"><a class="header" href="#step-4--compute-ndvi-change">Step 4 — Compute NDVI Change</a></h3>
-<p>Subtract time-1 NDVI from time-2 NDVI to produce a change magnitude raster.</p>
-<p><strong>QGIS Raster Calculator:</strong></p>
-<pre><code>"ndvi_t2@1" - "ndvi_t1@1"
-</code></pre>
-<p>Output: <code>ndvi_change.tif</code>. Positive values indicate vegetation gain;
-negative values indicate vegetation loss.</p>
-<p>Apply a symmetric diverging colour ramp (red–white–green) centred on 0.</p>
-<hr />
-<h3 id="step-5--identify-significant-change-areas"><a class="header" href="#step-5--identify-significant-change-areas">Step 5 — Identify Significant Change Areas</a></h3>
-<p><strong>Processing Toolbox → Whitebox Workflows → Raster Analysis →
-<code>Reclass</code></strong> (or Raster Calculator threshold)</p>
-<div class="table-wrapper"><table><thead><tr><th>Class</th><th>NDVI change threshold</th><th>Interpretation</th></tr></thead><tbody>
-<tr><td>–2</td><td>&lt; –0.20</td><td>Significant vegetation loss</td></tr>
-<tr><td>–1</td><td>–0.20 to –0.10</td><td>Moderate vegetation loss</td></tr>
-<tr><td>0</td><td>–0.10 to +0.10</td><td>No significant change</td></tr>
-<tr><td>+1</td><td>+0.10 to +0.20</td><td>Moderate vegetation gain</td></tr>
-<tr><td>+2</td><td>&gt; +0.20</td><td>Significant vegetation gain</td></tr>
+<h3 id="step-3---create-change-surfaces"><a class="header" href="#step-3---create-change-surfaces">Step 3 - Create Change Surfaces</a></h3>
+<p>Use QGIS Raster Calculator for differencing:</p>
+<ul>
+<li>NDVI change: ndvi_t2 - ndvi_t1</li>
+<li>NBR change: nbr_t2 - nbr_t1</li>
+</ul>
+<p>Then classify into practical bins (loss, stable, gain) using:</p>
+<ul>
+<li>Whitebox Workflows -&gt; Raster Analysis -&gt; Reclass</li>
+<li>or Raster Calculator threshold expressions</li>
+</ul>
+<p>Suggested interpretation for NDVI change:</p>
+<div class="table-wrapper"><table><thead><tr><th>Class</th><th>Threshold</th></tr></thead><tbody>
+<tr><td>Strong loss</td><td>&lt; -0.20</td></tr>
+<tr><td>Moderate loss</td><td>-0.20 to -0.10</td></tr>
+<tr><td>Stable</td><td>-0.10 to 0.10</td></tr>
+<tr><td>Moderate gain</td><td>0.10 to 0.20</td></tr>
+<tr><td>Strong gain</td><td>&gt; 0.20</td></tr>
 </tbody></table>
 </div>
 <hr />
-<h2 id="python-console-equivalent"><a class="header" href="#python-console-equivalent">Python Console Equivalent</a></h2>
+<h3 id="step-4---dimensionality-reduction-pca"><a class="header" href="#step-4---dimensionality-reduction-pca">Step 4 - Dimensionality Reduction (PCA)</a></h3>
+<p>Processing Toolbox -&gt; Whitebox Workflows -&gt; Remote Sensing -&gt;
+Principal Component Analysis</p>
+<p>Use PCA when:</p>
+<ul>
+<li>Bands are highly correlated.</li>
+<li>You need compact inputs for segmentation or clustering.</li>
+<li>You are preparing a classification feature stack.</li>
+</ul>
+<p>Inspect output variance/eigenvalue diagnostics and retain only the components
+needed for most variance.</p>
+<hr />
+<h3 id="step-5---segmentation-and-classification-prep"><a class="header" href="#step-5---segmentation-and-classification-prep">Step 5 - Segmentation and Classification Prep</a></h3>
+<p>Processing Toolbox -&gt; Whitebox Workflows -&gt; Remote Sensing -&gt;
+Image Segmentation</p>
+<p>Typical tuning:</p>
+<ul>
+<li>Lower threshold -&gt; more, smaller segments</li>
+<li>Higher threshold -&gt; fewer, larger segments</li>
+<li>Minimum segment size removes speckle</li>
+</ul>
+<p>After segmentation:</p>
+<ul>
+<li>Optionally polygonize segment rasters in QGIS.</li>
+<li>Join zonal metrics from index layers.</li>
+<li>Use resulting segment features for training/validation workflows.</li>
+</ul>
+<hr />
+<h2 id="qgis-python-console-equivalent"><a class="header" href="#qgis-python-console-equivalent">QGIS Python Console Equivalent</a></h2>
+<p>Use this pattern for reproducible batch processing in QGIS:</p>
 <pre><code class="language-python">import processing
 
 img_t1 = '/data/image_t1.tif'
 img_t2 = '/data/image_t2.tif'
 
-# NDVI for both dates
 for label, img in [('t1', img_t1), ('t2', img_t2)]:
     processing.run('whitebox_workflows:ndvi', {
         'input': img,
@@ -277,75 +307,43 @@ for label, img in [('t1', img_t1), ('t2', img_t2)]:
         'output': f'/data/ndvi_{label}.tif',
     })
 
-# NDVI change via Raster Calculator
 processing.run('qgis:rastercalculator', {
     'EXPRESSION': '"ndvi_t2@1" - "ndvi_t1@1"',
     'LAYERS': ['/data/ndvi_t1.tif', '/data/ndvi_t2.tif'],
     'OUTPUT': '/data/ndvi_change.tif',
 })
 
-print("Change detection complete.")
-</code></pre>
-<hr />
-<h2 id="advanced-pca-for-dimensionality-reduction"><a class="header" href="#advanced-pca-for-dimensionality-reduction">Advanced: PCA for Dimensionality Reduction</a></h2>
-<p>PCA is useful before unsupervised classification to reduce correlated band
-redundancy.</p>
-<p><strong>Processing Toolbox → Whitebox Workflows → Remote Sensing →
-<code>Principal Component Analysis</code></strong></p>
-<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
-<tr><td>Input image</td><td><code>image_t1.tif</code></td></tr>
-<tr><td>Number of components</td><td><code>4</code> (captures &gt; 95 % variance in most 8-band images)</td></tr>
-<tr><td>Output</td><td><code>pca_t1.tif</code></td></tr>
-</tbody></table>
-</div>
-<pre><code class="language-python">processing.run('whitebox_workflows:principal_component_analysis', {
+processing.run('whitebox_workflows:principal_component_analysis', {
     'input': '/data/image_t1.tif',
     'num_comp': 4,
     'output': '/data/pca_t1.tif',
 })
 </code></pre>
-<p>Inspect the eigenvalue table in the tool output log to confirm how many
-components are needed to explain &gt; 95 % of the variance.</p>
-<hr />
-<h2 id="advanced-image-segmentation"><a class="header" href="#advanced-image-segmentation">Advanced: Image Segmentation</a></h2>
-<p>Object-based analysis begins with segmentation into spectrally homogeneous
-regions.</p>
-<p><strong>Processing Toolbox → Whitebox Workflows → Remote Sensing →
-<code>Image Segmentation</code></strong></p>
-<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
-<tr><td>Input image</td><td><code>image_t1.tif</code> (or PCA output)</td></tr>
-<tr><td>Threshold</td><td><code>25.0</code> (lower = smaller segments)</td></tr>
-<tr><td>Minimum segment size (px)</td><td><code>50</code></td></tr>
-<tr><td>Output</td><td><code>segments_t1.tif</code></td></tr>
-</tbody></table>
-</div>
-<p>Use QGIS <strong>Polygonize</strong> to convert the integer segment raster to vector
-polygons for attribute extraction and classification.</p>
 <hr />
 <h2 id="common-pitfalls"><a class="header" href="#common-pitfalls">Common Pitfalls</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
-<tr><td>NDVI values outside –1 to +1</td><td>DN imagery rather than reflectance</td><td>Convert DN to reflectance before computing index</td></tr>
-<tr><td>Change map shows artefacts at swath edges</td><td>Different acquisition geometries or BRDF</td><td>Normalise images before differencing</td></tr>
-<tr><td>PCA produces striped output</td><td>No-data mixed into statistics</td><td>Mask NoData before running PCA</td></tr>
-<tr><td>Segmentation produces single giant segment</td><td>Threshold too high</td><td>Halve threshold and rerun</td></tr>
-<tr><td>Band order mismatch</td><td>Tool expects specific band numbering</td><td>Verify band order in Layer Properties → Source</td></tr>
+<tr><td>Index values are outside expected ranges</td><td>Wrong bands or scale mismatch</td><td>Verify band mapping and value scale</td></tr>
+<tr><td>Apparent change is mostly cloud edges</td><td>Missing cloud/shadow masking</td><td>Mask QA classes before differencing</td></tr>
+<tr><td>PCA output looks unstable</td><td>NoData included in stats</td><td>Mask NoData consistently</td></tr>
+<tr><td>Segmentation over-merges features</td><td>Threshold too high</td><td>Lower threshold and retest</td></tr>
+<tr><td>Change map is noisy</td><td>Different spatial grids or radiometry</td><td>Align rasters and normalize radiometry</td></tr>
 </tbody></table>
 </div>
 <hr />
 <h2 id="validation-checklist"><a class="header" href="#validation-checklist">Validation Checklist</a></h2>
 <ul>
 <li><input disabled="" type="checkbox"/>
-Input imagery is atmospherically corrected (reflectance, not DN).</li>
+Inputs are co-registered and in a common CRS.</li>
 <li><input disabled="" type="checkbox"/>
-Band assignments match sensor band order (confirm in metadata).</li>
+Band assignments match sensor metadata.</li>
 <li><input disabled="" type="checkbox"/>
-NDVI histogram peaks in expected range for land cover type.</li>
+Cloud/shadow/no-data masking applied consistently across dates.</li>
 <li><input disabled="" type="checkbox"/>
-Change map artefacts are not co-located with cloud/shadow masks.</li>
+Index histograms are plausible for local land cover.</li>
 <li><input disabled="" type="checkbox"/>
-Segment boundaries visually match spectral boundaries in original image.</li>
+Change classes were reviewed visually against source imagery.</li>
 <li><input disabled="" type="checkbox"/>
-PCA output eigenvalue table confirms component count captures &gt; 95 % variance.</li>
+PCA/segmentation parameters were documented for reproducibility.</li>
 </ul>
 
                     </main>

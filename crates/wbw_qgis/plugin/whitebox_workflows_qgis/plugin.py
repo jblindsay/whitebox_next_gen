@@ -274,18 +274,8 @@ class WhiteboxWorkflowsPlugin:
             return "", False
 
     def _activate_license(self, *_args):
-        wbw = None
-        try:
-            wbw = load_whitebox_workflows()
-        except Exception as exc:
-            self._notify_warning(f"Unable to load whitebox_workflows runtime: {exc}")
-            return
-
-        required_api = getattr(wbw, "activate_license", None)
-        if not callable(required_api):
-            self._notify_warning("This whitebox_workflows build does not expose activate_license().")
-            return
-
+        from .bootstrap import invoke_license_function
+        
         key, ok = self._prompt_text("Activate Whitebox License", "License key")
         if not ok or not key:
             return
@@ -299,23 +289,19 @@ class WhiteboxWorkflowsPlugin:
         if not ok or not email:
             return
 
-        provider_url_default = os.environ.get("WBW_LICENSE_PROVIDER_URL", "")
-        provider_url, _ = self._prompt_text(
-            "Activate Whitebox License",
-            "Provider URL (optional)",
-            provider_url_default,
+        # Use production server by default; developers can override via WBW_LICENSE_PROVIDER_URL env var
+        provider_url = os.environ.get(
+            "WBW_LICENSE_PROVIDER_URL", "https://radiant-garden-01227.herokuapp.com"
         )
 
         try:
-            message = wbw.activate_license(
+            message = invoke_license_function(
+                "activate_license",
                 key=key,
                 firstname=firstname,
                 lastname=lastname,
                 email=email,
-                agree_to_license_terms=True,
-                provider_url=provider_url or None,
-                include_pro=True,
-                fallback_tier=self.provider.tier,
+                provider_url=provider_url,
             )
             self._notify_info(str(message))
             self._refresh_catalog(silent=True)
@@ -323,26 +309,20 @@ class WhiteboxWorkflowsPlugin:
             self._notify_warning(f"License activation failed: {exc}")
 
     def _deactivate_license(self, *_args):
+        from .bootstrap import invoke_license_function
+        
         try:
-            wbw = load_whitebox_workflows()
-            fn = getattr(wbw, "deactivate_license", None)
-            if not callable(fn):
-                self._notify_warning("This whitebox_workflows build does not expose deactivate_license().")
-                return
-            message = fn(from_transfer=False)
+            message = invoke_license_function("deactivate_license", from_transfer=False)
             self._notify_info(str(message))
             self._refresh_catalog(silent=True)
         except Exception as exc:
             self._notify_warning(f"License deactivation failed: {exc}")
 
     def _transfer_license(self, *_args):
+        from .bootstrap import invoke_license_function
+        
         try:
-            wbw = load_whitebox_workflows()
-            fn = getattr(wbw, "transfer_license", None)
-            if not callable(fn):
-                self._notify_warning("This whitebox_workflows build does not expose transfer_license().")
-                return
-            payload_raw = fn()
+            payload_raw = invoke_license_function("transfer_license")
             payload = payload_raw
             if isinstance(payload_raw, str):
                 try:
@@ -1095,7 +1075,7 @@ class WhiteboxWorkflowsPlugin:
             )
             self._dock_panel.update_state(
                 status=str(payload.get("status", "unknown")),
-                requested_tier=self.provider.tier,
+                fallback_tier=self.provider.tier,
                 effective_tier=effective_tier,
                 available_count=available,
                 locked_count=locked,

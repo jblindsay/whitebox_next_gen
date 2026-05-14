@@ -26,3 +26,5 @@ serde_json.workspace = true
 pyo3 = { version = "0.28.2", features = ["macros"] }
 ureq = { version = "2.12.1", features = ["json"] }
 rayon = "1"
+uuid = { version = "1.11", features = ["v4"] }
+dirs = "5"

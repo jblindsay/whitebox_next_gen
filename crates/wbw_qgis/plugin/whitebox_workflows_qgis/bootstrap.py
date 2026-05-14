@@ -481,6 +481,113 @@ def load_whitebox_workflows():
         ) from exc
 
 
+def _build_clean_env() -> dict[str, str]:
+    """Build a clean environment for subprocess calls (remove PYTHONHOME, etc.)."""
+    clean_env = dict(os.environ)
+    clean_env.pop("PYTHONHOME", None)
+    clean_env.pop("PYTHONPATH", None)
+    return clean_env
+
+
+def invoke_license_function(
+    function_name: str,
+    key: str | None = None,
+    firstname: str | None = None,
+    lastname: str | None = None,
+    email: str | None = None,
+    provider_url: str | None = None,
+    from_transfer: bool = False,
+) -> str:
+    """
+    Invoke a license function (activate_license, deactivate_license, transfer_license)
+    via the discovered external Python interpreter.
+    
+    This ensures license operations use the same Python environment as tool execution,
+    avoiding split-brain where the in-process QGIS Python might be stale/different.
+    
+    Args:
+        function_name: 'activate_license', 'deactivate_license', or 'transfer_license'
+        key, firstname, lastname, email, provider_url: parameters for activate_license
+        from_transfer: parameter for deactivate_license
+        
+    Returns:
+        String result from the license function.
+        
+    Raises:
+        RuntimeBootstrapError on execution or availability failure.
+    """
+    external_python = _discover_external_python()
+    if not external_python:
+        raise RuntimeBootstrapError(
+            "No external Python interpreter was found for license operations."
+        )
+
+    if function_name == "activate_license":
+        if not all([key, firstname, lastname, email]):
+            raise RuntimeBootstrapError(
+                "activate_license requires: key, firstname, lastname, email"
+            )
+        runner = (
+            "import json, sys\n"
+            "import whitebox_workflows as wbw\n"
+            "params = json.loads(sys.argv[1])\n"
+            "result = wbw.activate_license(\n"
+            "    key=str(params['key']),\n"
+            "    firstname=str(params['firstname']),\n"
+            "    lastname=str(params['lastname']),\n"
+            "    email=str(params['email']),\n"
+            "    agree_to_license_terms=True,\n"
+            "    provider_url=params.get('provider_url') or None,\n"
+            "    include_pro=True,\n"
+            ")\n"
+            "sys.stdout.write(str(result))\n"
+        )
+        payload = {
+            "key": key,
+            "firstname": firstname,
+            "lastname": lastname,
+            "email": email,
+            "provider_url": provider_url,
+        }
+    elif function_name == "transfer_license":
+        runner = (
+            "import sys\n"
+            "import whitebox_workflows as wbw\n"
+            "result = wbw.transfer_license()\n"
+            "sys.stdout.write(str(result))\n"
+        )
+        payload = {}
+    elif function_name == "deactivate_license":
+        runner = (
+            "import json, sys\n"
+            "import whitebox_workflows as wbw\n"
+            "params = json.loads(sys.argv[1])\n"
+            "result = wbw.deactivate_license(from_transfer=bool(params.get('from_transfer', False)))\n"
+            "sys.stdout.write(str(result))\n"
+        )
+        payload = {"from_transfer": from_transfer}
+    else:
+        raise RuntimeBootstrapError(
+            f"Unknown license function: {function_name}"
+        )
+
+    completed = subprocess.run(
+        [external_python, "-c", runner, json.dumps(payload)] if payload else [external_python, "-c", runner],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_build_clean_env(),
+    )
+
+    if completed.returncode != 0:
+        stderr = completed.stderr.strip() or completed.stdout.strip() or "unknown license operation error"
+        raise RuntimeBootstrapError(
+            f"License operation '{function_name}' failed via {external_python}: {stderr}"
+        )
+
+    return completed.stdout.strip()
+
+
 def create_runtime_session(include_pro: bool = True, tier: str = "open"):
     def _external_session(prefer_pro: bool, allow_downgrade: bool = True):
         external_python = _discover_external_python()

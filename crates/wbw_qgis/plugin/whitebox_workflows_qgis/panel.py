@@ -564,7 +564,7 @@ class WhiteboxDockPanel(QDockWidget):
         self,
         *,
         status: str,
-        requested_tier: str,
+        fallback_tier: str,
         effective_tier: str,
         available_count: int,
         locked_count: int,
@@ -574,7 +574,7 @@ class WhiteboxDockPanel(QDockWidget):
         if hasattr(self._status_label, "setStyleSheet"):
             self._status_label.setStyleSheet(status_style(status))
         self._tier_label.setText(
-            f"Tier: requested={requested_tier}, effective={effective_tier}"
+            f"Tier: fallback={fallback_tier}, effective={effective_tier}"
         )
         if hasattr(self._tier_label, "setStyleSheet"):
             self._tier_label.setStyleSheet(tier_style(effective_tier))

@@ -18,9 +18,16 @@ pub type ToolArgs = BTreeMap<String, Value>;
 pub type ToolId = &'static str;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum LicenseTier {
+    #[serde(alias = "Open")]
+    #[serde(alias = "open")]
     Open,
+    #[serde(alias = "Pro")]
+    #[serde(alias = "pro")]
     Pro,
+    #[serde(alias = "Enterprise")]
+    #[serde(alias = "enterprise")]
     Enterprise,
 }
 

@@ -14,6 +14,8 @@ use wbcore::{
 use wblicense_core::{
     verify_signed_entitlement_json, EntitlementCapabilities, LicenseError, VerificationKeyStore,
 };
+#[cfg(feature = "pro")]
+use wblicense_core::write_license_state_json;
 use wbtools_oss::{register_default_tools as register_default_oss_tools, ToolRegistry as OssRegistry};
 #[cfg(feature = "pro")]
 use wbtools_pro::{register_default_tools as register_default_pro_tools, ToolRegistry as ProRegistry};
@@ -741,6 +743,27 @@ fn current_unix() -> u64 {
         .unwrap_or(0)
 }
 
+#[cfg(feature = "pro")]
+fn map_http_json_error(context: &str, err: ureq::Error) -> ToolError {
+    match err {
+        ureq::Error::Status(code, resp) => {
+            let body = resp.into_string().unwrap_or_default();
+            if body.is_empty() {
+                return ToolError::LicenseDenied(format!("{context}: status code {code}"));
+            }
+            if let Ok(v) = serde_json::from_str::<Value>(&body) {
+                if let Some(msg) = v.get("error").and_then(|x| x.as_str()) {
+                    return ToolError::LicenseDenied(format!(
+                        "{context}: status code {code}: {msg}"
+                    ));
+                }
+            }
+            ToolError::LicenseDenied(format!("{context}: status code {code}: {body}"))
+        }
+        other => ToolError::LicenseDenied(format!("{context}: {other}")),
+    }
+}
+
 fn map_license_error(err: LicenseError) -> ToolError {
     ToolError::LicenseDenied(err.to_string())
 }
@@ -817,7 +840,7 @@ fn fetch_public_key_for_entitlement(
     let keys_url = format!("{}/api/v2/public-keys", base.trim_end_matches('/'));
     let keys_resp = ureq::get(&keys_url)
         .call()
-        .map_err(|e| ToolError::LicenseDenied(format!("public-key fetch failed: {e}")))?;
+        .map_err(|e| map_http_json_error("public-key fetch failed", e))?;
     let keys_json: Value = keys_resp
         .into_json()
         .map_err(|e| ToolError::LicenseDenied(format!("invalid public-keys response json: {e}")))?;
@@ -883,7 +906,7 @@ fn key_activation_bundle(
 
     let activation_resp = ureq::post(&activation_url)
         .send_json(body)
-        .map_err(|e| ToolError::LicenseDenied(format!("key activation failed: {e}")))?;
+        .map_err(|e| map_http_json_error("key activation failed", e))?;
     let activation_json: Value = activation_resp
         .into_json()
         .map_err(|e| ToolError::LicenseDenied(format!("invalid activation response json: {e}")))?;
@@ -943,7 +966,7 @@ fn floating_activation_bundle(
 
     let activation_resp = ureq::post(&activation_url)
         .send_json(body)
-        .map_err(|e| ToolError::LicenseDenied(format!("floating activation failed: {e}")))?;
+        .map_err(|e| map_http_json_error("floating activation failed", e))?;
     let activation_json: Value = activation_resp
         .into_json()
         .map_err(|e| ToolError::LicenseDenied(format!("invalid activation response json: {e}")))?;
@@ -2056,6 +2079,39 @@ fn activate_license(
         ));
     }
 
+    // Establish or load machine ID: generate UUID once, store in ~/.whitebox/machine_id.txt
+    let resolved_machine_id = if let Some(mid) = machine_id {
+        mid.to_string()
+    } else {
+        // Try to load existing machine ID, or generate and persist new one
+        use std::fs;
+        use uuid::Uuid;
+
+        let whitebox_dir = dirs::home_dir()
+            .map(|h| h.join(".whitebox"))
+            .ok_or_else(|| {
+                PyValueError::new_err("Cannot determine home directory for machine_id persistence")
+            })?;
+        let machine_id_file = whitebox_dir.join("machine_id.txt");
+
+        let mid = if machine_id_file.exists() {
+            fs::read_to_string(&machine_id_file)
+                .map_err(|e| PyValueError::new_err(format!("Failed to read machine_id: {}", e)))?
+                .trim()
+                .to_string()
+        } else {
+            let new_uuid = Uuid::new_v4().to_string();
+            fs::create_dir_all(&whitebox_dir).map_err(|e| {
+                PyValueError::new_err(format!("Failed to create ~/.whitebox: {}", e))
+            })?;
+            fs::write(&machine_id_file, &new_uuid).map_err(|e| {
+                PyValueError::new_err(format!("Failed to write machine_id: {}", e))
+            })?;
+            new_uuid
+        };
+        mid
+    };
+
     let parsed_tier = parse_tier(fallback_tier).map_err(map_tool_error)?;
     let (
         signed_entitlement_json,
@@ -2063,7 +2119,7 @@ fn activate_license(
         public_key_b64url,
         resolved_provider_url,
         resolved_customer_id,
-    ) = key_activation_bundle(key, provider_url, machine_id, customer_id)
+    ) = key_activation_bundle(key, provider_url, Some(resolved_machine_id.as_str()), customer_id)
         .map_err(map_tool_error)?;
 
     PythonToolRuntime::new_with_entitlement_json(
@@ -2083,7 +2139,7 @@ fn activate_license(
         "lastname": lastname,
         "email": email,
         "provider_url": resolved_provider_url,
-        "machine_id": machine_id,
+        "machine_id": resolved_machine_id,
         "customer_id": resolved_customer_id,
         "include_pro": include_pro,
         "fallback_tier": fallback_tier,
@@ -2092,7 +2148,7 @@ fn activate_license(
         "signed_entitlement_json": signed_entitlement_json,
     });
 
-    let state_path = write_license_state_json(&state).map_err(|err| {
+    let state_path = write_license_state_json(&state).map_err(|err: LicenseError| {
         map_tool_error(ToolError::LicenseDenied(err.to_string()))
     })?;
     Ok(format!(

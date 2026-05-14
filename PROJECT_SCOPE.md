@@ -12,6 +12,8 @@ Update this file whenever priorities, architecture, or non-negotiables change.
 - Always build wbw_python with Pro enabled when doing platform integration/testing.
 - Use tool_taxonomy.toml as the single source of truth for category/subcategory membership.
 - Keep RuntimeSession catalog, taxonomy TOML, and frontend exports in sync.
+- Shared-core delegation boundaries (for example license-state read/write in `wblicense_core`) must not be reverted, duplicated, or bypassed in frontend crates.
+- Do not remove cross-crate imports/calls in `wbw_python` or `wbw_r` based only on local warnings; first confirm all call sites and feature-gated paths still compile in intended integration modes.
 
 ## Canonical Sources
 - Taxonomy source: crates/wbw_python/tool_taxonomy.toml
@@ -27,14 +29,15 @@ Update this file whenever priorities, architecture, or non-negotiables change.
 
 ## Active Priorities
 - Priority 1: Recover legacy-parity performance for raster overlay operations in `crates/wbtools_oss/src/tools/gis/mod.rs`, starting with `sum_overlay` and then the broader overlay family (`average_overlay`, `max_overlay`, `min_overlay`, `multiply_overlay`, `standard_deviation_overlay`, `weighted_sum`, `weighted_overlay`).
-- Priority 2: Study legacy `whitebox_workflows` implementations before optimizing Whitebox Next Gen raster tools, especially where algorithm structure affects both correctness and speed.
-- Priority 3: Continue targeted Python stub typing cleanup to reduce unresolved `*args/**kwargs -> Any` placeholders in `crates/wbw_python/whitebox_workflows/whitebox_workflows.pyi` while preserving conservative safety rules.
-- Priority 4: Keep signature-rollout automation centralized in `scripts/rollout_stub_literals.py` (Literal rollout + placeholder fill modes) and prefer unambiguous-only replacement paths.
-- Priority 5: Maintain taxonomy/runtime/frontend alignment checks after stub updates so Python/R/QGIS discovery/catalog behavior remains coherent.
+- Priority 2: Continue targeted Python stub typing cleanup to reduce unresolved `*args/**kwargs -> Any` placeholders in `crates/wbw_python/whitebox_workflows/whitebox_workflows.pyi` while preserving conservative safety rules.
+- Priority 3: Keep signature-rollout automation centralized in `scripts/rollout_stub_literals.py` (Literal rollout + placeholder fill modes) and prefer unambiguous-only replacement paths.
+- Priority 4: Maintain taxonomy/runtime/frontend alignment checks after stub updates so Python/R/QGIS discovery/catalog behavior remains coherent.
+- Priority 5: Keep newly added open-core tools, frontends, and taxonomy exports synchronized after implementation slices land.
 
 ## Immediate Working Scope
 - In scope now: raster overlay performance recovery in `wbtools_oss`, with legacy behavior in `whitebox_workflows/src/tools/gis` treated as the correctness and structure reference.
 - In scope now: profiling-by-reasoning around raster access patterns, nodata propagation, output write strategy, and avoidable full-grid buffer copies.
+- In scope now: incremental tool/catalog maintenance after completed feature work, especially keeping Python/R/QGIS exports aligned with `tool_taxonomy.toml`.
 - Out of scope for this recovery slice: unrelated GIS/network feature expansion, taxonomy reshaping, and public-release workflow changes.
 
 ## Out Of Scope (For Now)
@@ -68,8 +71,12 @@ Before coding, restate:
 2. Non-negotiables that apply
 3. Files/systems in scope
 4. Validation plan
+5. For cleanup/refactor edits touching shared-core boundaries, confirm the ownership boundary and compile all affected frontend feature sets before concluding.
 
 ## Session Notes (Optional)
+- Scope refresh completed on 2026-05-13 after georeference raster from control points implementation and push.
+- `georeference_raster_from_control_points` is now implemented in `wbtools_oss` and wired through Python, R, and QGIS fallback integration.
+- Current completed-slice checkpoint commit: `823bc34`.
 - Scope refresh completed on 2026-05-10 for wbtools_oss performance-parity execution.
 - Current execution context: broad Rayon migration batches are now documented in `docs/performance/WBTOOLS_OSS_PARALLELIZATION_AUDIT_2026-05-09.md`; immediate emphasis is validating correctness/determinism and closing any remaining high-impact non-parallel hot paths identified from parity tracker slices.
 - Current working rule for this slice: prefer deterministic parallel derivation with sequential final writes, avoid speculative refactors that drift from legacy semantics, and keep parity-tracker evidence tied to concrete tool-level code paths.

@@ -15,11 +15,17 @@ def gather_runtime_diagnostics(include_pro: bool = True, tier: str = "open") -> 
     payload: dict[str, Any] = {
         "status": "ok",
         "include_pro": include_pro,
-        "requested_tier": tier,
+        "fallback_tier": tier,
     }
 
     try:
         capabilities = get_runtime_capabilities(include_pro=include_pro, tier=tier)
+        if isinstance(capabilities, dict):
+            # Backward compatibility: older runtimes report requested_tier.
+            if "fallback_tier" not in capabilities and "requested_tier" in capabilities:
+                capabilities = dict(capabilities)
+                capabilities["fallback_tier"] = capabilities.get("requested_tier")
+                capabilities.pop("requested_tier", None)
         payload["capabilities"] = capabilities
     except RuntimeBootstrapError as exc:
         payload["status"] = "bootstrap_error"
@@ -39,7 +45,7 @@ def diagnostics_text(payload: dict[str, Any]) -> str:
         "",
         f"status: {status}",
         f"include_pro: {payload.get('include_pro')}",
-        f"requested_tier: {payload.get('requested_tier')}",
+        f"fallback_tier: {payload.get('fallback_tier')}",
     ]
 
     error = payload.get("error")

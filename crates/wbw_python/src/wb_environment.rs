@@ -14895,13 +14895,15 @@ impl WbEnvironment {
     }
 
     /// [PRO] remote_sensing_change_detection — detect and quantify land-cover change between two optical raster dates.
-    #[pyo3(signature = (baseline_red, baseline_nir, change_red, change_nir, intermediate_ndvi=None, profile="balanced", high_confidence_threshold=0.85, output_prefix=None, callback=None))]
+    #[pyo3(signature = (baseline_bundle, change_bundle, baseline_red_band_index=0, baseline_nir_band_index=1, change_red_band_index=0, change_nir_band_index=1, intermediate_ndvi=None, profile="balanced", high_confidence_threshold=0.85, output_prefix=None, callback=None))]
     fn remote_sensing_change_detection(
         &self,
-        baseline_red: &Raster,
-        baseline_nir: &Raster,
-        change_red: &Raster,
-        change_nir: &Raster,
+        baseline_bundle: &Raster,
+        change_bundle: &Raster,
+        baseline_red_band_index: i64,
+        baseline_nir_band_index: i64,
+        change_red_band_index: i64,
+        change_nir_band_index: i64,
         intermediate_ndvi: Option<&Raster>,
         profile: &str,
         high_confidence_threshold: f64,
@@ -14909,17 +14911,19 @@ impl WbEnvironment {
         callback: Option<Py<PyAny>>,
     ) -> PyResult<(Raster, Raster, String)> {
         let mut args = serde_json::Map::new();
-        args.insert("baseline_red".to_string(), json!(baseline_red.file_path.to_string_lossy().to_string()));
-        args.insert("baseline_nir".to_string(), json!(baseline_nir.file_path.to_string_lossy().to_string()));
-        args.insert("change_red".to_string(), json!(change_red.file_path.to_string_lossy().to_string()));
-        args.insert("change_nir".to_string(), json!(change_nir.file_path.to_string_lossy().to_string()));
+        args.insert("baseline_bundle".to_string(), json!(baseline_bundle.file_path.to_string_lossy().to_string()));
+        args.insert("baseline_red_band_index".to_string(), json!(baseline_red_band_index));
+        args.insert("baseline_nir_band_index".to_string(), json!(baseline_nir_band_index));
+        args.insert("change_bundle".to_string(), json!(change_bundle.file_path.to_string_lossy().to_string()));
+        args.insert("change_red_band_index".to_string(), json!(change_red_band_index));
+        args.insert("change_nir_band_index".to_string(), json!(change_nir_band_index));
         if let Some(ndvi) = intermediate_ndvi {
             args.insert("intermediate_ndvi".to_string(), json!(ndvi.file_path.to_string_lossy().to_string()));
         }
         args.insert("profile".to_string(), json!(profile));
         args.insert("high_confidence_threshold".to_string(), json!(high_confidence_threshold));
         if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
-            args.insert("output".to_string(), json!(prefix));
+            args.insert("output_prefix".to_string(), json!(prefix));
         }
 
         let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
@@ -14949,11 +14953,11 @@ impl WbEnvironment {
         Ok((
             Raster {
                 file_path: change_path,
-                active_band: baseline_red.active_band,
+                active_band: baseline_bundle.active_band,
             },
             Raster {
                 file_path: confidence_path,
-                active_band: baseline_red.active_band,
+                active_band: baseline_bundle.active_band,
             },
             summary_path.to_string_lossy().to_string(),
         ))

@@ -28690,6 +28690,55 @@ fn nearest_network_node(nodes: &[wbvector::Coord], target: &wbvector::Coord) -> 
     best
 }
 
+fn projected_fraction_on_segment(
+    target: &wbvector::Coord,
+    a: &wbvector::Coord,
+    b: &wbvector::Coord,
+) -> Option<(f64, f64)> {
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    let len2 = dx * dx + dy * dy;
+    if len2 <= 0.0 {
+        return None;
+    }
+    let t = (((target.x - a.x) * dx) + ((target.y - a.y) * dy)) / len2;
+    let t_clamped = t.clamp(0.0, 1.0);
+    let px = a.x + dx * t_clamped;
+    let py = a.y + dy * t_clamped;
+    let ddx = target.x - px;
+    let ddy = target.y - py;
+    Some((t_clamped, (ddx * ddx + ddy * ddy).sqrt()))
+}
+
+fn nearest_network_edge(
+    graph: &LineNetworkGraph,
+    target: &wbvector::Coord,
+) -> Option<(usize, usize, f64, f64, f64)> {
+    let mut best: Option<(usize, usize, f64, f64, f64)> = None;
+    for (u, neighbors) in graph.adjacency.iter().enumerate() {
+        let a = &graph.nodes[u];
+        for (v, w) in neighbors {
+            let b = &graph.nodes[*v];
+            let Some((frac, perp_dist)) = projected_fraction_on_segment(target, a, b) else {
+                continue;
+            };
+            if best
+                .map(|(_, _, _, _, best_dist)| perp_dist < best_dist)
+                .unwrap_or(true)
+            {
+                best = Some((u, *v, *w, frac, perp_dist));
+            }
+        }
+    }
+    best
+}
+
+#[derive(Clone, Copy)]
+struct StartSeed {
+    node: usize,
+    cost: f64,
+}
+
 fn collect_point_coords_from_layer(layer: &wbvector::Layer) -> Vec<(i64, wbvector::Coord)> {
     let per_feature: Vec<Vec<(i64, wbvector::Coord)>> = layer
         .features
@@ -28996,17 +29045,35 @@ fn dijkstra_shortest_path(
 }
 
 fn dijkstra_all_costs(graph: &LineNetworkGraph, starts: &[usize], costs: &TurnCostOptions) -> Vec<f64> {
+    let seeds: Vec<StartSeed> = starts
+        .iter()
+        .copied()
+        .map(|node| StartSeed { node, cost: 0.0 })
+        .collect();
+    dijkstra_all_costs_seeded(graph, &seeds, costs)
+}
+
+fn dijkstra_all_costs_seeded(
+    graph: &LineNetworkGraph,
+    seeds: &[StartSeed],
+    costs: &TurnCostOptions,
+) -> Vec<f64> {
     let no_prev = usize::MAX;
     let mut dist_states = HashMap::<(usize, usize), f64>::new();
     let mut best_node = vec![f64::INFINITY; graph.nodes.len()];
     let mut heap = BinaryHeap::<DijkstraState>::new();
 
-    for start in starts {
-        if *start < graph.nodes.len() {
-            dist_states.insert((no_prev, *start), 0.0);
+    for seed in seeds {
+        if seed.node < graph.nodes.len() {
+            let key = (no_prev, seed.node);
+            let old = dist_states.get(&key).copied().unwrap_or(f64::INFINITY);
+            if seed.cost >= old {
+                continue;
+            }
+            dist_states.insert(key, seed.cost);
             heap.push(DijkstraState {
-                cost: 0.0,
-                node: *start,
+                cost: seed.cost,
+                node: seed.node,
                 prev: no_prev,
             });
         }
@@ -31503,20 +31570,49 @@ impl Tool for NetworkServiceAreaTool {
             ));
         }
 
-        let mut snapped_origins = Vec::<(i64, usize)>::new();
+        let mut snapped_origins = Vec::<(i64, Vec<StartSeed>, wbvector::Coord)>::new();
         let mut start_nodes = Vec::<usize>::new();
         for (origin_fid, origin) in &origin_points {
-            let (idx, dist) = nearest_network_node(&graph.nodes, origin)
+            let (idx, node_dist) = nearest_network_node(&graph.nodes, origin)
                 .ok_or_else(|| ToolError::Execution("failed locating nearest origin node".to_string()))?;
+
+            let mut seeds = Vec::<StartSeed>::new();
+            let mut anchor_dist = node_dist;
+
+            if let Some((u, v, edge_weight, frac, edge_dist)) = nearest_network_edge(&graph, origin) {
+                if edge_dist < anchor_dist {
+                    anchor_dist = edge_dist;
+                }
+                if edge_weight.is_finite() && edge_weight > 0.0 {
+                    seeds.push(StartSeed {
+                        node: u,
+                        cost: edge_weight * frac,
+                    });
+                    seeds.push(StartSeed {
+                        node: v,
+                        cost: edge_weight * (1.0 - frac),
+                    });
+                }
+            }
+
+            if seeds.is_empty() {
+                seeds.push(StartSeed {
+                    node: idx,
+                    cost: 0.0,
+                });
+            }
+
             if let Some(limit) = max_snap_distance {
-                if dist > limit {
+                if anchor_dist > limit {
                     continue;
                 }
             }
-            snapped_origins.push((*origin_fid, idx));
-            if !start_nodes.contains(&idx) {
-                start_nodes.push(idx);
+            for seed in &seeds {
+                if !start_nodes.contains(&seed.node) {
+                    start_nodes.push(seed.node);
+                }
             }
+            snapped_origins.push((*origin_fid, seeds, origin.clone()));
         }
         if snapped_origins.is_empty() {
             return Err(ToolError::Execution(
@@ -31643,15 +31739,16 @@ impl Tool for NetworkServiceAreaTool {
             let mut polygon_records = Vec::<ServiceAreaPolygonRecord>::new();
             let per_origin_dist = snapped_origins
                 .par_iter()
-                .map(|(origin_fid, start_idx)| {
+                .map(|(origin_fid, origin_seeds, origin_coord)| {
                     (
                         *origin_fid,
-                        dijkstra_all_costs(&graph, &[*start_idx], &turn_costs),
+                        origin_coord.clone(),
+                        dijkstra_all_costs_seeded(&graph, origin_seeds, &turn_costs),
                     )
                 })
                 .collect::<Vec<_>>();
 
-            for (origin_fid, origin_dist) in per_origin_dist {
+            for (origin_fid, origin_coord, origin_dist) in per_origin_dist {
                 let ring_limits: Vec<f64> = if let Some(rings) = ring_costs.as_ref() {
                     rings.clone()
                 } else {
@@ -31681,6 +31778,7 @@ impl Tool for NetworkServiceAreaTool {
                         .iter()
                         .map(|idx| graph.nodes[*idx].clone())
                         .collect();
+                    envelope_coords.push(origin_coord.clone());
                     let mut reachable_segment_lengths = Vec::<f64>::new();
                     let mut frontier_count = 0i64;
                     let mut partial_count = 0i64;

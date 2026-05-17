@@ -131,7 +131,9 @@ pub struct FilterRasterFeaturesByAreaTool;
 pub struct SmoothVectorsTool;
 pub struct SnapEndnodesTool;
 pub struct SnapPointsToNetworkTool;
+pub struct SnapEventsToRoutesTool;
 pub struct SplitLinesAtIntersectionsTool;
+pub struct BuildNetworkTopologyTool;
 pub struct SplitVectorLinesTool;
 pub struct SplitWithLinesTool;
 pub struct GenerateNetworkNodesTool;
@@ -15641,6 +15643,95 @@ impl Tool for SplitLinesAtIntersectionsTool {
     }
 }
 
+impl Tool for BuildNetworkTopologyTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "build_network_topology",
+            display_name: "Build Network Topology",
+            summary: "Builds a noded topological line network by splitting lines at intersections.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec {
+                    name: "input",
+                    description: "Input line network layer.",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "snap_tolerance",
+                    description:
+                        "Optional snapping tolerance used while detecting and splitting intersections.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "output",
+                    description: "Output topologically noded line vector path.",
+                    required: true,
+                },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network_lines.shp"));
+        defaults.insert("snap_tolerance".to_string(), json!(f64::EPSILON));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("network_topology.gpkg"));
+
+        ToolManifest {
+            id: "build_network_topology".to_string(),
+            display_name: "Build Network Topology".to_string(),
+            summary: "Builds a noded topological line network by splitting lines at intersections."
+                .to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor {
+                    name: "input".to_string(),
+                    description: "Input line network layer.".to_string(),
+                    required: true,
+                },
+                ToolParamDescriptor {
+                    name: "snap_tolerance".to_string(),
+                    description:
+                        "Optional snapping tolerance used while detecting and splitting intersections."
+                            .to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
+                    name: "output".to_string(),
+                    description: "Output topologically noded line vector path.".to_string(),
+                    required: true,
+                },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "build_network_topology_basic".to_string(),
+                description:
+                    "Splits a line network at all intersections to create topologically noded edges."
+                        .to_string(),
+                args: example_args,
+            }],
+            tags: vec![
+                "vector".to_string(),
+                "network".to_string(),
+                "topology".to_string(),
+                "preprocessing".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        SplitLinesAtIntersectionsTool.validate(args)
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        SplitLinesAtIntersectionsTool.run(args, ctx)
+    }
+}
+
 fn compute_polygon_complexity(ring: &wbvector::Ring) -> f64 {
     let coords = ring.coords();
     if coords.len() < 3 {
@@ -21995,6 +22086,11 @@ impl Tool for TransferAttributesTool {
                     required: false,
                 },
                 ToolParamSpec {
+                    name: "strategy",
+                    description: "Transfer strategy: first, last, count, sum, mean, min, max.",
+                    required: false,
+                },
+                ToolParamSpec {
                     name: "prefix",
                     description: "Prefix for transferred source fields (default SRC_).",
                     required: false,
@@ -22013,6 +22109,7 @@ impl Tool for TransferAttributesTool {
         defaults.insert("target".to_string(), json!("target.shp"));
         defaults.insert("source".to_string(), json!("source.shp"));
         defaults.insert("predicate".to_string(), json!("intersects"));
+        defaults.insert("strategy".to_string(), json!("first"));
         defaults.insert("prefix".to_string(), json!("SRC_"));
         let mut example_args = defaults.clone();
         example_args.insert("output".to_string(), json!("transfer_attributes.shp"));
@@ -22042,6 +22139,12 @@ impl Tool for TransferAttributesTool {
                 ToolParamDescriptor {
                     name: "distance".to_string(),
                     description: "Distance threshold when predicate=within_distance.".to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
+                    name: "strategy".to_string(),
+                    description: "Transfer strategy: first, last, count, sum, mean, min, max."
+                        .to_string(),
                     required: false,
                 },
                 ToolParamDescriptor {
@@ -22101,6 +22204,18 @@ impl Tool for TransferAttributesTool {
                 ));
             }
         }
+        let strategy = parse_optional_string_arg(args, "strategy")
+            .unwrap_or("first")
+            .to_ascii_lowercase();
+        match strategy.as_str() {
+            "first" | "last" | "count" | "sum" | "mean" | "min" | "max" => {}
+            _ => {
+                return Err(ToolError::Validation(
+                    "strategy must be one of: first, last, count, sum, mean, min, max"
+                        .to_string(),
+                ))
+            }
+        }
         let _ = parse_vector_path_arg(args, "output")?;
         Ok(())
     }
@@ -22110,13 +22225,14 @@ impl Tool for TransferAttributesTool {
         let source = parse_required_vector_path_arg(args, "source")?;
         let output = parse_vector_path_arg(args, "output")?;
         let predicate = parse_optional_string_arg(args, "predicate").unwrap_or("intersects");
+        let strategy = parse_optional_string_arg(args, "strategy").unwrap_or("first");
         let prefix = parse_optional_string_arg(args, "prefix").unwrap_or("SRC_");
 
         let mut delegated_args = ToolArgs::new();
         delegated_args.insert("target".to_string(), json!(target));
         delegated_args.insert("join".to_string(), json!(source));
         delegated_args.insert("predicate".to_string(), json!(predicate));
-        delegated_args.insert("strategy".to_string(), json!("first"));
+        delegated_args.insert("strategy".to_string(), json!(strategy));
         delegated_args.insert("prefix".to_string(), json!(prefix));
         if let Some(distance) = parse_optional_f64_arg(args, "distance") {
             delegated_args.insert("distance".to_string(), json!(distance));
@@ -23036,6 +23152,129 @@ impl Tool for SnapPointsToNetworkTool {
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for SnapEventsToRoutesTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "snap_events_to_routes",
+            display_name: "Snap Events To Routes",
+            summary: "Snaps event points to route lines and reports route measure/offset diagnostics.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec {
+                    name: "routes",
+                    description: "Input route line layer.",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "events",
+                    description: "Input event point layer.",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "max_offset_distance",
+                    description: "Optional maximum route offset distance in map units.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "output",
+                    description: "Output snapped event point vector path.",
+                    required: true,
+                },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("routes".to_string(), json!("routes.gpkg"));
+        defaults.insert("events".to_string(), json!("events.gpkg"));
+        let mut example_args = defaults.clone();
+        example_args.insert("max_offset_distance".to_string(), json!(50.0));
+        example_args.insert("output".to_string(), json!("events_snapped_to_routes.gpkg"));
+
+        ToolManifest {
+            id: "snap_events_to_routes".to_string(),
+            display_name: "Snap Events To Routes".to_string(),
+            summary: "Snaps event points to route lines and reports route measure/offset diagnostics."
+                .to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor {
+                    name: "routes".to_string(),
+                    description: "Input route line layer.".to_string(),
+                    required: true,
+                },
+                ToolParamDescriptor {
+                    name: "events".to_string(),
+                    description: "Input event point layer.".to_string(),
+                    required: true,
+                },
+                ToolParamDescriptor {
+                    name: "max_offset_distance".to_string(),
+                    description: "Optional maximum route offset distance in map units.".to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
+                    name: "output".to_string(),
+                    description: "Output snapped event point vector path.".to_string(),
+                    required: true,
+                },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "snap_events_to_routes_basic".to_string(),
+                description:
+                    "Projects events to routes and emits route id, measure, and offset attributes."
+                        .to_string(),
+                args: example_args,
+            }],
+            tags: vec![
+                "vector".to_string(),
+                "network".to_string(),
+                "linear-referencing".to_string(),
+                "event-snapping".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let mut delegated_args = ToolArgs::new();
+        delegated_args.insert(
+            "routes".to_string(),
+            json!(parse_required_vector_path_arg(args, "routes")?),
+        );
+        delegated_args.insert(
+            "points".to_string(),
+            json!(parse_required_vector_path_arg(args, "events")?),
+        );
+        if let Some(v) = parse_optional_f64_arg(args, "max_offset_distance") {
+            delegated_args.insert("max_offset_distance".to_string(), json!(v));
+        }
+        delegated_args.insert("output".to_string(), json!(parse_vector_path_arg(args, "output")?));
+        LocatePointsAlongRoutesTool.validate(&delegated_args)
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let mut delegated_args = ToolArgs::new();
+        delegated_args.insert(
+            "routes".to_string(),
+            json!(parse_required_vector_path_arg(args, "routes")?),
+        );
+        delegated_args.insert(
+            "points".to_string(),
+            json!(parse_required_vector_path_arg(args, "events")?),
+        );
+        if let Some(v) = parse_optional_f64_arg(args, "max_offset_distance") {
+            delegated_args.insert("max_offset_distance".to_string(), json!(v));
+        }
+        delegated_args.insert("output".to_string(), json!(parse_vector_path_arg(args, "output")?));
+        LocatePointsAlongRoutesTool.run(&delegated_args, ctx)
     }
 }
 

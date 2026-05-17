@@ -498,7 +498,9 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::SmoothVectorsTool));
     registry.register(Box::new(tools::SnapEndnodesTool));
     registry.register(Box::new(tools::SnapPointsToNetworkTool));
+    registry.register(Box::new(tools::SnapEventsToRoutesTool));
     registry.register(Box::new(tools::SplitLinesAtIntersectionsTool));
+    registry.register(Box::new(tools::BuildNetworkTopologyTool));
     registry.register(Box::new(tools::PointsAlongLinesTool));
     registry.register(Box::new(tools::LocatePointsAlongRoutesTool));
     registry.register(Box::new(tools::RouteEventPointsFromTableTool));

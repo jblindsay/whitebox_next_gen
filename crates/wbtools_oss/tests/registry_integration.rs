@@ -208,6 +208,7 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"smooth_vectors"));
     assert!(ids.contains(&"snap_endnodes"));
     assert!(ids.contains(&"split_lines_at_intersections"));
+    assert!(ids.contains(&"build_network_topology"));
     assert!(ids.contains(&"generate_network_nodes"));
     assert!(ids.contains(&"transfer_attributes"));
     assert!(ids.contains(&"split_vector_lines"));
@@ -233,6 +234,7 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"densify_features"));
     assert!(ids.contains(&"points_along_lines"));
     assert!(ids.contains(&"locate_points_along_routes"));
+    assert!(ids.contains(&"snap_events_to_routes"));
     assert!(ids.contains(&"route_event_points_from_table"));
     assert!(ids.contains(&"route_event_lines_from_table"));
     assert!(ids.contains(&"route_event_points_from_layer"));

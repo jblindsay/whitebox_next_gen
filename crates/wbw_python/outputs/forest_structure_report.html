@@ -1,0 +1,357 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Forestry Structure and Biomass Intelligence – Workflow Report</title><style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+    
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, sans-serif;
+        line-height: 1.6;
+        color: #1b2b3a;
+        background: linear-gradient(135deg, #eef3f8 0%, #d9e5f2 100%);
+        min-height: 100vh;
+        padding: 2rem 1rem;
+    }
+    
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 10px 32px rgba(10, 32, 56, 0.18);
+        overflow: hidden;
+    }
+    
+    header {
+        background: linear-gradient(135deg, #0b2f4f 0%, #1f4f7a 100%);
+        color: white;
+        padding: 3rem 2rem;
+        text-align: center;
+    }
+    
+    header h1 {
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+        font-weight: 700;
+    }
+    
+    .tool-id {
+        font-size: 0.95rem;
+        opacity: 0.9;
+    }
+
+    .brand-line {
+        margin-top: 0.75rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        opacity: 0.95;
+    }
+    
+    .tool-id code {
+        background: rgba(255, 255, 255, 0.2);
+        padding: 0.3rem 0.6rem;
+        border-radius: 3px;
+        font-family: &quot;Monaco&quot;, &quot;Courier New&quot;, monospace;
+    }
+    
+    section {
+        padding: 2rem;
+        border-bottom: 1px solid #eee;
+    }
+    
+    section:last-of-type {
+        border-bottom: none;
+    }
+    
+    section h2 {
+        font-size: 1.5rem;
+        margin-bottom: 1.5rem;
+        color: #0f3f67;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .artifact-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+    }
+    
+    .artifact-card {
+        background: #f8f9fa;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 1.5rem;
+        transition: all 0.3s ease;
+    }
+    
+    .artifact-card:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        border-color: #0f4a7a;
+    }
+    
+    .artifact-type {
+        display: inline-block;
+        background: #0f4a7a;
+        color: white;
+        padding: 0.3rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        margin-bottom: 0.75rem;
+    }
+    
+    .artifact-name {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 0.5rem;
+        font-size: 1rem;
+    }
+    
+    .artifact-path {
+        font-size: 0.85rem;
+        color: #666;
+        word-break: break-word;
+    }
+    
+    .artifact-path code {
+        background: #f0f0f0;
+        padding: 0.2rem 0.4rem;
+        border-radius: 3px;
+        font-family: &quot;Monaco&quot;, &quot;Courier New&quot;, monospace;
+        font-size: 0.8rem;
+    }
+
+    .executive-summary {
+        background: #f3f8fd;
+    }
+
+    .status-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .status-pill {
+        display: inline-block;
+        padding: 0.35rem 0.85rem;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+    }
+
+    .status-review {
+        color: #5f4b00;
+        background: #ffe082;
+    }
+
+    .status-fail {
+        color: #7f1d1d;
+        background: #fecaca;
+    }
+
+    .status-unknown {
+        color: #1f2937;
+        background: #e5e7eb;
+    }
+
+    .status-context {
+        color: #334155;
+        font-weight: 500;
+    }
+
+    .exec-text {
+        color: #334155;
+        font-size: 1rem;
+    }
+
+    .findings-list,
+    .guidance-list {
+        margin-left: 1.25rem;
+        color: #334155;
+    }
+
+    .findings-list li,
+    .guidance-list li {
+        margin-bottom: 0.65rem;
+    }
+    
+    .diagnostics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+    }
+    
+    .diag-item {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-left: 4px solid #0f4a7a;
+        border-radius: 4px;
+        font-size: 0.95rem;
+    }
+    
+    .diag-item strong {
+        color: #333;
+    }
+    
+    .status-pass {
+        color: #0f5132;
+        font-weight: 600;
+        background: #d1fae5;
+        padding: 0.1rem 0.35rem;
+        border-radius: 4px;
+    }
+
+    .preview-note {
+        margin-top: -0.4rem;
+        margin-bottom: 1rem;
+        color: #37516b;
+        font-size: 0.92rem;
+    }
+
+    .preview-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .preview-card {
+        border: 1px solid #d3deea;
+        border-radius: 8px;
+        background: #fbfdff;
+        padding: 1rem;
+    }
+
+    .preview-card h3 {
+        color: #0f3f67;
+        font-size: 1rem;
+        margin-bottom: 0.6rem;
+    }
+
+    .preview-svg {
+        width: 100%;
+        overflow-x: auto;
+        border: 1px solid #d9e4ef;
+        border-radius: 6px;
+        background: #ffffff;
+    }
+
+    .image-preview-wrap {
+        width: 100%;
+        border: 1px solid #d9e4ef;
+        border-radius: 6px;
+        background: #ffffff;
+        padding: 0.6rem;
+        text-align: center;
+    }
+
+    .image-preview-wrap img {
+        width: auto;
+        max-width: 100%;
+        height: auto;
+        max-height: 480px;
+        border-radius: 4px;
+        box-shadow: 0 3px 10px rgba(14, 36, 59, 0.15);
+    }
+
+    .preview-source {
+        margin-top: 0.65rem;
+        font-size: 0.84rem;
+        color: #587089;
+        word-break: break-word;
+    }
+
+    .preview-sources {
+        margin-top: 0.4rem;
+        margin-left: 1.2rem;
+        color: #587089;
+        font-size: 0.82rem;
+    }
+
+    .preview-sources li {
+        margin-bottom: 0.25rem;
+        word-break: break-word;
+    }
+    
+    .status-warning {
+        color: #ffc107;
+        font-weight: 600;
+    }
+    
+    .stats-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .stats-table tr {
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .stats-table tr:last-child {
+        border-bottom: none;
+    }
+    
+    .stat-label {
+        font-weight: 600;
+        color: #333;
+        padding: 0.75rem 1rem;
+        text-align: left;
+        width: 40%;
+    }
+    
+    .stat-value {
+        padding: 0.75rem 1rem;
+        color: #666;
+    }
+    
+    .stat-value code {
+        background: #f0f0f0;
+        padding: 0.3rem 0.6rem;
+        border-radius: 3px;
+        font-family: &quot;Monaco&quot;, &quot;Courier New&quot;, monospace;
+        font-size: 0.9rem;
+    }
+    
+    footer.metadata {
+        background: #f8f9fa;
+        font-size: 0.85rem;
+        color: #666;
+    }
+    
+    footer.metadata p {
+        margin: 0.5rem 0;
+    }
+    
+    footer.metadata code {
+        background: white;
+        padding: 0.2rem 0.4rem;
+        border-radius: 3px;
+        font-family: &quot;Monaco&quot;, &quot;Courier New&quot;, monospace;
+        font-size: 0.8rem;
+    }
+    
+    @media (max-width: 768px) {
+        header h1 {
+            font-size: 1.75rem;
+        }
+        
+        .artifact-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .diagnostics-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        section {
+            padding: 1.5rem 1rem;
+        }
+    }
+    </style></head><body><div class="container"><header><h1>Forestry Structure and Biomass Intelligence</h1><p class="tool-id">Tool ID: <code>forestry_structure_and_biomass_intelligence</code></p><p class="brand-line">Produced with Whitebox Pro decision workflow tooling.</p></header><section class="executive-summary"><h2>Executive Summary</h2><p class="exec-text">This workflow produced decision-support artifacts and metrics. Review key findings and interpretation guidance before acting on outputs.</p></section><section class="findings"><h2>Key Findings</h2><ul class="findings-list"><li>Biovolume distribution fraction: {&quot;high&quot;:0.0,&quot;low&quot;:0.9998117236102598,&quot;moderate&quot;:0.00018827638974013852,&quot;very_high&quot;:0.0}</li><li>Mean biomass proxy: 0.2904</li><li>Mean canopy height: 2.5481</li><li>Mean confidence: 0.4800</li><li>Structure class fraction: {&quot;low&quot;:0.5706176667347667,&quot;mid_story&quot;:0.20396742417869432,&quot;regenerating&quot;:0.19189770583216162,&quot;tall_canopy&quot;:0.033517203254377424}</li><li>Valid cell count: 249633</li></ul></section><section class="interpretation"><h2>How To Interpret These Findings</h2><ol class="guidance-list"><li>Use Key Findings to understand what changed or failed, then open the referenced artifact files for spatial verification in GIS tools.</li><li>Use confidence, uncertainty, and status fields together; avoid decisions based on any single metric in isolation.</li></ol></section><section class="outputs"><h2>Output Artifacts</h2><div class="artifact-grid"><div class="artifact-card"><div class="artifact-type">GeoTIFF</div><div class="artifact-name">Biomass proxy</div><div class="artifact-path"><code>/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbw_python/outputs/forest_structure_biomass_proxy.tif</code></div></div><div class="artifact-card"><div class="artifact-type">GeoTIFF</div><div class="artifact-name">Canopy height metrics</div><div class="artifact-path"><code>/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbw_python/outputs/forest_structure_canopy_height_metrics.tif</code></div></div><div class="artifact-card"><div class="artifact-type">GeoTIFF</div><div class="artifact-name">Confidence</div><div class="artifact-path"><code>/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbw_python/outputs/forest_structure_confidence.tif</code></div></div><div class="artifact-card"><div class="artifact-type">File</div><div class="artifact-name">Stand structure units</div><div class="artifact-path"><code>/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbw_python/outputs/forest_structure_stand_structure_units.gpkg</code></div></div><div class="artifact-card"><div class="artifact-type">GeoTIFF</div><div class="artifact-name">Vertical structure class</div><div class="artifact-path"><code>/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbw_python/outputs/forest_structure_vertical_structure_class.tif</code></div></div></div></section><section class="diagnostics"><h2>Quality &amp; Diagnostics</h2><div class="diagnostics-grid"><div class="diag-item"><strong>Error Codes Defined:</strong> E_INPUT_MISSING, E_INPUT_INVALID, E_CRS_MISSING, E_CRS_HARMONIZATION_FAILED, E_IO_READ_FAILED, E_IO_WRITE_FAILED, E_SUBTOOL_FAILED, E_INSUFFICIENT_VALID_DATA, E_QUALITY_THRESHOLD_NOT_MET, E_INTERNAL</div></div></section><section class="statistics"><h2>Summary Statistics</h2><table class="stats-table"><tbody><tr><td class="stat-label">Mean biomass proxy</td><td class="stat-value"><code>0.2904</code></td></tr><tr><td class="stat-label">Mean canopy height</td><td class="stat-value"><code>2.5481</code></td></tr><tr><td class="stat-label">Mean confidence</td><td class="stat-value"><code>0.4800</code></td></tr><tr><td class="stat-label">Valid cell count</td><td class="stat-value"><code>249633</code></td></tr></tbody></table></section><footer class="metadata"><p>Report generated <strong>2026-05-17 01:15:41 UTC</strong></p><p>Produced with Whitebox Pro decision workflow tooling.</p><p>Schema version: <code>1.0.0</code></p></footer></div></body></html>

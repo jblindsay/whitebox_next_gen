@@ -1,0 +1,139 @@
+{
+  "error_taxonomy": {
+    "codes": [
+      {
+        "code": "E_INPUT_MISSING",
+        "remediation": "Provide all required inputs and rerun validation.",
+        "severity": "error",
+        "when": "A required input path or argument is missing."
+      },
+      {
+        "code": "E_INPUT_INVALID",
+        "remediation": "Correct argument values to documented ranges and formats.",
+        "severity": "error",
+        "when": "An input value is out of range, malformed, or unsupported."
+      },
+      {
+        "code": "E_CRS_MISSING",
+        "remediation": "Assign CRS metadata (or EPSG override where supported) before rerun.",
+        "severity": "error",
+        "when": "CRS metadata required for harmonization is missing."
+      },
+      {
+        "code": "E_CRS_HARMONIZATION_FAILED",
+        "remediation": "Verify source CRS, extent validity, and raster/vector readability.",
+        "severity": "error",
+        "when": "Reprojection/harmonization to the reference grid fails."
+      },
+      {
+        "code": "E_IO_READ_FAILED",
+        "remediation": "Check file existence, permissions, and format compatibility.",
+        "severity": "error",
+        "when": "A required raster/vector/JSON input cannot be read."
+      },
+      {
+        "code": "E_IO_WRITE_FAILED",
+        "remediation": "Ensure output directories exist and are writable.",
+        "severity": "error",
+        "when": "An output artifact cannot be written."
+      },
+      {
+        "code": "E_SUBTOOL_FAILED",
+        "remediation": "Inspect sub-tool logs and rerun with corrected inputs/parameters.",
+        "severity": "error",
+        "when": "An internal delegated sub-tool fails to complete."
+      },
+      {
+        "code": "E_INSUFFICIENT_VALID_DATA",
+        "remediation": "Relax masking/thresholds or provide higher-quality source data.",
+        "severity": "warning",
+        "when": "Too few valid pixels/points remain for robust analysis."
+      },
+      {
+        "code": "E_QUALITY_THRESHOLD_NOT_MET",
+        "remediation": "Review flagged zones and rerun with stricter profile/settings if needed.",
+        "severity": "warning",
+        "when": "Outputs are produced but QA thresholds are not met."
+      },
+      {
+        "code": "E_INTERNAL",
+        "remediation": "Capture logs, isolate reproducer inputs, and escalate for investigation.",
+        "severity": "error",
+        "when": "An unexpected internal execution error occurs."
+      }
+    ],
+    "version": "1.0.0",
+    "workflow": "forestry_structure_and_biomass_intelligence"
+  },
+  "generated_at_utc": "2026-05-17T01:15:41.281793Z",
+  "inputs": {
+    "input": "/Users/johnlindsay/Documents/programming/Rust/flash_point_classifier/resources/Robin_Rd.las"
+  },
+  "interpretation": {
+    "terrain_adaptive_biomass": {
+      "management_guidance": "Use high and very_high biovolume fractions to prioritize fuel management or harvest planning zones; compare across adaptation modes for sensitivity.",
+      "summary": "Terrain adaptation adjusts biomass proxy using local canopy relief to reduce underestimation in heterogeneous stands."
+    }
+  },
+  "outputs": {
+    "biomass_proxy": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbw_python/outputs/forest_structure_biomass_proxy.tif",
+    "canopy_height_metrics": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbw_python/outputs/forest_structure_canopy_height_metrics.tif",
+    "confidence": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbw_python/outputs/forest_structure_confidence.tif",
+    "stand_structure_units": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbw_python/outputs/forest_structure_stand_structure_units.gpkg",
+    "vertical_structure_class": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbw_python/outputs/forest_structure_vertical_structure_class.tif"
+  },
+  "parameters": {
+    "biomass_cap": 25.0,
+    "biomass_model": {
+      "density_exponent": 0.85,
+      "height_exponent": 1.35,
+      "scale": 6.0
+    },
+    "height_thresholds": {
+      "adaptive": true,
+      "adaptive_weight": 0.45,
+      "high": 12.134964217030678,
+      "low": 0.8714841357862327,
+      "medium": 4.205613066094688
+    },
+    "resolution": 2.0,
+    "stand_block_cells": 12,
+    "terrain_adaptation": "moderate"
+  },
+  "profile": "balanced",
+  "schema_migration_notes": {
+    "applies_to": "1.0.0",
+    "breaking_changes": [],
+    "notes": [
+      "Initial versioned schema release."
+    ]
+  },
+  "schema_version": "1.0.0",
+  "summary": {
+    "biovolume_distribution_fraction": {
+      "high": 0.0,
+      "low": 0.9998117236102598,
+      "moderate": 0.00018827638974013852,
+      "very_high": 0.0
+    },
+    "mean_biomass_proxy": 0.290374801918503,
+    "mean_canopy_height": 2.5480668801012927,
+    "mean_confidence": 0.48001726086211066,
+    "structure_class_fraction": {
+      "low": 0.5706176667347667,
+      "mid_story": 0.20396742417869432,
+      "regenerating": 0.19189770583216162,
+      "tall_canopy": 0.033517203254377424
+    },
+    "valid_cell_count": 249633
+  },
+  "timings_ms": {
+    "class_and_biomass_scoring": 46,
+    "density_gridding": 63435,
+    "ground_canopy_derivation": 11470,
+    "load_inputs_and_chm": 15,
+    "total": 75036,
+    "write_primary_outputs": 63
+  },
+  "workflow": "forestry_structure_and_biomass_intelligence"
+}

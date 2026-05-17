@@ -2,6 +2,7 @@ from .whitebox_workflows import *
 from . import callbacks
 from .callbacks import ProgressPrinter, make_progress_printer, print_progress
 from contextlib import ExitStack, contextmanager
+import json
 
 
 @contextmanager
@@ -266,6 +267,13 @@ def field_trafficability_and_operation_planning(
 def _attach_phase4_convenience_methods():
     if "WbEnvironment" not in globals():
         return
+
+    # Compatibility shim: some builds expose run_tool_json but not run_tool.
+    if not hasattr(WbEnvironment, "run_tool") and hasattr(WbEnvironment, "run_tool_json"):
+        def _run_tool(self, tool_id, args):
+            return self.run_tool_json(tool_id, json.dumps(args))
+        WbEnvironment.run_tool = _run_tool
+
     WbEnvironment.analyze_multimodal_od_scenarios = analyze_multimodal_od_scenarios
     WbEnvironment.export_multimodal_routes_for_od_pairs = export_multimodal_routes_for_od_pairs
     WbEnvironment.compute_network_accessibility = compute_network_accessibility

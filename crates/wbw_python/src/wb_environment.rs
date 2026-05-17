@@ -2557,6 +2557,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("network_accessibility_metrics", "vector", "network_analysis"),
     ("network_centrality_metrics", "vector", "network_analysis"),
     ("network_connected_components", "vector", "network_analysis"),
+    ("generate_network_nodes", "vector", "network_analysis"),
     ("network_node_degree", "vector", "network_analysis"),
     ("network_od_cost_matrix", "vector", "network_analysis"),
     ("network_readiness_and_diagnostics_intelligence", "vector", "network_analysis"),
@@ -2745,6 +2746,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("smooth_vectors", "vector", "geometry_processing"),
     ("smooth_vegetation_residual", "terrain", "general"),
     ("snap_endnodes", "vector", "geometry_processing"),
+    ("split_lines_at_intersections", "vector", "network_analysis"),
     ("snap_points_to_network", "vector", "network_analysis"),
     ("snap_pour_points", "hydrology", "watersheds_basins"),
     ("sobel_filter", "remote_sensing", "edge_feature_detection"),
@@ -2803,6 +2805,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("total_filter", "remote_sensing", "filters"),
     ("trace_downslope_flowpaths", "hydrology", "flow_routing"),
     ("travelling_salesman_problem", "vector", "network_analysis"),
+    ("transfer_attributes", "vector", "network_analysis"),
     ("trend_surface", "raster", "general"),
     ("trend_surface_vector_points", "raster", "general"),
     ("tributary_identifier", "streams", "ordering_metrics"),
@@ -3267,7 +3270,10 @@ fn matches_subcategory(category_slug: &str, subcategory: &str, tool_id: &str, ta
                 || id == "network_accessibility_metrics"
                 || id == "network_centrality_metrics"
                 || id == "od_sensitivity_analysis"
+                || id == "split_lines_at_intersections"
+                || id == "generate_network_nodes"
                 || id == "snap_points_to_network"
+                || id == "transfer_attributes"
                 || id == "vehicle_routing_cvrp"
                 || id == "vehicle_routing_pickup_delivery"
                 || id == "vehicle_routing_vrptw"
@@ -27424,6 +27430,58 @@ impl WbEnvironment {
         self._run_vector_tool_with_args("split_with_lines", args, callback)
     }
 
+    #[pyo3(signature = (input, snap_tolerance=f64::EPSILON, output_path=None, callback=None))]
+    fn split_lines_at_intersections(
+        &self,
+        input: &Vector,
+        snap_tolerance: f64,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_output_path(&input.file_path, "split_lines_at_intersections")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("snap_tolerance".to_string(), json!(snap_tolerance));
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("split_lines_at_intersections", args, callback)
+    }
+
+    #[pyo3(signature = (target, source, predicate="intersects", distance=None, prefix="SRC_", output_path=None, callback=None))]
+    fn transfer_attributes(
+        &self,
+        target: &Vector,
+        source: &Vector,
+        predicate: &str,
+        distance: Option<f64>,
+        prefix: &str,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_output_path(&target.file_path, "transfer_attributes")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("target".to_string(), json!(target.file_path.to_string_lossy().to_string()));
+        args.insert("source".to_string(), json!(source.file_path.to_string_lossy().to_string()));
+        args.insert("predicate".to_string(), json!(predicate));
+        if let Some(v) = distance {
+            args.insert("distance".to_string(), json!(v));
+        }
+        args.insert("prefix".to_string(), json!(prefix));
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("transfer_attributes", args, callback)
+    }
+
     #[pyo3(signature = (input, distance, extend_direction="both", output_path=None, callback=None))]
     fn extend_vector_lines(
         &self,
@@ -28553,6 +28611,30 @@ impl WbEnvironment {
         }
         args.insert("output".to_string(), json!(output));
         self._run_vector_tool_with_args("network_topology_audit", args, callback)
+    }
+
+    #[pyo3(signature = (input, snap_tolerance=None, output_path=None, callback=None))]
+    fn generate_network_nodes(
+        &self,
+        input: &Vector,
+        snap_tolerance: Option<f64>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "generate_network_nodes")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        if let Some(v) = snap_tolerance {
+            args.insert("snap_tolerance".to_string(), json!(v));
+        }
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("generate_network_nodes", args, callback)
     }
 
     #[pyo3(signature = (input, overlay, output_path=None, callback=None, snap_tolerance=None))]

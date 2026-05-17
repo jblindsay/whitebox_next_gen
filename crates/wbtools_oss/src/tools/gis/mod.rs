@@ -131,8 +131,11 @@ pub struct FilterRasterFeaturesByAreaTool;
 pub struct SmoothVectorsTool;
 pub struct SnapEndnodesTool;
 pub struct SnapPointsToNetworkTool;
+pub struct SplitLinesAtIntersectionsTool;
 pub struct SplitVectorLinesTool;
 pub struct SplitWithLinesTool;
+pub struct GenerateNetworkNodesTool;
+pub struct TransferAttributesTool;
 pub struct SumOverlayTool;
 pub struct SymmetricalDifferenceTool;
 pub struct UnionTool;
@@ -15526,6 +15529,118 @@ impl Tool for SplitWithLinesTool {
     }
 }
 
+impl Tool for SplitLinesAtIntersectionsTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "split_lines_at_intersections",
+            display_name: "Split Lines At Intersections",
+            summary: "Splits a line network wherever line segments intersect, including self-intersections.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec {
+                    name: "input",
+                    description: "Input line layer to split at intersections.",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "snap_tolerance",
+                    description:
+                        "Optional snapping tolerance used by split operations; defaults to machine epsilon.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "output",
+                    description: "Output split line vector path.",
+                    required: true,
+                },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network_lines.shp"));
+        defaults.insert("snap_tolerance".to_string(), json!(f64::EPSILON));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("network_split_at_intersections.shp"));
+
+        ToolManifest {
+            id: "split_lines_at_intersections".to_string(),
+            display_name: "Split Lines At Intersections".to_string(),
+            summary:
+                "Splits a line network wherever line segments intersect, including self-intersections."
+                    .to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor {
+                    name: "input".to_string(),
+                    description: "Input line layer to split at intersections.".to_string(),
+                    required: true,
+                },
+                ToolParamDescriptor {
+                    name: "snap_tolerance".to_string(),
+                    description:
+                        "Optional snapping tolerance used by split operations; defaults to machine epsilon."
+                            .to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
+                    name: "output".to_string(),
+                    description: "Output split line vector path.".to_string(),
+                    required: true,
+                },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "split_lines_at_intersections_basic".to_string(),
+                description: "Splits all line features at line-line intersections within one network layer."
+                    .to_string(),
+                args: example_args,
+            }],
+            tags: vec![
+                "vector".to_string(),
+                "network".to_string(),
+                "preprocessing".to_string(),
+                "split".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        let tol = parse_overlay_snap_tolerance(args);
+        if !tol.is_finite() || tol < 0.0 {
+            return Err(ToolError::Validation(
+                "snap_tolerance must be a finite value >= 0".to_string(),
+            ));
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input_path = parse_required_vector_path_arg(args, "input")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let mut delegated_args = ToolArgs::new();
+        delegated_args.insert("input".to_string(), json!(input_path));
+        delegated_args.insert("split".to_string(), json!(input_path));
+        delegated_args.insert(
+            "snap_tolerance".to_string(),
+            json!(parse_overlay_snap_tolerance(args)),
+        );
+        delegated_args.insert("output".to_string(), json!(output_path));
+        SplitWithLinesTool.run(&delegated_args, ctx)
+    }
+}
+
 fn compute_polygon_complexity(ring: &wbvector::Ring) -> f64 {
     let coords = ring.coords();
     if coords.len() < 3 {
@@ -21847,6 +21962,168 @@ impl Tool for SpatialJoinTool {
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for TransferAttributesTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "transfer_attributes",
+            display_name: "Transfer Attributes",
+            summary: "Transfers source attributes onto target features using a spatial predicate.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec {
+                    name: "target",
+                    description: "Target layer receiving transferred attributes.",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "source",
+                    description: "Source layer providing attributes.",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "predicate",
+                    description: "Spatial predicate: intersects, within, contains, touches, crosses, overlaps, within_distance.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "distance",
+                    description: "Distance threshold when predicate=within_distance.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "prefix",
+                    description: "Prefix for transferred source fields (default SRC_).",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "output",
+                    description: "Output vector path.",
+                    required: true,
+                },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("target".to_string(), json!("target.shp"));
+        defaults.insert("source".to_string(), json!("source.shp"));
+        defaults.insert("predicate".to_string(), json!("intersects"));
+        defaults.insert("prefix".to_string(), json!("SRC_"));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("transfer_attributes.shp"));
+
+        ToolManifest {
+            id: "transfer_attributes".to_string(),
+            display_name: "Transfer Attributes".to_string(),
+            summary: "Transfers source attributes onto target features using a spatial predicate.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor {
+                    name: "target".to_string(),
+                    description: "Target layer receiving transferred attributes.".to_string(),
+                    required: true,
+                },
+                ToolParamDescriptor {
+                    name: "source".to_string(),
+                    description: "Source layer providing attributes.".to_string(),
+                    required: true,
+                },
+                ToolParamDescriptor {
+                    name: "predicate".to_string(),
+                    description: "Spatial predicate: intersects, within, contains, touches, crosses, overlaps, within_distance.".to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
+                    name: "distance".to_string(),
+                    description: "Distance threshold when predicate=within_distance.".to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
+                    name: "prefix".to_string(),
+                    description: "Prefix for transferred source fields (default SRC_).".to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
+                    name: "output".to_string(),
+                    description: "Output vector path.".to_string(),
+                    required: true,
+                },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "transfer_attributes_basic".to_string(),
+                description: "Transfers source attributes to target features using first-match spatial join semantics."
+                    .to_string(),
+                args: example_args,
+            }],
+            tags: vec![
+                "vector".to_string(),
+                "network".to_string(),
+                "attribute-transfer".to_string(),
+                "preprocessing".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "target")?;
+        let _ = load_vector_arg(args, "source")?;
+        let predicate = parse_optional_string_arg(args, "predicate")
+            .unwrap_or("intersects")
+            .to_ascii_lowercase();
+        let allowed_predicates = [
+            "intersects",
+            "within",
+            "contains",
+            "touches",
+            "crosses",
+            "overlaps",
+            "within_distance",
+        ];
+        if !allowed_predicates.iter().any(|p| *p == predicate) {
+            return Err(ToolError::Validation(
+                "predicate must be one of: intersects, within, contains, touches, crosses, overlaps, within_distance"
+                    .to_string(),
+            ));
+        }
+        if predicate == "within_distance" {
+            let distance = parse_f64_arg(args, "distance")?;
+            if !distance.is_finite() || distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "distance must be a finite value >= 0 for within_distance".to_string(),
+                ));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let target = parse_required_vector_path_arg(args, "target")?;
+        let source = parse_required_vector_path_arg(args, "source")?;
+        let output = parse_vector_path_arg(args, "output")?;
+        let predicate = parse_optional_string_arg(args, "predicate").unwrap_or("intersects");
+        let prefix = parse_optional_string_arg(args, "prefix").unwrap_or("SRC_");
+
+        let mut delegated_args = ToolArgs::new();
+        delegated_args.insert("target".to_string(), json!(target));
+        delegated_args.insert("join".to_string(), json!(source));
+        delegated_args.insert("predicate".to_string(), json!(predicate));
+        delegated_args.insert("strategy".to_string(), json!("first"));
+        delegated_args.insert("prefix".to_string(), json!(prefix));
+        if let Some(distance) = parse_optional_f64_arg(args, "distance") {
+            delegated_args.insert("distance".to_string(), json!(distance));
+        }
+        delegated_args.insert("output".to_string(), json!(output));
+
+        SpatialJoinTool.run(&delegated_args, ctx)
     }
 }
 
@@ -32087,6 +32364,113 @@ impl Tool for NetworkTopologyAuditTool {
         }
 
         Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for GenerateNetworkNodesTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "generate_network_nodes",
+            display_name: "Generate Network Nodes",
+            summary: "Generates network nodes and node diagnostics from linework topology.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec {
+                    name: "input",
+                    description: "Input line network layer.",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "snap_tolerance",
+                    description: "Optional node snapping tolerance for graph construction.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "output",
+                    description: "Output node point vector path.",
+                    required: true,
+                },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("snap_tolerance".to_string(), json!(0.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("network_nodes.shp"));
+
+        ToolManifest {
+            id: "generate_network_nodes".to_string(),
+            display_name: "Generate Network Nodes".to_string(),
+            summary: "Generates network nodes and node diagnostics from linework topology."
+                .to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor {
+                    name: "input".to_string(),
+                    description: "Input line network layer.".to_string(),
+                    required: true,
+                },
+                ToolParamDescriptor {
+                    name: "snap_tolerance".to_string(),
+                    description: "Optional node snapping tolerance for graph construction.".to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
+                    name: "output".to_string(),
+                    description: "Output node point vector path.".to_string(),
+                    required: true,
+                },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "generate_network_nodes_basic".to_string(),
+                description: "Builds a routable node layer from network lines and classifies node types."
+                    .to_string(),
+                args: example_args,
+            }],
+            tags: vec![
+                "vector".to_string(),
+                "network".to_string(),
+                "nodes".to_string(),
+                "preprocessing".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = parse_required_vector_path_arg(args, "input")?;
+        let output = parse_vector_path_arg(args, "output")?;
+        let mut delegated_args = ToolArgs::new();
+        delegated_args.insert("input".to_string(), json!(input));
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            delegated_args.insert("snap_tolerance".to_string(), json!(tol));
+        }
+        delegated_args.insert("output".to_string(), json!(output));
+        NetworkTopologyAuditTool.run(&delegated_args, ctx)
     }
 }
 

@@ -498,6 +498,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::SmoothVectorsTool));
     registry.register(Box::new(tools::SnapEndnodesTool));
     registry.register(Box::new(tools::SnapPointsToNetworkTool));
+    registry.register(Box::new(tools::SplitLinesAtIntersectionsTool));
     registry.register(Box::new(tools::PointsAlongLinesTool));
     registry.register(Box::new(tools::LocatePointsAlongRoutesTool));
     registry.register(Box::new(tools::RouteEventPointsFromTableTool));
@@ -514,6 +515,8 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::SplitVectorLinesTool));
     registry.register(Box::new(tools::StandardDeviationOverlayTool));
     registry.register(Box::new(tools::SplitWithLinesTool));
+    registry.register(Box::new(tools::GenerateNetworkNodesTool));
+    registry.register(Box::new(tools::TransferAttributesTool));
     registry.register(Box::new(tools::SumOverlayTool));
     registry.register(Box::new(tools::SymmetricalDifferenceTool));
     registry.register(Box::new(tools::UnionTool));

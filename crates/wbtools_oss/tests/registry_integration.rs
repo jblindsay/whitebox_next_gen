@@ -207,6 +207,9 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"shape_complexity_index_vector"));
     assert!(ids.contains(&"smooth_vectors"));
     assert!(ids.contains(&"snap_endnodes"));
+    assert!(ids.contains(&"split_lines_at_intersections"));
+    assert!(ids.contains(&"generate_network_nodes"));
+    assert!(ids.contains(&"transfer_attributes"));
     assert!(ids.contains(&"split_vector_lines"));
     assert!(ids.contains(&"standard_deviation_overlay"));
     assert!(ids.contains(&"split_with_lines"));

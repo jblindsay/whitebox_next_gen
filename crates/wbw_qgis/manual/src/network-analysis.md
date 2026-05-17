@@ -74,6 +74,36 @@ Use this prepared layer as the routing network for native QGIS algorithms.
 
 ---
 
+### Step 2.5 - Build Network Topology and Snap Points (Optional)
+
+If your network lacks proper node structure or you need to snap facility/demand points to the network:
+
+**Processing Toolbox → Whitebox Workflows → Vector Analysis →
+`Build Network Topology`**
+
+| Parameter | Value |
+|-----------|-------|
+| Input vector | roads_prepared.shp |
+| Snap tolerance | 0.5 |
+| Output | roads_noded.shp |
+| Output nodes | network_nodes.shp |
+
+Then snap your facilities and demand points:
+
+**Processing Toolbox → Whitebox Workflows → Vector Analysis →
+`Snap Points to Network`**
+
+| Parameter | Value |
+|-----------|-------|
+| Network layer | roads_noded.shp |
+| Points layer | fire_stations.shp |
+| Snap distance | 50.0 (meters) |
+| Output | fire_stations_snapped.shp |
+
+Output includes `SNAP_DIST` (offset to network) for diagnostics.
+
+---
+
 ## Workflow B: Routing, Service Areas, and Closest Facility
 
 ### Step 3 - Shortest Path

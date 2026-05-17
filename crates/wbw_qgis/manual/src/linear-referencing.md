@@ -73,6 +73,40 @@ segments by `ROUTE_ID`.
 
 ---
 
+## Route Calibration and Recalibration
+
+Measures are only useful when anchored to real-world control points such as kilometre posts or survey stations. If your routes lack calibration or have been edited, use these tools to establish stable, field-verified measures.
+
+### Calibrate Routes from Control Points
+
+**Processing Toolbox → Whitebox Workflows → Linear Referencing →
+`Route Calibrate`**
+
+| Parameter | Value |
+|-----------|-------|
+| Input routes | roads.shp (with ROUTE_ID field) |
+| Control points | km_posts.shp (with ROUTE_ID and KNOWN_MEASURE fields) |
+| Control measure field | KNOWN_MEASURE |
+| Snap tolerance | 10.0 (meters) |
+| Output | routes_calibrated.shp |
+
+Output adds `FROM_MEASURE` and `TO_MEASURE` fields containing the calibrated values.
+
+### Recalibrate After Route Edits
+
+If you split, merge, or redraw routes, use recalibration to scale measures proportionally:
+
+**Processing Toolbox → Whitebox Workflows → Linear Referencing →
+`Route Recalibrate`**
+
+| Parameter | Value |
+|-----------|-------|
+| Original routes | routes_calibrated.shp (reference with valid measures) |
+| Edited routes | routes_edited.shp (after geometric changes) |
+| Output | routes_recalibrated.shp |
+
+---
+
 ### Step 2 — Validate Route Identifiers
 
 Route IDs must be unique per route and stable across updates. Check for

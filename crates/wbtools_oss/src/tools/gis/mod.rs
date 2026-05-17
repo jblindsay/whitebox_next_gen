@@ -15648,7 +15648,7 @@ impl Tool for BuildNetworkTopologyTool {
         ToolMetadata {
             id: "build_network_topology",
             display_name: "Build Network Topology",
-            summary: "Builds a noded topological line network by splitting lines at intersections.",
+            summary: "Builds a noded topological line network with stable edge and node outputs.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -15665,8 +15665,13 @@ impl Tool for BuildNetworkTopologyTool {
                 },
                 ToolParamSpec {
                     name: "output",
-                    description: "Output topologically noded line vector path.",
+                    description: "Output topologically noded edge vector path.",
                     required: true,
+                },
+                ToolParamSpec {
+                    name: "nodes_output",
+                    description: "Optional output node vector path.",
+                    required: false,
                 },
             ],
         }
@@ -15682,7 +15687,7 @@ impl Tool for BuildNetworkTopologyTool {
         ToolManifest {
             id: "build_network_topology".to_string(),
             display_name: "Build Network Topology".to_string(),
-            summary: "Builds a noded topological line network by splitting lines at intersections."
+            summary: "Builds a noded topological line network with stable edge and node outputs."
                 .to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
@@ -15701,15 +15706,20 @@ impl Tool for BuildNetworkTopologyTool {
                 },
                 ToolParamDescriptor {
                     name: "output".to_string(),
-                    description: "Output topologically noded line vector path.".to_string(),
+                    description: "Output topologically noded edge vector path.".to_string(),
                     required: true,
+                },
+                ToolParamDescriptor {
+                    name: "nodes_output".to_string(),
+                    description: "Optional output node vector path.".to_string(),
+                    required: false,
                 },
             ],
             defaults,
             examples: vec![ToolExample {
                 name: "build_network_topology_basic".to_string(),
                 description:
-                    "Splits a line network at all intersections to create topologically noded edges."
+                    "Builds stable edge and node topology tables from a line network."
                         .to_string(),
                 args: example_args,
             }],
@@ -15724,11 +15734,22 @@ impl Tool for BuildNetworkTopologyTool {
     }
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
-        SplitLinesAtIntersectionsTool.validate(args)
+        let _ = load_vector_arg(args, "input")?;
+        let _ = parse_vector_path_arg(args, "output")?;
+        let _ = parse_optional_output_path(args, "nodes_output")?;
+        Ok(())
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        SplitLinesAtIntersectionsTool.run(args, ctx)
+        let input = load_vector_arg(args, "input")?;
+        let snap_tolerance = args
+            .get("snap_tolerance")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(f64::EPSILON);
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let nodes_output_path = parse_optional_output_path(args, "nodes_output")?;
+
+        build_network_topology_outputs(&input, snap_tolerance, output_path.trim(), nodes_output_path.as_deref(), ctx)
     }
 }
 
@@ -27922,6 +27943,187 @@ fn build_line_network_graph(
     }
 
     Ok(LineNetworkGraph { nodes, adjacency })
+}
+
+fn network_node_coord(key: NetworkNodeKey, snap_tolerance: f64) -> wbvector::Coord {
+    let scale = if snap_tolerance > 0.0 {
+        1.0 / snap_tolerance
+    } else {
+        1.0e9
+    };
+    wbvector::Coord::xy(key.x as f64 / scale, key.y as f64 / scale)
+}
+
+fn derived_topology_node_output_path(output_path: &str) -> String {
+    if output_path == IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH {
+        return output_path.to_string();
+    }
+
+    let path = std::path::Path::new(output_path);
+    let parent = path.parent().unwrap_or_else(|| std::path::Path::new(""));
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("network_topology");
+    let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+    let file_name = if extension.is_empty() {
+        format!("{}_nodes", stem)
+    } else {
+        format!("{}_nodes.{}", stem, extension)
+    };
+    parent.join(file_name).to_string_lossy().to_string()
+}
+
+fn build_network_topology_outputs(
+    input: &wbvector::Layer,
+    snap_tolerance: f64,
+    output_path: &str,
+    nodes_output_path: Option<&std::path::Path>,
+    ctx: &ToolContext,
+) -> Result<ToolRunResult, ToolError> {
+    let linework = collect_layer_linework(input, false)?;
+
+    let mut edge_records = Vec::<(usize, usize, usize, i64, f64, Vec<wbvector::Coord>, NetworkNodeKey, NetworkNodeKey)>::new();
+    let mut node_degree = HashMap::<NetworkNodeKey, usize>::new();
+
+    for (line_idx, line) in linework.iter().enumerate() {
+        let pieces = split_lines_against_splitter(&line.coords, &linework, snap_tolerance);
+        let source_fid = input
+            .features
+            .get(line.source_index)
+            .map(|feature| if feature.fid > 0 { feature.fid as i64 } else { line.source_index as i64 + 1 })
+            .unwrap_or(line.source_index as i64 + 1);
+
+        for (piece_idx, piece) in pieces.into_iter().enumerate() {
+            if piece.len() < 2 {
+                continue;
+            }
+            let length = piece
+                .windows(2)
+                .map(|coords| coord_dist2(&coords[0], &coords[1]).sqrt())
+                .sum::<f64>();
+            if !length.is_finite() || length <= 0.0 {
+                continue;
+            }
+
+            let from_key = network_node_key(piece.first().unwrap(), snap_tolerance);
+            let to_key = network_node_key(piece.last().unwrap(), snap_tolerance);
+            if from_key == to_key {
+                continue;
+            }
+
+            *node_degree.entry(from_key).or_insert(0) += 1;
+            *node_degree.entry(to_key).or_insert(0) += 1;
+            edge_records.push((line_idx, piece_idx, line.source_index, source_fid, length, piece, from_key, to_key));
+        }
+    }
+
+    let mut node_keys: Vec<NetworkNodeKey> = node_degree.keys().copied().collect();
+    node_keys.sort_by(|lhs, rhs| lhs.x.cmp(&rhs.x).then(lhs.y.cmp(&rhs.y)));
+
+    let mut node_ids = HashMap::<NetworkNodeKey, usize>::new();
+    let mut node_output = wbvector::Layer::new(format!("{}_nodes", input.name));
+    node_output.geom_type = Some(wbvector::GeometryType::Point);
+    node_output.crs = input.crs.clone();
+    node_output.schema = wbvector::Schema::new();
+    node_output
+        .schema
+        .add_field(wbvector::FieldDef::new("NODE_ID", wbvector::FieldType::Integer));
+    node_output
+        .schema
+        .add_field(wbvector::FieldDef::new("DEGREE", wbvector::FieldType::Integer));
+    node_output
+        .schema
+        .add_field(wbvector::FieldDef::new("X", wbvector::FieldType::Float));
+    node_output
+        .schema
+        .add_field(wbvector::FieldDef::new("Y", wbvector::FieldType::Float));
+
+    for (idx, key) in node_keys.iter().enumerate() {
+        let node_id = idx as i64 + 1;
+        node_ids.insert(*key, idx + 1);
+        let coord = network_node_coord(*key, snap_tolerance);
+        let x = coord.x;
+        let y = coord.y;
+        let degree = node_degree.get(key).copied().unwrap_or(0) as i64;
+        node_output.features.push(wbvector::Feature {
+            fid: node_id as u64,
+            geometry: Some(wbvector::Geometry::Point(coord)),
+            attributes: vec![
+                wbvector::FieldValue::Integer(node_id),
+                wbvector::FieldValue::Integer(degree),
+                wbvector::FieldValue::Float(x),
+                wbvector::FieldValue::Float(y),
+            ],
+        });
+    }
+
+    let mut edge_output = wbvector::Layer::new(format!("{}_edges", input.name));
+    edge_output.geom_type = Some(wbvector::GeometryType::LineString);
+    edge_output.crs = input.crs.clone();
+    edge_output.schema = wbvector::Schema::new();
+    edge_output
+        .schema
+        .add_field(wbvector::FieldDef::new("EDGE_ID", wbvector::FieldType::Integer));
+    edge_output
+        .schema
+        .add_field(wbvector::FieldDef::new("FROM_NODE", wbvector::FieldType::Integer));
+    edge_output
+        .schema
+        .add_field(wbvector::FieldDef::new("TO_NODE", wbvector::FieldType::Integer));
+    edge_output
+        .schema
+        .add_field(wbvector::FieldDef::new("SOURCE_FID", wbvector::FieldType::Integer));
+    edge_output
+        .schema
+        .add_field(wbvector::FieldDef::new("LENGTH", wbvector::FieldType::Float));
+
+    edge_records.sort_by(|lhs, rhs| {
+        lhs.0
+            .cmp(&rhs.0)
+            .then(lhs.1.cmp(&rhs.1))
+            .then(lhs.2.cmp(&rhs.2))
+            .then(lhs.3.cmp(&rhs.3))
+    });
+
+    for (idx, (_, _, _, source_fid, length, piece, from_key, to_key)) in edge_records.into_iter().enumerate() {
+        let from_id = *node_ids
+            .get(&from_key)
+            .ok_or_else(|| ToolError::Execution("failed resolving from-node id".to_string()))? as i64;
+        let to_id = *node_ids
+            .get(&to_key)
+            .ok_or_else(|| ToolError::Execution("failed resolving to-node id".to_string()))? as i64;
+        let edge_id = idx as i64 + 1;
+        edge_output.features.push(wbvector::Feature {
+            fid: edge_id as u64,
+            geometry: Some(wbvector::Geometry::LineString(piece)),
+            attributes: vec![
+                wbvector::FieldValue::Integer(edge_id),
+                wbvector::FieldValue::Integer(from_id),
+                wbvector::FieldValue::Integer(to_id),
+                wbvector::FieldValue::Integer(source_fid),
+                wbvector::FieldValue::Float(length),
+            ],
+        });
+    }
+
+    ctx.progress.progress(1.0);
+
+    let edge_output_path = write_vector_output(&edge_output, output_path.trim())?;
+    let node_output_path = if let Some(path) = nodes_output_path {
+        write_vector_output(&node_output, &path.to_string_lossy())?
+    } else {
+        let derived_path = derived_topology_node_output_path(output_path.trim());
+        write_vector_output(&node_output, &derived_path)?
+    };
+
+    let mut outputs = BTreeMap::new();
+    outputs.insert("path".to_string(), json!(edge_output_path));
+    outputs.insert("nodes_path".to_string(), json!(node_output_path));
+    outputs.insert("edge_count".to_string(), json!(edge_output.features.len()));
+    outputs.insert("node_count".to_string(), json!(node_output.features.len()));
+    Ok(ToolRunResult { outputs })
 }
 
 fn build_line_network_graph_mode_aware(

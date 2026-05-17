@@ -27456,14 +27456,15 @@ impl WbEnvironment {
         self._run_vector_tool_with_args("split_lines_at_intersections", args, callback)
     }
 
-    #[pyo3(signature = (input, snap_tolerance=f64::EPSILON, output_path=None, callback=None))]
+    #[pyo3(signature = (input, snap_tolerance=f64::EPSILON, output_path=None, nodes_output_path=None, callback=None))]
     fn build_network_topology(
         &self,
         input: &Vector,
         snap_tolerance: f64,
         output_path: Option<&str>,
+        nodes_output_path: Option<&str>,
         callback: Option<Py<PyAny>>,
-    ) -> PyResult<Vector> {
+    ) -> PyResult<(Vector, Vector)> {
         let output = self
             .resolve_output_path_for_wd(output_path)
             .unwrap_or_else(|| {
@@ -27475,7 +27476,18 @@ impl WbEnvironment {
         args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
         args.insert("snap_tolerance".to_string(), json!(snap_tolerance));
         args.insert("output".to_string(), json!(output));
-        self._run_vector_tool_with_args("build_network_topology", args, callback)
+        if let Some(out) = self.resolve_output_path_for_wd(nodes_output_path) {
+            args.insert("nodes_output".to_string(), json!(out));
+        }
+
+        let response = run_tool_response_with_args(&self.runtime, "build_network_topology", args, callback)?;
+        let edges_path = extract_typed_output_path_by_key("build_network_topology", &response, "path")?;
+        let nodes_path = extract_typed_output_path_by_key("build_network_topology", &response, "nodes_path")?;
+
+        Ok((
+            Vector { file_path: edges_path },
+            Vector { file_path: nodes_path },
+        ))
     }
 
     #[pyo3(signature = (target, source, predicate="intersects", distance=None, strategy="first", prefix="SRC_", output_path=None, callback=None))]

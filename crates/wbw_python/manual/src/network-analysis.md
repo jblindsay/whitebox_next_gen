@@ -103,6 +103,37 @@ nodes = wbe.vector.network_analysis.network_node_degree(roads, snap_tolerance=0.
 wbe.write_vector(nodes, 'node_degree.shp')
 ```
 
+### Building Network Topology
+
+If your raw network lacks proper topology (node points, edge connectivity structure), use `build_network_topology()` to construct nodes and validate edges. This is essential before running advanced analysis like service areas or facility location.
+
+```python
+edges, nodes = wbe.vector.network_analysis.build_network_topology(
+    roads,
+    snap_tolerance=0.5,
+    output_nodes=True
+)
+wbe.write_vector(edges, 'roads_noded.shp')
+wbe.write_vector(nodes, 'network_nodes.shp')
+```
+
+### Snapping Facilities and Demand Points
+
+Before routing from facilities or demand points, snap them to the nearest network location. This ensures routing queries don't fail on "off-network" origins.
+
+```python
+facilities = wbe.read_vector('fire_stations.shp')
+
+snapped = wbe.vector.network_analysis.snap_points_to_network(
+    network=edges,
+    points=facilities,
+    snap_distance=50.0,  # meters
+    search_by_nearest=True
+)
+wbe.write_vector(snapped, 'fire_stations_snapped.shp')
+# Output includes SNAP_DIST (offset to network) and snapped geometry.
+```
+
 ---
 
 ## Step 2 — Shortest Path and Alternatives

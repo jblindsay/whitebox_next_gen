@@ -32,6 +32,74 @@ Common Whitebox Next Gen applications include:
 
 ---
 
+## Route Calibration and M-Value Management
+
+Measures are only useful when anchored to real-world control points. If your
+raw routes lack calibration, or have been edited, use the calibration tools
+to establish stable, field-verified measures.
+
+### Initial Calibration from Control Points
+
+`route_calibrate()` establishes measure values on routes using control points
+with known measures. For example, if you have kilometre posts at known
+distances along a highway, calibration ensures your event locations align with
+field reality.
+
+```python
+import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+wbe.working_directory = '/data/linear_referencing'
+
+routes = wbe.read_vector('highway_centerlines.shp')
+km_posts = wbe.read_vector('km_post_locations.shp')  # with ROUTE_ID and KNOWN_MEASURE fields
+
+calibrated = wbe.vector.linear_referencing.route_calibrate(
+    routes=routes,
+    control_points=km_posts,
+    control_measure_field='KNOWN_MEASURE',
+    route_id_field='ROUTE_ID',
+    snap_tolerance=10.0  # max control-point offset from route (meters)
+)
+wbe.write_vector(calibrated, 'highway_calibrated.shp')
+# Output includes FROM_MEASURE and TO_MEASURE fields.
+```
+
+### Recalibration After Edits
+
+If you edit routes (split, merge, or regeometrize), use `route_recalibrate()`
+to scale measures proportionally and maintain event alignment.
+
+```python
+edited_routes = wbe.read_vector('highway_edited.shp')  # after geometric changes
+
+recalibrated = wbe.vector.linear_referencing.route_recalibrate(
+    original_routes=calibrated,     # reference with valid measures
+    edited_routes=edited_routes,
+    route_id_field='ROUTE_ID'
+)
+wbe.write_vector(recalibrated, 'highway_recalibrated.shp')
+```
+
+### Validating Event Snapping
+
+Before placing events on routes, diagnose snapping issues with `snap_events_to_routes()`.
+This reports snap distance, offset, and any unmatched events.
+
+```python
+obs_points = wbe.read_vector('field_observations.shp')
+
+diag = wbe.vector.linear_referencing.snap_events_to_routes(
+    routes=calibrated,
+    events=obs_points,
+    max_offset_distance=15.0
+)
+wbe.write_vector(diag, 'observations_snap_diagnostics.shp')
+# Output includes ROUTE_ID, MEASURE, and OFFSET fields; unmatched features are excluded.
+```
+
+---
+
 ## Step 1 — Understand Your Route Geometry
 
 Routes must be single-part polylines with a consistent digitizing direction.

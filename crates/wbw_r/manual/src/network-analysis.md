@@ -102,6 +102,34 @@ wbw_network_node_degree(i              = 'roads.shp',
   snap_tolerance = 0.5)
 ```
 
+### Building Network Topology
+
+If your raw network lacks proper topology (node points, edge connectivity structure), use `build_network_topology()` to construct nodes and validate edges. This is essential before running advanced analysis like service areas or facility location.
+
+```r
+result <- wbw_build_network_topology(i=roads, snap_tolerance=0.5)
+edges <- result$edges
+nodes <- result$nodes
+wbw_write_vector(edges, 'roads_noded.shp')
+wbw_write_vector(nodes, 'network_nodes.shp')
+```
+
+### Snapping Facilities and Demand Points
+
+Before routing from facilities or demand points, snap them to the nearest network location. This ensures routing queries don't fail on "off-network" origins.
+
+```r
+facilities <- wbw_read_vector('fire_stations.shp')
+
+snapped <- wbw_snap_points_to_network(
+  network=edges,
+  points=facilities,
+  snap_distance=50.0  # meters
+)
+wbw_write_vector(snapped, 'fire_stations_snapped.shp')
+# Output includes SNAP_DIST (offset to network) and snapped geometry.
+```
+
 ---
 
 ## Step 2 — Shortest Path and Alternatives

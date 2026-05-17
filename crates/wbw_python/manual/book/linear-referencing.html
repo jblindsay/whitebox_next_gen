@@ -204,6 +204,59 @@ distance from its start point.</li>
 <li>GPS probe data quality control and kilometrage reporting</li>
 </ul>
 <hr />
+<h2 id="route-calibration-and-m-value-management"><a class="header" href="#route-calibration-and-m-value-management">Route Calibration and M-Value Management</a></h2>
+<p>Measures are only useful when anchored to real-world control points. If your
+raw routes lack calibration, or have been edited, use the calibration tools
+to establish stable, field-verified measures.</p>
+<h3 id="initial-calibration-from-control-points"><a class="header" href="#initial-calibration-from-control-points">Initial Calibration from Control Points</a></h3>
+<p><code>route_calibrate()</code> establishes measure values on routes using control points
+with known measures. For example, if you have kilometre posts at known
+distances along a highway, calibration ensures your event locations align with
+field reality.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+wbe.working_directory = '/data/linear_referencing'
+
+routes = wbe.read_vector('highway_centerlines.shp')
+km_posts = wbe.read_vector('km_post_locations.shp')  # with ROUTE_ID and KNOWN_MEASURE fields
+
+calibrated = wbe.vector.linear_referencing.route_calibrate(
+    routes=routes,
+    control_points=km_posts,
+    control_measure_field='KNOWN_MEASURE',
+    route_id_field='ROUTE_ID',
+    snap_tolerance=10.0  # max control-point offset from route (meters)
+)
+wbe.write_vector(calibrated, 'highway_calibrated.shp')
+# Output includes FROM_MEASURE and TO_MEASURE fields.
+</code></pre>
+<h3 id="recalibration-after-edits"><a class="header" href="#recalibration-after-edits">Recalibration After Edits</a></h3>
+<p>If you edit routes (split, merge, or regeometrize), use <code>route_recalibrate()</code>
+to scale measures proportionally and maintain event alignment.</p>
+<pre><code class="language-python">edited_routes = wbe.read_vector('highway_edited.shp')  # after geometric changes
+
+recalibrated = wbe.vector.linear_referencing.route_recalibrate(
+    original_routes=calibrated,     # reference with valid measures
+    edited_routes=edited_routes,
+    route_id_field='ROUTE_ID'
+)
+wbe.write_vector(recalibrated, 'highway_recalibrated.shp')
+</code></pre>
+<h3 id="validating-event-snapping"><a class="header" href="#validating-event-snapping">Validating Event Snapping</a></h3>
+<p>Before placing events on routes, diagnose snapping issues with <code>snap_events_to_routes()</code>.
+This reports snap distance, offset, and any unmatched events.</p>
+<pre><code class="language-python">obs_points = wbe.read_vector('field_observations.shp')
+
+diag = wbe.vector.linear_referencing.snap_events_to_routes(
+    routes=calibrated,
+    events=obs_points,
+    max_offset_distance=15.0
+)
+wbe.write_vector(diag, 'observations_snap_diagnostics.shp')
+# Output includes ROUTE_ID, MEASURE, and OFFSET fields; unmatched features are excluded.
+</code></pre>
+<hr />
 <h2 id="step-1--understand-your-route-geometry"><a class="header" href="#step-1--understand-your-route-geometry">Step 1 — Understand Your Route Geometry</a></h2>
 <p>Routes must be single-part polylines with a consistent digitizing direction.
 Before dropping events, confirm:</p>

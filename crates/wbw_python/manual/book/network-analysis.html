@@ -259,6 +259,29 @@ nodes may indicate duplicate arcs.</p>
 <pre><code class="language-python">nodes = wbe.vector.network_analysis.network_node_degree(roads, snap_tolerance=0.5)
 wbe.write_vector(nodes, 'node_degree.shp')
 </code></pre>
+<h3 id="building-network-topology"><a class="header" href="#building-network-topology">Building Network Topology</a></h3>
+<p>If your raw network lacks proper topology (node points, edge connectivity structure), use <code>build_network_topology()</code> to construct nodes and validate edges. This is essential before running advanced analysis like service areas or facility location.</p>
+<pre><code class="language-python">edges, nodes = wbe.vector.network_analysis.build_network_topology(
+    roads,
+    snap_tolerance=0.5,
+    output_nodes=True
+)
+wbe.write_vector(edges, 'roads_noded.shp')
+wbe.write_vector(nodes, 'network_nodes.shp')
+</code></pre>
+<h3 id="snapping-facilities-and-demand-points"><a class="header" href="#snapping-facilities-and-demand-points">Snapping Facilities and Demand Points</a></h3>
+<p>Before routing from facilities or demand points, snap them to the nearest network location. This ensures routing queries don't fail on "off-network" origins.</p>
+<pre><code class="language-python">facilities = wbe.read_vector('fire_stations.shp')
+
+snapped = wbe.vector.network_analysis.snap_points_to_network(
+    network=edges,
+    points=facilities,
+    snap_distance=50.0,  # meters
+    search_by_nearest=True
+)
+wbe.write_vector(snapped, 'fire_stations_snapped.shp')
+# Output includes SNAP_DIST (offset to network) and snapped geometry.
+</code></pre>
 <hr />
 <h2 id="step-2--shortest-path-and-alternatives"><a class="header" href="#step-2--shortest-path-and-alternatives">Step 2 — Shortest Path and Alternatives</a></h2>
 <h3 id="single-shortest-path"><a class="header" href="#single-shortest-path">Single Shortest Path</a></h3>

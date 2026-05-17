@@ -232,6 +232,31 @@ segments by <code>ROUTE_ID</code>.</p>
 </tbody></table>
 </div>
 <hr />
+<h2 id="route-calibration-and-recalibration"><a class="header" href="#route-calibration-and-recalibration">Route Calibration and Recalibration</a></h2>
+<p>Measures are only useful when anchored to real-world control points such as kilometre posts or survey stations. If your routes lack calibration or have been edited, use these tools to establish stable, field-verified measures.</p>
+<h3 id="calibrate-routes-from-control-points"><a class="header" href="#calibrate-routes-from-control-points">Calibrate Routes from Control Points</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Linear Referencing →
+<code>Route Calibrate</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>Input routes</td><td>roads.shp (with ROUTE_ID field)</td></tr>
+<tr><td>Control points</td><td>km_posts.shp (with ROUTE_ID and KNOWN_MEASURE fields)</td></tr>
+<tr><td>Control measure field</td><td>KNOWN_MEASURE</td></tr>
+<tr><td>Snap tolerance</td><td>10.0 (meters)</td></tr>
+<tr><td>Output</td><td>routes_calibrated.shp</td></tr>
+</tbody></table>
+</div>
+<p>Output adds <code>FROM_MEASURE</code> and <code>TO_MEASURE</code> fields containing the calibrated values.</p>
+<h3 id="recalibrate-after-route-edits"><a class="header" href="#recalibrate-after-route-edits">Recalibrate After Route Edits</a></h3>
+<p>If you split, merge, or redraw routes, use recalibration to scale measures proportionally:</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Linear Referencing →
+<code>Route Recalibrate</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>Original routes</td><td>routes_calibrated.shp (reference with valid measures)</td></tr>
+<tr><td>Edited routes</td><td>routes_edited.shp (after geometric changes)</td></tr>
+<tr><td>Output</td><td>routes_recalibrated.shp</td></tr>
+</tbody></table>
+</div>
+<hr />
 <h3 id="step-2--validate-route-identifiers"><a class="header" href="#step-2--validate-route-identifiers">Step 2 — Validate Route Identifiers</a></h3>
 <p>Route IDs must be unique per route and stable across updates. Check for
 duplicates.</p>

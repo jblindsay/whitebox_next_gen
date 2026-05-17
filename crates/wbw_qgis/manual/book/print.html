@@ -2414,6 +2414,29 @@ Add Geometry Attributes</p>
 </ul>
 <p>Use this prepared layer as the routing network for native QGIS algorithms.</p>
 <hr />
+<h3 id="step-25---build-network-topology-and-snap-points-optional"><a class="header" href="#step-25---build-network-topology-and-snap-points-optional">Step 2.5 - Build Network Topology and Snap Points (Optional)</a></h3>
+<p>If your network lacks proper node structure or you need to snap facility/demand points to the network:</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Vector Analysis →
+<code>Build Network Topology</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>Input vector</td><td>roads_prepared.shp</td></tr>
+<tr><td>Snap tolerance</td><td>0.5</td></tr>
+<tr><td>Output</td><td>roads_noded.shp</td></tr>
+<tr><td>Output nodes</td><td>network_nodes.shp</td></tr>
+</tbody></table>
+</div>
+<p>Then snap your facilities and demand points:</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Vector Analysis →
+<code>Snap Points to Network</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>Network layer</td><td>roads_noded.shp</td></tr>
+<tr><td>Points layer</td><td>fire_stations.shp</td></tr>
+<tr><td>Snap distance</td><td>50.0 (meters)</td></tr>
+<tr><td>Output</td><td>fire_stations_snapped.shp</td></tr>
+</tbody></table>
+</div>
+<p>Output includes <code>SNAP_DIST</code> (offset to network) for diagnostics.</p>
+<hr />
 <h2 id="workflow-b-routing-service-areas-and-closest-facility"><a class="header" href="#workflow-b-routing-service-areas-and-closest-facility">Workflow B: Routing, Service Areas, and Closest Facility</a></h2>
 <h3 id="step-3---shortest-path"><a class="header" href="#step-3---shortest-path">Step 3 - Shortest Path</a></h3>
 <p>Processing Toolbox -&gt; Network Analysis:</p>
@@ -2581,6 +2604,31 @@ segments by <code>ROUTE_ID</code>.</p>
 <tr><td>Input layer</td><td><code>roads.shp</code> (merged per route)</td></tr>
 <tr><td>M value</td><td>Expression: <code>$length</code> (QGIS expression — cumulative along merged route)</td></tr>
 <tr><td>Output</td><td><code>routes_m.shp</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="route-calibration-and-recalibration"><a class="header" href="#route-calibration-and-recalibration">Route Calibration and Recalibration</a></h2>
+<p>Measures are only useful when anchored to real-world control points such as kilometre posts or survey stations. If your routes lack calibration or have been edited, use these tools to establish stable, field-verified measures.</p>
+<h3 id="calibrate-routes-from-control-points"><a class="header" href="#calibrate-routes-from-control-points">Calibrate Routes from Control Points</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Linear Referencing →
+<code>Route Calibrate</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>Input routes</td><td>roads.shp (with ROUTE_ID field)</td></tr>
+<tr><td>Control points</td><td>km_posts.shp (with ROUTE_ID and KNOWN_MEASURE fields)</td></tr>
+<tr><td>Control measure field</td><td>KNOWN_MEASURE</td></tr>
+<tr><td>Snap tolerance</td><td>10.0 (meters)</td></tr>
+<tr><td>Output</td><td>routes_calibrated.shp</td></tr>
+</tbody></table>
+</div>
+<p>Output adds <code>FROM_MEASURE</code> and <code>TO_MEASURE</code> fields containing the calibrated values.</p>
+<h3 id="recalibrate-after-route-edits"><a class="header" href="#recalibrate-after-route-edits">Recalibrate After Route Edits</a></h3>
+<p>If you split, merge, or redraw routes, use recalibration to scale measures proportionally:</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Linear Referencing →
+<code>Route Recalibrate</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>Original routes</td><td>routes_calibrated.shp (reference with valid measures)</td></tr>
+<tr><td>Edited routes</td><td>routes_edited.shp (after geometric changes)</td></tr>
+<tr><td>Output</td><td>routes_recalibrated.shp</td></tr>
 </tbody></table>
 </div>
 <hr />

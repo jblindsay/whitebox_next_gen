@@ -2180,6 +2180,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("ceil", "raster", "general"),
     ("centroid_raster", "raster", "general"),
     ("centroid_vector", "vector", "geometry_processing"),
+    ("representative_point_vector", "vector", "geometry_processing"),
     ("change_vector_analysis", "remote_sensing", "change_detection"),
     ("circular_variance_of_aspect", "terrain", "roughness_texture"),
     ("classify_buildings_in_lidar", "lidar", "filtering_classification"),
@@ -2744,6 +2745,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("smooth_vectors", "vector", "geometry_processing"),
     ("smooth_vegetation_residual", "terrain", "general"),
     ("snap_endnodes", "vector", "geometry_processing"),
+    ("snap_points_to_network", "vector", "network_analysis"),
     ("snap_pour_points", "hydrology", "watersheds_basins"),
     ("sobel_filter", "remote_sensing", "edge_feature_detection"),
     ("soil_landscape_classification", "precision_agriculture", "general"),
@@ -3265,6 +3267,7 @@ fn matches_subcategory(category_slug: &str, subcategory: &str, tool_id: &str, ta
                 || id == "network_accessibility_metrics"
                 || id == "network_centrality_metrics"
                 || id == "od_sensitivity_analysis"
+                || id == "snap_points_to_network"
                 || id == "vehicle_routing_cvrp"
                 || id == "vehicle_routing_pickup_delivery"
                 || id == "vehicle_routing_vrptw"
@@ -3301,6 +3304,7 @@ fn matches_subcategory(category_slug: &str, subcategory: &str, tool_id: &str, ta
                     | "extend_vector_lines"
                     | "merge_line_segments"
                     | "polygonize"
+                    | "representative_point_vector"
                     | "reproject_vector"
                     | "simplify_features"
                     | "smooth_vectors"
@@ -15515,7 +15519,7 @@ impl WbEnvironment {
     }
 
     /// [PRO] forestry_structure_and_biomass_intelligence — derive forest structure and biomass proxy maps from LiDAR.
-    #[pyo3(signature = (input, profile="balanced", resolution=2.0, stand_block_cells=12, biomass_cap=25.0, output_prefix=None, callback=None))]
+    #[pyo3(signature = (input, profile="balanced", resolution=2.0, stand_block_cells=12, biomass_cap=25.0, terrain_adaptation="moderate", output_prefix=None, callback=None))]
     fn forestry_structure_and_biomass_intelligence(
         &self,
         input: &Lidar,
@@ -15523,6 +15527,7 @@ impl WbEnvironment {
         resolution: f64,
         stand_block_cells: i64,
         biomass_cap: f64,
+        terrain_adaptation: &str,
         output_prefix: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<(Raster, Raster, Vector, Raster, Raster, String)> {
@@ -15532,6 +15537,7 @@ impl WbEnvironment {
         args.insert("resolution".to_string(), json!(resolution));
         args.insert("stand_block_cells".to_string(), json!(stand_block_cells));
         args.insert("biomass_cap".to_string(), json!(biomass_cap));
+        args.insert("terrain_adaptation".to_string(), json!(terrain_adaptation));
         if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
             args.insert("output_prefix".to_string(), json!(prefix));
         }
@@ -26826,6 +26832,26 @@ impl WbEnvironment {
     }
 
     #[pyo3(signature = (input, output_path=None, callback=None))]
+    fn representative_point_vector(
+        &self,
+        input: &Vector,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_output_path(&input.file_path, "representative_point_vector")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("representative_point_vector", args, callback)
+    }
+
+    #[pyo3(signature = (input, output_path=None, callback=None))]
     fn medoid(
         &self,
         input: &Vector,
@@ -27603,6 +27629,34 @@ impl WbEnvironment {
         args.insert("include_end".to_string(), json!(include_end));
         args.insert("output".to_string(), json!(output));
         self._run_vector_tool_with_args("points_along_lines", args, callback)
+    }
+
+    #[pyo3(signature = (points, network, max_snap_distance=None, keep_unsnapped=true, output_path=None, callback=None))]
+    fn snap_points_to_network(
+        &self,
+        points: &Vector,
+        network: &Vector,
+        max_snap_distance: Option<f64>,
+        keep_unsnapped: bool,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&points.file_path, "snap_points_to_network")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("points".to_string(), json!(points.file_path.to_string_lossy().to_string()));
+        args.insert("network".to_string(), json!(network.file_path.to_string_lossy().to_string()));
+        if let Some(v) = max_snap_distance {
+            args.insert("max_snap_distance".to_string(), json!(v));
+        }
+        args.insert("keep_unsnapped".to_string(), json!(keep_unsnapped));
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("snap_points_to_network", args, callback)
     }
 
     #[pyo3(signature = (routes, points, max_offset_distance=None, output_path=None, callback=None))]

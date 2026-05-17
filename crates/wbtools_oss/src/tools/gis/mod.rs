@@ -130,6 +130,7 @@ pub struct ReclassTool;
 pub struct FilterRasterFeaturesByAreaTool;
 pub struct SmoothVectorsTool;
 pub struct SnapEndnodesTool;
+pub struct SnapPointsToNetworkTool;
 pub struct SplitVectorLinesTool;
 pub struct SplitWithLinesTool;
 pub struct SumOverlayTool;
@@ -174,6 +175,7 @@ pub struct VectorHexBinningTool;
 // ── Tier-1 new vector tools ──────────────────────────────────────────────────
 pub struct ReprojectVectorTool;
 pub struct AddGeometryAttributesTool;
+pub struct RepresentativePointVectorTool;
 pub struct SimplifyFeaturesTool;
 pub struct NearTool;
 pub struct SelectByLocationTool;
@@ -11943,6 +11945,115 @@ impl Tool for CentroidVectorTool {
     }
 }
 
+impl Tool for RepresentativePointVectorTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "representative_point_vector",
+            display_name: "Representative Point Vector",
+            summary: "Computes representative points guaranteed to lie on or within input geometries.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec {
+                    name: "input",
+                    description: "Input vector layer.",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "output",
+                    description: "Output point vector path.",
+                    required: true,
+                },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input_polygons.gpkg"));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("representative_points.gpkg"));
+
+        ToolManifest {
+            id: "representative_point_vector".to_string(),
+            display_name: "Representative Point Vector".to_string(),
+            summary: "Computes representative points guaranteed to lie on or within input geometries."
+                .to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor {
+                    name: "input".to_string(),
+                    description: "Input vector layer.".to_string(),
+                    required: true,
+                },
+                ToolParamDescriptor {
+                    name: "output".to_string(),
+                    description: "Output point vector path.".to_string(),
+                    required: true,
+                },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "representative_point_vector_basic".to_string(),
+                description: "Creates an interior representative point for each polygon feature."
+                    .to_string(),
+                args: example_args,
+            }],
+            tags: vec![
+                "vector".to_string(),
+                "geometry".to_string(),
+                "representative-point".to_string(),
+                "point-on-surface".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let coalescer = PercentCoalescer::new(1, 99);
+
+        let mut output = wbvector::Layer::new(format!("{}_representative_points", input.name));
+        output.geom_type = Some(wbvector::GeometryType::Point);
+        output.crs = input.crs.clone();
+        output.schema = input.schema.clone();
+
+        let total = input.features.len().max(1);
+        let mut next_fid = 1u64;
+
+        for (index, feature) in input.features.iter().enumerate() {
+            let mut out_feature = wbvector::Feature {
+                fid: next_fid,
+                geometry: None,
+                attributes: feature.attributes.clone(),
+            };
+
+            if let Some(geometry) = feature.geometry.as_ref() {
+                let topo_geometry = wb_geometry_to_topo(geometry)?;
+                if let Some(rep_point) = representative_point_for_topo_geometry(&topo_geometry, 1.0e-9)
+                {
+                    out_feature.geometry = Some(wbvector::Geometry::Point(to_wb_coord(&rep_point)));
+                }
+            }
+
+            output.push(out_feature);
+            next_fid += 1;
+            coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
 impl Tool for ExtractByAttributeTool {
     fn metadata(&self) -> ToolMetadata {
         ToolMetadata {
@@ -20044,6 +20155,267 @@ fn locate_point_on_routes(
     best
 }
 
+fn ring_centroid_topo(coords: &[TopoCoord]) -> Option<TopoCoord> {
+    if coords.len() < 4 {
+        return None;
+    }
+
+    let mut a2 = 0.0;
+    let mut cx = 0.0;
+    let mut cy = 0.0;
+
+    for i in 0..(coords.len() - 1) {
+        let p = coords[i];
+        let q = coords[i + 1];
+        let cross = p.x * q.y - q.x * p.y;
+        a2 += cross;
+        cx += (p.x + q.x) * cross;
+        cy += (p.y + q.y) * cross;
+    }
+
+    if a2.abs() <= 1.0e-18 {
+        return None;
+    }
+
+    let inv = 1.0 / (3.0 * a2);
+    Some(TopoCoord::xy(cx * inv, cy * inv))
+}
+
+fn representative_point_for_ring_coords(coords: &[TopoCoord], eps: f64) -> Option<TopoCoord> {
+    if coords.len() < 4 {
+        return None;
+    }
+
+    let ring_poly = TopoGeometry::Polygon(TopoPolygon::new(
+        TopoLinearRing::new(coords.to_vec()),
+        Vec::new(),
+    ));
+
+    if let Some(c) = ring_centroid_topo(coords) {
+        if contains(&ring_poly, &TopoGeometry::Point(c)) {
+            return Some(c);
+        }
+    }
+
+    let mut min_x = coords[0].x;
+    let mut max_x = coords[0].x;
+    let mut min_y = coords[0].y;
+    let mut max_y = coords[0].y;
+    for &p in &coords[1..] {
+        min_x = min_x.min(p.x);
+        max_x = max_x.max(p.x);
+        min_y = min_y.min(p.y);
+        max_y = max_y.max(p.y);
+    }
+
+    let h = (max_y - min_y).abs();
+    let y_candidates = [
+        (min_y + max_y) * 0.5,
+        min_y + h * 0.37,
+        min_y + h * 0.63,
+        min_y + h * 0.23,
+        min_y + h * 0.77,
+    ];
+
+    for mut y in y_candidates {
+        if y <= min_y {
+            y = min_y + (eps * 16.0).max(h * 1.0e-6);
+        }
+        if y >= max_y {
+            y = max_y - (eps * 16.0).max(h * 1.0e-6);
+        }
+
+        let mut xs = Vec::new();
+        for i in 0..(coords.len() - 1) {
+            let a = coords[i];
+            let b = coords[i + 1];
+            let y0 = a.y;
+            let y1 = b.y;
+
+            if (y1 - y0).abs() <= eps {
+                continue;
+            }
+
+            let lo = y0.min(y1);
+            let hi = y0.max(y1);
+            if y < lo || y >= hi {
+                continue;
+            }
+
+            let t = (y - y0) / (y1 - y0);
+            xs.push(a.x + t * (b.x - a.x));
+        }
+
+        if xs.len() < 2 {
+            continue;
+        }
+        xs.sort_by(|a, b| a.total_cmp(b));
+
+        for pair in xs.chunks_exact(2) {
+            let x0 = pair[0];
+            let x1 = pair[1];
+            let span = x1 - x0;
+            if span <= eps * 4.0 {
+                continue;
+            }
+            let candidate = TopoCoord::xy((x0 + x1) * 0.5, y);
+            if contains(&ring_poly, &TopoGeometry::Point(candidate)) {
+                return Some(candidate);
+            }
+        }
+    }
+
+    let mut best_i = None;
+    let mut best_len2 = 0.0f64;
+    for i in 0..(coords.len() - 1) {
+        let a = coords[i];
+        let b = coords[i + 1];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let l2 = dx * dx + dy * dy;
+        if l2 > best_len2 {
+            best_len2 = l2;
+            best_i = Some(i);
+        }
+    }
+
+    let i = best_i?;
+    let a = coords[i];
+    let b = coords[i + 1];
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    let len = (dx * dx + dy * dy).sqrt();
+    if len <= eps {
+        return None;
+    }
+
+    let mid = TopoCoord::xy((a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
+    let left_nx = -dy / len;
+    let left_ny = dx / len;
+    let sign = if ring_signed_area(coords) >= 0.0 { 1.0 } else { -1.0 };
+    let nx = left_nx * sign;
+    let ny = left_ny * sign;
+
+    let probe_dist = (eps * 256.0).max(len * 1.0e-4);
+    let p1 = TopoCoord::xy(mid.x + nx * probe_dist, mid.y + ny * probe_dist);
+    if contains(&ring_poly, &TopoGeometry::Point(p1)) {
+        return Some(p1);
+    }
+
+    let p2 = TopoCoord::xy(mid.x - nx * probe_dist, mid.y - ny * probe_dist);
+    if contains(&ring_poly, &TopoGeometry::Point(p2)) {
+        return Some(p2);
+    }
+
+    None
+}
+
+fn representative_point_for_polygon(poly: &TopoPolygon, eps: f64) -> Option<TopoCoord> {
+    let poly_geom = TopoGeometry::Polygon(poly.clone());
+
+    if let Some(c) = geometry_centroid(&poly_geom) {
+        if contains(&poly_geom, &TopoGeometry::Point(c)) {
+            return Some(c);
+        }
+    }
+
+    if let Some(candidate) = representative_point_for_ring_coords(&poly.exterior.coords, eps) {
+        if contains(&poly_geom, &TopoGeometry::Point(candidate)) {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+fn representative_point_for_topo_geometry(geometry: &TopoGeometry, eps: f64) -> Option<TopoCoord> {
+    match geometry {
+        TopoGeometry::Point(coord) => Some(*coord),
+        TopoGeometry::LineString(line) => {
+            if line.coords.is_empty() {
+                return None;
+            }
+            if line.coords.len() == 1 {
+                return Some(line.coords[0]);
+            }
+
+            let total_length: f64 = line
+                .coords
+                .windows(2)
+                .map(|segment| topo_coord_dist2(segment[0], segment[1]).sqrt())
+                .sum();
+            if total_length <= eps {
+                return Some(line.coords[0]);
+            }
+
+            let target = total_length * 0.5;
+            let mut accum = 0.0;
+            for segment in line.coords.windows(2) {
+                let a = segment[0];
+                let b = segment[1];
+                let seg_len = topo_coord_dist2(a, b).sqrt();
+                if seg_len <= eps {
+                    continue;
+                }
+                if accum + seg_len >= target {
+                    let t = ((target - accum) / seg_len).clamp(0.0, 1.0);
+                    return Some(TopoCoord::interpolate_segment(a, b, t));
+                }
+                accum += seg_len;
+            }
+            line.coords.last().copied()
+        }
+        TopoGeometry::Polygon(poly) => representative_point_for_polygon(poly, eps),
+        TopoGeometry::MultiPoint(points) => points.first().copied(),
+        TopoGeometry::MultiLineString(lines) => {
+            let mut best: Option<&TopoLineString> = None;
+            let mut best_len = 0.0;
+            for line in lines {
+                let len = geometry_length(&TopoGeometry::LineString(line.clone()));
+                if len > best_len {
+                    best_len = len;
+                    best = Some(line);
+                }
+            }
+            best.and_then(|line| representative_point_for_topo_geometry(&TopoGeometry::LineString(line.clone()), eps))
+        }
+        TopoGeometry::MultiPolygon(polygons) => {
+            let mut best: Option<&TopoPolygon> = None;
+            let mut best_area = -1.0;
+            for poly in polygons {
+                let area = geometry_area(&TopoGeometry::Polygon(poly.clone())).abs();
+                if area > best_area {
+                    best_area = area;
+                    best = Some(poly);
+                }
+            }
+            best.and_then(|poly| representative_point_for_polygon(poly, eps))
+        }
+        TopoGeometry::GeometryCollection(parts) => {
+            for part in parts {
+                if matches!(part, TopoGeometry::Polygon(_) | TopoGeometry::MultiPolygon(_)) {
+                    if let Some(p) = representative_point_for_topo_geometry(part, eps) {
+                        return Some(p);
+                    }
+                }
+            }
+            for part in parts {
+                if matches!(part, TopoGeometry::LineString(_) | TopoGeometry::MultiLineString(_)) {
+                    if let Some(p) = representative_point_for_topo_geometry(part, eps) {
+                        return Some(p);
+                    }
+                }
+            }
+            for part in parts {
+                if let Some(p) = representative_point_for_topo_geometry(part, eps) {
+                    return Some(p);
+                }
+            }
+            None
+        }
+    }
+}
+
 fn route_geometry_length(geometry: &wbvector::Geometry) -> f64 {
     match geometry {
         wbvector::Geometry::LineString(coords) => linestring_length(coords),
@@ -22187,6 +22559,201 @@ impl Tool for LocatePointsAlongRoutesTool {
                 feature.attributes.push(wbvector::FieldValue::Null);
                 feature.attributes.push(wbvector::FieldValue::Null);
             }
+            coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for SnapPointsToNetworkTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "snap_points_to_network",
+            display_name: "Snap Points To Network",
+            summary: "Snaps input point features to the nearest location along a network line layer.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "points", description: "Input point layer to be snapped.", required: true },
+                ToolParamSpec { name: "network", description: "Input network line layer.", required: true },
+                ToolParamSpec { name: "max_snap_distance", description: "Optional maximum snapping distance in map units.", required: false },
+                ToolParamSpec { name: "keep_unsnapped", description: "If true (default), retains points that cannot be snapped within tolerance.", required: false },
+                ToolParamSpec { name: "output", description: "Output snapped point vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("points".to_string(), json!("points.gpkg"));
+        defaults.insert("network".to_string(), json!("network.gpkg"));
+        defaults.insert("keep_unsnapped".to_string(), json!(true));
+        let mut example_args = defaults.clone();
+        example_args.insert("max_snap_distance".to_string(), json!(50.0));
+        example_args.insert("output".to_string(), json!("snapped_points.gpkg"));
+
+        ToolManifest {
+            id: "snap_points_to_network".to_string(),
+            display_name: "Snap Points To Network".to_string(),
+            summary: "Snaps input point features to the nearest location along a network line layer.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "points".to_string(), description: "Input point layer to be snapped.".to_string(), required: true },
+                ToolParamDescriptor { name: "network".to_string(), description: "Input network line layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional maximum snapping distance in map units.".to_string(), required: false },
+                ToolParamDescriptor { name: "keep_unsnapped".to_string(), description: "If true (default), retains points that cannot be snapped within tolerance.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output snapped point vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "snap_points_to_network_basic".to_string(),
+                description: "Snaps point features to nearest network edges and writes snap diagnostics fields.".to_string(),
+                args: example_args,
+            }],
+            tags: vec![
+                "vector".to_string(),
+                "network".to_string(),
+                "snapping".to_string(),
+                "preprocessing".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let points = load_vector_arg(args, "points")?;
+        let network = load_vector_arg(args, "network")?;
+
+        if points.geom_type != Some(wbvector::GeometryType::Point) {
+            return Err(ToolError::Validation("points must be a point layer".to_string()));
+        }
+        if network.geom_type != Some(wbvector::GeometryType::LineString)
+            && network.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("network must be a line layer".to_string()));
+        }
+
+        if let Some(max_snap_distance) = parse_optional_f64_arg(args, "max_snap_distance") {
+            if !max_snap_distance.is_finite() || max_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "max_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let points = load_vector_arg(args, "points")?;
+        let network = load_vector_arg(args, "network")?;
+        let max_snap_distance = parse_optional_f64_arg(args, "max_snap_distance");
+        let keep_unsnapped = args
+            .get("keep_unsnapped")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let coalescer = PercentCoalescer::new(1, 99);
+
+        let route_geometries: Vec<(i64, wbvector::Geometry)> = network
+            .features
+            .iter()
+            .filter_map(|feature| feature.geometry.clone().map(|geometry| (feature.fid as i64, geometry)))
+            .collect();
+        if route_geometries.is_empty() {
+            return Err(ToolError::Execution(
+                "network layer contains no usable line geometries".to_string(),
+            ));
+        }
+
+        let matches: Vec<Option<(i64, f64, wbvector::Coord)>> = points
+            .features
+            .par_iter()
+            .map(|feature| match feature.geometry.as_ref() {
+                Some(wbvector::Geometry::Point(point)) => {
+                    locate_point_on_routes(point, &route_geometries, max_snap_distance)
+                        .map(|(route_fid, _measure, offset_dist, snapped)| {
+                            (route_fid, offset_dist, snapped)
+                        })
+                }
+                _ => None,
+            })
+            .collect();
+
+        let mut output = wbvector::Layer::new(format!("{}_snapped", points.name));
+        output.geom_type = Some(wbvector::GeometryType::Point);
+        output.crs = points.crs.clone();
+        output.schema = points.schema.clone();
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("SNAP_FID", wbvector::FieldType::Integer));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("SNAP_DIST", wbvector::FieldType::Float));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("SNAP_X", wbvector::FieldType::Float));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("SNAP_Y", wbvector::FieldType::Float));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("SNAPPED", wbvector::FieldType::Integer));
+
+        let total = points.features.len().max(1);
+        let mut next_fid = 1u64;
+        for (index, (feature, snapped_match)) in points
+            .features
+            .iter()
+            .zip(matches.into_iter())
+            .enumerate()
+        {
+            match snapped_match {
+                Some((route_fid, snap_dist, snapped_coord)) => {
+                    let mut attributes = feature.attributes.clone();
+                    attributes.push(wbvector::FieldValue::Integer(route_fid));
+                    attributes.push(wbvector::FieldValue::Float(snap_dist));
+                    attributes.push(wbvector::FieldValue::Float(snapped_coord.x));
+                    attributes.push(wbvector::FieldValue::Float(snapped_coord.y));
+                    attributes.push(wbvector::FieldValue::Integer(1));
+
+                    output.push(wbvector::Feature {
+                        fid: next_fid,
+                        geometry: Some(wbvector::Geometry::Point(snapped_coord)),
+                        attributes,
+                    });
+                    next_fid += 1;
+                }
+                None => {
+                    if keep_unsnapped {
+                        let mut attributes = feature.attributes.clone();
+                        attributes.push(wbvector::FieldValue::Null);
+                        attributes.push(wbvector::FieldValue::Null);
+                        attributes.push(wbvector::FieldValue::Null);
+                        attributes.push(wbvector::FieldValue::Null);
+                        attributes.push(wbvector::FieldValue::Integer(0));
+
+                        let fallback_geom = match feature.geometry.as_ref() {
+                            Some(wbvector::Geometry::Point(coord)) => {
+                                Some(wbvector::Geometry::Point(coord.clone()))
+                            }
+                            _ => None,
+                        };
+
+                        output.push(wbvector::Feature {
+                            fid: next_fid,
+                            geometry: fallback_geom,
+                            attributes,
+                        });
+                        next_fid += 1;
+                    }
+                }
+            }
+
             coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
         }
 

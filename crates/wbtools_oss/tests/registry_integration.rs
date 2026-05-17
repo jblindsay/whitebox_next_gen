@@ -124,6 +124,7 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"buffer_vector"));
     assert!(ids.contains(&"centroid_raster"));
     assert!(ids.contains(&"centroid_vector"));
+    assert!(ids.contains(&"representative_point_vector"));
     assert!(ids.contains(&"clip"));
     assert!(ids.contains(&"clip_raster_to_polygon"));
     assert!(ids.contains(&"clump"));
@@ -239,6 +240,7 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"route_measure_qa"));
     assert!(ids.contains(&"route_calibrate"));
     assert!(ids.contains(&"route_recalibrate"));
+    assert!(ids.contains(&"snap_points_to_network"));
     assert!(ids.contains(&"vector_summary_statistics"));
     assert!(ids.contains(&"rename_field"));
     assert!(ids.contains(&"delete_field"));

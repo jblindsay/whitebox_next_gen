@@ -351,6 +351,7 @@ category = "vector"
 subcategory = "network_analysis"
 tools = [
   "network_readiness_and_diagnostics_intelligence",
+  "snap_points_to_network",
   "service_area_planning_and_coverage_optimization",
   "fleet_routing_and_dispatch_optimizer",
   "closest_facility_network",
@@ -411,6 +412,7 @@ tools = [
   "minimum_bounding_envelope",
   "minimum_convex_hull",
   "polygonize",
+  "representative_point_vector",
   "simplify_features",
   "smooth_vectors",
   "snap_endnodes",

@@ -340,6 +340,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::ClipRasterToPolygonTool));
     registry.register(Box::new(tools::ClipTool));
     registry.register(Box::new(tools::CentroidVectorTool));
+    registry.register(Box::new(tools::RepresentativePointVectorTool));
     registry.register(Box::new(tools::ClumpTool));
     registry.register(Box::new(tools::CompactnessRatioTool));
     registry.register(Box::new(tools::CountIfTool));
@@ -496,6 +497,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::ShapeComplexityIndexVectorTool));
     registry.register(Box::new(tools::SmoothVectorsTool));
     registry.register(Box::new(tools::SnapEndnodesTool));
+    registry.register(Box::new(tools::SnapPointsToNetworkTool));
     registry.register(Box::new(tools::PointsAlongLinesTool));
     registry.register(Box::new(tools::LocatePointsAlongRoutesTool));
     registry.register(Box::new(tools::RouteEventPointsFromTableTool));

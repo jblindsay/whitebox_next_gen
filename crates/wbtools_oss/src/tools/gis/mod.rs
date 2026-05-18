@@ -10186,6 +10186,70 @@ fn to_wb_rings(rings: &[TopoLinearRing]) -> Vec<wbvector::Ring> {
     rings.iter().map(to_wb_ring).collect()
 }
 
+fn min_distance_sq_to_ring(coord: &wbvector::Coord, ring: &wbvector::Ring) -> f64 {
+    ring.0
+        .iter()
+        .map(|p| {
+            let dx = p.x - coord.x;
+            let dy = p.y - coord.y;
+            dx * dx + dy * dy
+        })
+        .fold(f64::INFINITY, f64::min)
+}
+
+fn select_polygon_from_multipolygon(
+    polys: &[TopoPolygon],
+    anchor: Option<&wbvector::Coord>,
+) -> Option<wbvector::Geometry> {
+    if polys.is_empty() {
+        return None;
+    }
+
+    if let Some(anchor_coord) = anchor {
+        let mut best_containing: Option<(usize, wbvector::Ring, Vec<wbvector::Ring>)> = None;
+        let mut best_nearest: Option<(f64, wbvector::Ring, Vec<wbvector::Ring>)> = None;
+
+        for poly in polys {
+            let exterior = to_wb_ring(&poly.exterior);
+            let interiors = to_wb_rings(&poly.holes);
+            if polygon_contains_xy(&exterior, &interiors, anchor_coord.x, anchor_coord.y) {
+                let score = exterior.0.len();
+                if best_containing
+                    .as_ref()
+                    .map(|(best_score, _, _)| score > *best_score)
+                    .unwrap_or(true)
+                {
+                    best_containing = Some((score, exterior, interiors));
+                }
+            } else {
+                let d2 = min_distance_sq_to_ring(anchor_coord, &exterior);
+                if best_nearest
+                    .as_ref()
+                    .map(|(best_d2, _, _)| d2 < *best_d2)
+                    .unwrap_or(true)
+                {
+                    best_nearest = Some((d2, exterior, interiors));
+                }
+            }
+        }
+
+        if let Some((_, exterior, interiors)) = best_containing {
+            return Some(wbvector::Geometry::Polygon { exterior, interiors });
+        }
+        if let Some((_, exterior, interiors)) = best_nearest {
+            return Some(wbvector::Geometry::Polygon { exterior, interiors });
+        }
+    }
+
+    polys
+        .iter()
+        .max_by_key(|poly| poly.exterior.coords.len())
+        .map(|poly| wbvector::Geometry::Polygon {
+            exterior: to_wb_ring(&poly.exterior),
+            interiors: to_wb_rings(&poly.holes),
+        })
+}
+
 fn to_topo_polygon(exterior: &wbvector::Ring, interiors: &[wbvector::Ring]) -> TopoPolygon {
     TopoPolygon::new(
         TopoLinearRing::new(exterior.coords().iter().map(to_topo_coord).collect()),
@@ -31288,6 +31352,7 @@ impl Tool for NetworkServiceAreaTool {
                 ToolParamSpec { name: "temporal_mode", description: "Optional temporal interpretation mode: multiplier or absolute.", required: false },
                 ToolParamSpec { name: "temporal_fallback", description: "Optional fallback when temporal row is missing: static_cost or error.", required: false },
                 ToolParamSpec { name: "temporal_profile_report", description: "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).", required: false },
+                ToolParamSpec { name: "snapped_origins_output", description: "Optional output vector path for internal snapped origin anchor points used to seed traversal.", required: false },
                 ToolParamSpec { name: "output", description: "Output service-area vector path.", required: true },
             ],
         }
@@ -31337,6 +31402,7 @@ impl Tool for NetworkServiceAreaTool {
                 ToolParamDescriptor { name: "temporal_mode".to_string(), description: "Optional temporal interpretation mode: multiplier or absolute.".to_string(), required: false },
                 ToolParamDescriptor { name: "temporal_fallback".to_string(), description: "Optional fallback when temporal row is missing: static_cost or error.".to_string(), required: false },
                 ToolParamDescriptor { name: "temporal_profile_report".to_string(), description: "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).".to_string(), required: false },
+                ToolParamDescriptor { name: "snapped_origins_output".to_string(), description: "Optional output vector path for internal snapped origin anchor points used to seed traversal.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output service-area vector path.".to_string(), required: true },
             ],
             defaults,
@@ -31388,6 +31454,13 @@ impl Tool for NetworkServiceAreaTool {
             if normalized != "nodes" && normalized != "edges" && normalized != "polygons" {
                 return Err(ToolError::Validation(
                     "output_mode must be one of 'nodes', 'edges', or 'polygons'".to_string(),
+                ));
+            }
+        }
+        if let Some(path) = parse_optional_string_arg(args, "snapped_origins_output") {
+            if path.trim().is_empty() {
+                return Err(ToolError::Validation(
+                    "snapped_origins_output must be a non-empty path when provided".to_string(),
                 ));
             }
         }
@@ -31510,6 +31583,8 @@ impl Tool for NetworkServiceAreaTool {
         let temporal_mode = parse_temporal_cost_mode_arg(args)?;
         let temporal_fallback = parse_temporal_fallback_arg(args)?;
         let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
+        let snapped_origins_output = parse_optional_string_arg(args, "snapped_origins_output")
+            .map(|s| s.to_string());
         let output_path = parse_vector_path_arg(args, "output")?;
 
         let temporal_options = if let (Some(profile_path), Some(departure)) = (temporal_cost_profile, departure_time) {
@@ -31571,6 +31646,7 @@ impl Tool for NetworkServiceAreaTool {
         }
 
         let mut snapped_origins = Vec::<(i64, Vec<StartSeed>, wbvector::Coord)>::new();
+        let mut snapped_origin_debug = Vec::<(i64, wbvector::Coord, wbvector::Coord, f64, i64, i64)>::new();
         let mut start_nodes = Vec::<usize>::new();
         for (origin_fid, origin) in &origin_points {
             let (idx, node_dist) = nearest_network_node(&graph.nodes, origin)
@@ -31578,10 +31654,19 @@ impl Tool for NetworkServiceAreaTool {
 
             let mut seeds = Vec::<StartSeed>::new();
             let mut anchor_dist = node_dist;
+            let mut anchor_coord = graph.nodes[idx].clone();
+            let mut anchor_node_id = (idx + 1) as i64;
 
             if let Some((u, v, edge_weight, frac, edge_dist)) = nearest_network_edge(&graph, origin) {
                 if edge_dist < anchor_dist {
                     anchor_dist = edge_dist;
+                    let start = &graph.nodes[u];
+                    let end = &graph.nodes[v];
+                    anchor_coord = wbvector::Coord::xy(
+                        start.x + (end.x - start.x) * frac,
+                        start.y + (end.y - start.y) * frac,
+                    );
+                    anchor_node_id = -1;
                 }
                 if edge_weight.is_finite() && edge_weight > 0.0 {
                     seeds.push(StartSeed {
@@ -31612,12 +31697,71 @@ impl Tool for NetworkServiceAreaTool {
                     start_nodes.push(seed.node);
                 }
             }
+            snapped_origin_debug.push((
+                *origin_fid,
+                origin.clone(),
+                anchor_coord,
+                anchor_dist,
+                anchor_node_id,
+                seeds.len() as i64,
+            ));
             snapped_origins.push((*origin_fid, seeds, origin.clone()));
         }
         if snapped_origins.is_empty() {
             return Err(ToolError::Execution(
                 "no origin points snapped to network within max_snap_distance".to_string(),
             ));
+        }
+
+        if let Some(debug_path) = snapped_origins_output.as_deref() {
+            let mut debug_layer = wbvector::Layer::new(format!("{}_snapped_origins", input.name));
+            debug_layer.geom_type = Some(wbvector::GeometryType::Point);
+            debug_layer.crs = input.crs.clone();
+            debug_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("ORIGIN_ID", wbvector::FieldType::Integer));
+            debug_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("INPUT_X", wbvector::FieldType::Float));
+            debug_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("INPUT_Y", wbvector::FieldType::Float));
+            debug_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("ANCHOR_X", wbvector::FieldType::Float));
+            debug_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("ANCHOR_Y", wbvector::FieldType::Float));
+            debug_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("SNAP_DIST", wbvector::FieldType::Float));
+            debug_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("ANCHOR_NID", wbvector::FieldType::Integer));
+            debug_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("SEED_CT", wbvector::FieldType::Integer));
+
+            for (idx, (origin_id, input_coord, anchor_coord, snap_dist, anchor_nid, seed_ct)) in
+                snapped_origin_debug.iter().enumerate()
+            {
+                debug_layer.push(wbvector::Feature {
+                    fid: (idx + 1) as u64,
+                    geometry: Some(wbvector::Geometry::Point(anchor_coord.clone())),
+                    attributes: vec![
+                        wbvector::FieldValue::Integer(*origin_id),
+                        wbvector::FieldValue::Float(input_coord.x),
+                        wbvector::FieldValue::Float(input_coord.y),
+                        wbvector::FieldValue::Float(anchor_coord.x),
+                        wbvector::FieldValue::Float(anchor_coord.y),
+                        wbvector::FieldValue::Float(*snap_dist),
+                        wbvector::FieldValue::Integer(*anchor_nid),
+                        wbvector::FieldValue::Integer(*seed_ct),
+                    ],
+                });
+            }
+
+            let _ = write_vector_output(&debug_layer, debug_path.trim())?;
         }
 
         let dist = dijkstra_all_costs(&graph, &start_nodes, &turn_costs);
@@ -31877,13 +32021,8 @@ impl Tool for NetworkServiceAreaTool {
                                 exterior: to_wb_ring(&poly.exterior),
                                 interiors: to_wb_rings(&poly.holes),
                             }),
-                            TopoGeometry::MultiPolygon(polys) => polys
-                                .iter()
-                                .max_by_key(|poly| poly.exterior.coords.len())
-                                .map(|poly| wbvector::Geometry::Polygon {
-                                    exterior: to_wb_ring(&poly.exterior),
-                                    interiors: to_wb_rings(&poly.holes),
-                                })
+                            TopoGeometry::MultiPolygon(polys) =>
+                                select_polygon_from_multipolygon(&polys, Some(&origin_coord))
                                 .or_else(|| convex_hull_polygon_for_coords(&envelope_coords, eps)),
                             _ => convex_hull_polygon_for_coords(&envelope_coords, eps),
                         }
@@ -31976,13 +32115,8 @@ impl Tool for NetworkServiceAreaTool {
                                 exterior: to_wb_ring(&poly.exterior),
                                 interiors: to_wb_rings(&poly.holes),
                             }),
-                            TopoGeometry::MultiPolygon(polys) => polys
-                                .iter()
-                                .max_by_key(|poly| poly.exterior.coords.len())
-                                .map(|poly| wbvector::Geometry::Polygon {
-                                    exterior: to_wb_ring(&poly.exterior),
-                                    interiors: to_wb_rings(&poly.holes),
-                                })
+                            TopoGeometry::MultiPolygon(polys) =>
+                                select_polygon_from_multipolygon(&polys, None)
                                 .or_else(|| convex_hull_polygon_for_coords(&envelope_coords, eps)),
                             _ => convex_hull_polygon_for_coords(&envelope_coords, eps),
                         }

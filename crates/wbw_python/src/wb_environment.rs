@@ -11550,7 +11550,7 @@ impl WbEnvironment {
 
     /// [PRO] service_area_planning_and_coverage_optimization — network-based multi-ring service-area planning.
     #[allow(clippy::too_many_arguments)]
-    #[pyo3(signature = (network, facilities, service_areas, uncovered_demand, scenario_summary_csv, ranked_candidates_csv, demand_points=None, ring_costs=vec![5.0, 10.0, 15.0], scenarios=None, callback=None))]
+    #[pyo3(signature = (network, facilities, service_areas, uncovered_demand, scenario_summary_csv, ranked_candidates_csv, demand_points=None, ring_costs=vec![5.0, 10.0, 15.0], scenarios=None, origin_service_edges=None, origin_debug_points=None, callback=None))]
     fn service_area_planning_and_coverage_optimization(
         &self,
         network: &Vector,
@@ -11562,6 +11562,8 @@ impl WbEnvironment {
         demand_points: Option<&Vector>,
         ring_costs: Vec<f64>,
         scenarios: Option<&str>,
+        origin_service_edges: Option<&str>,
+        origin_debug_points: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<(Vector, Vector, String, String)> {
         let mut args = serde_json::Map::new();
@@ -11576,6 +11578,18 @@ impl WbEnvironment {
         args.insert("ring_costs".to_string(), json!(ring_costs));
         if let Some(path) = scenarios {
             args.insert("scenarios".to_string(), json!(path));
+        }
+        if let Some(path) = origin_service_edges {
+            args.insert(
+                "origin_service_edges".to_string(),
+                json!(self.resolve_output_path_for_wd(Some(path)).unwrap()),
+            );
+        }
+        if let Some(path) = origin_debug_points {
+            args.insert(
+                "origin_debug_points".to_string(),
+                json!(self.resolve_output_path_for_wd(Some(path)).unwrap()),
+            );
         }
         args.insert(
             "service_areas".to_string(),

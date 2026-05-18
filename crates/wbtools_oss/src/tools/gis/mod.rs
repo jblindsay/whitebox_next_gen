@@ -22333,12 +22333,13 @@ impl Tool for ConcaveHullTool {
         ToolMetadata {
             id: "concave_hull",
             display_name: "Concave Hull",
-            summary: "Creates concave hull polygons around all input feature coordinates.",
+            summary: "Creates concave hull polygons around input feature coordinates using the concaveman algorithm.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
-                ToolParamSpec { name: "max_edge_length", description: "Maximum edge length controlling hull detail.", required: true },
+                ToolParamSpec { name: "concavity", description: "Concavity ratio (default 2.0). Higher values produce a less-concave hull closer to the convex hull. Lower values allow tighter concavities.", required: false },
+                ToolParamSpec { name: "max_edge_length", description: "Length threshold: hull edges shorter than this value are not refined further. Defaults to unlimited (infinity).", required: false },
                 ToolParamSpec { name: "epsilon", description: "Robustness epsilon (default 1e-9).", required: false },
                 ToolParamSpec { name: "output", description: "Output vector path.", required: true },
             ],
@@ -22348,7 +22349,7 @@ impl Tool for ConcaveHullTool {
     fn manifest(&self) -> ToolManifest {
         let mut defaults = ToolArgs::new();
         defaults.insert("input".to_string(), json!("input.shp"));
-        defaults.insert("max_edge_length".to_string(), json!(50.0));
+        defaults.insert("concavity".to_string(), json!(2.0));
         defaults.insert("epsilon".to_string(), json!(1.0e-9));
         let mut example_args = defaults.clone();
         example_args.insert("output".to_string(), json!("concave_hull.shp"));
@@ -22356,12 +22357,13 @@ impl Tool for ConcaveHullTool {
         ToolManifest {
             id: "concave_hull".to_string(),
             display_name: "Concave Hull".to_string(),
-            summary: "Creates concave hull polygons around all input feature coordinates.".to_string(),
+            summary: "Creates concave hull polygons around input feature coordinates using the concaveman algorithm.".to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
-                ToolParamDescriptor { name: "max_edge_length".to_string(), description: "Maximum edge length controlling hull detail.".to_string(), required: true },
+                ToolParamDescriptor { name: "concavity".to_string(), description: "Concavity ratio (default 2.0). Higher values produce a less-concave hull closer to the convex hull. Lower values allow tighter concavities.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_edge_length".to_string(), description: "Length threshold: hull edges shorter than this value are not refined further. Defaults to unlimited (infinity).".to_string(), required: false },
                 ToolParamDescriptor { name: "epsilon".to_string(), description: "Robustness epsilon (default 1e-9).".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
             ],
@@ -22378,11 +22380,19 @@ impl Tool for ConcaveHullTool {
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = load_vector_arg(args, "input")?;
-        let max_edge_length = parse_f64_arg(args, "max_edge_length")?;
-        if !max_edge_length.is_finite() || max_edge_length <= 0.0 {
-            return Err(ToolError::Validation(
-                "max_edge_length must be a finite value > 0".to_string(),
-            ));
+        if let Some(concavity) = parse_optional_f64_arg(args, "concavity") {
+            if !concavity.is_finite() || concavity <= 0.0 {
+                return Err(ToolError::Validation(
+                    "concavity must be a finite value > 0".to_string(),
+                ));
+            }
+        }
+        if let Some(max_edge_length) = parse_optional_f64_arg(args, "max_edge_length") {
+            if !max_edge_length.is_finite() || max_edge_length <= 0.0 {
+                return Err(ToolError::Validation(
+                    "max_edge_length must be a finite value > 0".to_string(),
+                ));
+            }
         }
         if let Some(epsilon) = parse_optional_f64_arg(args, "epsilon") {
             if !epsilon.is_finite() || epsilon <= 0.0 {
@@ -22397,7 +22407,8 @@ impl Tool for ConcaveHullTool {
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input = load_vector_arg(args, "input")?;
-        let max_edge_length = parse_f64_arg(args, "max_edge_length")?;
+        let concavity = parse_optional_f64_arg(args, "concavity").unwrap_or(2.0);
+        let max_edge_length = parse_optional_f64_arg(args, "max_edge_length").unwrap_or(f64::INFINITY);
         let epsilon = parse_optional_f64_arg(args, "epsilon").unwrap_or(1.0e-9);
         let output_path = parse_vector_path_arg(args, "output")?;
 
@@ -22425,6 +22436,7 @@ impl Tool for ConcaveHullTool {
         }
 
         let options = ConcaveHullOptions {
+            concavity,
             max_edge_length,
             epsilon,
             ..ConcaveHullOptions::default()

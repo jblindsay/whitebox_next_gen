@@ -3,10 +3,22 @@
 //! The convex hull implementation uses Andrew's monotone chain and returns the
 //! tightest enclosing geometry as a `Point`, `LineString`, or `Polygon`.
 //!
-//! The concave hull implementation is a pragmatic alpha-shape-style wrapper
-//! over Delaunay triangulation. Triangles whose longest edge exceeds the user
-//! threshold are discarded; the boundary of the remaining triangle union is then
-//! reconstructed into polygon shells/holes.
+//! The concave hull implementation provides three backends selectable via
+//! [`ConcaveHullEngine`]:
+//!
+//! * [`ConcaveHullEngine::Concaveman`] (**default**) — a Rust port of the
+//!   concaveman algorithm (Mapbox / Park & Oh, 2012).  Starting from the convex
+//!   hull, boundary edges are iteratively refined by pulling in nearby interior
+//!   points, guided by a dimensionless `concavity` parameter and an optional
+//!   minimum-edge-length threshold.  Always produces a single connected polygon.
+//!
+//! * [`ConcaveHullEngine::Delaunay`] — an alpha-shape-style approach based on
+//!   Delaunay triangulation with connectivity-aware boundary-inward triangle
+//!   filtering.  Supports disjoint multipolygon output when `allow_disjoint`
+//!   is `true`.
+//!
+//! * [`ConcaveHullEngine::FastRefine`] — a lightweight convex-hull edge
+//!   refinement algorithm suited to small or simple point sets.
 
 use std::collections::HashSet;
 
@@ -21,9 +33,19 @@ use crate::triangulation::delaunay_triangulation;
 /// Concave hull backend algorithm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConcaveHullEngine {
-    /// Delaunay triangle filtering + polygonization (current default).
+    /// Concaveman algorithm (Mapbox / Park & Oh, 2012) — the default.
+    ///
+    /// Starts from the convex hull and iteratively pulls boundary edges toward
+    /// nearby interior points.  Controlled by [`ConcaveHullOptions::concavity`]
+    /// and [`ConcaveHullOptions::max_edge_length`].  Always produces a single
+    /// connected polygon.
+    Concaveman,
+    /// Delaunay triangle filtering + polygonization.
+    ///
+    /// Alpha-shape-style approach with connectivity-aware boundary-inward
+    /// triangle filtering.  Supports disjoint multipolygon output.
     Delaunay,
-    /// Convex-hull edge refinement inspired by concaveman-style workflows.
+    /// Lightweight convex-hull edge refinement.
     FastRefine,
 }
 
@@ -32,7 +54,20 @@ pub enum ConcaveHullEngine {
 pub struct ConcaveHullOptions {
     /// Concave hull backend algorithm.
     pub engine: ConcaveHullEngine,
-    /// Maximum allowed edge length in kept Delaunay triangles.
+    /// Dimensionless concavity factor used by [`ConcaveHullEngine::Concaveman`].
+    ///
+    /// Controls how aggressively boundary edges are allowed to become concave
+    /// relative to their length.  `1.0` yields a highly detailed hull;
+    /// `f64::INFINITY` produces the convex hull.  The default `2.0` matches
+    /// the original Mapbox JavaScript implementation.
+    pub concavity: f64,
+    /// Edge-length threshold used by the selected engine.
+    ///
+    /// * **Concaveman**: edges shorter than this length are not refined further
+    ///   (`lengthThreshold` in the original JS API).
+    /// * **Delaunay**: maximum edge length allowed in kept triangles.
+    ///
+    /// Default: `f64::INFINITY` (unlimited refinement / largest threshold).
     pub max_edge_length: f64,
     /// Optional relative threshold expressed as a fraction of the input bbox diagonal.
     ///
@@ -61,7 +96,8 @@ pub struct ConcaveHullOptions {
 impl Default for ConcaveHullOptions {
     fn default() -> Self {
         Self {
-            engine: ConcaveHullEngine::Delaunay,
+            engine: ConcaveHullEngine::Concaveman,
+            concavity: 2.0,
             max_edge_length: f64::INFINITY,
             relative_edge_length_ratio: None,
             epsilon: 1.0e-12,
@@ -201,6 +237,7 @@ pub fn concave_hull_with_options(coords: &[Coord], options: ConcaveHullOptions) 
     }
 
     match options.engine {
+        ConcaveHullEngine::Concaveman => concave_hull_concaveman_from_points(&pts, eps, options),
         ConcaveHullEngine::Delaunay => concave_hull_delaunay_from_points(&pts, eps, options),
         ConcaveHullEngine::FastRefine => concave_hull_fast_refine_from_points(&pts, eps, options),
     }
@@ -477,6 +514,262 @@ fn concave_hull_fast_refine_from_points(
 
     let poly = Polygon::new(LinearRing::new(coords), vec![]);
     postprocess_concave_output(Geometry::Polygon(poly), options)
+}
+
+// ---------------------------------------------------------------------------
+// Concaveman engine (Mapbox / Park & Oh, 2012)
+// ---------------------------------------------------------------------------
+
+/// Internal linked-list node used by the concaveman refinement loop.
+struct ConcaveNode {
+    /// Index of this point in the `pts` slice.
+    point_idx: usize,
+    /// Position of the previous node in the `nodes` Vec.
+    prev: usize,
+    /// Position of the next node in the `nodes` Vec.
+    next: usize,
+}
+
+/// Concaveman algorithm: convex-hull → iterative boundary edge refinement.
+///
+/// Reference: Park & Oh (2012), "A New Concave Hull Algorithm and Concaveness
+/// Measure for n-dimensional Datasets".
+/// Implementation adapted from Mapbox's JavaScript concaveman library.
+fn concave_hull_concaveman_from_points(
+    pts: &[Coord],
+    eps: f64,
+    options: ConcaveHullOptions,
+) -> Geometry {
+    use std::collections::VecDeque;
+
+    // ---- 1. Start with the convex hull ----
+    let hull_indices = convex_hull_indices_sorted(pts, eps);
+    if hull_indices.len() < 3 {
+        return convex_hull(pts, eps);
+    }
+
+    // ---- 2. Parameters ----
+    // max_edge_length is the minimum edge length below which refinement stops.
+    let length_threshold = effective_max_edge_length(pts, options);
+    let sq_len_threshold = if length_threshold.is_finite() && length_threshold > 0.0 {
+        length_threshold * length_threshold
+    } else {
+        0.0
+    };
+
+    // concavity: dimensionless ratio; higher = less concave.
+    let concavity = options.concavity.max(1.0e-10);
+    let sq_concavity = concavity * concavity;
+
+    // ---- 3. Build doubly-linked list from convex hull ----
+    let n_hull = hull_indices.len();
+    let mut nodes: Vec<ConcaveNode> = hull_indices
+        .iter()
+        .enumerate()
+        .map(|(pos, &pid)| ConcaveNode {
+            point_idx: pid,
+            prev: (pos + n_hull - 1) % n_hull,
+            next: (pos + 1) % n_hull,
+        })
+        .collect();
+
+    // Track which points are already on the hull ring.
+    let mut on_hull = vec![false; pts.len()];
+    for &idx in &hull_indices {
+        on_hull[idx] = true;
+    }
+
+    // ---- 4. Index all points in an R-tree for fast nearest-to-segment queries ----
+    let point_geoms: Vec<Geometry> = pts.iter().copied().map(Geometry::Point).collect();
+    let point_index = SpatialIndex::from_geometries(&point_geoms);
+
+    // ---- 5. Process edge queue ----
+    let mut queue: VecDeque<usize> = (0..n_hull).collect();
+    // Safety cap: at most 10 insertions per input point.
+    let max_inserts = pts.len().saturating_mul(10);
+    let mut n_inserts = 0usize;
+
+    while let Some(node_pos) = queue.pop_front() {
+        if n_inserts >= max_inserts {
+            break;
+        }
+
+        let a_pos = node_pos;
+        let b_pos = nodes[a_pos].next;
+        let a_idx = nodes[a_pos].point_idx;
+        let b_idx = nodes[b_pos].point_idx;
+        let a = pts[a_idx];
+        let b = pts[b_idx];
+
+        let sq_len = dist2(a, b);
+
+        // Skip edges already short enough to leave unrefined.
+        if sq_len <= sq_len_threshold {
+            continue;
+        }
+
+        // Maximum squared distance from a candidate to edge (a,b) for it to
+        // be accepted.  Mirrors: maxSqLen = sqLen / sqConcavity in the JS.
+        let max_sq_len = sq_len / sq_concavity;
+        let search_radius = max_sq_len.sqrt() + eps;
+
+        let env = Envelope::new(
+            a.x.min(b.x) - search_radius,
+            a.y.min(b.y) - search_radius,
+            a.x.max(b.x) + search_radius,
+            a.y.max(b.y) + search_radius,
+        );
+
+        // Collect and sort candidates by distance to edge (ascending).
+        let mut candidates: Vec<usize> = point_index
+            .query_envelope(env)
+            .into_iter()
+            .filter(|&idx| !on_hull[idx])
+            .collect();
+
+        if candidates.is_empty() {
+            continue;
+        }
+
+        candidates.sort_unstable_by(|&ci, &cj| {
+            cm_sq_seg_dist(pts[ci], a, b).total_cmp(&cm_sq_seg_dist(pts[cj], a, b))
+        });
+
+        // Adjacent-edge points for the adjacency constraint.
+        let prev_pt = pts[nodes[nodes[a_pos].prev].point_idx];
+        let next_next_pt = pts[nodes[nodes[b_pos].next].point_idx];
+
+        // Find the first valid candidate in distance order.
+        let mut chosen: Option<usize> = None;
+        for &c_idx in &candidates {
+            let c = pts[c_idx];
+            let d_edge = cm_sq_seg_dist(c, a, b);
+
+            // Candidates are sorted; once we exceed max distance, stop.
+            if d_edge > max_sq_len {
+                break;
+            }
+
+            // Adjacency constraint: c must be closer to edge (a,b) than to
+            // either neighbouring edge, to avoid a sawtooth boundary.
+            if d_edge >= cm_sq_seg_dist(c, prev_pt, a) {
+                continue;
+            }
+            if d_edge >= cm_sq_seg_dist(c, b, next_next_pt) {
+                continue;
+            }
+
+            // Self-intersection guards for the two proposed new edges.
+            if !cm_no_intersections(a_idx, c_idx, &nodes, pts, eps) {
+                continue;
+            }
+            if !cm_no_intersections(b_idx, c_idx, &nodes, pts, eps) {
+                continue;
+            }
+
+            // Final endpoint-distance check (mirrors the JS main-loop guard).
+            if dist2(c, a).min(dist2(c, b)) > max_sq_len {
+                continue;
+            }
+
+            chosen = Some(c_idx);
+            break;
+        }
+
+        if let Some(c_idx) = chosen {
+            // Insert c between a_pos and b_pos in the linked list.
+            let new_pos = nodes.len();
+            nodes.push(ConcaveNode {
+                point_idx: c_idx,
+                prev: a_pos,
+                next: b_pos,
+            });
+            nodes[a_pos].next = new_pos;
+            nodes[b_pos].prev = new_pos;
+
+            on_hull[c_idx] = true;
+            n_inserts += 1;
+
+            // Enqueue both new edges for further potential refinement.
+            queue.push_back(a_pos);   // edge a → c
+            queue.push_back(new_pos); // edge c → b
+        }
+    }
+
+    // ---- 6. Walk linked list and build output polygon ----
+    let mut coords = Vec::new();
+    let mut cur = 0usize;
+    loop {
+        coords.push(pts[nodes[cur].point_idx]);
+        cur = nodes[cur].next;
+        if cur == 0 {
+            break;
+        }
+    }
+    if coords.len() < 3 {
+        return convex_hull(pts, eps);
+    }
+    coords.push(coords[0]); // close ring
+
+    let poly = Polygon::new(LinearRing::new(coords), vec![]);
+    postprocess_concave_output(Geometry::Polygon(poly), options)
+}
+
+/// Squared distance from point `p` to segment (`a`, `b`).
+///
+/// Ported from the concaveman JS `sqSegDist` helper.
+fn cm_sq_seg_dist(p: Coord, a: Coord, b: Coord) -> f64 {
+    let mut x = a.x;
+    let mut y = a.y;
+    let dx = b.x - x;
+    let dy = b.y - y;
+    let denom = dx * dx + dy * dy;
+    if denom > 0.0 {
+        let t = ((p.x - x) * dx + (p.y - y) * dy) / denom;
+        if t >= 1.0 {
+            x = b.x;
+            y = b.y;
+        } else if t > 0.0 {
+            x += dx * t;
+            y += dy * t;
+        }
+    }
+    let qx = p.x - x;
+    let qy = p.y - y;
+    qx * qx + qy * qy
+}
+
+/// Returns `true` if the proposed segment (`from`, `to`) does not intersect
+/// any existing edge of the concaveman hull linked list.
+///
+/// Edges that share a vertex with the proposed segment are excluded (they
+/// cannot produce a crossing, only a shared endpoint).
+fn cm_no_intersections(
+    from_idx: usize,
+    to_idx: usize,
+    nodes: &[ConcaveNode],
+    pts: &[Coord],
+    eps: f64,
+) -> bool {
+    let from = pts[from_idx];
+    let to = pts[to_idx];
+    let mut cur = 0usize;
+    loop {
+        let next = nodes[cur].next;
+        let u_idx = nodes[cur].point_idx;
+        let v_idx = nodes[next].point_idx;
+        // Only test edges that share no vertex with the proposed segment.
+        if u_idx != from_idx && u_idx != to_idx && v_idx != from_idx && v_idx != to_idx {
+            if segments_intersect_eps(from, to, pts[u_idx], pts[v_idx], eps) {
+                return false;
+            }
+        }
+        cur = next;
+        if cur == 0 {
+            break;
+        }
+    }
+    true
 }
 
 /// Compute a pragmatic concave hull of all coordinates contained in a geometry.

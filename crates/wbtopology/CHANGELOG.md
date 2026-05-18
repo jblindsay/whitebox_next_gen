@@ -7,6 +7,15 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Added `ConcaveHullEngine::Concaveman` variant implementing the Mapbox/Park & Oh (2012) concaveman algorithm as the new default concave hull engine.  The concaveman engine iteratively refines a convex-hull seed by inserting the closest non-hull point to each sufficiently-long hull edge, using an R-tree for fast candidate lookup and a linked-list hull representation for O(1) insertion.
+- Added `ConcaveHullOptions::concavity` field (`f64`, default `2.0`).  Controls how aggressively edges are refined: a candidate point is accepted only when its squared distance to the edge is less than `sq_edge_length / concavity²`.  Higher values → less concave (closer to convex hull).
+
+### Changed
+- `ConcaveHullOptions` default engine changed from `Delaunay` to `Concaveman`.  Callers using `ConcaveHullOptions::default()` or `..ConcaveHullOptions::default()` struct-update syntax now run the concaveman algorithm; set `engine: ConcaveHullEngine::Delaunay` explicitly to restore the previous behaviour.
+- `ConcaveHullOptions::max_edge_length` semantic extended: for `Concaveman` it acts as a *length threshold* — hull edges shorter than this value are not refined further (analogous to `lengthThreshold` in the reference JS implementation).  Semantics are unchanged for `Delaunay` (maximum triangle edge length) and `FastRefine`.
+- Connectivity-aware iterative triangle filtering in `concave_hull_delaunay_from_points`: the Delaunay engine now removes boundary triangles one at a time from the outside inward, checking at each step that no orphaned interior node would result, instead of applying a single-pass global filter.  This eliminates the polygon displacement / coordinate-set mismatch that occurred when the global filter removed load-bearing triangles.
+
+### Added
 - Added `BufferOp` staged dissolve orchestration API (`BufferOp`, `BufferOpOptions`, `BufferOpResult`, `BufferOpStats`) and crate-root exports for restart-safe GEOS-style buffering flow.
 - Added `tests/buffer_op_pipeline_tests.rs` to validate staged line/polygon dissolve behavior, stats invariants, and invalid-distance guards.
 - Expanded GEOS/JTS parity fixture scaffold coverage in overlay audit tests with touching, disjoint, overlap, containment, and partial-overlap polygon cases.

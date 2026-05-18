@@ -11550,7 +11550,7 @@ impl WbEnvironment {
 
     /// [PRO] service_area_planning_and_coverage_optimization — network-based multi-ring service-area planning.
     #[allow(clippy::too_many_arguments)]
-    #[pyo3(signature = (network, facilities, service_areas, uncovered_demand, scenario_summary_csv, ranked_candidates_csv, demand_points=None, ring_costs=vec![5.0, 10.0, 15.0], scenarios=None, origin_service_edges=None, origin_debug_points=None, callback=None))]
+    #[pyo3(signature = (network, facilities, service_areas, uncovered_demand, scenario_summary_csv, ranked_candidates_csv, demand_points=None, ring_costs=vec![5.0, 10.0, 15.0], scenarios=None, optimization_mode=None, candidate_mode=None, candidate_sites=None, num_sites_to_select=None, selection_strategy=None, min_new_site_separation=None, max_generated_candidates=None, ranked_candidates_vector=None, callback=None))]
     fn service_area_planning_and_coverage_optimization(
         &self,
         network: &Vector,
@@ -11562,8 +11562,14 @@ impl WbEnvironment {
         demand_points: Option<&Vector>,
         ring_costs: Vec<f64>,
         scenarios: Option<&str>,
-        origin_service_edges: Option<&str>,
-        origin_debug_points: Option<&str>,
+        optimization_mode: Option<&str>,
+        candidate_mode: Option<&str>,
+        candidate_sites: Option<&Vector>,
+        num_sites_to_select: Option<usize>,
+        selection_strategy: Option<&str>,
+        min_new_site_separation: Option<f64>,
+        max_generated_candidates: Option<usize>,
+        ranked_candidates_vector: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<(Vector, Vector, String, String)> {
         let mut args = serde_json::Map::new();
@@ -11579,15 +11585,33 @@ impl WbEnvironment {
         if let Some(path) = scenarios {
             args.insert("scenarios".to_string(), json!(path));
         }
-        if let Some(path) = origin_service_edges {
+        if let Some(mode) = optimization_mode {
+            args.insert("optimization_mode".to_string(), json!(mode));
+        }
+        if let Some(mode) = candidate_mode {
+            args.insert("candidate_mode".to_string(), json!(mode));
+        }
+        if let Some(layer) = candidate_sites {
             args.insert(
-                "origin_service_edges".to_string(),
-                json!(self.resolve_output_path_for_wd(Some(path)).unwrap()),
+                "candidate_sites".to_string(),
+                json!(layer.file_path.to_string_lossy().to_string()),
             );
         }
-        if let Some(path) = origin_debug_points {
+        if let Some(value) = num_sites_to_select {
+            args.insert("num_sites_to_select".to_string(), json!(value));
+        }
+        if let Some(strategy) = selection_strategy {
+            args.insert("selection_strategy".to_string(), json!(strategy));
+        }
+        if let Some(value) = min_new_site_separation {
+            args.insert("min_new_site_separation".to_string(), json!(value));
+        }
+        if let Some(value) = max_generated_candidates {
+            args.insert("max_generated_candidates".to_string(), json!(value));
+        }
+        if let Some(path) = ranked_candidates_vector {
             args.insert(
-                "origin_debug_points".to_string(),
+                "ranked_candidates_vector".to_string(),
                 json!(self.resolve_output_path_for_wd(Some(path)).unwrap()),
             );
         }

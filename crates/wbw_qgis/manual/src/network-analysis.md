@@ -106,6 +106,26 @@ Output includes `SNAP_DIST` (offset to network) for diagnostics.
 
 ## Workflow B: Routing, Service Areas, and Closest Facility
 
+### Intersection Delay / Node Cost Modeling
+
+For Whitebox network tools that support advanced impedance (for example
+service-area and closest-facility workflows), you can include node-entry costs
+to model intersection delay:
+
+- `node_cost_points`: point layer of intersection/gate delay observations.
+- `node_cost_field`: numeric field in `node_cost_points` with non-negative
+  delay/cost values.
+- `node_cost_snap_distance`: optional max assignment distance from each
+  node-cost point to a network node.
+
+Practical pattern:
+
+1. Build/snap a clean network first.
+2. Prepare an intersection delay points layer (signals, crossings, gates).
+3. Run network tools with both edge impedance and node-cost parameters.
+
+When node-cost parameters are omitted, routing uses edge impedance only.
+
 ### Step 3 - Shortest Path
 
 Processing Toolbox -> Network Analysis:

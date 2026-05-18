@@ -106,6 +106,9 @@ def compute_network_accessibility(
     output,
     edge_cost_field=None,
     max_snap_distance=None,
+    node_cost_points=None,
+    node_cost_field=None,
+    node_cost_snap_distance=None,
     impedance_cutoff=None,
     decay_function=None,
     decay_parameter=None,
@@ -119,6 +122,9 @@ def compute_network_accessibility(
     }
     _add_if_not_none(args, "edge_cost_field", edge_cost_field)
     _add_if_not_none(args, "max_snap_distance", max_snap_distance)
+    _add_if_not_none(args, "node_cost_points", node_cost_points)
+    _add_if_not_none(args, "node_cost_field", node_cost_field)
+    _add_if_not_none(args, "node_cost_snap_distance", node_cost_snap_distance)
     _add_if_not_none(args, "impedance_cutoff", impedance_cutoff)
     _add_if_not_none(args, "decay_function", decay_function)
     _add_if_not_none(args, "decay_parameter", decay_parameter)
@@ -134,6 +140,9 @@ def analyze_od_cost_sensitivity(
     output,
     edge_cost_field=None,
     max_snap_distance=None,
+    node_cost_points=None,
+    node_cost_field=None,
+    node_cost_snap_distance=None,
     impedance_disturbance_range=None,
     monte_carlo_samples=None,
     parallel_execution=None,
@@ -146,6 +155,9 @@ def analyze_od_cost_sensitivity(
     }
     _add_if_not_none(args, "edge_cost_field", edge_cost_field)
     _add_if_not_none(args, "max_snap_distance", max_snap_distance)
+    _add_if_not_none(args, "node_cost_points", node_cost_points)
+    _add_if_not_none(args, "node_cost_field", node_cost_field)
+    _add_if_not_none(args, "node_cost_snap_distance", node_cost_snap_distance)
     _add_if_not_none(args, "impedance_disturbance_range", impedance_disturbance_range)
     _add_if_not_none(args, "monte_carlo_samples", monte_carlo_samples)
     _add_if_not_none(args, "parallel_execution", parallel_execution)
@@ -279,6 +291,9 @@ def route_shortest_path(
     blocked_field=None,
     barriers=None,
     barrier_snap_distance=None,
+    node_cost_points=None,
+    node_cost_field=None,
+    node_cost_snap_distance=None,
     turn_penalty=None,
     u_turn_penalty=None,
     forbid_u_turns=None,
@@ -307,6 +322,9 @@ def route_shortest_path(
     _add_if_not_none(args, "blocked_field", blocked_field)
     _add_if_not_none(args, "barriers", barriers)
     _add_if_not_none(args, "barrier_snap_distance", barrier_snap_distance)
+    _add_if_not_none(args, "node_cost_points", node_cost_points)
+    _add_if_not_none(args, "node_cost_field", node_cost_field)
+    _add_if_not_none(args, "node_cost_snap_distance", node_cost_snap_distance)
     _add_if_not_none(args, "turn_penalty", turn_penalty)
     _add_if_not_none(args, "u_turn_penalty", u_turn_penalty)
     _add_if_not_none(args, "forbid_u_turns", forbid_u_turns)
@@ -342,6 +360,9 @@ def delineate_network_service_area(
     blocked_field=None,
     barriers=None,
     barrier_snap_distance=None,
+    node_cost_points=None,
+    node_cost_field=None,
+    node_cost_snap_distance=None,
     turn_penalty=None,
     u_turn_penalty=None,
     forbid_u_turns=None,
@@ -375,6 +396,9 @@ def delineate_network_service_area(
     _add_if_not_none(args, "blocked_field", blocked_field)
     _add_if_not_none(args, "barriers", barriers)
     _add_if_not_none(args, "barrier_snap_distance", barrier_snap_distance)
+    _add_if_not_none(args, "node_cost_points", node_cost_points)
+    _add_if_not_none(args, "node_cost_field", node_cost_field)
+    _add_if_not_none(args, "node_cost_snap_distance", node_cost_snap_distance)
     _add_if_not_none(args, "turn_penalty", turn_penalty)
     _add_if_not_none(args, "u_turn_penalty", u_turn_penalty)
     _add_if_not_none(args, "forbid_u_turns", forbid_u_turns)
@@ -403,6 +427,9 @@ def route_to_closest_facility(
     blocked_field=None,
     barriers=None,
     barrier_snap_distance=None,
+    node_cost_points=None,
+    node_cost_field=None,
+    node_cost_snap_distance=None,
     turn_penalty=None,
     u_turn_penalty=None,
     forbid_u_turns=None,
@@ -429,6 +456,9 @@ def route_to_closest_facility(
     _add_if_not_none(args, "blocked_field", blocked_field)
     _add_if_not_none(args, "barriers", barriers)
     _add_if_not_none(args, "barrier_snap_distance", barrier_snap_distance)
+    _add_if_not_none(args, "node_cost_points", node_cost_points)
+    _add_if_not_none(args, "node_cost_field", node_cost_field)
+    _add_if_not_none(args, "node_cost_snap_distance", node_cost_snap_distance)
     _add_if_not_none(args, "turn_penalty", turn_penalty)
     _add_if_not_none(args, "u_turn_penalty", u_turn_penalty)
     _add_if_not_none(args, "forbid_u_turns", forbid_u_turns)
@@ -457,6 +487,9 @@ def compute_od_cost_matrix(
     blocked_field=None,
     barriers=None,
     barrier_snap_distance=None,
+    node_cost_points=None,
+    node_cost_field=None,
+    node_cost_snap_distance=None,
     turn_penalty=None,
     u_turn_penalty=None,
     forbid_u_turns=None,
@@ -483,6 +516,9 @@ def compute_od_cost_matrix(
     _add_if_not_none(args, "blocked_field", blocked_field)
     _add_if_not_none(args, "barriers", barriers)
     _add_if_not_none(args, "barrier_snap_distance", barrier_snap_distance)
+    _add_if_not_none(args, "node_cost_points", node_cost_points)
+    _add_if_not_none(args, "node_cost_field", node_cost_field)
+    _add_if_not_none(args, "node_cost_snap_distance", node_cost_snap_distance)
     _add_if_not_none(args, "turn_penalty", turn_penalty)
     _add_if_not_none(args, "u_turn_penalty", u_turn_penalty)
     _add_if_not_none(args, "forbid_u_turns", forbid_u_turns)
@@ -517,6 +553,9 @@ def solve_location_allocation(
     blocked_field=None,
     barriers=None,
     barrier_snap_distance=None,
+    node_cost_points=None,
+    node_cost_field=None,
+    node_cost_snap_distance=None,
     turn_penalty=None,
     u_turn_penalty=None,
     forbid_u_turns=None,
@@ -549,6 +588,9 @@ def solve_location_allocation(
     _add_if_not_none(args, "blocked_field", blocked_field)
     _add_if_not_none(args, "barriers", barriers)
     _add_if_not_none(args, "barrier_snap_distance", barrier_snap_distance)
+    _add_if_not_none(args, "node_cost_points", node_cost_points)
+    _add_if_not_none(args, "node_cost_field", node_cost_field)
+    _add_if_not_none(args, "node_cost_snap_distance", node_cost_snap_distance)
     _add_if_not_none(args, "turn_penalty", turn_penalty)
     _add_if_not_none(args, "u_turn_penalty", u_turn_penalty)
     _add_if_not_none(args, "forbid_u_turns", forbid_u_turns)

@@ -29485,9 +29485,6 @@ impl Tool for ShortestPathNetworkTool {
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
                 ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
                 ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
-                ToolParamSpec { name: "node_cost_points", description: "Optional point layer providing per-node entry costs (e.g., intersection delay).", required: false },
-                ToolParamSpec { name: "node_cost_field", description: "Numeric field in node_cost_points containing non-negative per-node costs.", required: false },
-                ToolParamSpec { name: "node_cost_snap_distance", description: "Optional max distance from each node-cost point to a network node for assignment.", required: false },
                 ToolParamSpec { name: "turn_penalty", description: "Optional additive cost applied to non-straight turns at network nodes.", required: false },
                 ToolParamSpec { name: "u_turn_penalty", description: "Optional additive cost applied to U-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
@@ -29534,9 +29531,6 @@ impl Tool for ShortestPathNetworkTool {
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
                 ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
                 ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
-                ToolParamDescriptor { name: "node_cost_points".to_string(), description: "Optional point layer providing per-node entry costs (e.g., intersection delay).".to_string(), required: false },
-                ToolParamDescriptor { name: "node_cost_field".to_string(), description: "Numeric field in node_cost_points containing non-negative per-node costs.".to_string(), required: false },
-                ToolParamDescriptor { name: "node_cost_snap_distance".to_string(), description: "Optional max distance from each node-cost point to a network node for assignment.".to_string(), required: false },
                 ToolParamDescriptor { name: "turn_penalty".to_string(), description: "Optional additive cost applied to non-straight turns at network nodes.".to_string(), required: false },
                 ToolParamDescriptor { name: "u_turn_penalty".to_string(), description: "Optional additive cost applied to U-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
@@ -30774,6 +30768,9 @@ impl Tool for NetworkAccessibilityMetricsTool {
                 ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
                 ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
+                ToolParamSpec { name: "node_cost_points", description: "Optional point layer providing per-node entry costs (e.g., intersection delay).", required: false },
+                ToolParamSpec { name: "node_cost_field", description: "Numeric field in node_cost_points containing non-negative per-node costs.", required: false },
+                ToolParamSpec { name: "node_cost_snap_distance", description: "Optional max distance from each node-cost point to a network node for assignment.", required: false },
                 ToolParamSpec { name: "parallel_execution", description: "If true (default), evaluate origins in parallel for faster accessibility computation.", required: false },
                 ToolParamSpec { name: "output", description: "Output point vector path (origins with accessibility metrics).", required: true },
             ],
@@ -30808,6 +30805,9 @@ impl Tool for NetworkAccessibilityMetricsTool {
                 ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
                 ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_points".to_string(), description: "Optional point layer providing per-node entry costs (e.g., intersection delay).".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_field".to_string(), description: "Numeric field in node_cost_points containing non-negative per-node costs.".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_snap_distance".to_string(), description: "Optional max distance from each node-cost point to a network node for assignment.".to_string(), required: false },
                 ToolParamDescriptor { name: "parallel_execution".to_string(), description: "If true (default), evaluate origins in parallel for faster accessibility computation.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output point vector path (origins with accessibility metrics).".to_string(), required: true },
             ],
@@ -30886,6 +30886,7 @@ impl Tool for NetworkAccessibilityMetricsTool {
         let _ = resolve_network_edge_cost_field(&input, edge_cost_field)?;
         let _ = resolve_network_one_way_field(&input, one_way_field)?;
         let _ = resolve_network_blocked_field(&input, blocked_field)?;
+        validate_network_node_cost_args(args)?;
         let _ = parse_vector_path_arg(args, "output")?;
         Ok(())
     }
@@ -30906,6 +30907,7 @@ impl Tool for NetworkAccessibilityMetricsTool {
         let blocked_field = parse_optional_string_arg(args, "blocked_field");
         let parallel_execution = parse_bool_arg(args, "parallel_execution", true);
         let output_path = parse_vector_path_arg(args, "output")?;
+        let node_cost_options = build_network_node_cost_options(args)?;
 
         let graph = build_line_network_graph(
             &input,
@@ -30914,7 +30916,7 @@ impl Tool for NetworkAccessibilityMetricsTool {
             one_way_field,
             blocked_field,
             None,
-            None,
+            node_cost_options.as_ref(),
         )?;
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(
@@ -31029,6 +31031,9 @@ impl Tool for OdSensitivityAnalysisTool {
                 ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from origin/destination points to nearest network node.", required: false },
                 ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges.", required: false },
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges.", required: false },
+                ToolParamSpec { name: "node_cost_points", description: "Optional point layer providing per-node entry costs (e.g., intersection delay).", required: false },
+                ToolParamSpec { name: "node_cost_field", description: "Numeric field in node_cost_points containing non-negative per-node costs.", required: false },
+                ToolParamSpec { name: "node_cost_snap_distance", description: "Optional max distance from each node-cost point to a network node for assignment.", required: false },
                 ToolParamSpec { name: "parallel_execution", description: "If true (default), evaluates origin searches in parallel for baseline and perturbed OD runs.", required: false },
                 ToolParamSpec { name: "output", description: "Output CSV path with OD pairs and sensitivity statistics.", required: true },
             ],
@@ -31063,6 +31068,9 @@ impl Tool for OdSensitivityAnalysisTool {
                 ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from origin/destination points to nearest network node.".to_string(), required: false },
                 ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges.".to_string(), required: false },
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges.".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_points".to_string(), description: "Optional point layer providing per-node entry costs (e.g., intersection delay).".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_field".to_string(), description: "Numeric field in node_cost_points containing non-negative per-node costs.".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_snap_distance".to_string(), description: "Optional max distance from each node-cost point to a network node for assignment.".to_string(), required: false },
                 ToolParamDescriptor { name: "parallel_execution".to_string(), description: "If true (default), evaluates origin searches in parallel for baseline and perturbed OD runs.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output CSV path with OD pairs and sensitivity statistics.".to_string(), required: true },
             ],
@@ -31128,6 +31136,7 @@ impl Tool for OdSensitivityAnalysisTool {
                 ));
             }
         }
+        validate_network_node_cost_args(args)?;
 
         let _ = parse_vector_path_arg(args, "output")?;
         Ok(())
@@ -31144,6 +31153,7 @@ impl Tool for OdSensitivityAnalysisTool {
         let blocked_field = parse_optional_string_arg(args, "blocked_field");
         let parallel_execution = parse_bool_arg(args, "parallel_execution", true);
         let output_path = parse_vector_path_arg(args, "output")?;
+        let node_cost_options = build_network_node_cost_options(args)?;
 
         let range_str = parse_optional_string_arg(args, "impedance_disturbance_range")
             .unwrap_or_else(|| "0.8,1.2");
@@ -31158,7 +31168,15 @@ impl Tool for OdSensitivityAnalysisTool {
         let num_samples = parse_optional_f64_arg(args, "monte_carlo_samples").unwrap_or(1.0) as usize;
         let num_samples = num_samples.min(100).max(1);
 
-        let graph = build_line_network_graph(&input, snap_tolerance, Some(edge_cost_field), one_way_field, blocked_field, None, None)?;
+        let graph = build_line_network_graph(
+            &input,
+            snap_tolerance,
+            Some(edge_cost_field),
+            one_way_field,
+            blocked_field,
+            None,
+            node_cost_options.as_ref(),
+        )?;
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(
                 "input network contains no usable line segments".to_string(),
@@ -32390,6 +32408,9 @@ impl Tool for MapMatchingV1Tool {
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
                 ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
                 ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
+                ToolParamSpec { name: "node_cost_points", description: "Optional point layer providing per-node entry costs (e.g., intersection delay).", required: false },
+                ToolParamSpec { name: "node_cost_field", description: "Numeric field in node_cost_points containing non-negative per-node costs.", required: false },
+                ToolParamSpec { name: "node_cost_snap_distance", description: "Optional max distance from each node-cost point to a network node for assignment.", required: false },
                 ToolParamSpec { name: "turn_penalty", description: "Optional additive cost applied to non-straight turns at network nodes.", required: false },
                 ToolParamSpec { name: "u_turn_penalty", description: "Optional additive cost applied to U-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
@@ -32433,6 +32454,9 @@ impl Tool for MapMatchingV1Tool {
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
                 ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
                 ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_points".to_string(), description: "Optional point layer providing per-node entry costs (e.g., intersection delay).".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_field".to_string(), description: "Numeric field in node_cost_points containing non-negative per-node costs.".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_snap_distance".to_string(), description: "Optional max distance from each node-cost point to a network node for assignment.".to_string(), required: false },
                 ToolParamDescriptor { name: "turn_penalty".to_string(), description: "Optional additive cost applied to non-straight turns at network nodes.".to_string(), required: false },
                 ToolParamDescriptor { name: "u_turn_penalty".to_string(), description: "Optional additive cost applied to U-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
@@ -33342,6 +33366,9 @@ impl Tool for NetworkOdCostMatrixTool {
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
                 ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
                 ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
+                ToolParamSpec { name: "node_cost_points", description: "Optional point layer providing per-node entry costs (e.g., intersection delay).", required: false },
+                ToolParamSpec { name: "node_cost_field", description: "Numeric field in node_cost_points containing non-negative per-node costs.", required: false },
+                ToolParamSpec { name: "node_cost_snap_distance", description: "Optional max distance from each node-cost point to a network node for assignment.", required: false },
                 ToolParamSpec { name: "turn_penalty", description: "Optional additive cost applied to non-straight turns at network nodes.", required: false },
                 ToolParamSpec { name: "u_turn_penalty", description: "Optional additive cost applied to U-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
@@ -33384,6 +33411,9 @@ impl Tool for NetworkOdCostMatrixTool {
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
                 ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
                 ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_points".to_string(), description: "Optional point layer providing per-node entry costs (e.g., intersection delay).".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_field".to_string(), description: "Numeric field in node_cost_points containing non-negative per-node costs.".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_snap_distance".to_string(), description: "Optional max distance from each node-cost point to a network node for assignment.".to_string(), required: false },
                 ToolParamDescriptor { name: "turn_penalty".to_string(), description: "Optional additive cost applied to non-straight turns at network nodes.".to_string(), required: false },
                 ToolParamDescriptor { name: "u_turn_penalty".to_string(), description: "Optional additive cost applied to U-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
@@ -34564,6 +34594,9 @@ impl Tool for LocationAllocationNetworkTool {
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
                 ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
                 ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
+                ToolParamSpec { name: "node_cost_points", description: "Optional point layer providing per-node entry costs (e.g., intersection delay).", required: false },
+                ToolParamSpec { name: "node_cost_field", description: "Numeric field in node_cost_points containing non-negative per-node costs.", required: false },
+                ToolParamSpec { name: "node_cost_snap_distance", description: "Optional max distance from each node-cost point to a network node for assignment.", required: false },
                 ToolParamSpec { name: "turn_penalty", description: "Optional additive cost applied to non-straight turns at network nodes.", required: false },
                 ToolParamSpec { name: "u_turn_penalty", description: "Optional additive cost applied to U-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
@@ -34613,6 +34646,9 @@ impl Tool for LocationAllocationNetworkTool {
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
                 ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
                 ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_points".to_string(), description: "Optional point layer providing per-node entry costs (e.g., intersection delay).".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_field".to_string(), description: "Numeric field in node_cost_points containing non-negative per-node costs.".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_snap_distance".to_string(), description: "Optional max distance from each node-cost point to a network node for assignment.".to_string(), required: false },
                 ToolParamDescriptor { name: "turn_penalty".to_string(), description: "Optional additive cost applied to non-straight turns at network nodes.".to_string(), required: false },
                 ToolParamDescriptor { name: "u_turn_penalty".to_string(), description: "Optional additive cost applied to U-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
@@ -34773,6 +34809,7 @@ impl Tool for LocationAllocationNetworkTool {
         let _ = parse_network_turn_cost_options(args)?;
         let _ = resolve_network_one_way_field(&input, one_way_field)?;
         let _ = resolve_network_blocked_field(&input, blocked_field)?;
+        validate_network_node_cost_args(args)?;
         if let Some(turn_restrictions_csv) = parse_optional_string_arg(args, "turn_restrictions_csv") {
             if std::fs::metadata(turn_restrictions_csv).is_err() {
                 return Err(ToolError::Validation(format!(
@@ -34843,6 +34880,7 @@ impl Tool for LocationAllocationNetworkTool {
         let temporal_fallback = parse_temporal_fallback_arg(args)?;
         let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
         let output_path = parse_vector_path_arg(args, "output")?;
+        let node_cost_options = build_network_node_cost_options(args)?;
 
         let temporal_options = if let (Some(profile_path), Some(departure)) = (temporal_cost_profile, departure_time) {
             let edge_id_field_name = temporal_edge_id_field.unwrap_or("EDGE_ID").to_string();
@@ -34867,7 +34905,7 @@ impl Tool for LocationAllocationNetworkTool {
             one_way_field,
             blocked_field,
             temporal_options.as_ref(),
-        None,
+            node_cost_options.as_ref(),
         )?;
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
         if let Some(path) = turn_restrictions_csv {
@@ -39756,6 +39794,9 @@ impl Tool for KShortestPathsNetworkTool {
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
                 ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
                 ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
+                ToolParamSpec { name: "node_cost_points", description: "Optional point layer providing per-node entry costs (e.g., intersection delay).", required: false },
+                ToolParamSpec { name: "node_cost_field", description: "Numeric field in node_cost_points containing non-negative per-node costs.", required: false },
+                ToolParamSpec { name: "node_cost_snap_distance", description: "Optional max distance from each node-cost point to a network node for assignment.", required: false },
                 ToolParamSpec { name: "turn_penalty", description: "Optional additive cost applied to non-straight turns at network nodes.", required: false },
                 ToolParamSpec { name: "u_turn_penalty", description: "Optional additive cost applied to U-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
@@ -39804,6 +39845,9 @@ impl Tool for KShortestPathsNetworkTool {
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
                 ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
                 ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_points".to_string(), description: "Optional point layer providing per-node entry costs (e.g., intersection delay).".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_field".to_string(), description: "Numeric field in node_cost_points containing non-negative per-node costs.".to_string(), required: false },
+                ToolParamDescriptor { name: "node_cost_snap_distance".to_string(), description: "Optional max distance from each node-cost point to a network node for assignment.".to_string(), required: false },
                 ToolParamDescriptor { name: "turn_penalty".to_string(), description: "Optional additive cost applied to non-straight turns at network nodes.".to_string(), required: false },
                 ToolParamDescriptor { name: "u_turn_penalty".to_string(), description: "Optional additive cost applied to U-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
@@ -39886,6 +39930,7 @@ impl Tool for KShortestPathsNetworkTool {
         let _ = parse_network_turn_cost_options(args)?;
         let _ = resolve_network_one_way_field(&input, one_way_field)?;
         let _ = resolve_network_blocked_field(&input, blocked_field)?;
+        validate_network_node_cost_args(args)?;
         if let Some(turn_restrictions_csv) = parse_optional_string_arg(args, "turn_restrictions_csv") {
             if std::fs::metadata(turn_restrictions_csv).is_err() {
                 return Err(ToolError::Validation(format!(
@@ -39951,6 +39996,7 @@ impl Tool for KShortestPathsNetworkTool {
         let temporal_fallback = parse_temporal_fallback_arg(args)?;
         let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
         let output_path = parse_vector_path_arg(args, "output")?;
+        let node_cost_options = build_network_node_cost_options(args)?;
 
         let temporal_options = if let (Some(profile_path), Some(departure)) = (temporal_cost_profile, departure_time) {
             let edge_id_field_name = temporal_edge_id_field.unwrap_or("EDGE_ID").to_string();
@@ -39975,7 +40021,7 @@ impl Tool for KShortestPathsNetworkTool {
             one_way_field,
             blocked_field,
             temporal_options.as_ref(),
-        None,
+            node_cost_options.as_ref(),
         )?;
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
         if let Some(path) = turn_restrictions_csv {

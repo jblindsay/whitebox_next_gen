@@ -56,6 +56,20 @@ this chapter.
 If you keep these definitions in mind, each workflow step below becomes easier
 to interpret and validate.
 
+### Modeling Intersection Delay With Node Costs
+
+Network tools in this chapter support optional node-entry cost modeling for
+intersections, gates, crossings, or turn-heavy junctions:
+
+- `node_cost_points`: point layer containing node-cost observations.
+- `node_cost_field`: numeric field in `node_cost_points` with non-negative
+  entry cost values.
+- `node_cost_snap_distance`: optional max assignment distance from each
+  node-cost point to the nearest network node.
+
+Use node costs when edge impedance alone underestimates urban delay at
+intersections.
+
 ---
 
 ## Step 1 — Prepare and Audit the Network
@@ -165,6 +179,9 @@ wbw_shortest_path_network(i               = 'roads.shp',
   snap_tolerance  = 20.0,
   edge_cost_field = 'MINUTES',
   one_way_field   = 'ONEWAY',
+  node_cost_points = 'intersection_delay_points.shp',
+  node_cost_field = 'DELAY_MIN',
+  node_cost_snap_distance = 25.0,
   turn_penalty    = 0.5,
   u_turn_penalty  = 3.0,
   forbid_u_turns  = TRUE)
@@ -224,6 +241,9 @@ wbw_network_service_area(i                      = 'roads.shp',
   polygon_merge_origins  = TRUE,
   edge_cost_field        = 'MINUTES',
   one_way_field          = 'ONEWAY',
+  node_cost_points       = 'intersection_delay_points.shp',
+  node_cost_field        = 'DELAY_MIN',
+  node_cost_snap_distance = 25.0,
   turn_penalty           = 0.3,
   u_turn_penalty         = 2.0,
   forbid_u_turns         = TRUE,
@@ -268,6 +288,9 @@ wbw_closest_facility_network(i                      = 'roads.shp',
   snap_tolerance         = 20.0,
   edge_cost_field        = 'MINUTES',
   one_way_field          = 'ONEWAY',
+  node_cost_points       = 'intersection_delay_points.shp',
+  node_cost_field        = 'DELAY_MIN',
+  node_cost_snap_distance = 25.0,
   turn_penalty           = 0.5,
   u_turn_penalty         = 3.0,
   forbid_u_turns         = TRUE,
@@ -312,6 +335,9 @@ wbw_network_od_cost_matrix(i                      = 'roads.shp',
   snap_tolerance         = 20.0,
   edge_cost_field        = 'MINUTES',
   one_way_field          = 'ONEWAY',
+  node_cost_points       = 'intersection_delay_points.shp',
+  node_cost_field        = 'DELAY_MIN',
+  node_cost_snap_distance = 25.0,
   turn_penalty           = 0.5,
   temporal_cost_profile  = 'am_peak_profiles.csv',
   temporal_edge_id_field = 'EDGE_ID',
@@ -372,6 +398,9 @@ wbw_location_allocation_network(i                      = 'roads.shp',
   demand_weight_field    = 'POP',
   snap_tolerance         = 20.0,
   edge_cost_field        = 'MINUTES',
+  node_cost_points       = 'intersection_delay_points.shp',
+  node_cost_field        = 'DELAY_MIN',
+  node_cost_snap_distance = 25.0,
   temporal_cost_profile  = 'am_peak_profiles.csv',
   temporal_edge_id_field = 'EDGE_ID',
   departure_time         = '2024-06-15T08:00:00Z',
@@ -397,6 +426,9 @@ result <- s$compute_network_accessibility(
   destinations       = supermarkets$file_path(),
   output             = 'food_accessibility.shp',
   edge_cost_field    = 'MINUTES',
+  node_cost_points   = 'intersection_delay_points.shp',
+  node_cost_field    = 'DELAY_MIN',
+  node_cost_snap_distance = 25.0,
   impedance_cutoff   = 30.0,
   decay_function     = 'negative_exponential',
   decay_parameter    = 0.1
@@ -419,6 +451,9 @@ result <- s$analyze_od_cost_sensitivity(
   destinations                = 'libraries.shp',
   output                      = 'od_sensitivity.shp',
   edge_cost_field             = 'MINUTES',
+  node_cost_points            = 'intersection_delay_points.shp',
+  node_cost_field             = 'DELAY_MIN',
+  node_cost_snap_distance     = 25.0,
   impedance_disturbance_range = 0.2,  # ±20 % perturbation
   monte_carlo_samples         = 500L
 )

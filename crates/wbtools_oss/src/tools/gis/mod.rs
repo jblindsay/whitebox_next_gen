@@ -26556,6 +26556,7 @@ struct NetworkNodeKey {
 struct LineNetworkGraph {
     nodes: Vec<wbvector::Coord>,
     adjacency: Vec<Vec<(usize, f64)>>,
+    node_costs: Vec<f64>,
 }
 
 #[derive(Clone)]
@@ -26616,6 +26617,12 @@ struct NetworkTemporalCostOptions {
     edge_id_field_idx: usize,
     edge_id_field_name: String,
     profile: TemporalCostProfile,
+}
+
+#[derive(Clone)]
+struct NetworkNodeCostOptions {
+    points: Vec<(wbvector::Coord, f64)>,
+    snap_distance: Option<f64>,
 }
 
 #[derive(Clone)]
@@ -27262,6 +27269,109 @@ fn parse_one_way_flag(value: &wbvector::FieldValue) -> Result<bool, ToolError> {
     parse_boolean_field_flag(value, "one_way_field")
 }
 
+fn validate_network_node_cost_args(args: &ToolArgs) -> Result<(), ToolError> {
+    let node_cost_points = parse_optional_string_arg(args, "node_cost_points");
+    let node_cost_field = parse_optional_string_arg(args, "node_cost_field");
+    let node_cost_snap_distance = parse_optional_f64_arg(args, "node_cost_snap_distance");
+
+    if node_cost_points.is_some() != node_cost_field.is_some() {
+        return Err(ToolError::Validation(
+            "node_cost_points and node_cost_field must be provided together".to_string(),
+        ));
+    }
+
+    if let Some(path) = node_cost_points {
+        if std::fs::metadata(path).is_err() {
+            return Err(ToolError::Validation(format!(
+                "node_cost_points '{}' does not exist",
+                path
+            )));
+        }
+    }
+
+    if let Some(dist) = node_cost_snap_distance {
+        if !dist.is_finite() || dist < 0.0 {
+            return Err(ToolError::Validation(
+                "node_cost_snap_distance must be finite and >= 0".to_string(),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn build_network_node_cost_options(
+    args: &ToolArgs,
+) -> Result<Option<NetworkNodeCostOptions>, ToolError> {
+    let points_path = parse_optional_string_arg(args, "node_cost_points");
+    let field_name = parse_optional_string_arg(args, "node_cost_field");
+    let snap_distance = parse_optional_f64_arg(args, "node_cost_snap_distance");
+
+    let (Some(points_path), Some(field_name)) = (points_path, field_name) else {
+        return Ok(None);
+    };
+
+    let layer = load_vector(points_path, "node_cost_points")?;
+    if layer.geom_type != Some(wbvector::GeometryType::Point)
+        && layer.geom_type != Some(wbvector::GeometryType::MultiPoint)
+    {
+        return Err(ToolError::Validation(
+            "node_cost_points must be a point layer".to_string(),
+        ));
+    }
+    let field_idx = layer
+        .schema
+        .field_index(field_name)
+        .ok_or_else(|| ToolError::Validation(format!("node_cost_field '{}' was not found", field_name)))?;
+    let field_def = layer
+        .schema
+        .fields()
+        .get(field_idx)
+        .ok_or_else(|| ToolError::Validation(format!("node_cost_field '{}' was not found", field_name)))?;
+    if !matches!(field_def.field_type, wbvector::FieldType::Integer | wbvector::FieldType::Float) {
+        return Err(ToolError::Validation(
+            "node_cost_field must reference a numeric field".to_string(),
+        ));
+    }
+
+    let mut points = Vec::<(wbvector::Coord, f64)>::new();
+    for feature in &layer.features {
+        let raw = feature
+            .attributes
+            .get(field_idx)
+            .ok_or_else(|| ToolError::Execution("node_cost_field missing on feature".to_string()))?;
+        let cost = field_value_to_f64(raw).ok_or_else(|| {
+            ToolError::Execution(format!(
+                "node_cost_field '{}' contains a non-numeric value",
+                field_name
+            ))
+        })?;
+        if !cost.is_finite() || cost < 0.0 {
+            return Err(ToolError::Validation(format!(
+                "node_cost_field '{}' values must be finite and >= 0",
+                field_name
+            )));
+        }
+        let Some(geom) = feature.geometry.as_ref() else {
+            continue;
+        };
+        match geom {
+            wbvector::Geometry::Point(coord) => points.push((coord.clone(), cost)),
+            wbvector::Geometry::MultiPoint(coords) => {
+                for coord in coords {
+                    points.push((coord.clone(), cost));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(Some(NetworkNodeCostOptions {
+        points,
+        snap_distance,
+    }))
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum LocationAllocationSolverMode {
     Auto,
@@ -27897,6 +28007,7 @@ fn build_line_network_graph(
     one_way_field: Option<&str>,
     blocked_field: Option<&str>,
     temporal_cost_options: Option<&NetworkTemporalCostOptions>,
+    node_cost_options: Option<&NetworkNodeCostOptions>,
 ) -> Result<LineNetworkGraph, ToolError> {
     let lines = collect_layer_linework(input, false)?;
     let edge_cost_idx = resolve_network_edge_cost_field(input, edge_cost_field)?;
@@ -28018,7 +28129,22 @@ fn build_line_network_graph(
         }
     }
 
-    Ok(LineNetworkGraph { nodes, adjacency })
+    let mut node_costs = vec![0.0; nodes.len()];
+    if let Some(node_opts) = node_cost_options {
+        for (coord, node_cost) in &node_opts.points {
+            if let Some((node_idx, dist)) = nearest_network_node(&nodes, coord) {
+                if node_opts.snap_distance.map(|limit| dist <= limit).unwrap_or(true) {
+                    node_costs[node_idx] += *node_cost;
+                }
+            }
+        }
+    }
+
+    Ok(LineNetworkGraph {
+        nodes,
+        adjacency,
+        node_costs,
+    })
 }
 
 fn network_node_coord(key: NetworkNodeKey, snap_tolerance: f64) -> wbvector::Coord {
@@ -28367,7 +28493,12 @@ fn build_line_network_graph_mode_aware(
         }
     }
 
-    Ok(LineNetworkGraph { nodes, adjacency })
+    let node_costs = vec![0.0; nodes.len()];
+    Ok(LineNetworkGraph {
+        nodes,
+        adjacency,
+        node_costs,
+    })
 }
 
 fn parse_mode_weight_overrides(
@@ -29089,7 +29220,7 @@ fn dijkstra_shortest_path(
             } else {
                 turn_transition_penalty(graph, costs, prev, node, *next)
             };
-            let candidate = cost + *w + turn_cost;
+            let candidate = cost + *w + turn_cost + graph.node_costs[*next];
             let next_key = (node, *next);
             let old = dist.get(&next_key).copied().unwrap_or(f64::INFINITY);
             if candidate < old {
@@ -29175,7 +29306,7 @@ fn dijkstra_all_costs_seeded(
             } else {
                 turn_transition_penalty(graph, costs, prev, node, *next)
             };
-            let candidate = cost + *w + turn_cost;
+            let candidate = cost + *w + turn_cost + graph.node_costs[*next];
             let next_key = (node, *next);
             let old = dist_states.get(&next_key).copied().unwrap_or(f64::INFINITY);
             if candidate < old {
@@ -29210,7 +29341,7 @@ fn dijkstra_tree(graph: &LineNetworkGraph, start: usize) -> (Vec<f64>, Vec<Optio
             continue;
         }
         for (next, w) in &graph.adjacency[node] {
-            let candidate = cost + *w;
+            let candidate = cost + *w + graph.node_costs[*next];
             if candidate < dist[*next] {
                 dist[*next] = candidate;
                 prev[*next] = Some(node);
@@ -29291,7 +29422,7 @@ fn k_shortest_simple_paths(
             let mut next_nodes = state.nodes.clone();
             next_nodes.push(*next);
             heap.push(PathSearchState {
-                cost: state.cost + *weight + turn_cost,
+                cost: state.cost + *weight + turn_cost + graph.node_costs[*next],
                 nodes: next_nodes,
             });
         }
@@ -29466,6 +29597,7 @@ impl Tool for ShortestPathNetworkTool {
         let _ = parse_network_turn_cost_options(args)?;
         let _ = resolve_network_one_way_field(&input, one_way_field)?;
         let _ = resolve_network_blocked_field(&input, blocked_field)?;
+        validate_network_node_cost_args(args)?;
         if let Some(turn_restrictions_csv) = parse_optional_string_arg(args, "turn_restrictions_csv") {
             if std::fs::metadata(turn_restrictions_csv).is_err() {
                 return Err(ToolError::Validation(format!(
@@ -29526,6 +29658,7 @@ impl Tool for ShortestPathNetworkTool {
         let temporal_fallback = parse_temporal_fallback_arg(args)?;
         let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
         let output_path = parse_vector_path_arg(args, "output")?;
+        let node_cost_options = build_network_node_cost_options(args)?;
 
         let temporal_options = if let (Some(profile_path), Some(departure)) = (temporal_cost_profile, departure_time) {
             let edge_id_field_name = temporal_edge_id_field.unwrap_or("EDGE_ID").to_string();
@@ -29550,6 +29683,7 @@ impl Tool for ShortestPathNetworkTool {
             one_way_field,
             blocked_field,
             temporal_options.as_ref(),
+        node_cost_options.as_ref(),
         )?;
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
         if let Some(path) = turn_restrictions_csv {
@@ -30505,6 +30639,7 @@ impl Tool for NetworkCentralityMetricsTool {
             one_way_field,
             blocked_field,
             None,
+            None,
         )?;
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(
@@ -30762,6 +30897,7 @@ impl Tool for NetworkAccessibilityMetricsTool {
             one_way_field,
             blocked_field,
             None,
+            None,
         )?;
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(
@@ -31005,7 +31141,7 @@ impl Tool for OdSensitivityAnalysisTool {
         let num_samples = parse_optional_f64_arg(args, "monte_carlo_samples").unwrap_or(1.0) as usize;
         let num_samples = num_samples.min(100).max(1);
 
-        let graph = build_line_network_graph(&input, snap_tolerance, Some(edge_cost_field), one_way_field, blocked_field, None)?;
+        let graph = build_line_network_graph(&input, snap_tolerance, Some(edge_cost_field), one_way_field, blocked_field, None, None)?;
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(
                 "input network contains no usable line segments".to_string(),
@@ -31271,7 +31407,7 @@ impl Tool for NetworkNodeDegreeTool {
         let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
         let output_path = parse_vector_path_arg(args, "output")?;
 
-        let graph = build_line_network_graph(&input, snap_tolerance, None, None, None, None)?;
+        let graph = build_line_network_graph(&input, snap_tolerance, None, None, None, None, None)?;
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(
                 "input network contains no usable line segments".to_string(),
@@ -31636,6 +31772,7 @@ impl Tool for NetworkServiceAreaTool {
                 one_way_field,
                 blocked_field,
                 temporal_options.as_ref(),
+                None,
             )?
         };
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
@@ -32424,6 +32561,7 @@ impl Tool for MapMatchingV1Tool {
             one_way_field,
             blocked_field,
             None,
+            None,
         )?;
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
         if let Some(path) = turn_restrictions_csv {
@@ -32875,7 +33013,7 @@ impl Tool for NetworkTopologyAuditTool {
         let report_path = parse_optional_string_arg(args, "report");
         let output_path = parse_vector_path_arg(args, "output")?;
 
-        let graph = build_line_network_graph(&input, snap_tolerance, None, one_way_field, blocked_field, None)?;
+        let graph = build_line_network_graph(&input, snap_tolerance, None, one_way_field, blocked_field, None, None)?;
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(
                 "input network contains no usable line segments".to_string(),
@@ -33388,6 +33526,7 @@ impl Tool for NetworkOdCostMatrixTool {
             one_way_field,
             blocked_field,
             temporal_options.as_ref(),
+        None,
         )?;
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
         if let Some(path) = turn_restrictions_csv {
@@ -33552,7 +33691,7 @@ impl Tool for NetworkConnectedComponentsTool {
         let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
         let output_path = parse_vector_path_arg(args, "output")?;
 
-        let graph = build_line_network_graph(&input, snap_tolerance, None, None, None, None)?;
+        let graph = build_line_network_graph(&input, snap_tolerance, None, None, None, None, None)?;
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(
                 "input network contains no usable line segments".to_string(),
@@ -33837,6 +33976,7 @@ impl Tool for NetworkRoutesFromOdTool {
             one_way_field,
             blocked_field,
             temporal_options.as_ref(),
+        None,
         )?;
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
         if let Some(path) = turn_restrictions_csv {
@@ -34199,6 +34339,7 @@ impl Tool for ClosestFacilityNetworkTool {
             one_way_field,
             blocked_field,
             temporal_options.as_ref(),
+        None,
         )?;
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
         if let Some(path) = turn_restrictions_csv {
@@ -34682,6 +34823,7 @@ impl Tool for LocationAllocationNetworkTool {
             one_way_field,
             blocked_field,
             temporal_options.as_ref(),
+        None,
         )?;
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
         if let Some(path) = turn_restrictions_csv {
@@ -39789,6 +39931,7 @@ impl Tool for KShortestPathsNetworkTool {
             one_way_field,
             blocked_field,
             temporal_options.as_ref(),
+        None,
         )?;
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
         if let Some(path) = turn_restrictions_csv {

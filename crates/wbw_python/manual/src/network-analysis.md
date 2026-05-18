@@ -219,6 +219,32 @@ catchment = wbe.vector.network_analysis.network_service_area(
 wbe.write_vector(catchment, 'fire_catchment_5min.shp')
 ```
 
+To model rush-hour conditions, pass a temporal speed profile and apply turn
+penalties. Edge speeds are scaled by the profile multipliers at the specified
+departure time.
+
+```python
+catchment_peak = wbe.vector.network_analysis.network_service_area(
+    roads,
+    origins=fire_stations,
+    max_cost=5.0,
+    snap_tolerance=20.0,
+    output_mode='polygon',
+    polygon_merge_origins=True,
+    edge_cost_field='MINUTES',
+    one_way_field='ONEWAY',
+    turn_penalty=0.3,
+    u_turn_penalty=2.0,
+    forbid_u_turns=True,
+    temporal_cost_profile='rush_hour_profiles.csv',
+    temporal_edge_id_field='EDGE_ID',
+    departure_time='2024-06-15T08:00:00Z',
+    temporal_mode='multiplier',
+    temporal_fallback='static_cost'
+)
+wbe.write_vector(catchment_peak, 'fire_catchment_5min_am_peak.shp')
+```
+
 Use `output_mode='edges'` to retain the actual road arcs inside the catchment
 rather than fill a polygon — more appropriate when the network is sparse or
 when the arc-level result is needed for reporting.
@@ -246,6 +272,29 @@ routes_to_hosp = wbe.vector.network_analysis.closest_facility_network(
 )
 wbe.write_vector(routes_to_hosp, 'routes_to_hospital.shp')
 # Output carries INCIDENT_FID, FACILITY_FID, and COST fields per route.
+```
+
+For peak-hour response-time analysis, combine turn penalties with a temporal
+speed profile.
+
+```python
+routes_peak = wbe.vector.network_analysis.closest_facility_network(
+    roads,
+    incidents=accidents,
+    facilities=hospitals,
+    snap_tolerance=20.0,
+    edge_cost_field='MINUTES',
+    one_way_field='ONEWAY',
+    turn_penalty=0.5,
+    u_turn_penalty=3.0,
+    forbid_u_turns=True,
+    temporal_cost_profile='rush_hour_profiles.csv',
+    temporal_edge_id_field='EDGE_ID',
+    departure_time='2024-06-15T08:00:00Z',
+    temporal_mode='multiplier',
+    temporal_fallback='static_cost'
+)
+wbe.write_vector(routes_peak, 'routes_to_hospital_am_peak.shp')
 ```
 
 ---
@@ -282,6 +331,27 @@ The CSV is directly usable in pandas or any tabular analysis tool.
 import pandas as pd
 df = pd.read_csv(cost_csv)
 print(df.groupby('ORIGIN_FID')['COST'].min().describe())
+```
+
+For a time-of-day comparison, run a second matrix at AM-peak departure and
+compare cost distributions.
+
+```python
+cost_csv_am = wbe.vector.network_analysis.network_od_cost_matrix(
+    roads,
+    origins=schools,
+    destinations=libraries,
+    snap_tolerance=20.0,
+    edge_cost_field='MINUTES',
+    one_way_field='ONEWAY',
+    turn_penalty=0.5,
+    temporal_cost_profile='am_peak_profiles.csv',
+    temporal_edge_id_field='EDGE_ID',
+    departure_time='2024-06-15T08:00:00Z',
+    temporal_mode='multiplier',
+    temporal_fallback='static_cost'
+)
+print('AM-peak OD matrix written to:', cost_csv_am)
 ```
 
 ### Materializing OD Routes as Geometry
@@ -327,6 +397,28 @@ sited = wbe.vector.network_analysis.location_allocation_network(
 wbe.write_vector(sited, 'selected_facilities.shp')
 # SELECTED == 1 on the four chosen candidate sites.
 # Demand points carry ASSIGNED_FID linking each to its nearest selected site.
+```
+
+To optimise facility placement under peak-hour travel times rather than
+free-flow speeds, pass a temporal profile.
+
+```python
+sited_peak = wbe.vector.network_analysis.location_allocation_network(
+    roads,
+    demand_points=demand,
+    facilities=candidates,
+    facility_count=4,
+    solver_mode='minimize_impedance',
+    demand_weight_field='POP',
+    snap_tolerance=20.0,
+    edge_cost_field='MINUTES',
+    temporal_cost_profile='am_peak_profiles.csv',
+    temporal_edge_id_field='EDGE_ID',
+    departure_time='2024-06-15T08:00:00Z',
+    temporal_mode='multiplier',
+    temporal_fallback='static_cost'
+)
+wbe.write_vector(sited_peak, 'selected_facilities_am_peak.shp')
 ```
 
 Solver modes include `minimize_impedance` (p-median), `maximize_coverage`, and

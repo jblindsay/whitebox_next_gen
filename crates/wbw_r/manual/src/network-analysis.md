@@ -211,6 +211,29 @@ wbw_network_service_area(i                    = 'roads.shp',
   one_way_field        = 'ONEWAY')
 ```
 
+To model rush-hour conditions, pass a temporal speed profile and apply turn
+penalties.
+
+```r
+wbw_network_service_area(i                      = 'roads.shp',
+  origins                = 'fire_stations.shp',
+  output                 = 'fire_catchment_5min_am_peak.shp',
+  max_cost               = 5.0,
+  snap_tolerance         = 20.0,
+  output_mode            = 'polygon',
+  polygon_merge_origins  = TRUE,
+  edge_cost_field        = 'MINUTES',
+  one_way_field          = 'ONEWAY',
+  turn_penalty           = 0.3,
+  u_turn_penalty         = 2.0,
+  forbid_u_turns         = TRUE,
+  temporal_cost_profile  = 'rush_hour_profiles.csv',
+  temporal_edge_id_field = 'EDGE_ID',
+  departure_time         = '2024-06-15T08:00:00Z',
+  temporal_mode          = 'multiplier',
+  temporal_fallback      = 'static_cost')
+```
+
 Use `output_mode = 'edges'` to retain actual road arcs inside the catchment
 rather than fill a polygon — more appropriate when the network is sparse.
 
@@ -232,6 +255,27 @@ wbw_closest_facility_network(i               = 'roads.shp',
   edge_cost_field = 'MINUTES',
   one_way_field   = 'ONEWAY')
 # Output carries INCIDENT_FID, FACILITY_FID, and COST fields per route.
+```
+
+For peak-hour response-time analysis, combine turn penalties with a temporal
+speed profile.
+
+```r
+wbw_closest_facility_network(i                      = 'roads.shp',
+  incidents              = 'accidents.shp',
+  facilities             = 'hospitals.shp',
+  output                 = 'routes_to_hospital_am_peak.shp',
+  snap_tolerance         = 20.0,
+  edge_cost_field        = 'MINUTES',
+  one_way_field          = 'ONEWAY',
+  turn_penalty           = 0.5,
+  u_turn_penalty         = 3.0,
+  forbid_u_turns         = TRUE,
+  temporal_cost_profile  = 'rush_hour_profiles.csv',
+  temporal_edge_id_field = 'EDGE_ID',
+  departure_time         = '2024-06-15T08:00:00Z',
+  temporal_mode          = 'multiplier',
+  temporal_fallback      = 'static_cost')
 ```
 
 ---
@@ -256,6 +300,24 @@ wbw_network_od_cost_matrix(i               = 'roads.shp',
 od <- read.csv('od_costs.csv')
 # Minimum travel time from each school to any library:
 print(aggregate(COST ~ ORIGIN_FID, data = od, FUN = min))
+```
+
+For a time-of-day comparison, run a second matrix at AM-peak departure.
+
+```r
+wbw_network_od_cost_matrix(i                      = 'roads.shp',
+  origins                = 'schools.shp',
+  destinations           = 'libraries.shp',
+  output                 = 'od_costs_am_peak.csv',
+  snap_tolerance         = 20.0,
+  edge_cost_field        = 'MINUTES',
+  one_way_field          = 'ONEWAY',
+  turn_penalty           = 0.5,
+  temporal_cost_profile  = 'am_peak_profiles.csv',
+  temporal_edge_id_field = 'EDGE_ID',
+  departure_time         = '2024-06-15T08:00:00Z',
+  temporal_mode          = 'multiplier',
+  temporal_fallback      = 'static_cost')
 ```
 
 ### Materializing OD Routes as Geometry
@@ -297,6 +359,25 @@ wbw_location_allocation_network(i                    = 'roads.shp',
 
 Supported solver modes: `minimize_impedance` (p-median), `maximize_coverage`,
 and `maximize_attendance`.
+
+To optimise under peak-hour travel times, pass a temporal profile.
+
+```r
+wbw_location_allocation_network(i                      = 'roads.shp',
+  demand_points          = 'demand_points.shp',
+  facilities             = 'candidate_sites.shp',
+  output                 = 'selected_facilities_am_peak.shp',
+  facility_count         = 4L,
+  solver_mode            = 'minimize_impedance',
+  demand_weight_field    = 'POP',
+  snap_tolerance         = 20.0,
+  edge_cost_field        = 'MINUTES',
+  temporal_cost_profile  = 'am_peak_profiles.csv',
+  temporal_edge_id_field = 'EDGE_ID',
+  departure_time         = '2024-06-15T08:00:00Z',
+  temporal_mode          = 'multiplier',
+  temporal_fallback      = 'static_cost')
+```
 
 ---
 

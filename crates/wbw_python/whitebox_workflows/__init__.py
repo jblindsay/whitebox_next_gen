@@ -264,6 +264,306 @@ def field_trafficability_and_operation_planning(
     return env.run_tool("field_trafficability_and_operation_planning", args)
 
 
+def route_shortest_path(
+    env,
+    input,
+    start_x,
+    start_y,
+    end_x,
+    end_y,
+    output,
+    snap_tolerance=None,
+    max_snap_distance=None,
+    edge_cost_field=None,
+    one_way_field=None,
+    blocked_field=None,
+    barriers=None,
+    barrier_snap_distance=None,
+    turn_penalty=None,
+    u_turn_penalty=None,
+    forbid_u_turns=None,
+    forbid_left_turns=None,
+    forbid_right_turns=None,
+    turn_restrictions_csv=None,
+    temporal_cost_profile=None,
+    temporal_edge_id_field=None,
+    departure_time=None,
+    temporal_mode=None,
+    temporal_fallback=None,
+    temporal_profile_report=None,
+):
+    args = {
+        "input": input,
+        "start_x": start_x,
+        "start_y": start_y,
+        "end_x": end_x,
+        "end_y": end_y,
+        "output": output,
+    }
+    _add_if_not_none(args, "snap_tolerance", snap_tolerance)
+    _add_if_not_none(args, "max_snap_distance", max_snap_distance)
+    _add_if_not_none(args, "edge_cost_field", edge_cost_field)
+    _add_if_not_none(args, "one_way_field", one_way_field)
+    _add_if_not_none(args, "blocked_field", blocked_field)
+    _add_if_not_none(args, "barriers", barriers)
+    _add_if_not_none(args, "barrier_snap_distance", barrier_snap_distance)
+    _add_if_not_none(args, "turn_penalty", turn_penalty)
+    _add_if_not_none(args, "u_turn_penalty", u_turn_penalty)
+    _add_if_not_none(args, "forbid_u_turns", forbid_u_turns)
+    _add_if_not_none(args, "forbid_left_turns", forbid_left_turns)
+    _add_if_not_none(args, "forbid_right_turns", forbid_right_turns)
+    _add_if_not_none(args, "turn_restrictions_csv", turn_restrictions_csv)
+    _add_if_not_none(args, "temporal_cost_profile", temporal_cost_profile)
+    _add_if_not_none(args, "temporal_edge_id_field", temporal_edge_id_field)
+    _add_if_not_none(args, "departure_time", departure_time)
+    _add_if_not_none(args, "temporal_mode", temporal_mode)
+    _add_if_not_none(args, "temporal_fallback", temporal_fallback)
+    _add_if_not_none(args, "temporal_profile_report", temporal_profile_report)
+    return env.run_tool("shortest_path_network", args)
+
+
+def delineate_network_service_area(
+    env,
+    input,
+    origins,
+    output,
+    max_cost,
+    snap_tolerance=None,
+    output_mode=None,
+    polygon_merge_origins=None,
+    snapped_origins_output=None,
+    cost_method=None,
+    edge_cost_field=None,
+    mode_field=None,
+    default_mode_speed=None,
+    mode_speed_overrides=None,
+    allowed_modes=None,
+    one_way_field=None,
+    blocked_field=None,
+    barriers=None,
+    barrier_snap_distance=None,
+    turn_penalty=None,
+    u_turn_penalty=None,
+    forbid_u_turns=None,
+    forbid_left_turns=None,
+    forbid_right_turns=None,
+    turn_restrictions_csv=None,
+    temporal_cost_profile=None,
+    temporal_edge_id_field=None,
+    departure_time=None,
+    temporal_mode=None,
+    temporal_fallback=None,
+    temporal_profile_report=None,
+):
+    args = {
+        "input": input,
+        "origins": origins,
+        "output": output,
+        "max_cost": max_cost,
+    }
+    _add_if_not_none(args, "snap_tolerance", snap_tolerance)
+    _add_if_not_none(args, "output_mode", output_mode)
+    _add_if_not_none(args, "polygon_merge_origins", polygon_merge_origins)
+    _add_if_not_none(args, "snapped_origins_output", snapped_origins_output)
+    _add_if_not_none(args, "cost_method", cost_method)
+    _add_if_not_none(args, "edge_cost_field", edge_cost_field)
+    _add_if_not_none(args, "mode_field", mode_field)
+    _add_if_not_none(args, "default_mode_speed", default_mode_speed)
+    _add_if_not_none(args, "mode_speed_overrides", mode_speed_overrides)
+    _add_if_not_none(args, "allowed_modes", allowed_modes)
+    _add_if_not_none(args, "one_way_field", one_way_field)
+    _add_if_not_none(args, "blocked_field", blocked_field)
+    _add_if_not_none(args, "barriers", barriers)
+    _add_if_not_none(args, "barrier_snap_distance", barrier_snap_distance)
+    _add_if_not_none(args, "turn_penalty", turn_penalty)
+    _add_if_not_none(args, "u_turn_penalty", u_turn_penalty)
+    _add_if_not_none(args, "forbid_u_turns", forbid_u_turns)
+    _add_if_not_none(args, "forbid_left_turns", forbid_left_turns)
+    _add_if_not_none(args, "forbid_right_turns", forbid_right_turns)
+    _add_if_not_none(args, "turn_restrictions_csv", turn_restrictions_csv)
+    _add_if_not_none(args, "temporal_cost_profile", temporal_cost_profile)
+    _add_if_not_none(args, "temporal_edge_id_field", temporal_edge_id_field)
+    _add_if_not_none(args, "departure_time", departure_time)
+    _add_if_not_none(args, "temporal_mode", temporal_mode)
+    _add_if_not_none(args, "temporal_fallback", temporal_fallback)
+    _add_if_not_none(args, "temporal_profile_report", temporal_profile_report)
+    return env.run_tool("network_service_area", args)
+
+
+def route_to_closest_facility(
+    env,
+    input,
+    incidents,
+    facilities,
+    output,
+    snap_tolerance=None,
+    max_snap_distance=None,
+    edge_cost_field=None,
+    one_way_field=None,
+    blocked_field=None,
+    barriers=None,
+    barrier_snap_distance=None,
+    turn_penalty=None,
+    u_turn_penalty=None,
+    forbid_u_turns=None,
+    forbid_left_turns=None,
+    forbid_right_turns=None,
+    turn_restrictions_csv=None,
+    temporal_cost_profile=None,
+    temporal_edge_id_field=None,
+    departure_time=None,
+    temporal_mode=None,
+    temporal_fallback=None,
+    temporal_profile_report=None,
+):
+    args = {
+        "input": input,
+        "incidents": incidents,
+        "facilities": facilities,
+        "output": output,
+    }
+    _add_if_not_none(args, "snap_tolerance", snap_tolerance)
+    _add_if_not_none(args, "max_snap_distance", max_snap_distance)
+    _add_if_not_none(args, "edge_cost_field", edge_cost_field)
+    _add_if_not_none(args, "one_way_field", one_way_field)
+    _add_if_not_none(args, "blocked_field", blocked_field)
+    _add_if_not_none(args, "barriers", barriers)
+    _add_if_not_none(args, "barrier_snap_distance", barrier_snap_distance)
+    _add_if_not_none(args, "turn_penalty", turn_penalty)
+    _add_if_not_none(args, "u_turn_penalty", u_turn_penalty)
+    _add_if_not_none(args, "forbid_u_turns", forbid_u_turns)
+    _add_if_not_none(args, "forbid_left_turns", forbid_left_turns)
+    _add_if_not_none(args, "forbid_right_turns", forbid_right_turns)
+    _add_if_not_none(args, "turn_restrictions_csv", turn_restrictions_csv)
+    _add_if_not_none(args, "temporal_cost_profile", temporal_cost_profile)
+    _add_if_not_none(args, "temporal_edge_id_field", temporal_edge_id_field)
+    _add_if_not_none(args, "departure_time", departure_time)
+    _add_if_not_none(args, "temporal_mode", temporal_mode)
+    _add_if_not_none(args, "temporal_fallback", temporal_fallback)
+    _add_if_not_none(args, "temporal_profile_report", temporal_profile_report)
+    return env.run_tool("closest_facility_network", args)
+
+
+def compute_od_cost_matrix(
+    env,
+    input,
+    origins,
+    destinations,
+    output,
+    snap_tolerance=None,
+    max_snap_distance=None,
+    edge_cost_field=None,
+    one_way_field=None,
+    blocked_field=None,
+    barriers=None,
+    barrier_snap_distance=None,
+    turn_penalty=None,
+    u_turn_penalty=None,
+    forbid_u_turns=None,
+    forbid_left_turns=None,
+    forbid_right_turns=None,
+    turn_restrictions_csv=None,
+    temporal_cost_profile=None,
+    temporal_edge_id_field=None,
+    departure_time=None,
+    temporal_mode=None,
+    temporal_fallback=None,
+    temporal_profile_report=None,
+):
+    args = {
+        "input": input,
+        "origins": origins,
+        "destinations": destinations,
+        "output": output,
+    }
+    _add_if_not_none(args, "snap_tolerance", snap_tolerance)
+    _add_if_not_none(args, "max_snap_distance", max_snap_distance)
+    _add_if_not_none(args, "edge_cost_field", edge_cost_field)
+    _add_if_not_none(args, "one_way_field", one_way_field)
+    _add_if_not_none(args, "blocked_field", blocked_field)
+    _add_if_not_none(args, "barriers", barriers)
+    _add_if_not_none(args, "barrier_snap_distance", barrier_snap_distance)
+    _add_if_not_none(args, "turn_penalty", turn_penalty)
+    _add_if_not_none(args, "u_turn_penalty", u_turn_penalty)
+    _add_if_not_none(args, "forbid_u_turns", forbid_u_turns)
+    _add_if_not_none(args, "forbid_left_turns", forbid_left_turns)
+    _add_if_not_none(args, "forbid_right_turns", forbid_right_turns)
+    _add_if_not_none(args, "turn_restrictions_csv", turn_restrictions_csv)
+    _add_if_not_none(args, "temporal_cost_profile", temporal_cost_profile)
+    _add_if_not_none(args, "temporal_edge_id_field", temporal_edge_id_field)
+    _add_if_not_none(args, "departure_time", departure_time)
+    _add_if_not_none(args, "temporal_mode", temporal_mode)
+    _add_if_not_none(args, "temporal_fallback", temporal_fallback)
+    _add_if_not_none(args, "temporal_profile_report", temporal_profile_report)
+    return env.run_tool("network_od_cost_matrix", args)
+
+
+def solve_location_allocation(
+    env,
+    input,
+    demand_points,
+    facilities,
+    facility_count,
+    output,
+    solver_mode=None,
+    demand_weight_field=None,
+    facility_capacity_field=None,
+    required_facility_field=None,
+    forbidden_facility_field=None,
+    snap_tolerance=None,
+    max_snap_distance=None,
+    edge_cost_field=None,
+    one_way_field=None,
+    blocked_field=None,
+    barriers=None,
+    barrier_snap_distance=None,
+    turn_penalty=None,
+    u_turn_penalty=None,
+    forbid_u_turns=None,
+    forbid_left_turns=None,
+    forbid_right_turns=None,
+    turn_restrictions_csv=None,
+    temporal_cost_profile=None,
+    temporal_edge_id_field=None,
+    departure_time=None,
+    temporal_mode=None,
+    temporal_fallback=None,
+    temporal_profile_report=None,
+):
+    args = {
+        "input": input,
+        "demand_points": demand_points,
+        "facilities": facilities,
+        "facility_count": facility_count,
+        "output": output,
+    }
+    _add_if_not_none(args, "solver_mode", solver_mode)
+    _add_if_not_none(args, "demand_weight_field", demand_weight_field)
+    _add_if_not_none(args, "facility_capacity_field", facility_capacity_field)
+    _add_if_not_none(args, "required_facility_field", required_facility_field)
+    _add_if_not_none(args, "forbidden_facility_field", forbidden_facility_field)
+    _add_if_not_none(args, "snap_tolerance", snap_tolerance)
+    _add_if_not_none(args, "max_snap_distance", max_snap_distance)
+    _add_if_not_none(args, "edge_cost_field", edge_cost_field)
+    _add_if_not_none(args, "one_way_field", one_way_field)
+    _add_if_not_none(args, "blocked_field", blocked_field)
+    _add_if_not_none(args, "barriers", barriers)
+    _add_if_not_none(args, "barrier_snap_distance", barrier_snap_distance)
+    _add_if_not_none(args, "turn_penalty", turn_penalty)
+    _add_if_not_none(args, "u_turn_penalty", u_turn_penalty)
+    _add_if_not_none(args, "forbid_u_turns", forbid_u_turns)
+    _add_if_not_none(args, "forbid_left_turns", forbid_left_turns)
+    _add_if_not_none(args, "forbid_right_turns", forbid_right_turns)
+    _add_if_not_none(args, "turn_restrictions_csv", turn_restrictions_csv)
+    _add_if_not_none(args, "temporal_cost_profile", temporal_cost_profile)
+    _add_if_not_none(args, "temporal_edge_id_field", temporal_edge_id_field)
+    _add_if_not_none(args, "departure_time", departure_time)
+    _add_if_not_none(args, "temporal_mode", temporal_mode)
+    _add_if_not_none(args, "temporal_fallback", temporal_fallback)
+    _add_if_not_none(args, "temporal_profile_report", temporal_profile_report)
+    return env.run_tool("location_allocation_network", args)
+
+
 def _attach_phase4_convenience_methods():
     if "WbEnvironment" not in globals():
         return
@@ -284,6 +584,11 @@ def _attach_phase4_convenience_methods():
     WbEnvironment.terrain_constructability_and_cost_analysis = terrain_constructability_and_cost_analysis
     WbEnvironment.in_season_crop_stress_intervention_planning = in_season_crop_stress_intervention_planning
     WbEnvironment.field_trafficability_and_operation_planning = field_trafficability_and_operation_planning
+    WbEnvironment.route_shortest_path = route_shortest_path
+    WbEnvironment.delineate_network_service_area = delineate_network_service_area
+    WbEnvironment.route_to_closest_facility = route_to_closest_facility
+    WbEnvironment.compute_od_cost_matrix = compute_od_cost_matrix
+    WbEnvironment.solve_location_allocation = solve_location_allocation
 
 
 _attach_phase4_convenience_methods()
@@ -305,6 +610,11 @@ if hasattr(whitebox_workflows, "__all__"):
         "terrain_constructability_and_cost_analysis",
         "in_season_crop_stress_intervention_planning",
         "field_trafficability_and_operation_planning",
+        "route_shortest_path",
+        "delineate_network_service_area",
+        "route_to_closest_facility",
+        "compute_od_cost_matrix",
+        "solve_location_allocation",
     ]
 else:
     __all__ = [
@@ -322,4 +632,9 @@ else:
         "terrain_constructability_and_cost_analysis",
         "in_season_crop_stress_intervention_planning",
         "field_trafficability_and_operation_planning",
+        "route_shortest_path",
+        "delineate_network_service_area",
+        "route_to_closest_facility",
+        "compute_od_cost_matrix",
+        "solve_location_allocation",
     ]

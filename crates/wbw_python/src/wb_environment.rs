@@ -12796,7 +12796,7 @@ impl WbEnvironment {
     }
 
     /// [PRO] solar_site_suitability_analysis — score land surface suitability for ground-mounted solar installations.
-    #[pyo3(signature = (dem, transmission_lines=None, substations=None, road_network=None, infra_weight_profile="balanced", candidate_threshold=0.7, max_candidate_sites=200, output_prefix=None, callback=None))]
+    #[pyo3(signature = (dem, transmission_lines=None, substations=None, road_network=None, infra_weight_profile="balanced", candidate_threshold=0.7, max_candidate_sites=200, sweep_spec_json=None, output_prefix=None, callback=None))]
     fn solar_site_suitability_analysis(
         &self,
         dem: &Raster,
@@ -12806,6 +12806,7 @@ impl WbEnvironment {
         infra_weight_profile: &str,
         candidate_threshold: f64,
         max_candidate_sites: i64,
+        sweep_spec_json: Option<&str>,
         output_prefix: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<(Raster, Raster, Vector, String)> {
@@ -12823,6 +12824,14 @@ impl WbEnvironment {
         args.insert("infra_weight_profile".to_string(), json!(infra_weight_profile));
         args.insert("candidate_threshold".to_string(), json!(candidate_threshold));
         args.insert("max_candidate_sites".to_string(), json!(max_candidate_sites));
+        if let Some(raw) = sweep_spec_json {
+            let parsed: JsonValue = serde_json::from_str(raw).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    format!("invalid sweep_spec_json; expected JSON object string: {e}"),
+                )
+            })?;
+            args.insert("sweep_spec".to_string(), parsed);
+        }
         if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
             args.insert("output_prefix".to_string(), json!(prefix));
         }
@@ -15276,7 +15285,7 @@ impl WbEnvironment {
     }
 
     /// [PRO] wind_turbine_siting — identify viable wind turbine siting zones from terrain and proximity constraints.
-    #[pyo3(signature = (dem, settlements, settlements_epsg=None, visibility_radius_meters=5000, min_slope_degrees=5.0, max_slope_degrees=35.0, profile="balanced", output_prefix=None, callback=None))]
+    #[pyo3(signature = (dem, settlements, settlements_epsg=None, visibility_radius_meters=5000, min_slope_degrees=5.0, max_slope_degrees=35.0, profile="balanced", sweep_spec_json=None, output_prefix=None, callback=None))]
     fn wind_turbine_siting(
         &self,
         dem: &Raster,
@@ -15286,6 +15295,7 @@ impl WbEnvironment {
         min_slope_degrees: f64,
         max_slope_degrees: f64,
         profile: &str,
+        sweep_spec_json: Option<&str>,
         output_prefix: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<(Raster, Raster, String, String)> {
@@ -15299,6 +15309,14 @@ impl WbEnvironment {
         args.insert("min_slope_degrees".to_string(), json!(min_slope_degrees));
         args.insert("max_slope_degrees".to_string(), json!(max_slope_degrees));
         args.insert("profile".to_string(), json!(profile));
+        if let Some(raw) = sweep_spec_json {
+            let parsed: JsonValue = serde_json::from_str(raw).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    format!("invalid sweep_spec_json; expected JSON object string: {e}"),
+                )
+            })?;
+            args.insert("sweep_spec".to_string(), parsed);
+        }
         if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
             args.insert("output_prefix".to_string(), json!(prefix));
         }

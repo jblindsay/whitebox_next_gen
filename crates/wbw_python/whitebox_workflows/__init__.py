@@ -238,6 +238,7 @@ def wind_turbine_siting(
     min_slope_degrees=None,
     max_slope_degrees=None,
     profile=None,
+    sweep_spec=None,
     output_prefix=None,
 ):
     args = {
@@ -249,6 +250,7 @@ def wind_turbine_siting(
     _add_if_not_none(args, "min_slope_degrees", min_slope_degrees)
     _add_if_not_none(args, "max_slope_degrees", max_slope_degrees)
     _add_if_not_none(args, "profile", profile)
+    _add_if_not_none(args, "sweep_spec", sweep_spec)
     _add_if_not_none(args, "output_prefix", output_prefix)
     return env.run_tool("wind_turbine_siting", args)
 
@@ -262,6 +264,7 @@ def solar_site_suitability_analysis(
     infra_weight_profile=None,
     candidate_threshold=None,
     max_candidate_sites=None,
+    sweep_spec=None,
     output_prefix=None,
 ):
     args = {
@@ -273,6 +276,7 @@ def solar_site_suitability_analysis(
     _add_if_not_none(args, "infra_weight_profile", infra_weight_profile)
     _add_if_not_none(args, "candidate_threshold", candidate_threshold)
     _add_if_not_none(args, "max_candidate_sites", max_candidate_sites)
+    _add_if_not_none(args, "sweep_spec", sweep_spec)
     _add_if_not_none(args, "output_prefix", output_prefix)
     return env.run_tool("solar_site_suitability_analysis", args)
 

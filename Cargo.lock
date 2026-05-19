@@ -4378,6 +4378,7 @@ dependencies = [
  "maud",
  "rayon",
  "regex",
+ "serde",
  "serde_json",
  "time",
  "ureq",

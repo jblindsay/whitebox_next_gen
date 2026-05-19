@@ -55,10 +55,12 @@ impact, streams_out, habitat_loss, summary = wbe.urban_expansion_impact_assessme
 ### wind_turbine_siting
 
 ```
-wind_turbine_siting(dem, settlements, settlements_epsg=None, visibility_radius_meters=5000, min_slope_degrees=5.0, max_slope_degrees=35.0, profile="balanced", output_prefix=None, callback=None)
+wind_turbine_siting(dem, settlements, settlements_epsg=None, visibility_radius_meters=5000, min_slope_degrees=5.0, max_slope_degrees=35.0, profile="balanced", sweep_spec_json=None, output_prefix=None, callback=None)
 ```
 
 Returns `(siting_score_raster, confidence_raster, summary_json_path)`.
+
+When `sweep_spec_json` is provided, the runtime also emits `run_matrix_summary`, `sensitivity_report`, and `sensitivity_report_html` outputs. The sensitivity report includes `metrics.primary_metric`, `metrics.primary_relative_span`, and `metrics.stability_class` (`high`, `medium`, `low`).
 
 Example:
 
@@ -73,10 +75,12 @@ score, confidence, summary = wbe.wind_turbine_siting(
 ### solar_site_suitability_analysis
 
 ```
-solar_site_suitability_analysis(dem, candidate_threshold=0.7, max_candidate_sites=200, output_prefix=None, callback=None)
+solar_site_suitability_analysis(dem, candidate_threshold=0.7, max_candidate_sites=200, sweep_spec_json=None, output_prefix=None, callback=None)
 ```
 
 Returns `(suitability_score_raster, visual_impact_raster, candidate_sites_vector, summary_json_path)`.
+
+When `sweep_spec_json` is provided, the runtime also emits `run_matrix_summary`, `sensitivity_report`, and `sensitivity_report_html` outputs. The sensitivity report includes `metrics.primary_metric`, `metrics.primary_relative_span`, and `metrics.stability_class` (`high`, `medium`, `low`).
 
 Example:
 

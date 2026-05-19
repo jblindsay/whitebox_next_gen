@@ -268,6 +268,41 @@ print(result)
 > **Note:** This workflow requires a session initialized with a valid Pro
 > licence.
 
+### Pro Sweep Diagnostics for Siting Workflows
+
+For scenario testing in Pro siting workflows, `wind_turbine_siting` and
+`solar_site_suitability_analysis` accept a `sweep_spec` list and emit
+additional sweep outputs:
+
+- `run_matrix_summary` (CSV)
+- `sensitivity_report` (JSON)
+- `sensitivity_report_html` (HTML)
+
+The sensitivity JSON includes a normalized span and stability classifier:
+
+- `metrics.primary_metric`
+- `metrics.primary_relative_span`
+- `metrics.stability_class` (`high`, `medium`, `low`)
+
+```r
+s <- wbw_session()
+
+sweep_spec <- list(
+  schema_version = "1.0.0",
+  sweep_mode = "grid",
+  parameters = list(
+    list(name = "candidate_threshold", values = list(0.65, 0.70, 0.75))
+  )
+)
+
+result <- s$wind_turbine_siting(
+  dem = "dem.tif",
+  settlements = "settlements.gpkg",
+  sweep_spec = sweep_spec,
+  output_prefix = "wind_sweep"
+)
+```
+
 ---
 
 ## Complete Terrain Analysis Workflow

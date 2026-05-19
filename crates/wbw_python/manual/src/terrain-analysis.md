@@ -482,6 +482,47 @@ print(result)
 > **Note:** This workflow requires a `WbEnvironment` initialized with a valid
 > Pro licence.
 
+### Pro Sweep Diagnostics for Siting Workflows
+
+For scenario testing in Pro siting workflows, `wind_turbine_siting` and
+`solar_site_suitability_analysis` accept `sweep_spec_json` and produce
+additional sweep outputs:
+
+- `run_matrix_summary` (CSV)
+- `sensitivity_report` (JSON)
+- `sensitivity_report_html` (HTML)
+
+The JSON sensitivity report includes a normalized primary metric span and
+stability class fields for quick robustness screening:
+
+- `metrics.primary_metric`
+- `metrics.primary_relative_span`
+- `metrics.stability_class` with values `high`, `medium`, or `low`
+
+Example:
+
+```python
+import json
+import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier="pro")
+
+sweep_spec = {
+  "schema_version": "1.0.0",
+  "sweep_mode": "grid",
+  "parameters": [
+    {"name": "candidate_threshold", "values": [0.65, 0.7, 0.75]},
+  ],
+}
+
+score, conf, summary = wbe.wind_turbine_siting(
+  dem="dem.tif",
+  settlements="settlements.gpkg",
+  sweep_spec_json=json.dumps(sweep_spec),
+  output_prefix="wind_sweep",
+)
+```
+
 ---
 
 ## Complete Terrain Analysis Pipeline

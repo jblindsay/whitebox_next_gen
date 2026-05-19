@@ -237,6 +237,27 @@ processing.run('whitebox_workflows:geomorphons', {
 
 ---
 
+## Pro Siting Sweep Diagnostics
+
+For Pro terrain siting workflows (`wind_turbine_siting` and
+`solar_site_suitability_analysis`), providing a sweep specification executes a
+multi-run grid and emits extra diagnostics:
+
+- `run_matrix_summary` (CSV)
+- `sensitivity_report` (JSON)
+- `sensitivity_report_html` (HTML)
+
+Inside `sensitivity_report`, use these fields for quick robustness checks:
+
+- `metrics.primary_metric`
+- `metrics.primary_relative_span`
+- `metrics.stability_class` (`high`, `medium`, `low`)
+
+These outputs are intended for scenario comparison and shortlist stability
+review before field validation.
+
+---
+
 ## Common Pitfalls
 
 | Problem | Likely cause | Fix |

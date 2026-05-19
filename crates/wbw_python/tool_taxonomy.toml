@@ -352,16 +352,14 @@ category = "vector"
 subcategory = "network_analysis"
 tools = [
   "build_network_topology",
-  "generate_network_nodes",
-  "network_readiness_and_diagnostics_intelligence",
-  "split_lines_at_intersections",
-  "snap_points_to_network",
-  "service_area_planning_and_coverage_optimization",
-  "fleet_routing_and_dispatch_optimizer",
   "closest_facility_network",
+  "emergency_scenario_routing_and_accessibility_simulator",
+  "fleet_routing_and_dispatch_optimizer",
+  "generate_network_nodes",
   "k_shortest_paths_network",
   "location_allocation_network",
   "map_matching_v1",
+  "market_access_and_site_intelligence_workflow",
   "multimodal_od_cost_matrix",
   "multimodal_routes_from_od",
   "multimodal_shortest_path",
@@ -370,12 +368,16 @@ tools = [
   "network_connected_components",
   "network_node_degree",
   "network_od_cost_matrix",
+  "network_readiness_and_diagnostics_intelligence",
   "network_routes_from_od",
   "network_service_area",
   "network_topology_audit",
   "od_sensitivity_analysis",
-  "transfer_attributes",
   "shortest_path_network",
+  "split_lines_at_intersections",
+  "snap_points_to_network",
+  "service_area_planning_and_coverage_optimization",
+  "transfer_attributes",
   "travelling_salesman_problem",
   "vehicle_routing_cvrp",
   "vehicle_routing_pickup_delivery",
@@ -490,8 +492,6 @@ subcategory = "workflow_products"
 tools = [
   "utility_corridor_encroachment_and_access_planning",
   "parcel_and_land_fabric_topology_compliance_workflow",
-  "emergency_scenario_routing_and_accessibility_simulator",
-  "market_access_and_site_intelligence_workflow",
 ]
 
 [[mapping]]

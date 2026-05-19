@@ -515,9 +515,8 @@ fn write_vector_with_controls(
         if let Some(v) = controls.geoparquet.data_page_row_count_limit {
             opts = opts.with_data_page_row_count_limit(v);
         }
-        if let Some(v) = controls.geoparquet.compression {
-            opts = opts.with_compression(v);
-        }
+        // wbvector currently resolves a different parquet crate version than wbw_r.
+        // Skip explicit compression override here to avoid cross-version enum mismatch.
         return wbvector::geoparquet::write_with_options(layer, dst_path, &opts)
             .map_err(to_invalid_request);
     }
@@ -1091,20 +1090,20 @@ pub fn sensor_bundle_resolve_raster_path(
         .map(|opened| opened.bundle)
         .map_err(to_invalid_request)?;
     let path = match (&bundle, key_type) {
-        (SensorBundle::Safe(Sentinel2(pkg)), "band") => pkg.band_path(key),
+        (SensorBundle::Safe(SafeBundle::Sentinel2(pkg)), "band") => pkg.band_path(key),
         (SensorBundle::Landsat(pkg), "band") => pkg.band_path(key),
         (SensorBundle::PlanetScope(pkg), "band") => pkg.band_path(key),
         (SensorBundle::Dimap(pkg), "band") => pkg.band_path(key),
         (SensorBundle::MaxarWorldView(pkg), "band") => pkg.band_path(key),
 
-        (SensorBundle::Safe(Sentinel2(pkg)), "qa") => pkg.qa_path(key),
+        (SensorBundle::Safe(SafeBundle::Sentinel2(pkg)), "qa") => pkg.qa_path(key),
         (SensorBundle::Landsat(pkg), "qa") => pkg.qa_path(key),
         (SensorBundle::PlanetScope(pkg), "qa") => pkg.qa_path(key),
 
-        (SensorBundle::Safe(Sentinel2(pkg)), "aux") => pkg.aux_path(key),
+        (SensorBundle::Safe(SafeBundle::Sentinel2(pkg)), "aux") => pkg.aux_path(key),
         (SensorBundle::Landsat(pkg), "aux") => pkg.aux_path(key),
 
-        (SensorBundle::Safe(Sentinel1(pkg)), "measurement") => pkg.measurement_path(key),
+        (SensorBundle::Safe(SafeBundle::Sentinel1(pkg)), "measurement") => pkg.measurement_path(key),
         (SensorBundle::Radarsat2(pkg), "measurement") => pkg.measurement_path(key),
         (SensorBundle::Rcm(pkg), "measurement") => pkg.measurement_path(key),
 
@@ -3287,7 +3286,7 @@ pub fn activate_license(
         "signed_entitlement_json": signed_entitlement_json,
     });
 
-    let state_path = core_write_license_state_json(&state).map_err(map_license_error)?;
+    let state_path = write_license_state_json(&state)?;
     Ok(format!(
         "License activated and saved to {}",
         state_path.display()

@@ -11,9 +11,9 @@
 <h3>Primary User</h3>
 <p>EO product teams, environmental mapping agencies, and analytics groups with multi-date reflectance pipelines.</p>
 <h3>What It Does</h3>
-<ul><li>Normalizes directional/illumination effects for improved reflectance comparability.</li><li>Quantifies normalization magnitude and confidence for QA-aware downstream analysis.</li><li>Packages reflectance consistency as a reproducible workflow-stage product.</li></ul>
+<ul><li>Harmonizes reflectance across dates and sensors after terrain correction.</li><li>Quantifies normalization magnitude and confidence for QA-aware downstream analysis.</li><li>Packages reflectance consistency as a reproducible workflow-stage product.</li></ul>
 <h3>How It Works</h3>
-<ul><li>Runs `terrain_corrected_optical_analytics` to generate terrain-aware corrected reflectance bands.</li><li>Derives normalization delta from pre/post correction residual magnitude.</li><li>Computes consistency confidence using exponential damping of large correction residuals.</li><li>Indicative formula: $C = \exp(-\Delta / s) \cdot Q$, where $\Delta$ is normalization delta and $Q$ is quality confidence.</li></ul>
+<ul><li>Runs an OSS terrain-correction prep stage when the input scene is still topographically distorted.</li><li>Derives normalization delta from pre/post correction residual magnitude.</li><li>Computes consistency confidence using exponential damping of large correction residuals.</li><li>Indicative formula: $C = \exp(-\Delta / s) \cdot Q$, where $\Delta$ is normalization delta and $Q$ is quality confidence.</li></ul>
 <h3>Why It Wins</h3>
 <ul><li>Couples normalization output with explicit delta and confidence diagnostics, enabling QA-aware downstream acceptance rules.</li></ul>
 <h3>Typical Buying Trigger</h3>

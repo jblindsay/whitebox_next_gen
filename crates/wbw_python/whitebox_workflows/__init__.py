@@ -168,6 +168,9 @@ def lidar_change_and_disturbance_analysis(
     env,
     baseline_tiles,
     monitor_tiles,
+    reference_perimeters=None,
+    attribution_buffer_meters=None,
+    min_overlap_fraction=None,
     resolution=None,
     min_change_m=None,
     output_prefix=None,
@@ -176,10 +179,102 @@ def lidar_change_and_disturbance_analysis(
         "baseline_tiles": baseline_tiles,
         "monitor_tiles": monitor_tiles,
     }
+    _add_if_not_none(args, "reference_perimeters", reference_perimeters)
+    _add_if_not_none(args, "attribution_buffer_meters", attribution_buffer_meters)
+    _add_if_not_none(args, "min_overlap_fraction", min_overlap_fraction)
     _add_if_not_none(args, "resolution", resolution)
     _add_if_not_none(args, "min_change_m", min_change_m)
     _add_if_not_none(args, "output_prefix", output_prefix)
     return env.run_tool("lidar_change_and_disturbance_analysis", args)
+
+
+def sar_analysis_readiness(
+    env,
+    input_sar=None,
+    input_dem=None,
+    input_sar_bundle=None,
+    input_measurement_key=None,
+    pair_sar=None,
+    pair_sar_bundle=None,
+    pair_measurement_key=None,
+    input_look_angle_deg=None,
+    pair_look_angle_deg=None,
+    max_look_angle_diff_deg=None,
+    auto_coregister_pair=None,
+    coreg_max_offset_px=None,
+    coreg_decimation=None,
+    coreg_min_overlap_fraction=None,
+    speckle_window=None,
+    z_factor=None,
+    output_prefix=None,
+):
+    args = {}
+    _add_if_not_none(args, "input_sar", input_sar)
+    _add_if_not_none(args, "input_dem", input_dem)
+    _add_if_not_none(args, "input_sar_bundle", input_sar_bundle)
+    _add_if_not_none(args, "input_measurement_key", input_measurement_key)
+    _add_if_not_none(args, "pair_sar", pair_sar)
+    _add_if_not_none(args, "pair_sar_bundle", pair_sar_bundle)
+    _add_if_not_none(args, "pair_measurement_key", pair_measurement_key)
+    _add_if_not_none(args, "input_look_angle_deg", input_look_angle_deg)
+    _add_if_not_none(args, "pair_look_angle_deg", pair_look_angle_deg)
+    _add_if_not_none(args, "max_look_angle_diff_deg", max_look_angle_diff_deg)
+    _add_if_not_none(args, "auto_coregister_pair", auto_coregister_pair)
+    _add_if_not_none(args, "coreg_max_offset_px", coreg_max_offset_px)
+    _add_if_not_none(args, "coreg_decimation", coreg_decimation)
+    _add_if_not_none(args, "coreg_min_overlap_fraction", coreg_min_overlap_fraction)
+    _add_if_not_none(args, "speckle_window", speckle_window)
+    _add_if_not_none(args, "z_factor", z_factor)
+    _add_if_not_none(args, "output_prefix", output_prefix)
+    return env.run_tool("sar_analysis_readiness", args)
+
+
+def wind_turbine_siting(
+    env,
+    dem,
+    settlements,
+    settlements_epsg=None,
+    visibility_radius_meters=None,
+    min_slope_degrees=None,
+    max_slope_degrees=None,
+    profile=None,
+    output_prefix=None,
+):
+    args = {
+        "dem": dem,
+        "settlements": settlements,
+    }
+    _add_if_not_none(args, "settlements_epsg", settlements_epsg)
+    _add_if_not_none(args, "visibility_radius_meters", visibility_radius_meters)
+    _add_if_not_none(args, "min_slope_degrees", min_slope_degrees)
+    _add_if_not_none(args, "max_slope_degrees", max_slope_degrees)
+    _add_if_not_none(args, "profile", profile)
+    _add_if_not_none(args, "output_prefix", output_prefix)
+    return env.run_tool("wind_turbine_siting", args)
+
+
+def solar_site_suitability_analysis(
+    env,
+    dem,
+    transmission_lines=None,
+    substations=None,
+    road_network=None,
+    infra_weight_profile=None,
+    candidate_threshold=None,
+    max_candidate_sites=None,
+    output_prefix=None,
+):
+    args = {
+        "dem": dem,
+    }
+    _add_if_not_none(args, "transmission_lines", transmission_lines)
+    _add_if_not_none(args, "substations", substations)
+    _add_if_not_none(args, "road_network", road_network)
+    _add_if_not_none(args, "infra_weight_profile", infra_weight_profile)
+    _add_if_not_none(args, "candidate_threshold", candidate_threshold)
+    _add_if_not_none(args, "max_candidate_sites", max_candidate_sites)
+    _add_if_not_none(args, "output_prefix", output_prefix)
+    return env.run_tool("solar_site_suitability_analysis", args)
 
 
 def sidewalk_vegetation_accessibility_monitoring(
@@ -621,6 +716,9 @@ def _attach_phase4_convenience_methods():
     WbEnvironment.compute_network_accessibility = compute_network_accessibility
     WbEnvironment.analyze_od_cost_sensitivity = analyze_od_cost_sensitivity
     WbEnvironment.lidar_change_and_disturbance_analysis = lidar_change_and_disturbance_analysis
+    WbEnvironment.sar_analysis_readiness = sar_analysis_readiness
+    WbEnvironment.wind_turbine_siting = wind_turbine_siting
+    WbEnvironment.solar_site_suitability_analysis = solar_site_suitability_analysis
     WbEnvironment.sidewalk_vegetation_accessibility_monitoring = sidewalk_vegetation_accessibility_monitoring
     WbEnvironment.terrain_constraint_and_conflict_analysis = terrain_constraint_and_conflict_analysis
     WbEnvironment.terrain_constructability_and_cost_analysis = terrain_constructability_and_cost_analysis
@@ -647,6 +745,9 @@ if hasattr(whitebox_workflows, "__all__"):
         "compute_network_accessibility",
         "analyze_od_cost_sensitivity",
         "lidar_change_and_disturbance_analysis",
+        "sar_analysis_readiness",
+        "wind_turbine_siting",
+        "solar_site_suitability_analysis",
         "sidewalk_vegetation_accessibility_monitoring",
         "terrain_constraint_and_conflict_analysis",
         "terrain_constructability_and_cost_analysis",
@@ -669,6 +770,9 @@ else:
         "compute_network_accessibility",
         "analyze_od_cost_sensitivity",
         "lidar_change_and_disturbance_analysis",
+        "sar_analysis_readiness",
+        "wind_turbine_siting",
+        "solar_site_suitability_analysis",
         "sidewalk_vegetation_accessibility_monitoring",
         "terrain_constraint_and_conflict_analysis",
         "terrain_constructability_and_cost_analysis",

@@ -74,6 +74,101 @@
       }
     }
   },
+  "brdf_normalization": {
+    "description": "",
+    "parameters": {
+      "input_raster": {
+        "label": "Input reflectance raster to normalize (single band or multi-band stack). (default input.tif)."
+      },
+      "input_dem": {
+        "label": "DEM raster co-registered with the input (same grid or will be resampled to match). (default dem.tif)."
+      },
+      "solar_zenith_deg": {
+        "label": "Solar zenith angle in degrees at acquisition time. (default 40.0)."
+      },
+      "solar_azimuth_deg": {
+        "label": "Solar azimuth angle in degrees (clockwise from north) at acquisition time. (default 165.0)."
+      },
+      "method": {
+        "label": "Correction method: c_correction (default) or minnaert. [optional]",
+        "tooltip": "Correction method: c_correction (default) or minnaert."
+      },
+      "minnaert_k": {
+        "label": "Minnaert k coefficient in [0,1] (default 0.5). [optional]"
+      },
+      "z_factor": {
+        "label": "Vertical exaggeration for DEM slope/aspect computation (default 1.0). [optional]"
+      },
+      "output_prefix": {
+        "label": "Prefix for output files (default brdf_normalized). [optional]"
+      },
+      "output": {
+        "label": "Output path for normalized raster (overrides output_prefix for single-output mode). [optional]"
+      }
+    }
+  },
+  "buffer_vector": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector layer. (default features.shp)."
+      },
+      "distance": {
+        "label": "Buffer distance in map units. (default 10.0)."
+      },
+      "quadrant_segments": {
+        "label": "Arc resolution in segments per quadrant; defaults to 8. [optional]"
+      },
+      "cap_style": {
+        "label": "Line end-cap style: round, flat, or square. (default round). [optional]",
+        "tooltip": "Line end-cap style: round, flat, or square."
+      },
+      "join_style": {
+        "label": "Corner join style: round, bevel, or mitre. (default round). [optional]",
+        "tooltip": "Corner join style: round, bevel, or mitre."
+      },
+      "mitre_limit": {
+        "label": "Mitre join limit used when join_style=mitre; defaults to 5.0. [optional]"
+      },
+      "dissolve": {
+        "label": "Dissolve overlapping buffers into a single unified polygon; defaults to false. [optional]"
+      },
+      "output": {
+        "label": "Output vector path."
+      }
+    }
+  },
+  "build_network_topology": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network_lines.shp)."
+      },
+      "snap_tolerance": {
+        "label": "Optional snapping tolerance used while detecting and splitting intersections. (default..."
+      },
+      "output": {
+        "label": "Output topologically noded edge vector path."
+      },
+      "nodes_output": {
+        "label": "Optional output node vector path. [optional]"
+      }
+    }
+  },
+  "build_object_hierarchy_multiscale": {
+    "description": "",
+    "parameters": {
+      "coarse_segments": {
+        "label": "Coarse segment raster."
+      },
+      "fine_segments": {
+        "label": "Fine segment raster."
+      },
+      "output": {
+        "label": "Output hierarchy CSV path. [optional]"
+      }
+    }
+  },
   "burn_streams": {
     "description": "",
     "parameters": {
@@ -165,6 +260,111 @@
       }
     }
   },
+  "classify_objects_ensemble_pro": {
+    "description": "",
+    "parameters": {
+      "features": {
+        "label": "Input object-features CSV (must include segment_id and numeric feature columns)."
+      },
+      "training": {
+        "label": "Training CSV with segment_id and class label columns."
+      },
+      "segment_id_field": {
+        "label": "Segment ID field name (default segment_id). [optional]"
+      },
+      "class_field": {
+        "label": "Class label field in training CSV (default class). [optional]"
+      },
+      "n_trees": {
+        "label": "Number of trees (default 200). [optional]"
+      },
+      "output": {
+        "label": "Output predictions CSV path. [optional]"
+      }
+    }
+  },
+  "classify_objects_random_forest": {
+    "description": "",
+    "parameters": {
+      "features": {
+        "label": "Input object-features CSV (must include segment_id and numeric feature columns)."
+      },
+      "training": {
+        "label": "Training CSV with segment_id and class label columns."
+      },
+      "segment_id_field": {
+        "label": "Segment ID field name (default segment_id). [optional]"
+      },
+      "class_field": {
+        "label": "Class label field in training CSV (default class). [optional]"
+      },
+      "n_trees": {
+        "label": "Number of trees (default 200). [optional]"
+      },
+      "output": {
+        "label": "Output predictions CSV path. [optional]"
+      }
+    }
+  },
+  "classify_objects_rules_basic": {
+    "description": "",
+    "parameters": {
+      "features": {
+        "label": "Input object-features CSV."
+      },
+      "rules": {
+        "label": "Rules CSV with columns: feature, op, value, class, [priority].",
+        "tooltip": "Rules CSV with columns: feature, op, value, class, [priority]."
+      },
+      "default_class": {
+        "label": "Fallback class when no rules match. [optional]"
+      },
+      "output": {
+        "label": "Output predictions CSV path. [optional]"
+      }
+    }
+  },
+  "classify_objects_rules_hierarchical": {
+    "description": "",
+    "parameters": {
+      "features": {
+        "label": "Input object-features CSV."
+      },
+      "rules": {
+        "label": "Rules CSV with columns: feature, op, value, class, [priority].",
+        "tooltip": "Rules CSV with columns: feature, op, value, class, [priority]."
+      },
+      "default_class": {
+        "label": "Fallback class when no rules match. [optional]"
+      },
+      "output": {
+        "label": "Output predictions CSV path. [optional]"
+      }
+    }
+  },
+  "classify_objects_svm": {
+    "description": "",
+    "parameters": {
+      "features": {
+        "label": "Input object-features CSV (must include segment_id and numeric feature columns)."
+      },
+      "training": {
+        "label": "Training CSV with segment_id and class label columns."
+      },
+      "segment_id_field": {
+        "label": "Segment ID field name (default segment_id). [optional]"
+      },
+      "class_field": {
+        "label": "Class label field in training CSV (default class). [optional]"
+      },
+      "n_trees": {
+        "label": "Number of trees (default 200). [optional]"
+      },
+      "output": {
+        "label": "Output predictions CSV path. [optional]"
+      }
+    }
+  },
   "closest_facility_network": {
     "description": "",
     "parameters": {
@@ -198,6 +398,15 @@
       },
       "barrier_snap_distance": {
         "label": "Optional max distance from each barrier point to a network node for blocking. [optional]"
+      },
+      "node_cost_points": {
+        "label": "Optional point layer providing per-node entry costs (e.g., intersection delay). [optional]"
+      },
+      "node_cost_field": {
+        "label": "Numeric field in node_cost_points containing non-negative per-node costs. [optional]"
+      },
+      "node_cost_snap_distance": {
+        "label": "Optional max distance from each node-cost point to a network node for assignment. [optional]"
       },
       "turn_penalty": {
         "label": "Optional additive cost applied to non-straight turns at network nodes. [optional]"
@@ -247,20 +456,70 @@
       }
     }
   },
+  "cloude_pottier_decomposition": {
+    "description": "",
+    "parameters": {
+      "inputs": {
+        "label": "Matrix rasters: diag3 [m11,m22,m33], full3x3 compact [m11,m22,m33,m12,m13,m23], or full row-major 9 rasters...",
+        "tooltip": "Matrix rasters: diag3 [m11,m22,m33], full3x3 compact [m11,m22,m33,m12,m13,m23], or full row-major 9 rasters."
+      },
+      "matrix_format": {
+        "label": "Input matrix format: diag3 (default with 3 rasters) or full3x3. [optional]"
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject stack rasters to match inputs[0] when CRS differs."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "output": {
+        "label": "Optional output 3-band raster [H, A, alpha_deg]. [optional]"
+      }
+    }
+  },
   "concave_hull": {
     "description": "",
     "parameters": {
       "input": {
         "label": "Input vector layer. (default input.shp)."
       },
+      "concavity": {
+        "label": "Concavity ratio (default 2.0). [optional]",
+        "tooltip": "Concavity ratio (default 2.0). Higher values produce a less-concave hull closer to the convex hull. Lower values allow tighter concavities."
+      },
       "max_edge_length": {
-        "label": "Maximum edge length controlling hull detail. (default 50.0)."
+        "label": "Length threshold: hull edges shorter than this value are not refined further. [optional]",
+        "tooltip": "Length threshold: hull edges shorter than this value are not refined further. Defaults to unlimited (infinity)."
       },
       "epsilon": {
         "label": "Robustness epsilon (default 1e-9). [optional]"
       },
       "output": {
         "label": "Output vector path."
+      }
+    }
+  },
+  "continuum_removal": {
+    "description": "",
+    "parameters": {
+      "inputs": {
+        "label": "Input raster stack (one raster per band). (default ['b1.tif', 'b2.tif', 'b3.tif', 'b4.tif'])."
+      },
+      "wavelengths": {
+        "label": "Optional strictly increasing wavelength array matching inputs length. [optional]"
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject stack rasters to match inputs[0] when CRS differs."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "output": {
+        "label": "Optional output multiband raster path. [optional]"
       }
     }
   },
@@ -295,6 +554,35 @@
       }
     }
   },
+  "dark_object_subtraction": {
+    "description": "",
+    "parameters": {
+      "inputs": {
+        "label": "Input raster stack (one or more rasters). (default ['band1.tif', 'band2.tif', 'band3.tif'])."
+      },
+      "percentile": {
+        "label": "Dark-object percentile per band (default 1.0). [optional]"
+      },
+      "clamp_non_negative": {
+        "label": "Clamp Non Negative [optional]",
+        "tooltip": "If true, clamp corrected values below zero to zero (default true)."
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject inputs to match inputs[0] when CRS differs."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "output": {
+        "label": "Optional output raster path. [optional]"
+      },
+      "output_diagnostic_offsets": {
+        "label": "Optional output raster path for per-band dark-object offset diagnostics. [optional]"
+      }
+    }
+  },
   "delete_field": {
     "description": "",
     "parameters": {
@@ -306,6 +594,144 @@
       },
       "output": {
         "label": "Output vector path."
+      }
+    }
+  },
+  "dn_to_toa_reflectance": {
+    "description": "",
+    "parameters": {
+      "inputs": {
+        "label": "Input DN raster stack (one or more rasters). (default ['B2.tif', 'B3.tif', 'B4.tif', 'B5.tif'])."
+      },
+      "reflectance_mult": {
+        "label": "Per-band multiplicative coefficient(s), either scalar or array sized to inputs. (default [2e-05, 2e-05..."
+      },
+      "reflectance_add": {
+        "label": "Per-band additive coefficient(s), either scalar or array sized to inputs (default 0). [optional]"
+      },
+      "sensor_bundle_root": {
+        "label": "Optional Landsat/Sentinel-2 bundle root used to auto-derive coefficients when explicit coefficients are...",
+        "tooltip": "Optional Landsat/Sentinel-2 bundle root used to auto-derive coefficients when explicit coefficients are omitted."
+      },
+      "sun_elevation_deg": {
+        "label": "Optional sun elevation angle in degrees for cosine correction. [optional]",
+        "tooltip": "Optional sun elevation angle in degrees for cosine correction. Auto-derived from bundle metadata when available."
+      },
+      "apply_solar_correction": {
+        "label": "Apply Solar Correction [optional]",
+        "tooltip": "If true (default), divide by sin(sun_elevation)."
+      },
+      "clamp_unit_interval": {
+        "label": "Clamp Unit Interval [optional]",
+        "tooltip": "If true (default), clamp outputs to [0, 1]."
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject inputs to match inputs[0] when CRS differs."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "output": {
+        "label": "Optional output raster path. [optional]"
+      }
+    }
+  },
+  "download_osm_vector": {
+    "description": "",
+    "parameters": {
+      "west": {
+        "label": "West boundary longitude (EPSG:4326). (default -80.5)."
+      },
+      "south": {
+        "label": "South boundary latitude (EPSG:4326). (default 43.4)."
+      },
+      "east": {
+        "label": "East boundary longitude (EPSG:4326). (default -80.4)."
+      },
+      "north": {
+        "label": "North boundary latitude (EPSG:4326). (default 43.5)."
+      },
+      "input_extent_epsg": {
+        "label": "EPSG code for west/south/east/north input extent (default 4326). [optional]"
+      },
+      "filter_preset": {
+        "label": "Feature class preset: all, roads, buildings, water, landuse, trails, parks, rail, amenities, boundaries...",
+        "tooltip": "Feature class preset: all, roads, buildings, water, landuse, trails, parks, rail, amenities, boundaries, transit, poi (default all)."
+      },
+      "include_tags": {
+        "label": "Include Tags [optional]",
+        "tooltip": "Semicolon-delimited tag keys filter list, e.g. amenity;shop."
+      },
+      "include_key_values": {
+        "label": "Include Key Values [optional]",
+        "tooltip": "Semicolon-delimited key=value filter list, e.g. amenity=school;building=yes."
+      },
+      "filter_key": {
+        "label": "Legacy single tag-key filter (deprecated; use include_tags). [optional]"
+      },
+      "filter_key_value": {
+        "label": "Legacy single key=value filter (deprecated; use include_key_values). [optional]"
+      },
+      "include_points": {
+        "label": "Include Points [optional]",
+        "tooltip": "Include OSM node features with tags as Point geometries (default true)."
+      },
+      "include_lines": {
+        "label": "Include Lines [optional]",
+        "tooltip": "Include OSM way features as LineString geometries (default true)."
+      },
+      "include_polygons": {
+        "label": "Include Polygons [optional]",
+        "tooltip": "Include closed OSM ways with area tags as Polygon geometries (default true)."
+      },
+      "clip_to_extent": {
+        "label": "Clip output geometries to the query bbox extent (default true). [optional]"
+      },
+      "split_output_by_geometry": {
+        "label": "Write separate outputs per geometry type (<output>_points|lines|polygons.ext). (default False). [optional]",
+        "tooltip": "Write separate outputs per geometry type (<output>_points|lines|polygons.ext)."
+      },
+      "output_epsg": {
+        "label": "Reproject output to this EPSG code; omit to keep EPSG:4326. [optional]"
+      },
+      "overpass_profile": {
+        "label": "Overpass endpoint profile: main, kumi, fr, or custom (default main). [optional]",
+        "tooltip": "Overpass endpoint profile: main, kumi, fr, or custom (default main)."
+      },
+      "overpass_url": {
+        "label": "Overpass API endpoint URL (default https://overpass-api.de/api/interpreter). [optional]"
+      },
+      "timeout_seconds": {
+        "label": "Query timeout in seconds (default 25). [optional]"
+      },
+      "max_elements": {
+        "label": "Maximum number of returned Overpass elements before an error is raised (default 50 000). [optional]"
+      },
+      "chunk_large_aoi": {
+        "label": "Automatically split larger AOIs into multiple Overpass requests (default true). [optional]"
+      },
+      "chunk_max_area_deg2": {
+        "label": "Maximum area per chunk in square degrees when chunking (default 4.0). [optional]"
+      },
+      "max_chunk_count": {
+        "label": "Hard cap on chunk count when chunking large AOIs (default 64). [optional]"
+      },
+      "chunk_parallel_requests": {
+        "label": "Maximum parallel chunk requests for large AOIs (default 1 = sequential). [optional]"
+      },
+      "cache_dir": {
+        "label": "Optional directory for caching Overpass JSON responses by endpoint+query hash. [optional]"
+      },
+      "cache_ttl_hours": {
+        "label": "Cache time-to-live in hours (default 24; 0 means no expiry check). [optional]"
+      },
+      "provenance_output": {
+        "label": "Optional JSON path to write query/provenance metadata sidecar. [optional]"
+      },
+      "output": {
+        "label": "Optional output vector path; when omitted, a temporary output is used. [optional]"
       }
     }
   },
@@ -360,6 +786,145 @@
       },
       "html_report": {
         "label": "Optional output path for an HTML accessibility simulation summary report. [optional]"
+      },
+      "cost_method": {
+        "label": "Cost method: distance, mode_speed, edge_field, or temporal. [optional]",
+        "tooltip": "Cost method: distance, mode_speed, edge_field, or temporal."
+      },
+      "edge_cost_field": {
+        "label": "Optional numeric line field used as an impedance multiplier for segment length. [optional]"
+      },
+      "mode_field": {
+        "label": "Mode Field [optional]",
+        "tooltip": "Optional line attribute field identifying travel mode per segment; enables mode-aware service-area costs."
+      },
+      "default_mode_speed": {
+        "label": "Default mode speed in coordinate-units per time unit when mode_field is provided (default: 1). [optional]",
+        "tooltip": "Default mode speed in coordinate-units per time unit when mode_field is provided (default: 1)."
+      },
+      "mode_speed_overrides": {
+        "label": "Optional comma-separated mode:speed overrides (e.g., walk:1.4,drive:12). [optional]",
+        "tooltip": "Optional comma-separated mode:speed overrides (e.g., walk:1.4,drive:12)."
+      },
+      "allowed_modes": {
+        "label": "Optional comma-separated allow-list of modes to include when mode_field is provided. [optional]",
+        "tooltip": "Optional comma-separated allow-list of modes to include when mode_field is provided."
+      },
+      "temporal_cost_profile": {
+        "label": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)...",
+        "tooltip": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)."
+      },
+      "temporal_edge_id_field": {
+        "label": "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID). [optional]"
+      },
+      "departure_time": {
+        "label": "Optional RFC3339 departure time used for temporal profile lookup. [optional]"
+      },
+      "temporal_mode": {
+        "label": "Optional temporal interpretation mode: multiplier or absolute. [optional]",
+        "tooltip": "Optional temporal interpretation mode: multiplier or absolute."
+      },
+      "temporal_fallback": {
+        "label": "Optional fallback when temporal row is missing: static_cost or error. [optional]"
+      },
+      "turn_penalty": {
+        "label": "Optional additive cost applied to non-straight turns at network nodes. [optional]"
+      },
+      "u_turn_penalty": {
+        "label": "Optional additive cost applied to U-turn transitions. [optional]"
+      },
+      "forbid_u_turns": {
+        "label": "Forbid U Turns [optional]",
+        "tooltip": "If true, disallow U-turn transitions."
+      },
+      "forbid_left_turns": {
+        "label": "Forbid Left Turns [optional]",
+        "tooltip": "If true, disallow left-turn transitions."
+      },
+      "forbid_right_turns": {
+        "label": "Forbid Right Turns [optional]",
+        "tooltip": "If true, disallow right-turn transitions."
+      },
+      "turn_restrictions_csv": {
+        "label": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. [optional]",
+        "tooltip": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden and turn_cost."
+      },
+      "node_cost_points": {
+        "label": "Optional point layer providing per-node entry costs (e.g., intersection delay). [optional]"
+      },
+      "node_cost_field": {
+        "label": "Numeric field in node_cost_points containing non-negative per-node costs. [optional]"
+      },
+      "node_cost_snap_distance": {
+        "label": "Optional max distance from each node-cost point to a network node for assignment. [optional]"
+      }
+    }
+  },
+  "enhanced_lee_filter": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input raster path or typed raster object. (default input.tif)."
+      },
+      "filter_size_x": {
+        "label": "Neighborhood width in pixels (odd integer, default 11). [optional]"
+      },
+      "filter_size_y": {
+        "label": "Neighborhood height in pixels (odd integer, default 11). [optional]"
+      },
+      "enl": {
+        "label": "Equivalent number of looks parameter for sigma-ratio weighting (default 4.0). [optional]"
+      },
+      "output": {
+        "label": "Optional output path. [optional]"
+      }
+    }
+  },
+  "evaluate_object_classification_accuracy": {
+    "description": "",
+    "parameters": {
+      "predictions": {
+        "label": "Predictions CSV containing segment_id and predicted_class."
+      },
+      "reference": {
+        "label": "Reference CSV containing segment_id and class."
+      },
+      "segment_id_field": {
+        "label": "Segment ID field name (default segment_id). [optional]"
+      },
+      "predicted_field": {
+        "label": "Predicted class field (default predicted_class). [optional]"
+      },
+      "reference_field": {
+        "label": "Reference class field (default class). [optional]"
+      },
+      "output": {
+        "label": "Output JSON report path. [optional]"
+      }
+    }
+  },
+  "evaluate_segmentation_quality_pro": {
+    "description": "",
+    "parameters": {
+      "segments": {
+        "label": "Input segment-label raster."
+      },
+      "reference": {
+        "label": "Optional reference label raster for overlap-based diagnostics. [optional]"
+      },
+      "output": {
+        "label": "Output JSON report path. [optional]"
+      }
+    }
+  },
+  "false_colour_composite": {
+    "description": "",
+    "parameters": {
+      "bundle_root": {
+        "label": "Root path of the input sensor bundle."
+      },
+      "output_path": {
+        "label": "Output raster path. [optional]"
       }
     }
   },
@@ -389,6 +954,20 @@
       },
       "output": {
         "label": "Optional output path. [optional]"
+      }
+    }
+  },
+  "fft_random_field": {
+    "description": "",
+    "parameters": {
+      "base_raster": {
+        "label": "Base raster path used for grid geometry."
+      },
+      "range": {
+        "label": "Approximate correlation range in map units. (default 1.0). [optional]"
+      },
+      "output": {
+        "label": "Optional output raster path. [optional]"
       }
     }
   },
@@ -460,8 +1039,44 @@
       "objective": {
         "label": "Optimization objective (default: minimize_distance). [optional]"
       },
+      "restrictions": {
+        "label": "Optional CSV with barriers/turn restrictions. [optional]"
+      },
+      "edge_cost_field": {
+        "label": "Optional numeric line field used as an impedance multiplier for segment length. [optional]"
+      },
+      "network_speed_kmph": {
+        "label": "Optional network travel speed used to convert path distance into travel time (default: 80). [optional]"
+      },
       "html_report": {
         "label": "Optional output path for an HTML fleet routing dispatch summary report. [optional]"
+      }
+    }
+  },
+  "forestry_structure_and_biomass_intelligence": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input LiDAR path. (default input.las)."
+      },
+      "profile": {
+        "label": "Profile preset: fast, balanced, strict. (default balanced). [optional]",
+        "tooltip": "Profile preset: fast, balanced, strict."
+      },
+      "resolution": {
+        "label": "Output raster resolution. (default 2.0). [optional]"
+      },
+      "stand_block_cells": {
+        "label": "Stand aggregation block size in cells. (default 12). [optional]"
+      },
+      "biomass_cap": {
+        "label": "Maximum biomass proxy value. (default 25.0). [optional]"
+      },
+      "terrain_adaptation": {
+        "label": "Biomass terrain adaptation mode. (default moderate). [optional]"
+      },
+      "output_prefix": {
+        "label": "Output prefix for generated artifacts. (default forest_structure). [optional]"
       }
     }
   },
@@ -485,6 +1100,32 @@
       }
     }
   },
+  "freeman_durden_decomposition": {
+    "description": "",
+    "parameters": {
+      "inputs": {
+        "label": "Matrix rasters: diag3 [m11,m22,m33], full3x3 compact [m11,m22,m33,m12,m13,m23], or full row-major 9 rasters...",
+        "tooltip": "Matrix rasters: diag3 [m11,m22,m33], full3x3 compact [m11,m22,m33,m12,m13,m23], or full row-major 9 rasters."
+      },
+      "matrix_format": {
+        "label": "Input matrix format: diag3 (default with 3 rasters) or full3x3. [optional]"
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject stack rasters to match inputs[0] when CRS differs."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "output": {
+        "label": "Optional output 3-band raster [surface, double_bounce, volume]. [optional]"
+      },
+      "output_clip_mask": {
+        "label": "Optional output clip-mask raster (1 where non-physical clipping/renormalization occurred). [optional]"
+      }
+    }
+  },
   "gabor_filter_bank": {
     "description": "",
     "parameters": {
@@ -502,6 +1143,55 @@
       },
       "output": {
         "label": "Optional output path. [optional]"
+      }
+    }
+  },
+  "generate_network_nodes": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. (default 0.0). [optional]"
+      },
+      "output": {
+        "label": "Output node point vector path."
+      }
+    }
+  },
+  "glcm_texture": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input single-band raster. (default input.tif)."
+      },
+      "window_size": {
+        "label": "Odd moving-window size in pixels (default 7). [optional]"
+      },
+      "distance": {
+        "label": "Pixel distance for the co-occurrence pair offsets (default 1). [optional]"
+      },
+      "angles": {
+        "label": "Comma-separated angles from 0,45,90,135 (default '0,45,90,135'). [optional]"
+      },
+      "features": {
+        "label": "Comma-separated features: contrast,dissimilarity,homogeneity,asm,energy,entropy,mean,variance,correlation...",
+        "tooltip": "Comma-separated features: contrast,dissimilarity,homogeneity,asm,energy,entropy,mean,variance,correlation."
+      },
+      "direction_aggregation": {
+        "label": "Direction aggregation mode: mean (default), min, max, range, separate. [optional]",
+        "tooltip": "Direction aggregation mode: mean (default), min, max, range, separate."
+      },
+      "levels": {
+        "label": "Number of quantization levels (default 32; range 8-128). [optional]"
+      },
+      "symmetric": {
+        "label": "Symmetric [optional]",
+        "tooltip": "If true (default), build symmetric GLCMs."
+      },
+      "output": {
+        "label": "Optional output raster path (multiband GeoTIFF). [optional]"
       }
     }
   },
@@ -544,6 +1234,28 @@
       }
     }
   },
+  "h_alpha_wisart_classification": {
+    "description": "",
+    "parameters": {
+      "h_raster": {
+        "label": "Input entropy (H) raster from Cloude-Pottier decomposition (0-1 range). (default entropy.tif)."
+      },
+      "alpha_raster": {
+        "label": "Input alpha (\u03b1) raster from Cloude-Pottier decomposition (degrees, 0-90). (default alpha.tif)."
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject alpha to match H when CRS differs."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos. [optional]",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos."
+      },
+      "output": {
+        "label": "Optional output raster with 9-class labels (1-9). [optional]"
+      }
+    }
+  },
   "high_pass_bilateral_filter": {
     "description": "",
     "parameters": {
@@ -566,6 +1278,62 @@
       },
       "output": {
         "label": "Optional output file path. [optional]"
+      }
+    }
+  },
+  "identity": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector layer. (default input_polygons.shp)."
+      },
+      "overlay": {
+        "label": "Overlay polygon layer. (default overlay_polygons.shp)."
+      },
+      "snap_tolerance": {
+        "label": "Optional snapping tolerance used by topology operations; defaults to machine epsilon. [optional]"
+      },
+      "output": {
+        "label": "Output vector path."
+      }
+    }
+  },
+  "image_difference_change_detection": {
+    "description": "",
+    "parameters": {
+      "t1_inputs": {
+        "label": "Array of date-1 raster paths. (default ['t1_b2.tif', 't1_b3.tif', 't1_b4.tif'])."
+      },
+      "t2_inputs": {
+        "label": "Array of date-2 raster paths; must match t1_inputs length and ordering. (default ['t2_b2.tif', 't2_b3.tif'..."
+      },
+      "mode": {
+        "label": "Difference mode: magnitude (default) or signed. [optional]",
+        "tooltip": "Difference mode: magnitude (default) or signed."
+      },
+      "threshold_sigma": {
+        "label": "Optional sigma threshold for binary change mask generation. (default 2.0). [optional]"
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject stack rasters to match t1_inputs[0] when CRS differs."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "output": {
+        "label": "Optional output raster path for difference image. [optional]"
+      },
+      "output_absolute": {
+        "label": "Optional output raster path for absolute signed difference (|mean(t2-t1)|). [optional]",
+        "tooltip": "Optional output raster path for absolute signed difference (|mean(t2-t1)|)."
+      },
+      "output_signed": {
+        "label": "Optional output raster path for signed difference mean(t2-t1). [optional]"
+      },
+      "output_mask": {
+        "label": "Optional output raster path for thresholded binary change mask. [optional]"
       }
     }
   },
@@ -611,6 +1379,15 @@
       },
       "barrier_snap_distance": {
         "label": "Optional max distance from each barrier point to a network node for blocking. [optional]"
+      },
+      "node_cost_points": {
+        "label": "Optional point layer providing per-node entry costs (e.g., intersection delay). [optional]"
+      },
+      "node_cost_field": {
+        "label": "Numeric field in node_cost_points containing non-negative per-node costs. [optional]"
+      },
+      "node_cost_snap_distance": {
+        "label": "Optional max distance from each node-cost point to a network node for assignment. [optional]"
       },
       "turn_penalty": {
         "label": "Optional additive cost applied to non-straight turns at network nodes. [optional]"
@@ -674,6 +1451,152 @@
       }
     }
   },
+  "land_surface_temperature_single_channel": {
+    "description": "",
+    "parameters": {
+      "thermal_input": {
+        "label": "Thermal raster path (DN by default, or brightness temperature if input_is_brightness_temp=true).",
+        "tooltip": "Thermal raster path (DN by default, or brightness temperature if input_is_brightness_temp=true)."
+      },
+      "input_is_brightness_temp": {
+        "label": "Input IS Brightness Temp [optional]",
+        "tooltip": "If true, thermal_input is already brightness temperature in Kelvin (default false)."
+      },
+      "emissivity_input": {
+        "label": "Optional emissivity raster path aligned to thermal_input. [optional]"
+      },
+      "emissivity_constant": {
+        "label": "Fallback emissivity when emissivity_input is not provided (default 0.98). [optional]"
+      },
+      "sensor_bundle_root": {
+        "label": "Optional Landsat bundle root used to derive thermal radiance and Planck constants. [optional]"
+      },
+      "thermal_band_number": {
+        "label": "Thermal band number for metadata lookup (default 10). [optional]"
+      },
+      "radiance_mult": {
+        "label": "Thermal radiance multiplicative factor for DN->radiance conversion. [optional]"
+      },
+      "radiance_add": {
+        "label": "Thermal radiance additive factor for DN->radiance conversion. [optional]"
+      },
+      "k1_constant": {
+        "label": "Planck K1 thermal constant. [optional]"
+      },
+      "k2_constant": {
+        "label": "Planck K2 thermal constant. [optional]"
+      },
+      "wavelength_um": {
+        "label": "Effective thermal wavelength in micrometers (default inferred by thermal_band_number). [optional]"
+      },
+      "output_units": {
+        "label": "Output units: celsius (default) or kelvin. [optional]"
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject emissivity_input to thermal_input CRS when needed."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "output": {
+        "label": "Optional output raster path. [optional]"
+      }
+    }
+  },
+  "land_surface_temperature_split_window": {
+    "description": "",
+    "parameters": {
+      "thermal1_input": {
+        "label": "First thermal raster path (e.g., Landsat B10). (default B10.tif)."
+      },
+      "thermal2_input": {
+        "label": "Second thermal raster path (e.g., Landsat B11). (default B11.tif)."
+      },
+      "input_is_brightness_temp": {
+        "label": "Input IS Brightness Temp [optional]",
+        "tooltip": "If true, thermal inputs are already brightness temperatures in Kelvin (default false)."
+      },
+      "emissivity_mean_input": {
+        "label": "Optional mean emissivity raster path. [optional]"
+      },
+      "emissivity_delta_input": {
+        "label": "Optional emissivity delta raster path (epsilon1 - epsilon2). [optional]"
+      },
+      "emissivity_mean_constant": {
+        "label": "Fallback mean emissivity constant when emissivity_mean_input is absent (default 0.98). [optional]"
+      },
+      "emissivity_delta_constant": {
+        "label": "Fallback emissivity delta constant when emissivity_delta_input is absent (default 0.0). [optional]"
+      },
+      "sensor_bundle_root": {
+        "label": "Optional Landsat bundle root used to derive thermal radiance and Planck constants. [optional]"
+      },
+      "thermal_band1_number": {
+        "label": "Band number for thermal1_input metadata lookup (default 10). [optional]"
+      },
+      "thermal_band2_number": {
+        "label": "Band number for thermal2_input metadata lookup (default 11). [optional]"
+      },
+      "radiance1_mult": {
+        "label": "Band-1 radiance multiplicative factor. [optional]"
+      },
+      "radiance1_add": {
+        "label": "Band-1 radiance additive factor. [optional]"
+      },
+      "k1_1": {
+        "label": "Band-1 Planck K1 constant. [optional]"
+      },
+      "k2_1": {
+        "label": "Band-1 Planck K2 constant. [optional]"
+      },
+      "radiance2_mult": {
+        "label": "Band-2 radiance multiplicative factor. [optional]"
+      },
+      "radiance2_add": {
+        "label": "Band-2 radiance additive factor. [optional]"
+      },
+      "k1_2": {
+        "label": "Band-2 Planck K1 constant. [optional]"
+      },
+      "k2_2": {
+        "label": "Band-2 Planck K2 constant. [optional]"
+      },
+      "coeff_a0": {
+        "label": "Split-window coefficient a0 (default 0.0). [optional]"
+      },
+      "coeff_a1": {
+        "label": "Split-window coefficient a1 for T1 term (default 1.0). [optional]"
+      },
+      "coeff_a2": {
+        "label": "Split-window coefficient a2 for (T1-T2) term (default 0.0). [optional]"
+      },
+      "coeff_a3": {
+        "label": "Split-window coefficient a3 for (T1-T2)^2 term (default 0.0). [optional]"
+      },
+      "coeff_a4": {
+        "label": "Split-window coefficient a4 for (1-emissivity_mean) term (default 0.0). [optional]"
+      },
+      "coeff_a5": {
+        "label": "Split-window coefficient a5 for emissivity_delta term (default 0.0). [optional]"
+      },
+      "output_units": {
+        "label": "Output units: celsius (default) or kelvin. [optional]"
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject supplemental rasters to match thermal1_input CRS when needed."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "output": {
+        "label": "Optional output raster path. [optional]"
+      }
+    }
+  },
   "landslide_susceptibility_assessment": {
     "description": "",
     "parameters": {
@@ -713,6 +1636,41 @@
       },
       "output": {
         "label": "Output vector path."
+      }
+    }
+  },
+  "linear_spectral_unmixing": {
+    "description": "",
+    "parameters": {
+      "inputs": {
+        "label": "Input raster stack (one raster per band). (default ['b1.tif', 'b2.tif', 'b3.tif', 'b4.tif'])."
+      },
+      "endmembers": {
+        "label": "Endmember signatures as array of objects {name, values} or numeric arrays. (default [{'name': 'water'..."
+      },
+      "sum_to_one": {
+        "label": "Sum TO One [optional]",
+        "tooltip": "If true (default), normalize non-negative fractions to sum to one."
+      },
+      "iterations": {
+        "label": "Projected-gradient iteration count (default 80). [optional]"
+      },
+      "step_size": {
+        "label": "Projected-gradient step size (default 0.05). [optional]"
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject stack rasters to match inputs[0] when CRS differs."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "output": {
+        "label": "Optional output multiband fraction raster path. [optional]"
+      },
+      "output_residual": {
+        "label": "Optional output residual RMS raster path. [optional]"
       }
     }
   },
@@ -788,6 +1746,15 @@
       },
       "barrier_snap_distance": {
         "label": "Optional max distance from each barrier point to a network node for blocking. [optional]"
+      },
+      "node_cost_points": {
+        "label": "Optional point layer providing per-node entry costs (e.g., intersection delay). [optional]"
+      },
+      "node_cost_field": {
+        "label": "Numeric field in node_cost_points containing non-negative per-node costs. [optional]"
+      },
+      "node_cost_snap_distance": {
+        "label": "Optional max distance from each node-cost point to a network node for assignment. [optional]"
       },
       "turn_penalty": {
         "label": "Optional additive cost applied to non-straight turns at network nodes. [optional]"
@@ -877,6 +1844,15 @@
       "barrier_snap_distance": {
         "label": "Optional max distance from each barrier point to a network node for blocking. [optional]"
       },
+      "node_cost_points": {
+        "label": "Optional point layer providing per-node entry costs (e.g., intersection delay). [optional]"
+      },
+      "node_cost_field": {
+        "label": "Numeric field in node_cost_points containing non-negative per-node costs. [optional]"
+      },
+      "node_cost_snap_distance": {
+        "label": "Optional max distance from each node-cost point to a network node for assignment. [optional]"
+      },
       "turn_penalty": {
         "label": "Optional additive cost applied to non-straight turns at network nodes. [optional]"
       },
@@ -920,7 +1896,7 @@
         "label": "Existing own/competitor sites. (default existing_sites.shp)."
       },
       "sites_candidates": {
-        "label": "Candidate expansion sites. (default candidate_sites.shp)."
+        "label": "Candidate expansion sites (required for user_supplied mode). (default candidate_sites.shp). [optional]"
       },
       "demand_surface": {
         "label": "Demand locations/centroids. (default demand_points.shp)."
@@ -930,6 +1906,23 @@
       },
       "ring_costs": {
         "label": "Drive-time costs for catchments. (default [5.0, 10.0, 15.0])."
+      },
+      "candidate_mode": {
+        "label": "Candidate mode: user_supplied or generated. [optional]",
+        "tooltip": "Candidate mode: user_supplied or generated."
+      },
+      "num_sites_to_select": {
+        "label": "Number of top sites to select. [optional]"
+      },
+      "selection_strategy": {
+        "label": "Selection strategy: single_best or top_k_greedy. [optional]",
+        "tooltip": "Selection strategy: single_best or top_k_greedy."
+      },
+      "min_new_site_separation": {
+        "label": "Minimum separation between selected sites in map units. [optional]"
+      },
+      "max_generated_candidates": {
+        "label": "Maximum generated candidate points. [optional]"
       },
       "catchments_output": {
         "label": "Output catchments."
@@ -948,6 +1941,76 @@
       },
       "html_report": {
         "label": "Optional output path for an HTML market access and site intelligence summary report. [optional]"
+      },
+      "cost_method": {
+        "label": "Cost method: distance (default), mode_speed, edge_field, or temporal. [optional]",
+        "tooltip": "Cost method: distance (default), mode_speed, edge_field, or temporal."
+      },
+      "edge_cost_field": {
+        "label": "Optional numeric line field used as an impedance multiplier for segment length. [optional]"
+      },
+      "mode_field": {
+        "label": "Optional line attribute field identifying travel mode per segment. [optional]",
+        "tooltip": "Optional line attribute field identifying travel mode per segment."
+      },
+      "default_mode_speed": {
+        "label": "Default mode speed when mode_field is provided. [optional]",
+        "tooltip": "Default mode speed when mode_field is provided."
+      },
+      "mode_speed_overrides": {
+        "label": "Optional comma-separated mode:speed overrides. [optional]",
+        "tooltip": "Optional comma-separated mode:speed overrides."
+      },
+      "allowed_modes": {
+        "label": "Optional comma-separated allow-list of modes. [optional]",
+        "tooltip": "Optional comma-separated allow-list of modes."
+      },
+      "temporal_cost_profile": {
+        "label": "Optional CSV defining time-dependent edge costs. [optional]",
+        "tooltip": "Optional CSV defining time-dependent edge costs."
+      },
+      "temporal_edge_id_field": {
+        "label": "Optional network field used to match temporal profile edge IDs. [optional]"
+      },
+      "departure_time": {
+        "label": "Optional RFC3339 departure time used for temporal profile lookup. [optional]"
+      },
+      "temporal_mode": {
+        "label": "Optional temporal interpretation mode: multiplier or absolute. [optional]",
+        "tooltip": "Optional temporal interpretation mode: multiplier or absolute."
+      },
+      "temporal_fallback": {
+        "label": "Optional fallback when temporal row is missing: static_cost or error. [optional]"
+      },
+      "turn_penalty": {
+        "label": "Optional additive cost applied to non-straight turns at network nodes. [optional]"
+      },
+      "u_turn_penalty": {
+        "label": "Optional additive cost applied to U-turn transitions. [optional]"
+      },
+      "forbid_u_turns": {
+        "label": "Forbid U Turns [optional]",
+        "tooltip": "If true, disallow U-turn transitions."
+      },
+      "forbid_left_turns": {
+        "label": "Forbid Left Turns [optional]",
+        "tooltip": "If true, disallow left-turn transitions."
+      },
+      "forbid_right_turns": {
+        "label": "Forbid Right Turns [optional]",
+        "tooltip": "If true, disallow right-turn transitions."
+      },
+      "turn_restrictions_csv": {
+        "label": "Optional CSV of turn transitions with optional per-turn costs. [optional]"
+      },
+      "node_cost_points": {
+        "label": "Optional point layer providing per-node entry costs (e.g., intersection delay). [optional]"
+      },
+      "node_cost_field": {
+        "label": "Numeric field in node_cost_points containing non-negative per-node costs. [optional]"
+      },
+      "node_cost_snap_distance": {
+        "label": "Optional max distance from each node-cost point to a network node for assignment. [optional]"
       }
     }
   },
@@ -1048,6 +2111,35 @@
       }
     }
   },
+  "minimum_noise_fraction": {
+    "description": "",
+    "parameters": {
+      "inputs": {
+        "label": "Input raster stack (one raster per band). (default ['b1.tif', 'b2.tif', 'b3.tif', 'b4.tif'])."
+      },
+      "num_components": {
+        "label": "Number of output MNF components (default: all bands). [optional]"
+      },
+      "noise_mode": {
+        "label": "Noise estimator mode: 'difference_x' (default) or 'difference_y'. [optional]",
+        "tooltip": "Noise estimator mode: 'difference_x' (default) or 'difference_y'."
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject stack rasters to match inputs[0] when CRS differs."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "output": {
+        "label": "Optional output multiband MNF component raster path. [optional]"
+      },
+      "output_inverse": {
+        "label": "Optional reconstructed multiband raster path from retained MNF components. [optional]"
+      }
+    }
+  },
   "multi_sensor_fusion_monitoring": {
     "description": "",
     "parameters": {
@@ -1091,6 +2183,10 @@
       },
       "max_zone_features": {
         "label": "Maximum number of high-confidence change polygons to emit. (default 25000). [optional]"
+      },
+      "vector_output_format": {
+        "label": "Vector format for high-confidence zones: gpkg, geojson, or shp (default gpkg). [optional]",
+        "tooltip": "Vector format for high-confidence zones: gpkg, geojson, or shp (default gpkg)."
       },
       "output_prefix": {
         "label": "Output prefix for generated artifacts. (default multi_sensor_fusion). [optional]"
@@ -1329,6 +2425,95 @@
       }
     }
   },
+  "multiscale_topographic_position_class": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input DEM raster path or typed raster object. (default dem.tif)."
+      },
+      "local_min_scale": {
+        "label": "Minimum half-window radius in cells for the local scale range (default 5). [optional]"
+      },
+      "local_max_scale": {
+        "label": "Maximum half-window radius in cells for the local scale range (default 80). [optional]"
+      },
+      "local_step_size": {
+        "label": "Scale increment in cells for the local scale range (default 1). [optional]"
+      },
+      "broad_min_scale": {
+        "label": "Minimum half-window radius in cells for the broad scale range (default 500). [optional]"
+      },
+      "broad_max_scale": {
+        "label": "Maximum half-window radius in cells for the broad scale range (default 2000). [optional]"
+      },
+      "broad_step_size": {
+        "label": "Scale increment in cells for the broad scale range (default 20). [optional]"
+      },
+      "local_threshold": {
+        "label": "DEV threshold used to classify the local scale mosaic into hollow, mid-position, and knoll states (default...",
+        "tooltip": "DEV threshold used to classify the local scale mosaic into hollow, mid-position, and knoll states (default 0.5)."
+      },
+      "broad_threshold": {
+        "label": "DEV threshold used to classify the broad scale mosaic into lowland, intermediate, and upland states (default...",
+        "tooltip": "DEV threshold used to classify the broad scale mosaic into lowland, intermediate, and upland states (default 0.5)."
+      },
+      "min_patch_size": {
+        "label": "Min Patch Size [optional]",
+        "tooltip": "Optional minimum patch size in cells for post-classification patch filtering (default 0, disabled)."
+      },
+      "output": {
+        "label": "Output class raster destination path (categorical map). [optional]"
+      },
+      "output_confidence": {
+        "label": "Output confidence raster destination path (values in [0,1]). [optional]"
+      }
+    }
+  },
+  "narrowness_index_vector": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input polygon vector layer. (default polygons.shp)."
+      },
+      "output": {
+        "label": "Output vector with narrowness field appended."
+      }
+    }
+  },
+  "ndvi_based_emissivity": {
+    "description": "",
+    "parameters": {
+      "red_input": {
+        "label": "Red-band raster path. (default red.tif)."
+      },
+      "nir_input": {
+        "label": "NIR-band raster path. (default nir.tif)."
+      },
+      "ndvi_soil": {
+        "label": "NDVI threshold for bare soil fraction (default 0.2). [optional]"
+      },
+      "ndvi_vegetation": {
+        "label": "NDVI threshold for full vegetation fraction (default 0.5). [optional]"
+      },
+      "emissivity_soil": {
+        "label": "Assumed soil emissivity (default 0.97). [optional]"
+      },
+      "emissivity_vegetation": {
+        "label": "Assumed vegetation emissivity (default 0.99). [optional]"
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject nir_input to red_input CRS when needed."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "output": {
+        "label": "Optional output raster path. [optional]"
+      }
+    }
+  },
   "network_accessibility_metrics": {
     "description": "",
     "parameters": {
@@ -1366,6 +2551,15 @@
       },
       "blocked_field": {
         "label": "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks). [optional]"
+      },
+      "node_cost_points": {
+        "label": "Optional point layer providing per-node entry costs (e.g., intersection delay). [optional]"
+      },
+      "node_cost_field": {
+        "label": "Numeric field in node_cost_points containing non-negative per-node costs. [optional]"
+      },
+      "node_cost_snap_distance": {
+        "label": "Optional max distance from each node-cost point to a network node for assignment. [optional]"
       },
       "parallel_execution": {
         "label": "Parallel Execution [optional]",
@@ -1483,6 +2677,15 @@
       "barrier_snap_distance": {
         "label": "Optional max distance from each barrier point to a network node for blocking. [optional]"
       },
+      "node_cost_points": {
+        "label": "Optional point layer providing per-node entry costs (e.g., intersection delay). [optional]"
+      },
+      "node_cost_field": {
+        "label": "Numeric field in node_cost_points containing non-negative per-node costs. [optional]"
+      },
+      "node_cost_snap_distance": {
+        "label": "Optional max distance from each node-cost point to a network node for assignment. [optional]"
+      },
       "turn_penalty": {
         "label": "Optional additive cost applied to non-straight turns at network nodes. [optional]"
       },
@@ -1593,6 +2796,15 @@
       "barrier_snap_distance": {
         "label": "Optional max distance from each barrier point to a network node for blocking. [optional]"
       },
+      "node_cost_points": {
+        "label": "Optional point layer providing per-node entry costs (e.g., intersection delay). [optional]"
+      },
+      "node_cost_field": {
+        "label": "Numeric field in node_cost_points containing non-negative per-node costs. [optional]"
+      },
+      "node_cost_snap_distance": {
+        "label": "Optional max distance from each node-cost point to a network node for assignment. [optional]"
+      },
       "turn_penalty": {
         "label": "Optional additive cost applied to non-straight turns at network nodes. [optional]"
       },
@@ -1635,6 +2847,9 @@
       "temporal_profile_report": {
         "label": "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage)...",
         "tooltip": "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage)."
+      },
+      "snapped_origins_output": {
+        "label": "Optional output vector path for internal snapped origin anchor points used to seed traversal. [optional]"
       },
       "output": {
         "label": "Output service-area vector path."
@@ -1695,6 +2910,176 @@
       }
     }
   },
+  "obia_audit_report_pro": {
+    "description": "",
+    "parameters": {
+      "artifacts": {
+        "label": "Array of artifact paths to audit."
+      },
+      "output": {
+        "label": "Output audit report JSON path. [optional]"
+      }
+    }
+  },
+  "obia_batch_orchestrator_pro": {
+    "description": "",
+    "parameters": {
+      "jobs": {
+        "label": "Array of job objects with inputs, training, output_prefix, and optional segment_method."
+      },
+      "output": {
+        "label": "Optional output JSON report path. [optional]"
+      }
+    }
+  },
+  "obia_pipeline_basic": {
+    "description": "",
+    "parameters": {
+      "inputs": {
+        "label": "Array of single-band input rasters for segmentation/features."
+      },
+      "training": {
+        "label": "Training CSV with segment_id and class columns."
+      },
+      "output_prefix": {
+        "label": "Output path prefix for generated artifacts."
+      },
+      "segment_method": {
+        "label": "Segmentation method: slic or graph (default slic). [optional]",
+        "tooltip": "Segmentation method: slic or graph (default slic)."
+      },
+      "min_size": {
+        "label": "Minimum segment size for merge cleanup (default 10). [optional]"
+      },
+      "class_field": {
+        "label": "Training class field name (default class). [optional]"
+      }
+    }
+  },
+  "object_class_probability_maps": {
+    "description": "",
+    "parameters": {
+      "predictions": {
+        "label": "Predictions CSV with segment_id and predicted_class."
+      },
+      "output": {
+        "label": "Output probability CSV path. [optional]"
+      }
+    }
+  },
+  "object_features_context_neighbors": {
+    "description": "",
+    "parameters": {
+      "segments": {
+        "label": "Input segment-label raster."
+      },
+      "output": {
+        "label": "Output CSV path. [optional]"
+      }
+    }
+  },
+  "object_features_shape_basic": {
+    "description": "",
+    "parameters": {
+      "segments": {
+        "label": "Input segment-label raster. (default segments.tif)."
+      },
+      "output": {
+        "label": "Output CSV path. [optional]"
+      }
+    }
+  },
+  "object_features_spectral_basic": {
+    "description": "",
+    "parameters": {
+      "segments": {
+        "label": "Input segment-label raster. (default segments.tif)."
+      },
+      "inputs": {
+        "label": "Array of single-band input rasters used for spectral features. (default ['red.tif', 'green.tif', 'nir.tif'])."
+      },
+      "output": {
+        "label": "Output CSV path. [optional]"
+      }
+    }
+  },
+  "object_features_texture_glcm_basic": {
+    "description": "",
+    "parameters": {
+      "segments": {
+        "label": "Input segment-label raster. (default segments.tif)."
+      },
+      "input": {
+        "label": "Single-band intensity raster for texture analysis. (default gray.tif)."
+      },
+      "levels": {
+        "label": "Quantization levels for GLCM (default 16). [optional]"
+      },
+      "output": {
+        "label": "Output CSV path. [optional]"
+      }
+    }
+  },
+  "object_features_topology_relations": {
+    "description": "",
+    "parameters": {
+      "segments": {
+        "label": "Input segment-label raster."
+      },
+      "output": {
+        "label": "Output CSV path. [optional]"
+      }
+    }
+  },
+  "object_uncertainty_diagnostics_pro": {
+    "description": "",
+    "parameters": {
+      "probabilities": {
+        "label": "Input probabilities CSV with probability and uncertainty columns."
+      },
+      "low_conf_threshold": {
+        "label": "Low-confidence threshold on probability (default 0.7). [optional]"
+      },
+      "output": {
+        "label": "Output diagnostics JSON path. [optional]"
+      }
+    }
+  },
+  "objects_boundary_refinement_pro": {
+    "description": "",
+    "parameters": {
+      "segments": {
+        "label": "Input segment-label raster."
+      },
+      "iterations": {
+        "label": "Refinement iterations (default 2). [optional]"
+      },
+      "min_size": {
+        "label": "Minimum object size threshold (default 6). [optional]"
+      },
+      "output": {
+        "label": "Output refined raster path. [optional]"
+      }
+    }
+  },
+  "objects_enforce_min_mapping_unit": {
+    "description": "",
+    "parameters": {
+      "segments": {
+        "label": "Input segment-label raster. (default segments.tif)."
+      },
+      "min_size": {
+        "label": "Minimum segment size in cells (default 5). [optional]"
+      },
+      "method": {
+        "label": "Merge method: longest, largest, nearest (default longest). [optional]",
+        "tooltip": "Merge method: longest, largest, nearest (default longest)."
+      },
+      "output": {
+        "label": "Optional output raster path. [optional]"
+      }
+    }
+  },
   "od_sensitivity_analysis": {
     "description": "",
     "parameters": {
@@ -1728,12 +3113,52 @@
       "blocked_field": {
         "label": "Optional line field marking blocked/closed edges. [optional]"
       },
+      "node_cost_points": {
+        "label": "Optional point layer providing per-node entry costs (e.g., intersection delay). [optional]"
+      },
+      "node_cost_field": {
+        "label": "Numeric field in node_cost_points containing non-negative per-node costs. [optional]"
+      },
+      "node_cost_snap_distance": {
+        "label": "Optional max distance from each node-cost point to a network node for assignment. [optional]"
+      },
       "parallel_execution": {
         "label": "Parallel Execution [optional]",
         "tooltip": "If true (default), evaluates origin searches in parallel for baseline and perturbed OD runs."
       },
       "output": {
         "label": "Output CSV path with OD pairs and sensitivity statistics."
+      }
+    }
+  },
+  "orthorectification": {
+    "description": "",
+    "parameters": {
+      "input_raster": {
+        "label": "Input raw (uncorrected) image raster path. (default raw_image.tif).",
+        "tooltip": "Input raw (uncorrected) image raster path. RPC metadata must be embedded in the file or present in an adjacent .RPB sidecar."
+      },
+      "input_dem": {
+        "label": "DEM raster used to obtain terrain elevation for each output pixel. (default dem.tif).",
+        "tooltip": "DEM raster used to obtain terrain elevation for each output pixel. Should cover the full scene extent. If not in geographic coordinates, the tool reprojects as needed."
+      },
+      "output_epsg": {
+        "label": "EPSG code of the output coordinate reference system (default 4326 geographic; specify a projected CRS like...",
+        "tooltip": "EPSG code of the output coordinate reference system (default 4326 geographic; specify a projected CRS like 32617 for UTM zone 17N)."
+      },
+      "output_resolution": {
+        "label": "Output pixel resolution in the output CRS units (e.g., degrees for geographic, metres for projected)...",
+        "tooltip": "Output pixel resolution in the output CRS units (e.g., degrees for geographic, metres for projected). Defaults to the approximate GSD of the input image."
+      },
+      "resample_method": {
+        "label": "Resampling method for output: nearest, bilinear (default), cubic. [optional]",
+        "tooltip": "Resampling method for output: nearest, bilinear (default), cubic."
+      },
+      "nodata_value": {
+        "label": "No-data value to assign to pixels with no valid source coverage (default same as input). [optional]"
+      },
+      "output": {
+        "label": "Output orthoimage raster path. (default orthorectified.tif). [optional]"
       }
     }
   },
@@ -1774,6 +3199,44 @@
       }
     }
   },
+  "pca_based_change_detection": {
+    "description": "",
+    "parameters": {
+      "t1_inputs": {
+        "label": "Array of date-1 raster paths. (default ['t1_b2.tif', 't1_b3.tif', 't1_b4.tif'])."
+      },
+      "t2_inputs": {
+        "label": "Array of date-2 raster paths; must match t1_inputs length and ordering. (default ['t2_b2.tif', 't2_b3.tif'..."
+      },
+      "component": {
+        "label": "1-based principal component index to output (default 1). [optional]"
+      },
+      "standardized": {
+        "label": "Standardized [optional]",
+        "tooltip": "If true, use correlation matrix PCA on change vectors (default false)."
+      },
+      "threshold_sigma": {
+        "label": "Optional sigma threshold on absolute PC score for binary mask output. (default 2.0). [optional]"
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject stack rasters to match t1_inputs[0] when CRS differs."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "output": {
+        "label": "Optional output raster path for absolute selected PC score. [optional]"
+      },
+      "output_mask": {
+        "label": "Optional output raster path for thresholded binary mask (0/1). [optional]"
+      },
+      "output_report": {
+        "label": "Optional output JSON report path for eigenvalues, explained variance, and component loadings. [optional]"
+      }
+    }
+  },
   "points_along_lines": {
     "description": "",
     "parameters": {
@@ -1789,6 +3252,56 @@
       },
       "output": {
         "label": "Output point vector path."
+      }
+    }
+  },
+  "polygons_to_segments": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input polygon vector path."
+      },
+      "base": {
+        "label": "Base raster defining output grid."
+      },
+      "field": {
+        "label": "Optional numeric field to burn (default FID). [optional]"
+      },
+      "output": {
+        "label": "Output segments raster path. [optional]"
+      }
+    }
+  },
+  "post_classification_change": {
+    "description": "",
+    "parameters": {
+      "t1_classified": {
+        "label": "Date-1 classified raster path. (default class_t1.tif)."
+      },
+      "t2_classified": {
+        "label": "Date-2 classified raster path. (default class_t2.tif)."
+      },
+      "transition_scale": {
+        "label": "Transition coding scale factor (default 1000): code = class1 * scale + class2. [optional]"
+      },
+      "t1_class_remap": {
+        "label": "Optional remap table for date-1 classes as object {\"old\": new, ...}. [optional]",
+        "tooltip": "Optional remap table for date-1 classes as object {\"old\": new, ...}."
+      },
+      "t2_class_remap": {
+        "label": "Optional remap table for date-2 classes as object {\"old\": new, ...}. [optional]",
+        "tooltip": "Optional remap table for date-2 classes as object {\"old\": new, ...}."
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject t2_classified to t1_classified CRS when needed."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "output": {
+        "label": "Optional output transition-coded raster path. [optional]"
       }
     }
   },
@@ -1809,6 +3322,23 @@
       }
     }
   },
+  "propagate_labels_across_hierarchy": {
+    "description": "",
+    "parameters": {
+      "hierarchy": {
+        "label": "Hierarchy CSV with fine_segment_id and coarse_segment_id."
+      },
+      "parent_labels": {
+        "label": "Parent labels CSV with coarse_segment_id and class."
+      },
+      "child_labels": {
+        "label": "Optional child labels CSV with fine_segment_id and class. [optional]"
+      },
+      "output": {
+        "label": "Output propagated labels CSV path. [optional]"
+      }
+    }
+  },
   "random_points_in_polygon": {
     "description": "",
     "parameters": {
@@ -1823,6 +3353,23 @@
       },
       "output": {
         "label": "Output vector path."
+      }
+    }
+  },
+  "refined_lee_filter": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input raster path or typed raster object. (default input.tif)."
+      },
+      "filter_size_x": {
+        "label": "Neighborhood width in pixels (odd integer, default 11). [optional]"
+      },
+      "filter_size_y": {
+        "label": "Neighborhood height in pixels (odd integer, default 11). [optional]"
+      },
+      "output": {
+        "label": "Optional output path. [optional]"
       }
     }
   },
@@ -1843,7 +3390,7 @@
         "label": "Right image path for mode=pair. [optional]"
       },
       "max_pairs": {
-        "label": "Maximum number of planned pairs for mode=set (default 50). [optional]"
+        "label": "Maximum number of planned pairs for mode=set (default 24). [optional]"
       },
       "max_features_per_image": {
         "label": "Maximum keypoints extracted per image (default 500). [optional]"
@@ -1889,6 +3436,17 @@
       }
     }
   },
+  "representative_point_vector": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector layer. (default input_polygons.gpkg)."
+      },
+      "output": {
+        "label": "Output point vector path."
+      }
+    }
+  },
   "reproject_vector": {
     "description": "",
     "parameters": {
@@ -1900,6 +3458,28 @@
       },
       "output": {
         "label": "Output vector path."
+      }
+    }
+  },
+  "river_corridor_health_assessment": {
+    "description": "",
+    "parameters": {
+      "dem": {
+        "label": "Input DEM raster path. (default dem.tif)."
+      },
+      "streams": {
+        "label": "Input stream network vector path. (default streams.gpkg)."
+      },
+      "profile": {
+        "label": "Preset profile controlling erosion sensitivity: fast, balanced, or conservative. (default balanced)...",
+        "tooltip": "Preset profile controlling erosion sensitivity: fast, balanced, or conservative."
+      },
+      "restoration_priority_mode": {
+        "label": "Restoration priority ranking mode: health_score_only | cost_weighted | ecological_gradient. (default...",
+        "tooltip": "Restoration priority ranking mode: health_score_only | cost_weighted | ecological_gradient. Default: health_score_only."
+      },
+      "output_prefix": {
+        "label": "Output prefix for generated artifacts. (default river_corridor_health). [optional]"
       }
     }
   },
@@ -2254,6 +3834,159 @@
       }
     }
   },
+  "segment_graph_felzenszwalb": {
+    "description": "",
+    "parameters": {
+      "inputs": {
+        "label": "Array of single-band input rasters. (default ['band1.tif', 'band2.tif', 'band3.tif'])."
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "k": {
+        "label": "Segmentation scale parameter (default 500.0). [optional]"
+      },
+      "sigma": {
+        "label": "Optional smoothing hint (default 0.8). [optional]"
+      },
+      "min_area": {
+        "label": "Minimum area for post-merge cleanup (default 20). [optional]"
+      },
+      "output": {
+        "label": "Optional output segments raster path. [optional]"
+      }
+    }
+  },
+  "segment_multiresolution_hierarchical": {
+    "description": "",
+    "parameters": {
+      "inputs": {
+        "label": "Array of single-band input rasters."
+      },
+      "coarse_k": {
+        "label": "Coarse scale parameter (default 800). [optional]"
+      },
+      "fine_k": {
+        "label": "Fine scale parameter (default 250). [optional]"
+      },
+      "output_prefix": {
+        "label": "Output prefix for generated products."
+      }
+    }
+  },
+  "segment_scale_parameter_optimizer": {
+    "description": "",
+    "parameters": {
+      "inputs": {
+        "label": "Array of single-band input rasters."
+      },
+      "candidate_scales": {
+        "label": "List of candidate scale (k) values. (default [120.0, 250.0, 500.0, 900.0]). [optional]"
+      },
+      "target_objects": {
+        "label": "Desired object count. [optional]"
+      },
+      "output": {
+        "label": "Optional optimizer report JSON path. [optional]"
+      }
+    }
+  },
+  "segment_slic_superpixels": {
+    "description": "",
+    "parameters": {
+      "inputs": {
+        "label": "Array of single-band input rasters. (default ['band1.tif', 'band2.tif', 'band3.tif'])."
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "region_size": {
+        "label": "Target superpixel size in pixels (default 20). [optional]"
+      },
+      "compactness": {
+        "label": "Compactness control (default 10.0). [optional]"
+      },
+      "min_area": {
+        "label": "Minimum area for cleanup merge (default derived from region_size). [optional]"
+      },
+      "output": {
+        "label": "Optional output segments raster path. [optional]"
+      }
+    }
+  },
+  "segment_watershed_markers": {
+    "description": "",
+    "parameters": {
+      "inputs": {
+        "label": "Array of single-band input rasters. (default ['band1.tif', 'band2.tif'])."
+      },
+      "gradient_weight": {
+        "label": "Boundary emphasis control (default 1.0). [optional]"
+      },
+      "min_area": {
+        "label": "Minimum segment size (default 12). [optional]"
+      },
+      "output": {
+        "label": "Optional output segments raster path. [optional]"
+      }
+    }
+  },
+  "segments_merge_small_regions": {
+    "description": "",
+    "parameters": {
+      "segments": {
+        "label": "Input segment-label raster. (default segments.tif)."
+      },
+      "min_size": {
+        "label": "Minimum segment size in cells (default 5). [optional]"
+      },
+      "method": {
+        "label": "Merge method: longest, largest, nearest (default longest). [optional]",
+        "tooltip": "Merge method: longest, largest, nearest (default longest)."
+      },
+      "output": {
+        "label": "Optional output raster path. [optional]"
+      }
+    }
+  },
+  "segments_split_low_cohesion": {
+    "description": "",
+    "parameters": {
+      "segments": {
+        "label": "Existing segments raster."
+      },
+      "inputs": {
+        "label": "Array of input rasters used for re-segmentation."
+      },
+      "split_scale": {
+        "label": "Finer split scale parameter (default 120). [optional]"
+      },
+      "output": {
+        "label": "Optional output raster path. [optional]"
+      }
+    }
+  },
+  "segments_to_polygons": {
+    "description": "",
+    "parameters": {
+      "segments": {
+        "label": "Input segments raster."
+      },
+      "output": {
+        "label": "Output polygon vector path. [optional]"
+      }
+    }
+  },
   "select_by_location": {
     "description": "",
     "parameters": {
@@ -2285,7 +4018,7 @@
         "label": "Input facility points layer. (default facilities.shp)."
       },
       "demand_points": {
-        "label": "Optional demand points layer. [optional]"
+        "label": "Optional demand layer (points or polygons). [optional]"
       },
       "ring_costs": {
         "label": "Numeric array of ring costs. (default [5.0, 10.0, 15.0])."
@@ -2304,6 +4037,107 @@
       },
       "ranked_candidates_csv": {
         "label": "Output ranked candidates CSV."
+      },
+      "optimization_mode": {
+        "label": "Optimization mode: existing or expansion. [optional]",
+        "tooltip": "Optimization mode: existing or expansion."
+      },
+      "candidate_mode": {
+        "label": "Expansion candidate mode: user_supplied or generated. [optional]",
+        "tooltip": "Expansion candidate mode: user_supplied or generated."
+      },
+      "candidate_sites": {
+        "label": "Optional candidate points layer for user_supplied expansion mode. [optional]"
+      },
+      "num_sites_to_select": {
+        "label": "Number of top expansion sites to select. [optional]"
+      },
+      "selection_strategy": {
+        "label": "Expansion strategy: single_best or top_k_greedy. [optional]",
+        "tooltip": "Expansion strategy: single_best or top_k_greedy."
+      },
+      "min_new_site_separation": {
+        "label": "Minimum separation between selected expansion sites in map units. [optional]"
+      },
+      "max_generated_candidates": {
+        "label": "Maximum number of generated expansion candidates. [optional]"
+      },
+      "ranked_candidates_vector": {
+        "label": "Optional vector output path for ranked candidates with metrics. [optional]"
+      },
+      "html_report": {
+        "label": "Optional output path for an HTML service area planning summary report. [optional]"
+      },
+      "cost_method": {
+        "label": "Cost method: distance (default), mode_speed, edge_field, or temporal. [optional]",
+        "tooltip": "Cost method: distance (default), mode_speed, edge_field, or temporal."
+      },
+      "edge_cost_field": {
+        "label": "Optional numeric line field used as an impedance multiplier for segment length. [optional]"
+      },
+      "mode_field": {
+        "label": "Mode Field [optional]",
+        "tooltip": "Optional line attribute field identifying travel mode per segment; enables mode-aware service-area costs."
+      },
+      "default_mode_speed": {
+        "label": "Default mode speed in coordinate-units per time unit when mode_field is provided (default: 1). [optional]",
+        "tooltip": "Default mode speed in coordinate-units per time unit when mode_field is provided (default: 1)."
+      },
+      "mode_speed_overrides": {
+        "label": "Optional comma-separated mode:speed overrides (e.g., walk:1.4,drive:12). [optional]",
+        "tooltip": "Optional comma-separated mode:speed overrides (e.g., walk:1.4,drive:12)."
+      },
+      "allowed_modes": {
+        "label": "Optional comma-separated allow-list of modes to include when mode_field is provided. [optional]",
+        "tooltip": "Optional comma-separated allow-list of modes to include when mode_field is provided."
+      },
+      "temporal_cost_profile": {
+        "label": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)...",
+        "tooltip": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)."
+      },
+      "temporal_edge_id_field": {
+        "label": "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID). [optional]"
+      },
+      "departure_time": {
+        "label": "Optional RFC3339 departure time used for temporal profile lookup. [optional]"
+      },
+      "temporal_mode": {
+        "label": "Optional temporal interpretation mode: multiplier or absolute. [optional]",
+        "tooltip": "Optional temporal interpretation mode: multiplier or absolute."
+      },
+      "temporal_fallback": {
+        "label": "Optional fallback when temporal row is missing: static_cost or error. [optional]"
+      },
+      "turn_penalty": {
+        "label": "Optional additive cost applied to non-straight turns at network nodes. [optional]"
+      },
+      "u_turn_penalty": {
+        "label": "Optional additive cost applied to U-turn transitions. [optional]"
+      },
+      "forbid_u_turns": {
+        "label": "Forbid U Turns [optional]",
+        "tooltip": "If true, disallow U-turn transitions."
+      },
+      "forbid_left_turns": {
+        "label": "Forbid Left Turns [optional]",
+        "tooltip": "If true, disallow left-turn transitions."
+      },
+      "forbid_right_turns": {
+        "label": "Forbid Right Turns [optional]",
+        "tooltip": "If true, disallow right-turn transitions."
+      },
+      "turn_restrictions_csv": {
+        "label": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. [optional]",
+        "tooltip": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost."
+      },
+      "node_cost_points": {
+        "label": "Optional point layer providing per-node entry costs (e.g., intersection delay). [optional]"
+      },
+      "node_cost_field": {
+        "label": "Numeric field in node_cost_points containing non-negative per-node costs. [optional]"
+      },
+      "node_cost_snap_distance": {
+        "label": "Optional max distance from each node-cost point to a network node for assignment. [optional]"
       }
     }
   },
@@ -2395,6 +4229,38 @@
       }
     }
   },
+  "sidewalk_vegetation_accessibility_monitoring": {
+    "description": "",
+    "parameters": {
+      "lidar_tiles": {
+        "label": "Array of LiDAR tile paths or a directory containing LAS/LAZ tiles. (default ['tile_001.laz', 'tile_002.laz'])."
+      },
+      "sidewalks": {
+        "label": "Input sidewalk line or polygon layer. (default sidewalks.gpkg)."
+      },
+      "sidewalks_epsg": {
+        "label": "Optional EPSG override when the sidewalk layer lacks CRS metadata. [optional]"
+      },
+      "resolution": {
+        "label": "Intermediate raster resolution in map units. (default 1.0). [optional]"
+      },
+      "segment_length_m": {
+        "label": "Optional fixed segment length for line inputs. (default 10.0). [optional]"
+      },
+      "clearance_height_m": {
+        "label": "Vegetation height threshold considered obstructive. (default 2.5). [optional]"
+      },
+      "buffer_distance_m": {
+        "label": "Neighborhood radius around sidewalk geometry sampled for obstruction. (default 3.0). [optional]"
+      },
+      "max_tile_workers": {
+        "label": "Optional max number of parallel tile workers (0 = auto). (default 0). [optional]"
+      },
+      "output_prefix": {
+        "label": "Output prefix for GeoPackage and JSON summary artifacts. (default sidewalk_accessibility). [optional]"
+      }
+    }
+  },
   "snap_endnodes": {
     "description": "",
     "parameters": {
@@ -2406,6 +4272,44 @@
       },
       "output": {
         "label": "Output snapped polyline vector path."
+      }
+    }
+  },
+  "snap_events_to_routes": {
+    "description": "",
+    "parameters": {
+      "routes": {
+        "label": "Input route line layer. (default routes.gpkg)."
+      },
+      "events": {
+        "label": "Input event point layer. (default events.gpkg)."
+      },
+      "max_offset_distance": {
+        "label": "Optional maximum route offset distance in map units. [optional]"
+      },
+      "output": {
+        "label": "Output snapped event point vector path."
+      }
+    }
+  },
+  "snap_points_to_network": {
+    "description": "",
+    "parameters": {
+      "points": {
+        "label": "Input point layer to be snapped. (default points.gpkg)."
+      },
+      "network": {
+        "label": "Input network line layer. (default network.gpkg)."
+      },
+      "max_snap_distance": {
+        "label": "Optional maximum snapping distance in map units. [optional]"
+      },
+      "keep_unsnapped": {
+        "label": "Keep Unsnapped [optional]",
+        "tooltip": "If true (default), retains points that cannot be snapped within tolerance."
+      },
+      "output": {
+        "label": "Output snapped point vector path."
       }
     }
   },
@@ -2457,8 +4361,87 @@
       "max_candidate_sites": {
         "label": "Maximum number of candidate site points to emit. (default 200). [optional]"
       },
+      "min_candidate_separation_cells": {
+        "label": "Min Candidate Separation Cells [optional]",
+        "tooltip": "Minimum spacing between emitted candidate sites in raster cells (0 disables separation)."
+      },
       "output_prefix": {
         "label": "Output prefix for generated artifacts. (default solar_siting). [optional]"
+      }
+    }
+  },
+  "spectral_angle_mapper": {
+    "description": "",
+    "parameters": {
+      "inputs": {
+        "label": "Input raster stack (one raster per band). (default ['B2.tif', 'B3.tif', 'B4.tif', 'B8.tif'])."
+      },
+      "endmembers": {
+        "label": "Endmember signatures as array of objects {name, values} or numeric arrays. (default [{'name': 'water'..."
+      },
+      "threshold_angle_deg": {
+        "label": "Optional maximum accepted spectral angle in degrees; unmatched pixels are class 0. (default 15.0). [optional]"
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject stack rasters to match inputs[0] when CRS differs."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "output": {
+        "label": "Optional output class raster path. [optional]"
+      },
+      "output_angle": {
+        "label": "Optional output raster path for minimum spectral angle (degrees). [optional]"
+      }
+    }
+  },
+  "spectral_library_matching": {
+    "description": "",
+    "parameters": {
+      "inputs": {
+        "label": "Input raster stack (one raster per band). (default ['b1.tif', 'b2.tif', 'b3.tif', 'b4.tif'])."
+      },
+      "library": {
+        "label": "Spectral library entries as array of objects {name, values} or numeric arrays. (default [{'name': 'water'..."
+      },
+      "library_csv": {
+        "label": "Optional CSV spectral library path (name,b1,b2,... [optional]",
+        "tooltip": "Optional CSV spectral library path (name,b1,b2,... or b1,b2,... rows). Used when 'library' is not provided."
+      },
+      "metric": {
+        "label": "Matching metric: 'sam' (default), 'euclidean', or 'sid'. [optional]",
+        "tooltip": "Matching metric: 'sam' (default), 'euclidean', or 'sid'."
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject stack rasters to match inputs[0] when CRS differs."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "output": {
+        "label": "Optional output class raster path. [optional]"
+      },
+      "output_score": {
+        "label": "Optional output best-match score raster path (angle or distance). [optional]"
+      }
+    }
+  },
+  "split_lines_at_intersections": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line layer to split at intersections. (default network_lines.shp)."
+      },
+      "snap_tolerance": {
+        "label": "Optional snapping tolerance used by split operations; defaults to machine epsilon. [optional]"
+      },
+      "output": {
+        "label": "Output split line vector path."
       }
     }
   },
@@ -2512,8 +4495,8 @@
         "label": "DEM raster co-registered with optical bands. (default dem.tif)."
       },
       "bundle_root": {
-        "label": "Optional optical sensor bundle root directory (currently Sentinel-2 SAFE, Landsat, PlanetScope, DIMAP SPOT/Pleiades, or Maxar/WorldView)...",
-        "tooltip": "Optional optical sensor bundle root directory (currently Sentinel-2 SAFE, Landsat, PlanetScope, DIMAP SPOT/Pleiades, or Maxar/WorldView) used to auto-resolve required bands, QA when available, and solar metadata when explicit inputs are omitted."
+        "label": "Optional optical sensor bundle root directory (currently Sentinel-2 SAFE, Landsat, or DIMAP SPOT/Pleiades)...",
+        "tooltip": "Optional optical sensor bundle root directory (currently Sentinel-2 SAFE, Landsat, or DIMAP SPOT/Pleiades) used to auto-resolve required bands, QA when available, and solar metadata when explicit inputs are omitted."
       },
       "input_red": {
         "label": "Red band raster (optional when bundle_root is provided). (default red.tif). [optional]"
@@ -2633,6 +4616,85 @@
       }
     }
   },
+  "transfer_attributes": {
+    "description": "",
+    "parameters": {
+      "target": {
+        "label": "Target layer receiving transferred attributes. (default target.shp)."
+      },
+      "source": {
+        "label": "Source layer providing attributes. (default source.shp)."
+      },
+      "predicate": {
+        "label": "Spatial predicate: intersects, within, contains, touches, crosses, overlaps, within_distance. (default...",
+        "tooltip": "Spatial predicate: intersects, within, contains, touches, crosses, overlaps, within_distance."
+      },
+      "distance": {
+        "label": "Distance threshold when predicate=within_distance. [optional]"
+      },
+      "strategy": {
+        "label": "Transfer strategy: first, last, count, sum, mean, min, max. (default first). [optional]",
+        "tooltip": "Transfer strategy: first, last, count, sum, mean, min, max."
+      },
+      "prefix": {
+        "label": "Prefix for transferred source fields (default SRC_). [optional]"
+      },
+      "output": {
+        "label": "Output vector path."
+      }
+    }
+  },
+  "true_colour_composite": {
+    "description": "",
+    "parameters": {
+      "bundle_root": {
+        "label": "Root path of the input sensor bundle."
+      },
+      "output_path": {
+        "label": "Output raster path. [optional]"
+      }
+    }
+  },
+  "update": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector layer. (default input_polygons.shp)."
+      },
+      "overlay": {
+        "label": "Overlay polygon layer. (default overlay_polygons.shp)."
+      },
+      "snap_tolerance": {
+        "label": "Optional snapping tolerance used by topology operations; defaults to machine epsilon. [optional]"
+      },
+      "output": {
+        "label": "Output vector path."
+      }
+    }
+  },
+  "urban_expansion_impact_assessment": {
+    "description": "",
+    "parameters": {
+      "baseline_urban": {
+        "label": "Baseline urban extent raster (binary or fractional). (default urban_baseline.tif)."
+      },
+      "scenario_urban": {
+        "label": "Scenario/future urban extent raster (binary or fractional). (default urban_scenario.tif)."
+      },
+      "streams": {
+        "label": "Input stream network vector path. (default streams.gpkg)."
+      },
+      "habitat_sensitivity": {
+        "label": "Optional habitat sensitivity raster (0..1). [optional]"
+      },
+      "scenario_template": {
+        "label": "Planning scenario template for policy comparison outputs. (default balanced_growth). [optional]"
+      },
+      "output_prefix": {
+        "label": "Output prefix for generated artifacts. (default urban_expansion). [optional]"
+      }
+    }
+  },
   "utility_corridor_encroachment_and_access_planning": {
     "description": "",
     "parameters": {
@@ -2665,6 +4727,48 @@
       },
       "html_report": {
         "label": "Optional output path for an HTML operations dashboard report. [optional]"
+      }
+    }
+  },
+  "utility_corridor_encroachment_intelligence": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input LiDAR paths (single path, delimited string, or array). (default input.laz)."
+      },
+      "corridors": {
+        "label": "Corridor centerlines vector path. (default corridors.gpkg)."
+      },
+      "corridor_type": {
+        "label": "Corridor type profile. (default pipeline). [optional]",
+        "tooltip": "Corridor type profile."
+      },
+      "corridor_width_m": {
+        "label": "Total corridor width in meters. (default 12.0). [optional]"
+      },
+      "ground_percentile": {
+        "label": "Ground candidate percentile in [0,1]. (default 0.05). [optional]"
+      },
+      "k_neighbors": {
+        "label": "K nearest ground points for HAG. (default 9). [optional]"
+      },
+      "hag_reuse_cell_m": {
+        "label": "Optional XY cell size for HAG query reuse/downsampling. (default 2.0). [optional]"
+      },
+      "chainage_window_m": {
+        "label": "Risk table chainage window size in meters. (default 25.0). [optional]"
+      },
+      "summary_json": {
+        "label": "Output summary JSON path. (default utility_corridor_summary.json). [optional]"
+      },
+      "events_output": {
+        "label": "Optional output GeoPackage path for encroachment event features. [optional]"
+      },
+      "intervals_output": {
+        "label": "Optional output GeoPackage path for merged interval features. [optional]"
+      },
+      "windows_output": {
+        "label": "Optional output GeoPackage path for risk window features. [optional]"
       }
     }
   },
@@ -3056,6 +5160,57 @@
       }
     }
   },
+  "wisart_iterative_clustering": {
+    "description": "",
+    "parameters": {
+      "h_raster": {
+        "label": "Input entropy (H) raster (0-1 range). (default entropy.tif)."
+      },
+      "alpha_raster": {
+        "label": "Input alpha (\u03b1) raster (degrees, 0-90). (default alpha.tif)."
+      },
+      "max_iterations": {
+        "label": "Maximum clustering iterations (default 10). [optional]"
+      },
+      "convergence_threshold": {
+        "label": "Convergence criterion: fraction of unchanged pixels (default 0.99). [optional]"
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject alpha to match H when CRS differs."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos. [optional]",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos."
+      },
+      "output": {
+        "label": "Optional output cluster label raster. [optional]"
+      }
+    }
+  },
+  "yamaguchi_4component_decomposition": {
+    "description": "",
+    "parameters": {
+      "inputs": {
+        "label": "Matrix rasters: 6 compact [m11,m22,m33,m12,m13,m23] or 9 row-major full 3x3 complex matrix elements. (default...",
+        "tooltip": "Matrix rasters: 6 compact [m11,m22,m33,m12,m13,m23] or 9 row-major full 3x3 complex matrix elements."
+      },
+      "matrix_format": {
+        "label": "Input matrix format: full3x3 (default) for Hermitian matrices with real/imag parts. [optional]"
+      },
+      "auto_reproject": {
+        "label": "Auto Reproject [optional]",
+        "tooltip": "If true (default), reproject stack rasters to match inputs[0] when CRS differs."
+      },
+      "auto_reproject_method": {
+        "label": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode...",
+        "tooltip": "Optional reprojection resampling override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev."
+      },
+      "output": {
+        "label": "Optional output 4-band raster [surface, double_bounce, volume, helix]. [optional]"
+      }
+    }
+  },
   "yield_data_conditioning_and_qa": {
     "description": "",
     "parameters": {
@@ -3064,6 +5219,13 @@
       },
       "output_prefix": {
         "label": "Output prefix for all generated artifacts. (default yield_pipeline). [optional]"
+      },
+      "keep_intermediates": {
+        "label": "Keep Intermediates [optional]",
+        "tooltip": "If true, preserve intermediate workflow artifacts (default true)."
+      },
+      "intermediate_dir": {
+        "label": "Optional directory for intermediate artifacts. [optional]"
       },
       "yield_field_name": {
         "label": "Raw yield field name (default YIELD). [optional]"

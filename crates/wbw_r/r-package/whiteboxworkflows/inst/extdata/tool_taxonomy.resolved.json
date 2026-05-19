@@ -331,6 +331,7 @@
       "category": "vector",
       "subcategory": "linear_referencing",
       "tools": [
+        "snap_events_to_routes",
         "route_event_governance_for_linear_assets",
         "locate_points_along_routes",
         "points_along_lines",
@@ -350,13 +351,15 @@
       "category": "vector",
       "subcategory": "network_analysis",
       "tools": [
-        "network_readiness_and_diagnostics_intelligence",
-        "service_area_planning_and_coverage_optimization",
-        "fleet_routing_and_dispatch_optimizer",
+        "build_network_topology",
         "closest_facility_network",
+        "emergency_scenario_routing_and_accessibility_simulator",
+        "fleet_routing_and_dispatch_optimizer",
+        "generate_network_nodes",
         "k_shortest_paths_network",
         "location_allocation_network",
         "map_matching_v1",
+        "market_access_and_site_intelligence_workflow",
         "multimodal_od_cost_matrix",
         "multimodal_routes_from_od",
         "multimodal_shortest_path",
@@ -365,11 +368,16 @@
         "network_connected_components",
         "network_node_degree",
         "network_od_cost_matrix",
+        "network_readiness_and_diagnostics_intelligence",
         "network_routes_from_od",
         "network_service_area",
         "network_topology_audit",
         "od_sensitivity_analysis",
         "shortest_path_network",
+        "split_lines_at_intersections",
+        "snap_points_to_network",
+        "service_area_planning_and_coverage_optimization",
+        "transfer_attributes",
         "travelling_salesman_problem",
         "vehicle_routing_cvrp",
         "vehicle_routing_pickup_delivery",
@@ -411,6 +419,7 @@
         "minimum_bounding_envelope",
         "minimum_convex_hull",
         "polygonize",
+        "representative_point_vector",
         "simplify_features",
         "smooth_vectors",
         "snap_endnodes",
@@ -482,9 +491,7 @@
       "subcategory": "workflow_products",
       "tools": [
         "utility_corridor_encroachment_and_access_planning",
-        "parcel_and_land_fabric_topology_compliance_workflow",
-        "emergency_scenario_routing_and_accessibility_simulator",
-        "market_access_and_site_intelligence_workflow"
+        "parcel_and_land_fabric_topology_compliance_workflow"
       ]
     },
     {
@@ -795,7 +802,6 @@
         "find_patch_edge_cells",
         "floor",
         "greater_than",
-        "greater_than_or_equal_to",
         "heat_map",
         "idw_interpolation",
         "image_autocorrelation",
@@ -812,7 +818,6 @@
         "kappa_index",
         "ks_normality_test",
         "less_than",
-        "less_than_or_equal_to",
         "list_unique_values_raster",
         "ln",
         "log10",
@@ -1223,6 +1228,10 @@
       "source_crate": "wbtools_oss"
     },
     "buffer_raster": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "build_network_topology": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
@@ -1930,6 +1939,10 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
+    "generate_network_nodes": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "generating_function": {
       "license_tier": "open",
       "source_crate": "unknown"
@@ -1940,17 +1953,13 @@
     },
     "georeference_raster_from_control_points": {
       "license_tier": "open",
-      "source_crate": "unknown"
+      "source_crate": "wbtools_oss"
     },
     "glcm_texture": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
     "greater_than": {
-      "license_tier": "open",
-      "source_crate": "unknown"
-    },
-    "greater_than_or_equal_to": {
       "license_tier": "open",
       "source_crate": "unknown"
     },
@@ -2259,10 +2268,6 @@
       "source_crate": "unknown"
     },
     "less_than": {
-      "license_tier": "open",
-      "source_crate": "unknown"
-    },
-    "less_than_or_equal_to": {
       "license_tier": "open",
       "source_crate": "unknown"
     },
@@ -3306,6 +3311,10 @@
       "license_tier": "open",
       "source_crate": "unknown"
     },
+    "representative_point_vector": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "reproject_lidar": {
       "license_tier": "open",
       "source_crate": "unknown"
@@ -3582,6 +3591,14 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
+    "snap_events_to_routes": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "snap_points_to_network": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "snap_pour_points": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -3623,6 +3640,10 @@
       "source_crate": "wbtools_oss"
     },
     "split_lidar": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "split_lines_at_intersections": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
@@ -3811,6 +3832,10 @@
       "source_crate": "unknown"
     },
     "trace_downslope_flowpaths": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "transfer_attributes": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },

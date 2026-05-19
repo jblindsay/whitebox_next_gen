@@ -2165,12 +2165,13 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("bool_or", "raster", "overlay_math"),
     ("bool_xor", "raster", "overlay_math"),
     ("boundary_shape_complexity", "raster", "general"),
-    ("brdf_surface_reflectance_consistency", "remote_sensing", "radiometric_correction"),
     ("brdf_normalization", "remote_sensing", "radiometric_correction"),
+    ("brdf_surface_reflectance_consistency", "remote_sensing", "radiometric_correction"),
     ("breach_depressions_least_cost", "hydrology", "depressions_storage"),
     ("breach_single_cell_pits", "hydrology", "depressions_storage"),
     ("breakline_mapping", "terrain", "general"),
     ("buffer_raster", "raster", "distance_cost"),
+    ("build_network_topology", "vector", "network_analysis"),
     ("build_object_hierarchy_multiscale", "remote_sensing", "obia"),
     ("burn_streams", "hydrology", "depressions_storage"),
     ("burn_streams_at_roads", "hydrology", "depressions_storage"),
@@ -2180,7 +2181,6 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("ceil", "raster", "general"),
     ("centroid_raster", "raster", "general"),
     ("centroid_vector", "vector", "geometry_processing"),
-    ("representative_point_vector", "vector", "geometry_processing"),
     ("change_vector_analysis", "remote_sensing", "change_detection"),
     ("circular_variance_of_aspect", "terrain", "roughness_texture"),
     ("classify_buildings_in_lidar", "lidar", "filtering_classification"),
@@ -2197,6 +2197,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("clip_raster_to_polygon", "raster", "general"),
     ("closest_facility_network", "vector", "network_analysis"),
     ("closing", "remote_sensing", "filters"),
+    ("cloude_pottier_decomposition", "remote_sensing", "sar"),
     ("clump", "raster", "general"),
     ("colourize_based_on_class", "lidar", "analysis_metrics"),
     ("colourize_based_on_point_returns", "lidar", "analysis_metrics"),
@@ -2205,6 +2206,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("conditional_evaluation", "raster", "reclass_mask"),
     ("conservative_smoothing_filter", "remote_sensing", "filters"),
     ("construct_vector_tin", "vector", "sampling_gridding"),
+    ("continuum_removal", "remote_sensing", "spectral_analytics"),
     ("contours_from_points", "vector", "sampling_gridding"),
     ("contours_from_raster", "vector", "sampling_gridding"),
     ("convergence_index", "terrain", "general"),
@@ -2228,6 +2230,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("d8_flow_accum", "hydrology", "flow_routing"),
     ("d8_mass_flux", "hydrology", "flow_routing"),
     ("d8_pointer", "hydrology", "flow_routing"),
+    ("dark_object_subtraction", "remote_sensing", "radiometric_correction"),
     ("dbscan", "raster", "general"),
     ("decrement", "raster", "general"),
     ("delete_field", "vector", "attribute_analysis"),
@@ -2250,6 +2253,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("distance_to_outlet", "hydrology", "hydrologic_indices"),
     ("diversity_filter", "remote_sensing", "filters"),
     ("divide", "raster", "overlay_math"),
+    ("dn_to_toa_reflectance", "remote_sensing", "radiometric_correction"),
     ("download_osm_vector", "vector", "online_data"),
     ("downslope_distance_to_stream", "hydrology", "hydrologic_indices"),
     ("downslope_flowpath_length", "hydrology", "flow_routing"),
@@ -2269,7 +2273,8 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("elongation_ratio", "vector", "shape_metrics"),
     ("embankment_mapping", "terrain", "general"),
     ("emboss_filter", "remote_sensing", "filters"),
-    ("emergency_scenario_routing_and_accessibility_simulator", "vector", "workflow_products"),
+    ("emergency_scenario_routing_and_accessibility_simulator", "vector", "network_analysis"),
+    ("enhanced_lee_filter", "remote_sensing", "sar"),
     ("equal_to", "raster", "general"),
     ("erase", "vector", "overlay_analysis"),
     ("erase_polygon_from_lidar", "lidar", "filtering_classification"),
@@ -2332,6 +2337,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("flow_length_diff", "hydrology", "flow_routing"),
     ("forestry_structure_and_biomass_intelligence", "terrain", "workflow_products"),
     ("frangi_filter", "remote_sensing", "filters"),
+    ("freeman_durden_decomposition", "remote_sensing", "sar"),
     ("frost_filter", "remote_sensing", "sar"),
     ("fuzzy_knn_classification", "remote_sensing", "classification"),
     ("gabor_filter_bank", "remote_sensing", "filters"),
@@ -2342,15 +2348,15 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("gaussian_filter", "remote_sensing", "filters"),
     ("generalize_classified_raster", "remote_sensing", "classification"),
     ("generalize_with_similarity", "remote_sensing", "classification"),
+    ("generate_network_nodes", "vector", "network_analysis"),
     ("generating_function", "terrain", "derivatives"),
     ("geomorphons", "terrain", "landform_indices"),
     ("georeference_raster_from_control_points", "projection_georeferencing", "general"),
-    ("orthorectification", "projection_georeferencing", "general"),
     ("glcm_texture", "remote_sensing", "filters"),
     ("greater_than", "raster", "general"),
-    ("greater_than_or_equal_to", "raster", "general"),
     ("guided_filter", "remote_sensing", "filters"),
     ("guided_uav_image_intake_workflow", "remote_sensing", "workflow_products"),
+    ("h_alpha_wisart_classification", "remote_sensing", "sar"),
     ("hack_stream_order", "streams", "ordering_metrics"),
     ("heat_map", "raster", "general"),
     ("height_above_ground", "lidar", "filtering_classification"),
@@ -2380,6 +2386,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("image_autocorrelation", "raster", "general"),
     ("image_correlation", "raster", "general"),
     ("image_correlation_neighbourhood_analysis", "raster", "local_neighborhood"),
+    ("image_difference_change_detection", "remote_sensing", "change_detection"),
     ("image_regression", "raster", "general"),
     ("image_segmentation", "remote_sensing", "obia"),
     ("image_slider", "remote_sensing", "obia"),
@@ -2412,6 +2419,8 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("ks_normality_test", "raster", "general"),
     ("kuan_filter", "remote_sensing", "sar"),
     ("kuwahara_filter", "remote_sensing", "filters"),
+    ("land_surface_temperature_single_channel", "remote_sensing", "thermal_emissivity"),
+    ("land_surface_temperature_split_window", "remote_sensing", "thermal_emissivity"),
     ("landslide_susceptibility_assessment", "terrain", "workflow_products"),
     ("laplacian_filter", "remote_sensing", "edge_feature_detection"),
     ("laplacian_of_gaussians_filter", "remote_sensing", "edge_feature_detection"),
@@ -2422,7 +2431,6 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("lee_filter", "remote_sensing", "filters"),
     ("length_of_upstream_channels", "streams", "longitudinal_analysis"),
     ("less_than", "raster", "general"),
-    ("less_than_or_equal_to", "raster", "general"),
     ("lidar_block_maximum", "lidar", "interpolation_gridding"),
     ("lidar_block_minimum", "lidar", "interpolation_gridding"),
     ("lidar_change_and_disturbance_analysis", "lidar", "workflow_products"),
@@ -2465,6 +2473,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("line_intersections", "vector", "overlay_analysis"),
     ("line_polygon_clip", "vector", "overlay_analysis"),
     ("line_thinning", "remote_sensing", "filters"),
+    ("linear_spectral_unmixing", "remote_sensing", "spectral_analytics"),
     ("linearity_index", "vector", "shape_metrics"),
     ("lines_to_polygons", "conversion", "geometry_topology"),
     ("list_unique_values", "vector", "attribute_analysis"),
@@ -2485,7 +2494,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("map_features", "raster", "general"),
     ("map_matching_v1", "vector", "network_analysis"),
     ("map_off_terrain_objects", "terrain", "general"),
-    ("market_access_and_site_intelligence_workflow", "vector", "workflow_products"),
+    ("market_access_and_site_intelligence_workflow", "vector", "network_analysis"),
     ("max", "raster", "general"),
     ("max_absolute_overlay", "raster", "overlay_math"),
     ("max_anisotropy_dev", "terrain", "multiscale_signatures"),
@@ -2523,6 +2532,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("minimum_bounding_envelope", "vector", "geometry_processing"),
     ("minimum_convex_hull", "vector", "geometry_processing"),
     ("minimum_filter", "remote_sensing", "filters"),
+    ("minimum_noise_fraction", "remote_sensing", "spectral_analytics"),
     ("modified_k_means_clustering", "remote_sensing", "classification"),
     ("modified_shepard_interpolation", "raster", "general"),
     ("modify_lidar", "lidar", "filtering_classification"),
@@ -2551,14 +2561,13 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("narrowness_index", "raster", "general"),
     ("narrowness_index_vector", "vector", "shape_metrics"),
     ("natural_neighbour_interpolation", "raster", "local_neighborhood"),
+    ("ndvi_based_emissivity", "remote_sensing", "thermal_emissivity"),
     ("near", "vector", "overlay_analysis"),
     ("nearest_neighbour_interpolation", "raster", "local_neighborhood"),
     ("negate", "raster", "general"),
     ("network_accessibility_metrics", "vector", "network_analysis"),
-    ("build_network_topology", "vector", "network_analysis"),
     ("network_centrality_metrics", "vector", "network_analysis"),
     ("network_connected_components", "vector", "network_analysis"),
-    ("generate_network_nodes", "vector", "network_analysis"),
     ("network_node_degree", "vector", "network_analysis"),
     ("network_od_cost_matrix", "vector", "network_analysis"),
     ("network_readiness_and_diagnostics_intelligence", "vector", "network_analysis"),
@@ -2593,12 +2602,14 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("olympic_filter", "remote_sensing", "filters"),
     ("opening", "remote_sensing", "filters"),
     ("openness", "terrain", "visibility"),
+    ("orthorectification", "projection_georeferencing", "general"),
     ("otsu_thresholding", "remote_sensing", "classification"),
     ("paired_sample_t_test", "raster", "general"),
     ("panchromatic_sharpening", "remote_sensing", "enhancement_contrast"),
     ("parallelepiped_classification", "remote_sensing", "classification"),
     ("parcel_and_land_fabric_topology_compliance_workflow", "vector", "workflow_products"),
     ("patch_orientation", "vector", "shape_metrics"),
+    ("pca_based_change_detection", "remote_sensing", "change_detection"),
     ("pennock_landform_classification", "terrain", "landform_indices"),
     ("percent_elev_range", "terrain", "landform_indices"),
     ("percent_equal_to", "raster", "overlay_math"),
@@ -2619,6 +2630,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("polygonize", "vector", "geometry_processing"),
     ("polygons_to_lines", "conversion", "geometry_topology"),
     ("polygons_to_segments", "remote_sensing", "obia"),
+    ("post_classification_change", "remote_sensing", "change_detection"),
     ("power", "raster", "overlay_math"),
     ("precision_ag_yield_zone_intelligence", "precision_agriculture", "general"),
     ("precision_irrigation_optimization", "precision_agriculture", "general"),
@@ -2663,6 +2675,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("recover_flightline_info", "lidar", "io_management"),
     ("rectangular_grid_from_raster_base", "vector", "sampling_gridding"),
     ("rectangular_grid_from_vector_base", "vector", "sampling_gridding"),
+    ("refined_lee_filter", "remote_sensing", "sar"),
     ("registration_oriented_feature_workflow", "remote_sensing", "workflow_products"),
     ("reinitialize_attribute_table", "conversion", "vector_table_io"),
     ("related_circumscribing_circle", "vector", "shape_metrics"),
@@ -2678,6 +2691,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("remove_spurs", "remote_sensing", "filters"),
     ("rename_field", "vector", "attribute_analysis"),
     ("repair_stream_vector_topology", "streams", "network_extraction"),
+    ("representative_point_vector", "vector", "geometry_processing"),
     ("reproject_lidar", "projection_georeferencing", "general"),
     ("reproject_raster", "projection_georeferencing", "general"),
     ("reproject_vector", "projection_georeferencing", "general"),
@@ -2748,7 +2762,6 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("smooth_vegetation_residual", "terrain", "general"),
     ("snap_endnodes", "vector", "geometry_processing"),
     ("snap_events_to_routes", "vector", "linear_referencing"),
-    ("split_lines_at_intersections", "vector", "network_analysis"),
     ("snap_points_to_network", "vector", "network_analysis"),
     ("snap_pour_points", "hydrology", "watersheds_basins"),
     ("sobel_filter", "remote_sensing", "edge_feature_detection"),
@@ -2756,9 +2769,12 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("solar_site_suitability_analysis", "terrain", "workflow_products"),
     ("sort_lidar", "lidar", "io_management"),
     ("spatial_join", "vector", "overlay_analysis"),
+    ("spectral_angle_mapper", "remote_sensing", "spectral_analytics"),
+    ("spectral_library_matching", "remote_sensing", "spectral_analytics"),
     ("spherical_std_dev_of_normals", "terrain", "roughness_texture"),
     ("split_colour_composite", "remote_sensing", "enhancement_contrast"),
     ("split_lidar", "lidar", "io_management"),
+    ("split_lines_at_intersections", "vector", "network_analysis"),
     ("split_vector_lines", "vector", "geometry_processing"),
     ("split_with_lines", "vector", "geometry_processing"),
     ("sqrt", "raster", "general"),
@@ -2806,8 +2822,8 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("total_curvature", "terrain", "derivatives"),
     ("total_filter", "remote_sensing", "filters"),
     ("trace_downslope_flowpaths", "hydrology", "flow_routing"),
-    ("travelling_salesman_problem", "vector", "network_analysis"),
     ("transfer_attributes", "vector", "network_analysis"),
+    ("travelling_salesman_problem", "vector", "network_analysis"),
     ("trend_surface", "raster", "general"),
     ("trend_surface_vector_points", "raster", "general"),
     ("tributary_identifier", "streams", "ordering_metrics"),
@@ -2849,24 +2865,6 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("wilcoxon_signed_rank_test", "raster", "general"),
     ("wildfire_fuel_loading_and_risk_matrix", "terrain", "workflow_products"),
     ("wind_turbine_siting", "terrain", "workflow_products"),
-    ("cloude_pottier_decomposition", "remote_sensing", "sar"),
-    ("continuum_removal", "remote_sensing", "spectral_analytics"),
-    ("dark_object_subtraction", "remote_sensing", "radiometric_correction"),
-    ("dn_to_toa_reflectance", "remote_sensing", "radiometric_correction"),
-    ("enhanced_lee_filter", "remote_sensing", "sar"),
-    ("freeman_durden_decomposition", "remote_sensing", "sar"),
-    ("h_alpha_wisart_classification", "remote_sensing", "sar"),
-    ("image_difference_change_detection", "remote_sensing", "change_detection"),
-    ("land_surface_temperature_single_channel", "remote_sensing", "thermal_emissivity"),
-    ("land_surface_temperature_split_window", "remote_sensing", "thermal_emissivity"),
-    ("linear_spectral_unmixing", "remote_sensing", "spectral_analytics"),
-    ("minimum_noise_fraction", "remote_sensing", "spectral_analytics"),
-    ("ndvi_based_emissivity", "remote_sensing", "thermal_emissivity"),
-    ("pca_based_change_detection", "remote_sensing", "change_detection"),
-    ("post_classification_change", "remote_sensing", "change_detection"),
-    ("refined_lee_filter", "remote_sensing", "sar"),
-    ("spectral_angle_mapper", "remote_sensing", "spectral_analytics"),
-    ("spectral_library_matching", "remote_sensing", "spectral_analytics"),
     ("wisart_iterative_clustering", "remote_sensing", "sar"),
     ("write_function_memory_insertion", "remote_sensing", "change_detection"),
     ("yamaguchi_4component_decomposition", "remote_sensing", "sar"),
@@ -12461,23 +12459,41 @@ impl WbEnvironment {
     }
 
     /// [PRO] sar_analysis_readiness — SAR scene quality and analysis-readiness assessment.
-    #[pyo3(signature = (input_sar, input_dem, pair_sar=None, speckle_window=5, z_factor=1.0, output_prefix=None, callback=None))]
+    #[pyo3(signature = (input_sar, input_dem, pair_sar=None, input_look_angle_deg=None, pair_look_angle_deg=None, max_look_angle_diff_deg=1.0, auto_coregister_pair=false, coreg_max_offset_px=24, coreg_decimation=4, coreg_min_overlap_fraction=0.20, speckle_window=5, z_factor=1.0, output_prefix=None, callback=None))]
     fn sar_analysis_readiness(
         &self,
         input_sar: &Raster,
         input_dem: &Raster,
         pair_sar: Option<&Raster>,
+        input_look_angle_deg: Option<f64>,
+        pair_look_angle_deg: Option<f64>,
+        max_look_angle_diff_deg: f64,
+        auto_coregister_pair: bool,
+        coreg_max_offset_px: i64,
+        coreg_decimation: i64,
+        coreg_min_overlap_fraction: f64,
         speckle_window: i64,
         z_factor: f64,
         output_prefix: Option<&str>,
         callback: Option<Py<PyAny>>,
-    ) -> PyResult<(Raster, Raster, Raster, Option<Raster>, String)> {
+    ) -> PyResult<(Raster, Raster, Raster, Option<Raster>, String, String, String)> {
         let mut args = serde_json::Map::new();
         args.insert("input_sar".to_string(), json!(input_sar.file_path.to_string_lossy().to_string()));
         args.insert("input_dem".to_string(), json!(input_dem.file_path.to_string_lossy().to_string()));
         if let Some(pair) = pair_sar {
             args.insert("pair_sar".to_string(), json!(pair.file_path.to_string_lossy().to_string()));
         }
+        if let Some(v) = input_look_angle_deg {
+            args.insert("input_look_angle_deg".to_string(), json!(v));
+        }
+        if let Some(v) = pair_look_angle_deg {
+            args.insert("pair_look_angle_deg".to_string(), json!(v));
+        }
+        args.insert("max_look_angle_diff_deg".to_string(), json!(max_look_angle_diff_deg));
+        args.insert("auto_coregister_pair".to_string(), json!(auto_coregister_pair));
+        args.insert("coreg_max_offset_px".to_string(), json!(coreg_max_offset_px));
+        args.insert("coreg_decimation".to_string(), json!(coreg_decimation));
+        args.insert("coreg_min_overlap_fraction".to_string(), json!(coreg_min_overlap_fraction));
         args.insert("speckle_window".to_string(), json!(speckle_window));
         args.insert("z_factor".to_string(), json!(z_factor));
         if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
@@ -12515,6 +12531,8 @@ impl WbEnvironment {
                 .map(|p| Raster { file_path: PathBuf::from(p), active_band: input_sar.active_band })
         };
         let summary = extract_output_path_by_key("sar_analysis_readiness", &response, "summary")?;
+        let readiness_rule_trace = extract_output_path_by_key("sar_analysis_readiness", &response, "readiness_rule_trace")?;
+        let readiness_blockers = extract_output_path_by_key("sar_analysis_readiness", &response, "readiness_blockers")?;
 
         Ok((
             Raster { file_path: calibrated, active_band: input_sar.active_band },
@@ -12522,6 +12540,8 @@ impl WbEnvironment {
             Raster { file_path: rtc, active_band: input_sar.active_band },
             coherence_proxy,
             summary.to_string_lossy().to_string(),
+            readiness_rule_trace.to_string_lossy().to_string(),
+            readiness_blockers.to_string_lossy().to_string(),
         ))
     }
 
@@ -12776,10 +12796,14 @@ impl WbEnvironment {
     }
 
     /// [PRO] solar_site_suitability_analysis — score land surface suitability for ground-mounted solar installations.
-    #[pyo3(signature = (dem, candidate_threshold=0.7, max_candidate_sites=200, output_prefix=None, callback=None))]
+    #[pyo3(signature = (dem, transmission_lines=None, substations=None, road_network=None, infra_weight_profile="balanced", candidate_threshold=0.7, max_candidate_sites=200, output_prefix=None, callback=None))]
     fn solar_site_suitability_analysis(
         &self,
         dem: &Raster,
+        transmission_lines: Option<&Vector>,
+        substations: Option<&Vector>,
+        road_network: Option<&Vector>,
+        infra_weight_profile: &str,
         candidate_threshold: f64,
         max_candidate_sites: i64,
         output_prefix: Option<&str>,
@@ -12787,6 +12811,16 @@ impl WbEnvironment {
     ) -> PyResult<(Raster, Raster, Vector, String)> {
         let mut args = serde_json::Map::new();
         args.insert("dem".to_string(), json!(dem.file_path.to_string_lossy().to_string()));
+        if let Some(v) = transmission_lines {
+            args.insert("transmission_lines".to_string(), json!(v.file_path.to_string_lossy().to_string()));
+        }
+        if let Some(v) = substations {
+            args.insert("substations".to_string(), json!(v.file_path.to_string_lossy().to_string()));
+        }
+        if let Some(v) = road_network {
+            args.insert("road_network".to_string(), json!(v.file_path.to_string_lossy().to_string()));
+        }
+        args.insert("infra_weight_profile".to_string(), json!(infra_weight_profile));
         args.insert("candidate_threshold".to_string(), json!(candidate_threshold));
         args.insert("max_candidate_sites".to_string(), json!(max_candidate_sites));
         if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
@@ -15254,7 +15288,7 @@ impl WbEnvironment {
         profile: &str,
         output_prefix: Option<&str>,
         callback: Option<Py<PyAny>>,
-    ) -> PyResult<(Raster, Raster, String)> {
+    ) -> PyResult<(Raster, Raster, String, String)> {
         let mut args = serde_json::Map::new();
         args.insert("dem".to_string(), json!(dem.file_path.to_string_lossy().to_string()));
         args.insert("settlements".to_string(), json!(settlements.file_path.to_string_lossy().to_string()));
@@ -15292,6 +15326,11 @@ impl WbEnvironment {
         let score_path = extract_output_path_by_key("wind_turbine_siting", &response, "siting_score")?;
         let confidence_path = extract_output_path_by_key("wind_turbine_siting", &response, "confidence")?;
         let summary_path = extract_output_path_by_key("wind_turbine_siting", &response, "summary")?;
+        let threshold_sensitivity_path = extract_output_path_by_key(
+            "wind_turbine_siting",
+            &response,
+            "threshold_sensitivity_summary",
+        )?;
 
         Ok((
             Raster {
@@ -15303,6 +15342,7 @@ impl WbEnvironment {
                 active_band: dem.active_band,
             },
             summary_path.to_string_lossy().to_string(),
+            threshold_sensitivity_path.to_string_lossy().to_string(),
         ))
     }
 

@@ -34,7 +34,7 @@
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
 </tbody></table>
-<p>When <code>sweep_spec</code> is supplied, the workflow also emits <code>run_matrix_summary</code>, <code>sensitivity_report</code>, and <code>sensitivity_report_html</code>. The sensitivity report includes <code>metrics.primary_metric</code>, <code>metrics.primary_relative_span</code>, and <code>metrics.stability_class</code> (<code>high</code>, <code>medium</code>, <code>low</code>).</p>
+<p>When <code>sweep_spec</code> is supplied, the workflow also emits <code>run_matrix_summary</code>, <code>sensitivity_report</code>, <code>sensitivity_report_html</code>, and <code>stability_map</code>. The sensitivity report includes <code>metrics.primary_metric</code>, <code>metrics.primary_relative_span</code>, and <code>metrics.stability_class</code> (<code>high</code>, <code>medium</code>, <code>low</code>), while <code>stability_map</code> uses classes <code>3=high</code>, <code>2=medium</code>, <code>1=low</code>.</p>
 <h2>Python Example</h2>
 <pre><code>import whitebox_workflows as wbw
 

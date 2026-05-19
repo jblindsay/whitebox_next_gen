@@ -491,6 +491,7 @@ additional sweep outputs:
 - `run_matrix_summary` (CSV)
 - `sensitivity_report` (JSON)
 - `sensitivity_report_html` (HTML)
+- `stability_map` (GeoTIFF; `3=high`, `2=medium`, `1=low`)
 
 The JSON sensitivity report includes a normalized primary metric span and
 stability class fields for quick robustness screening:

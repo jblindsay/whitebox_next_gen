@@ -28,6 +28,7 @@
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>biomass_proxy</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional LiDAR-derived biomass proxy raster for blended carbon-proxy interpretation.</td></tr>
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>profile: conservative | balanced | aggressive</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Sensitivity profile controlling gain/loss thresholds and confidence blending behavior.</td></tr>
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>zone_block_cells</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Pixel block size used for verification zone polygon aggregation. Defaults to `16`.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>mrv_template</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>MRV profile: verra_vcs_vm0010, american_carbon_registry, gold_standard, or none.</td></tr>
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>methodology_reference</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional methodology lineage note for audit metadata (for example Verra references).</td></tr>
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>output_prefix</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Prefix used to name output artifacts.</td></tr>
 </tbody></table>
@@ -40,6 +41,8 @@
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>change_confidence</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Confidence raster for change interpretation (`*_change_confidence.tif`).</td></tr>
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>verification_zones</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Block-aggregated verification polygons with change class and summary attributes (`*_verification_zones.gpkg`).</td></tr>
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>audit_contract</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable audit summary contract (`*_audit_contract.json`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>compliance_evidence_packet</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Submission-oriented compliance evidence packet (`*_compliance_evidence_packet.json`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>regulator_ready_table</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Flat regulator-ready summary table (`*_regulator_ready_table.csv`).</td></tr>
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable report generated from the contract for stakeholder review.</td></tr>
 </tbody></table>
 <h2>Python Example</h2>
@@ -57,6 +60,7 @@ result = wbe.carbon_sequestration_verification_audit(
     biomass_proxy=&quot;data/biomass_proxy.tif&quot;,
     profile=&quot;balanced&quot;,
     zone_block_cells=16,
+    mrv_template=&quot;verra_vcs_vm0010&quot;,
     methodology_reference=&quot;Verra VM0010 v1.3&quot;,
     output_prefix=&quot;output/carbon_audit&quot;,
 )

@@ -13186,7 +13186,7 @@ impl WbEnvironment {
 
     /// [PRO] multi_sensor_fusion_monitoring — fuse optical and SAR sensors for high-confidence change monitoring.
     #[allow(clippy::too_many_arguments)]
-    #[pyo3(signature = (baseline_bundle, change_bundle, input_sar, input_dem, baseline_red_band_index=0, baseline_nir_band_index=1, change_red_band_index=0, change_nir_band_index=1, pair_sar=None, profile="balanced", high_confidence_threshold=0.8, max_zone_features=25000, output_prefix=None, callback=None))]
+    #[pyo3(signature = (baseline_bundle, change_bundle, input_sar, input_dem, baseline_red_band_index=0, baseline_nir_band_index=1, change_red_band_index=0, change_nir_band_index=1, pair_sar=None, thermal_bundle=None, thermal_band_index=0, profile="balanced", harmonization_mode="robust", high_confidence_threshold=0.8, max_zone_features=25000, vector_output_format="gpkg", output_prefix=None, callback=None))]
     fn multi_sensor_fusion_monitoring(
         &self,
         baseline_bundle: &Raster,
@@ -13198,12 +13198,16 @@ impl WbEnvironment {
         change_red_band_index: i64,
         change_nir_band_index: i64,
         pair_sar: Option<&Raster>,
+        thermal_bundle: Option<&Raster>,
+        thermal_band_index: i64,
         profile: &str,
+        harmonization_mode: &str,
         high_confidence_threshold: f64,
         max_zone_features: i64,
+        vector_output_format: &str,
         output_prefix: Option<&str>,
         callback: Option<Py<PyAny>>,
-    ) -> PyResult<(Raster, Raster, Raster, Vector, String)> {
+    ) -> PyResult<(Raster, Raster, Raster, Raster, Vector, String, String, String)> {
         let mut args = serde_json::Map::new();
         args.insert("baseline_bundle".to_string(), json!(baseline_bundle.file_path.to_string_lossy().to_string()));
         args.insert("baseline_red_band_index".to_string(), json!(baseline_red_band_index));
@@ -13216,9 +13220,15 @@ impl WbEnvironment {
         if let Some(pair) = pair_sar {
             args.insert("pair_sar".to_string(), json!(pair.file_path.to_string_lossy().to_string()));
         }
+        if let Some(thermal) = thermal_bundle {
+            args.insert("thermal_bundle".to_string(), json!(thermal.file_path.to_string_lossy().to_string()));
+        }
+        args.insert("thermal_band_index".to_string(), json!(thermal_band_index));
         args.insert("profile".to_string(), json!(profile));
+        args.insert("harmonization_mode".to_string(), json!(harmonization_mode));
         args.insert("high_confidence_threshold".to_string(), json!(high_confidence_threshold));
         args.insert("max_zone_features".to_string(), json!(max_zone_features));
+        args.insert("vector_output_format".to_string(), json!(vector_output_format));
         if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
             args.insert("output_prefix".to_string(), json!(prefix));
         }
@@ -13246,14 +13256,20 @@ impl WbEnvironment {
         let fused = extract_output_path_by_key("multi_sensor_fusion_monitoring", &response, "fused_change_probability")?;
         let agreement = extract_output_path_by_key("multi_sensor_fusion_monitoring", &response, "sensor_agreement")?;
         let terrain = extract_output_path_by_key("multi_sensor_fusion_monitoring", &response, "terrain_context")?;
+        let uncertainty = extract_output_path_by_key("multi_sensor_fusion_monitoring", &response, "uncertainty_inflation")?;
         let zones = extract_output_path_by_key("multi_sensor_fusion_monitoring", &response, "high_confidence_change_zones")?;
+        let thermal_contract = extract_output_path_by_key("multi_sensor_fusion_monitoring", &response, "thermal_input_contract")?;
+        let modality_diag = extract_output_path_by_key("multi_sensor_fusion_monitoring", &response, "modality_contribution_diagnostics")?;
         let summary = extract_output_path_by_key("multi_sensor_fusion_monitoring", &response, "summary")?;
 
         Ok((
             Raster { file_path: fused, active_band: baseline_bundle.active_band },
             Raster { file_path: agreement, active_band: baseline_bundle.active_band },
             Raster { file_path: terrain, active_band: baseline_bundle.active_band },
+            Raster { file_path: uncertainty, active_band: baseline_bundle.active_band },
             Vector { file_path: zones },
+            thermal_contract.to_string_lossy().to_string(),
+            modality_diag.to_string_lossy().to_string(),
             summary.to_string_lossy().to_string(),
         ))
     }
@@ -15763,7 +15779,7 @@ impl WbEnvironment {
         methodology_reference: Option<&str>,
         output_prefix: Option<&str>,
         callback: Option<Py<PyAny>>,
-    ) -> PyResult<(Raster, Raster, Raster, Vector, String)> {
+    ) -> PyResult<(Raster, Raster, Raster, Raster, Vector, String, String, String)> {
         let mut args = serde_json::Map::new();
         args.insert("baseline_bundle".to_string(), json!(baseline_bundle.file_path.to_string_lossy().to_string()));
         args.insert("current_bundle".to_string(), json!(current_bundle.file_path.to_string_lossy().to_string()));
@@ -15808,15 +15824,21 @@ impl WbEnvironment {
         let carbon_proxy = extract_output_path_by_key("carbon_sequestration_verification_audit", &response, "carbon_proxy")?;
         let ndvi_delta = extract_output_path_by_key("carbon_sequestration_verification_audit", &response, "ndvi_delta")?;
         let change_confidence = extract_output_path_by_key("carbon_sequestration_verification_audit", &response, "change_confidence")?;
+        let uncertainty = extract_output_path_by_key("carbon_sequestration_verification_audit", &response, "uncertainty")?;
         let verification_zones = extract_output_path_by_key("carbon_sequestration_verification_audit", &response, "verification_zones")?;
         let audit_contract = extract_output_path_by_key("carbon_sequestration_verification_audit", &response, "audit_contract")?;
+        let compliance_evidence_packet = extract_output_path_by_key("carbon_sequestration_verification_audit", &response, "compliance_evidence_packet")?;
+        let regulator_ready_table = extract_output_path_by_key("carbon_sequestration_verification_audit", &response, "regulator_ready_table")?;
 
         Ok((
             Raster { file_path: carbon_proxy, active_band: baseline_bundle.active_band },
             Raster { file_path: ndvi_delta, active_band: baseline_bundle.active_band },
             Raster { file_path: change_confidence, active_band: baseline_bundle.active_band },
+            Raster { file_path: uncertainty, active_band: baseline_bundle.active_band },
             Vector { file_path: verification_zones },
             audit_contract.to_string_lossy().to_string(),
+            compliance_evidence_packet.to_string_lossy().to_string(),
+            regulator_ready_table.to_string_lossy().to_string(),
         ))
     }
 
@@ -15871,7 +15893,7 @@ impl WbEnvironment {
 
     /// [PRO] mine_site_reclamation_compliance_tracker — track vegetation recovery and regulatory compliance at mine reclamation sites.
     #[allow(clippy::too_many_arguments)]
-    #[pyo3(signature = (baseline_bundle, current_bundle, slope=None, baseline_red_band_index=0, baseline_nir_band_index=1, current_red_band_index=0, current_nir_band_index=1, reclamation_target_ndvi=0.35, slope_stability_max_deg=30.0, jurisdiction=None, monitoring_epoch=None, site_name=None, zone_block_cells=20, output_prefix=None, callback=None))]
+    #[pyo3(signature = (baseline_bundle, current_bundle, slope=None, baseline_red_band_index=0, baseline_nir_band_index=1, current_red_band_index=0, current_nir_band_index=1, reclamation_target_ndvi=0.35, slope_stability_max_deg=30.0, jurisdiction=None, monitoring_epoch=None, site_name=None, has_hydrology_evidence=false, has_soil_ph_evidence=false, has_perennial_vegetation_evidence=false, report_interval_months=None, zone_block_cells=20, output_prefix=None, callback=None))]
     fn mine_site_reclamation_compliance_tracker(
         &self,
         baseline_bundle: &Raster,
@@ -15884,12 +15906,16 @@ impl WbEnvironment {
         reclamation_target_ndvi: f64,
         slope_stability_max_deg: f64,
         jurisdiction: Option<&str>,
-        monitoring_epoch: Option<&str>,
+        monitoring_epoch: Option<i64>,
         site_name: Option<&str>,
+        has_hydrology_evidence: bool,
+        has_soil_ph_evidence: bool,
+        has_perennial_vegetation_evidence: bool,
+        report_interval_months: Option<i64>,
         zone_block_cells: i64,
         output_prefix: Option<&str>,
         callback: Option<Py<PyAny>>,
-    ) -> PyResult<(Raster, Raster, Vector, String)> {
+    ) -> PyResult<(Raster, Raster, Vector, String, String)> {
         let mut args = serde_json::Map::new();
         args.insert("baseline_bundle".to_string(), json!(baseline_bundle.file_path.to_string_lossy().to_string()));
         args.insert("current_bundle".to_string(), json!(current_bundle.file_path.to_string_lossy().to_string()));
@@ -15905,6 +15931,12 @@ impl WbEnvironment {
         if let Some(j) = jurisdiction { args.insert("jurisdiction".to_string(), json!(j)); }
         if let Some(e) = monitoring_epoch { args.insert("monitoring_epoch".to_string(), json!(e)); }
         if let Some(n) = site_name { args.insert("site_name".to_string(), json!(n)); }
+        args.insert("has_hydrology_evidence".to_string(), json!(has_hydrology_evidence));
+        args.insert("has_soil_ph_evidence".to_string(), json!(has_soil_ph_evidence));
+        args.insert("has_perennial_vegetation_evidence".to_string(), json!(has_perennial_vegetation_evidence));
+        if let Some(interval) = report_interval_months {
+            args.insert("report_interval_months".to_string(), json!(interval));
+        }
         args.insert("zone_block_cells".to_string(), json!(zone_block_cells));
         if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
             args.insert("output_prefix".to_string(), json!(prefix));
@@ -15934,12 +15966,14 @@ impl WbEnvironment {
         let reclamation_progress = extract_output_path_by_key("mine_site_reclamation_compliance_tracker", &response, "reclamation_progress")?;
         let compliance_zones = extract_output_path_by_key("mine_site_reclamation_compliance_tracker", &response, "compliance_zones")?;
         let compliance_contract = extract_output_path_by_key("mine_site_reclamation_compliance_tracker", &response, "compliance_contract")?;
+        let validation_diagnostics = extract_output_path_by_key("mine_site_reclamation_compliance_tracker", &response, "validation_diagnostics")?;
 
         Ok((
             Raster { file_path: vegetation_recovery, active_band: baseline_bundle.active_band },
             Raster { file_path: reclamation_progress, active_band: baseline_bundle.active_band },
             Vector { file_path: compliance_zones },
             compliance_contract.to_string_lossy().to_string(),
+            validation_diagnostics.to_string_lossy().to_string(),
         ))
     }
 

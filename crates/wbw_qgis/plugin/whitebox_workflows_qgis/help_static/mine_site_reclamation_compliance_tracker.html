@@ -28,7 +28,10 @@
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>slope</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional slope raster (degrees) for stability milestone evaluation.</td></tr>
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>reclamation_target_ndvi</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Target NDVI threshold used for vegetation milestone scoring. Defaults to `0.35`.</td></tr>
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>slope_stability_max_deg</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Maximum acceptable slope for stability compliance. Defaults to `30.0`.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>jurisdiction</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Compliance template: us_federal_mtbs, us_california_mining, us_pennsylvania_coal, aus_western_australia, canada_bc_mines, south_africa_dmre, none.</td></tr>
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>site_name</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional site name or permit identifier in contract outputs.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>has_hydrology_evidence, has_soil_ph_evidence, has_perennial_vegetation_evidence</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Boolean evidence flags used by submission-readiness diagnostics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>report_interval_months</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Reported cadence in months (1-120) compared against template expectations.</td></tr>
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>zone_block_cells</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Pixel block size used for compliance-zone aggregation. Defaults to `20`.</td></tr>
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>output_prefix</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Prefix used to name output artifacts.</td></tr>
 </tbody></table>
@@ -40,6 +43,7 @@
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>reclamation_progress</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Normalized progress-to-target raster (`*_reclamation_progress.tif`).</td></tr>
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>compliance_zones</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Zone-level compliance polygons with progress/recovery attributes (`*_compliance_zones.gpkg`).</td></tr>
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>compliance_contract</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable compliance summary contract (`*_compliance_contract.json`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>validation_diagnostics</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Evidence completeness and warning diagnostics (`*_validation_diagnostics.json`).</td></tr>
 <tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable report generated from compliance contract outputs.</td></tr>
 </tbody></table>
 <h2>Python Example</h2>
@@ -57,7 +61,12 @@ result = wbe.mine_site_reclamation_compliance_tracker(
     slope=&quot;data/slope.tif&quot;,
     reclamation_target_ndvi=0.35,
     slope_stability_max_deg=30.0,
+    jurisdiction=&quot;canada_bc_mines&quot;,
     site_name=&quot;Mine Site Alpha&quot;,
+    has_hydrology_evidence=True,
+    has_soil_ph_evidence=True,
+    has_perennial_vegetation_evidence=True,
+    report_interval_months=12,
     zone_block_cells=20,
     output_prefix=&quot;output/reclamation&quot;,
 )

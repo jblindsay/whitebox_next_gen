@@ -608,16 +608,21 @@ wbe.multi_sensor_fusion_monitoring(
     change_red_band_index=0,
     change_nir_band_index=1,
     pair_sar=None,
+    thermal_bundle=None,
+    thermal_band_index=0,
     profile="balanced",
+    harmonization_mode="robust",
     high_confidence_threshold=0.8,
     max_zone_features=25000,
+    vector_output_format="gpkg",
     output_prefix=None,
     callback=None,
-) -> tuple[Raster, Raster, Raster, Vector, str]
+) -> tuple[Raster, Raster, Raster, Raster, Vector, str, str, str]
 ```
 
 Runs multi-sensor disturbance fusion from optical change, SAR stability cues, and terrain context.
-Returns fused change probability, sensor agreement, terrain context, high-confidence zones,
+Returns fused change probability, sensor agreement, terrain context, uncertainty inflation,
+high-confidence zones, thermal contract JSON path, modality diagnostics JSON path,
 and a summary JSON path.
 
 **Parameters**
@@ -633,16 +638,20 @@ and a summary JSON path.
 | `change_red_band_index` | `int` | `0` | Change red-band index |
 | `change_nir_band_index` | `int` | `1` | Change NIR-band index |
 | `pair_sar` | `Raster \| None` | `None` | Optional paired SAR raster for coherence-style cues |
-| `profile` | `str` | `"balanced"` | One of `"aggressive"`, `"balanced"`, `"conservative"` |
+| `thermal_bundle` | `Raster \| None` | `None` | Optional thermal raster used for three-modality fusion |
+| `thermal_band_index` | `int` | `0` | Thermal band index in `thermal_bundle` |
+| `profile` | `str` | `"balanced"` | One of `"fast"`, `"balanced"`, `"conservative"` |
+| `harmonization_mode` | `str` | `"robust"` | One of `"off"`, `"robust"`, `"conservative"` |
 | `high_confidence_threshold` | `float` | `0.8` | Threshold in `[0, 1]` used to derive high-confidence zones |
 | `max_zone_features` | `int` | `25000` | Maximum number of output zone features |
+| `vector_output_format` | `str` | `"gpkg"` | One of `"gpkg"`, `"geojson"`, `"shp"` |
 | `output_prefix` | `str \| None` | `None` | Prefix for generated outputs |
 | `callback` | `callable \| None` | `None` | Progress/message event handler |
 
 **Examples**
 
 ```python
-fused, agreement, terrain, zones, summary = wbe.multi_sensor_fusion_monitoring(
+fused, agreement, terrain, uncertainty, zones, thermal_contract, modality_diagnostics, summary = wbe.multi_sensor_fusion_monitoring(
     baseline_bundle=baseline_bundle,
     change_bundle=change_bundle,
     input_sar=sar_a,
@@ -652,7 +661,11 @@ fused, agreement, terrain, zones, summary = wbe.multi_sensor_fusion_monitoring(
     change_red_band_index=0,
     change_nir_band_index=1,
     pair_sar=sar_b,
+    thermal_bundle=thermal,
+    thermal_band_index=0,
     profile="balanced",
+    harmonization_mode="robust",
+    vector_output_format="gpkg",
 )
 ```
 

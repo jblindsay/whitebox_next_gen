@@ -13051,7 +13051,7 @@ impl WbEnvironment {
     }
 
     /// [PRO] precision_irrigation_optimization — generate terrain-driven precision irrigation prescription rasters.
-    #[pyo3(signature = (dem, soil_moisture=None, profile="balanced", target_moisture=0.6, max_irrigation_mm=18.0, output_prefix=None, callback=None))]
+    #[pyo3(signature = (dem, soil_moisture=None, profile="balanced", target_moisture=0.6, max_irrigation_mm=18.0, sweep_spec_json=None, output_prefix=None, callback=None))]
     fn precision_irrigation_optimization(
         &self,
         dem: &Raster,
@@ -13059,6 +13059,7 @@ impl WbEnvironment {
         profile: &str,
         target_moisture: f64,
         max_irrigation_mm: f64,
+        sweep_spec_json: Option<&str>,
         output_prefix: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<(Raster, Raster, Raster, String)> {
@@ -13070,6 +13071,14 @@ impl WbEnvironment {
         args.insert("profile".to_string(), json!(profile));
         args.insert("target_moisture".to_string(), json!(target_moisture));
         args.insert("max_irrigation_mm".to_string(), json!(max_irrigation_mm));
+        if let Some(spec_json) = sweep_spec_json {
+            let sweep_spec: serde_json::Value = serde_json::from_str(spec_json).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "invalid sweep_spec_json: {e}"
+                ))
+            })?;
+            args.insert("sweep_spec".to_string(), sweep_spec);
+        }
         if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
             args.insert("output_prefix".to_string(), json!(prefix));
         }

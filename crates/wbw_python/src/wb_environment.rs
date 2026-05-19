@@ -13117,7 +13117,7 @@ impl WbEnvironment {
     }
 
     /// [PRO] precision_ag_yield_zone_intelligence — derive management zones from yield surface and terrain context.
-    #[pyo3(signature = (yield_surface, terrain_context=None, profile="balanced", zone_count=4, max_zone_features=5000, output_prefix=None, callback=None))]
+    #[pyo3(signature = (yield_surface, terrain_context=None, profile="balanced", zone_count=4, max_zone_features=5000, sweep_spec_json=None, output_prefix=None, callback=None))]
     fn precision_ag_yield_zone_intelligence(
         &self,
         yield_surface: &Raster,
@@ -13125,6 +13125,7 @@ impl WbEnvironment {
         profile: &str,
         zone_count: i64,
         max_zone_features: i64,
+        sweep_spec_json: Option<&str>,
         output_prefix: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<(Raster, Raster, Vector, Raster, String)> {
@@ -13136,6 +13137,14 @@ impl WbEnvironment {
         args.insert("profile".to_string(), json!(profile));
         args.insert("zone_count".to_string(), json!(zone_count));
         args.insert("max_zone_features".to_string(), json!(max_zone_features));
+        if let Some(spec_json) = sweep_spec_json {
+            let sweep_spec: serde_json::Value = serde_json::from_str(spec_json).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "invalid sweep_spec_json: {e}"
+                ))
+            })?;
+            args.insert("sweep_spec".to_string(), sweep_spec);
+        }
         if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
             args.insert("output_prefix".to_string(), json!(prefix));
         }

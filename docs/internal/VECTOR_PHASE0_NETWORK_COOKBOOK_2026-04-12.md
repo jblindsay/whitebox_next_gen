@@ -16,6 +16,10 @@ Use these canonical terms consistently in wrappers/docs/examples:
 - turn_restrictions_csv: CSV defining forbidden transitions
 - output: output path (vector or CSV depending on tool)
 
+One-way routing note:
+- When a tool exposes `one_way_field`, it accepts FT/TF/B direction codes as well as legacy boolean-style values.
+- Use FT for forward-only, TF for reverse-only, and B for bidirectional segments.
+
 Output-mode conventions:
 - network_service_area output_mode: nodes, edges, polygons
 - Network cost outputs should use the term cost consistently (not mixed with weight in user-facing docs)

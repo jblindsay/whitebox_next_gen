@@ -1586,7 +1586,13 @@ impl Tool for DownloadOsmVectorTool {
 
         if split_output_by_geometry {
             let (points_path, lines_path, polygons_path) = derive_split_output_paths(output_path.trim())?;
-            let (points_layer, lines_layer, polygons_layer) = split_layer_by_geometry(&output_layer);
+
+            let (mut points_layer, mut lines_layer, mut polygons_layer) = split_layer_by_geometry(&output_layer);
+
+            // Explicitly set geometry types for each output
+            points_layer.geom_type = Some(wbvector::GeometryType::Point);
+            lines_layer.geom_type = Some(wbvector::GeometryType::LineString);
+            polygons_layer.geom_type = Some(wbvector::GeometryType::Polygon);
 
             if !points_layer.features.is_empty() {
                 let loc = write_vector_output(&points_layer, &points_path)?;

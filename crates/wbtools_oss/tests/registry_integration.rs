@@ -282,7 +282,7 @@ fn vehicle_routing_cvrp_builds_capacity_constrained_routes() {
     register_default_tools(&mut registry);
     let caps = OpenOnly;
 
-    let tag = unique_tag("wbtools_oss_vehicle_routing_cvrp_basic");
+    let tag = unique_tag("wbtools_oss_vehicle_routing_cvrp_capacity");
     let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
     let depot_path = std::env::temp_dir().join(format!("{tag}_depots.gpkg"));
     let stops_path = std::env::temp_dir().join(format!("{tag}_stops.gpkg"));
@@ -18678,6 +18678,115 @@ fn network_accessibility_metrics_computes_weighted_accessibility_by_cutoff_and_d
 }
 
 #[test]
+fn network_accessibility_metrics_respects_ft_tf_b_one_way_values() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_network_accessibility_one_way_ft_tf_b");
+    let network_path = std::env::temp_dir().join(format!("{tag}_net.gpkg"));
+    let origins_path = std::env::temp_dir().join(format!("{tag}_ori.gpkg"));
+    let destinations_path = std::env::temp_dir().join(format!("{tag}_dst.gpkg"));
+    let output_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    // Build a star-like local network around node B to validate FT/TF/B behavior.
+    let mut network = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    network.schema.add_field(FieldDef::new("DIR", FieldType::Text));
+
+    // A->B is FT, so B cannot traverse to A.
+    network
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[("DIR", FieldValue::Text("FT".to_string()))],
+        )
+        .expect("add FT edge");
+    // B->C is FT, so B can traverse to C.
+    network
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(2.0, 0.0)])),
+            &[("DIR", FieldValue::Text("FT".to_string()))],
+        )
+        .expect("add forward FT edge");
+    // D->B is TF, so traversal B->D is allowed (reverse direction).
+    network
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 1.0), Coord::xy(1.0, 0.0)])),
+            &[("DIR", FieldValue::Text("TF".to_string()))],
+        )
+        .expect("add TF edge");
+    // B<->E is bidirectional.
+    network
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(1.0, -1.0)])),
+            &[("DIR", FieldValue::Text("B".to_string()))],
+        )
+        .expect("add B edge");
+    wbvector::write(&network, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut origins = Layer::new("origins")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
+        .expect("add origin at B");
+    wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage).expect("write origins");
+
+    let mut destinations = Layer::new("destinations")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add destination A");
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
+        .expect("add destination C");
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(1.0, 1.0))), &[])
+        .expect("add destination D");
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(1.0, -1.0))), &[])
+        .expect("add destination E");
+    wbvector::write(&destinations, &destinations_path, VectorFormat::GeoPackage)
+        .expect("write destinations");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert(
+        "destinations".to_string(),
+        json!(destinations_path.to_string_lossy().to_string()),
+    );
+    args.insert("one_way_field".to_string(), json!("DIR"));
+    args.insert("max_snap_distance".to_string(), json!(0.25));
+    args.insert("output".to_string(), json!(output_path.to_string_lossy().to_string()));
+    registry
+        .run("network_accessibility_metrics", &args, &context(&caps))
+        .expect("network_accessibility_metrics with FT/TF/B run");
+
+    let out = wbvector::read(&output_path).expect("read accessibility output");
+    assert_eq!(out.features.len(), 1, "expected one origin feature");
+
+    let acc_idx = out.schema.field_index("ACCESSIBILITY").expect("ACCESSIBILITY field");
+    let accessibility = match &out.features[0].attributes[acc_idx] {
+        wbvector::FieldValue::Float(v) => *v,
+        wbvector::FieldValue::Integer(v) => *v as f64,
+        other => panic!("expected numeric ACCESSIBILITY, got {:?}", other),
+    };
+
+    // Reachable: C (FT from B), D (TF reverse), E (B). Unreachable: A.
+    assert_eq!(accessibility, 3.0, "expected exactly 3 reachable destinations");
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&origins_path);
+    let _ = std::fs::remove_file(&destinations_path);
+    let _ = std::fs::remove_file(&output_path);
+}
+
+#[test]
 fn od_sensitivity_analysis_computes_perturbed_od_costs_with_variance() {
     use wbvector::{Coord, Geometry, Layer, VectorFormat};
 
@@ -19408,6 +19517,84 @@ fn shortest_path_network_respects_one_way_field_direction() {
 }
 
 #[test]
+fn shortest_path_network_supports_ft_tf_b_one_way_values() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_shortest_path_network_ft_tf_b");
+    let input_path = std::env::temp_dir().join(format!("{tag}_in.gpkg"));
+    let out_ft_path = std::env::temp_dir().join(format!("{tag}_ft_out.gpkg"));
+    let out_tf_path = std::env::temp_dir().join(format!("{tag}_tf_out.gpkg"));
+    let out_b_forward_path = std::env::temp_dir().join(format!("{tag}_b_forward_out.gpkg"));
+    let out_b_reverse_path = std::env::temp_dir().join(format!("{tag}_b_reverse_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines.schema.add_field(FieldDef::new("DIR", FieldType::Text));
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[("DIR", FieldValue::Text("FT".to_string()))],
+        )
+        .expect("add FT component");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(10.0, 0.0), Coord::xy(11.0, 0.0)])),
+            &[("DIR", FieldValue::Text("TF".to_string()))],
+        )
+        .expect("add TF component");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(20.0, 0.0), Coord::xy(21.0, 0.0)])),
+            &[("DIR", FieldValue::Text("B".to_string()))],
+        )
+        .expect("add B component");
+    wbvector::write(&lines, &input_path, VectorFormat::GeoPackage).expect("write network");
+
+    let run_shortest = |start_x: f64, end_x: f64, output_path: &std::path::Path| {
+        let mut args = ToolArgs::new();
+        args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+        args.insert("start_x".to_string(), json!(start_x));
+        args.insert("start_y".to_string(), json!(0.0));
+        args.insert("end_x".to_string(), json!(end_x));
+        args.insert("end_y".to_string(), json!(0.0));
+        args.insert("one_way_field".to_string(), json!("DIR"));
+        args.insert("max_snap_distance".to_string(), json!(0.25));
+        args.insert("output".to_string(), json!(output_path.to_string_lossy().to_string()));
+        registry
+            .run("shortest_path_network", &args, &context(&caps))
+            .expect("shortest_path_network run")
+    };
+
+    run_shortest(0.0, 1.0, &out_ft_path);
+    run_shortest(11.0, 10.0, &out_tf_path);
+    run_shortest(20.0, 21.0, &out_b_forward_path);
+    run_shortest(21.0, 20.0, &out_b_reverse_path);
+
+    for output_path in [&out_ft_path, &out_tf_path, &out_b_forward_path, &out_b_reverse_path] {
+        let out = wbvector::read(output_path).expect("read shortest path output");
+        assert_eq!(out.features.len(), 1);
+        let cost_idx = out.schema.field_index("COST").expect("COST field");
+        let cost = match &out.features[0].attributes[cost_idx] {
+            FieldValue::Float(v) => *v,
+            FieldValue::Integer(v) => *v as f64,
+            other => panic!("expected numeric COST, got {:?}", other),
+        };
+        assert!((cost - 1.0).abs() < 1.0e-9, "expected one-unit cost, got {}", cost);
+    }
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&out_ft_path);
+    let _ = std::fs::remove_file(&out_tf_path);
+    let _ = std::fs::remove_file(&out_b_forward_path);
+    let _ = std::fs::remove_file(&out_b_reverse_path);
+}
+
+#[test]
 fn shortest_path_network_respects_blocked_field_edges() {
     use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
 
@@ -20020,6 +20207,106 @@ fn network_service_area_mode_speed_overrides_change_reachability() {
 
     let out = wbvector::read(&out_path).expect("read service area output");
     assert_eq!(out.features.len(), 3, "expected speed override to make third node reachable within max_cost");
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&origins_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn network_service_area_respects_ft_tf_b_one_way_values() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_network_service_area_one_way_ft_tf_b");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let origins_path = std::env::temp_dir().join(format!("{tag}_origins.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines.schema.add_field(FieldDef::new("DIR", FieldType::Text));
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[("DIR", FieldValue::Text("FT".to_string()))],
+        )
+        .expect("add FT edge 1");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(2.0, 0.0)])),
+            &[("DIR", FieldValue::Text("FT".to_string()))],
+        )
+        .expect("add FT edge 2");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(2.0, 0.0), Coord::xy(3.0, 0.0)])),
+            &[("DIR", FieldValue::Text("FT".to_string()))],
+        )
+        .expect("add FT edge 3");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(2.0, 1.0), Coord::xy(2.0, 0.0)])),
+            &[("DIR", FieldValue::Text("TF".to_string()))],
+        )
+        .expect("add TF edge");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(2.0, 0.0), Coord::xy(2.0, -1.0)])),
+            &[("DIR", FieldValue::Text("B".to_string()))],
+        )
+        .expect("add bidirectional edge");
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut origins = Layer::new("origins")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add origin");
+    wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage).expect("write origins");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert("max_cost".to_string(), json!(3.1));
+    args.insert("one_way_field".to_string(), json!("DIR"));
+    args.insert("output_mode".to_string(), json!("nodes"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("network_service_area", &args, &context(&caps))
+        .expect("network_service_area run");
+
+    let out = wbvector::read(&out_path).expect("read service area output");
+    assert_eq!(out.features.len(), 6, "expected six reachable nodes along the directed chain and branches");
+
+    let mut reachability = std::collections::HashSet::<(i64, i64)>::new();
+    for feature in &out.features {
+        let coord = match feature.geometry.as_ref().expect("point geometry") {
+            Geometry::Point(coord) => coord,
+            other => panic!("expected point geometry, got {:?}", other),
+        };
+        let key = ((coord.x * 1.0e9).round() as i64, (coord.y * 1.0e9).round() as i64);
+        reachability.insert(key);
+    }
+
+    let p0 = ((0.0_f64 * 1.0e9).round() as i64, (0.0_f64 * 1.0e9).round() as i64);
+    let p1 = ((1.0_f64 * 1.0e9).round() as i64, (0.0_f64 * 1.0e9).round() as i64);
+    let p2 = ((2.0_f64 * 1.0e9).round() as i64, (0.0_f64 * 1.0e9).round() as i64);
+    let p3 = ((3.0_f64 * 1.0e9).round() as i64, (0.0_f64 * 1.0e9).round() as i64);
+    let p_up = ((2.0_f64 * 1.0e9).round() as i64, (1.0_f64 * 1.0e9).round() as i64);
+    let p_down = ((2.0_f64 * 1.0e9).round() as i64, (-1.0_f64 * 1.0e9).round() as i64);
+
+    assert!(reachability.contains(&p0));
+    assert!(reachability.contains(&p1));
+    assert!(reachability.contains(&p2));
+    assert!(reachability.contains(&p3));
+    assert!(reachability.contains(&p_up), "expected TF branch to be reachable from C");
+    assert!(reachability.contains(&p_down), "expected bidirectional branch to be reachable from C");
 
     let _ = std::fs::remove_file(&network_path);
     let _ = std::fs::remove_file(&origins_path);
@@ -22411,14 +22698,14 @@ fn network_od_cost_matrix_uses_edge_cost_field_multiplier() {
 }
 
 #[test]
-fn network_od_cost_matrix_marks_unreachable_with_one_way_field() {
+fn network_od_cost_matrix_supports_ft_tf_b_one_way_values() {
     use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
 
     let mut registry = ToolRegistry::new();
     register_default_tools(&mut registry);
     let caps = OpenOnly;
 
-    let tag = unique_tag("wbtools_oss_network_od_matrix_one_way_field");
+    let tag = unique_tag("wbtools_oss_network_od_matrix_ft_tf_b");
     let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
     let origins_path = std::env::temp_dir().join(format!("{tag}_origins.gpkg"));
     let destinations_path = std::env::temp_dir().join(format!("{tag}_destinations.gpkg"));
@@ -22427,35 +22714,59 @@ fn network_od_cost_matrix_marks_unreachable_with_one_way_field() {
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
         .with_epsg(4326);
-    lines.schema.add_field(FieldDef::new("ONEWAY", FieldType::Integer));
+    lines.schema.add_field(FieldDef::new("DIR", FieldType::Text));
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
-            &[("ONEWAY", FieldValue::Integer(1))],
+            &[("DIR", FieldValue::Text("FT".to_string()))],
         )
-        .expect("add one-way edge");
+        .expect("add FT edge");
     lines
         .add_feature(
-            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(2.0, 0.0)])),
-            &[("ONEWAY", FieldValue::Integer(0))],
+            Some(Geometry::line_string(vec![Coord::xy(10.0, 0.0), Coord::xy(11.0, 0.0)])),
+            &[("DIR", FieldValue::Text("TF".to_string()))],
         )
-        .expect("add two-way edge");
+        .expect("add TF edge");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(20.0, 0.0), Coord::xy(21.0, 0.0)])),
+            &[("DIR", FieldValue::Text("B".to_string()))],
+        )
+        .expect("add B edge");
     wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
         .with_epsg(4326);
     origins
-        .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
-        .expect("add origin");
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add FT origin");
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(11.0, 0.0))), &[])
+        .expect("add TF origin");
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(20.0, 0.0))), &[])
+        .expect("add B forward origin");
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(21.0, 0.0))), &[])
+        .expect("add B reverse origin");
     wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage).expect("write origins");
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
         .with_epsg(4326);
     destinations
-        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
-        .expect("add destination");
+        .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
+        .expect("add FT destination");
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(10.0, 0.0))), &[])
+        .expect("add TF destination");
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(21.0, 0.0))), &[])
+        .expect("add B forward destination");
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(20.0, 0.0))), &[])
+        .expect("add B reverse destination");
     wbvector::write(&destinations, &destinations_path, VectorFormat::GeoPackage)
         .expect("write destinations");
 
@@ -22463,7 +22774,7 @@ fn network_od_cost_matrix_marks_unreachable_with_one_way_field() {
     args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
     args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
     args.insert("destinations".to_string(), json!(destinations_path.to_string_lossy().to_string()));
-    args.insert("one_way_field".to_string(), json!("ONEWAY"));
+    args.insert("one_way_field".to_string(), json!("DIR"));
     args.insert("output".to_string(), json!(out_csv.to_string_lossy().to_string()));
     registry
         .run("network_od_cost_matrix", &args, &context(&caps))
@@ -22471,10 +22782,50 @@ fn network_od_cost_matrix_marks_unreachable_with_one_way_field() {
 
     let csv = std::fs::read_to_string(&out_csv).expect("read od csv");
     let lines: Vec<&str> = csv.lines().collect();
-    assert_eq!(lines.len(), 2, "expected header + one OD row");
-    let parts: Vec<&str> = lines[1].split(',').collect();
-    assert_eq!(parts[3], "false", "expected unreachable OD pair due to one-way edge");
-    assert!(parts[2].is_empty(), "cost should be empty for unreachable OD row");
+    assert_eq!(lines.len(), 17, "expected header + 16 OD rows");
+
+    let mut rows = std::collections::HashMap::<(i64, i64), (bool, Option<f64>)>::new();
+    for row in lines.iter().skip(1) {
+        let parts: Vec<&str> = row.split(',').collect();
+        assert_eq!(parts.len(), 6, "unexpected OD CSV row format: {}", row);
+        let origin_fid: i64 = parts[0].parse().expect("parse origin_fid");
+        let destination_fid: i64 = parts[1].parse().expect("parse destination_fid");
+        let reachable = parts[3] == "true";
+        let cost = if parts[2].is_empty() {
+            None
+        } else {
+            Some(parts[2].parse().expect("parse cost"))
+        };
+        rows.insert((origin_fid, destination_fid), (reachable, cost));
+    }
+
+    let expected_reachable = std::collections::HashMap::from([
+        ((1i64, 1i64), 1.0),
+        ((2, 2), 1.0),
+        ((3, 3), 1.0),
+        ((4, 4), 1.0),
+        ((3, 4), 0.0),
+        ((4, 3), 0.0),
+    ]);
+    for origin_fid in 1..=4 {
+        for destination_fid in 1..=4 {
+            let (reachable, cost) = rows
+                .get(&(origin_fid, destination_fid))
+                .copied()
+                .expect("missing OD row");
+            if let Some(expected_cost) = expected_reachable.get(&(origin_fid, destination_fid)) {
+                assert!(reachable, "expected reachable pair ({origin_fid}, {destination_fid})");
+                assert!(
+                    cost.map(|value| (value - expected_cost).abs() < 1.0e-9).unwrap_or(false),
+                    "expected cost {} for reachable pair ({origin_fid}, {destination_fid})",
+                    expected_cost
+                );
+            } else {
+                assert!(!reachable, "expected unreachable pair ({origin_fid}, {destination_fid})");
+                assert!(cost.is_none(), "cost should be empty for unreachable pair ({origin_fid}, {destination_fid})");
+            }
+        }
+    }
 
     let _ = std::fs::remove_file(&network_path);
     let _ = std::fs::remove_file(&origins_path);
@@ -22640,6 +22991,128 @@ fn network_od_cost_matrix_marks_unreachable_with_barriers() {
     let _ = std::fs::remove_file(&destinations_path);
     let _ = std::fs::remove_file(&barriers_path);
     let _ = std::fs::remove_file(&out_csv);
+}
+
+#[test]
+fn closest_facility_network_supports_ft_tf_b_one_way_values() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_closest_facility_network_ft_tf_b");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let incidents_path = std::env::temp_dir().join(format!("{tag}_incidents.gpkg"));
+    let facilities_path = std::env::temp_dir().join(format!("{tag}_facilities.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines.schema.add_field(FieldDef::new("DIR", FieldType::Text));
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[("DIR", FieldValue::Text("FT".to_string()))],
+        )
+        .expect("add FT edge");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(10.0, 0.0), Coord::xy(11.0, 0.0)])),
+            &[("DIR", FieldValue::Text("TF".to_string()))],
+        )
+        .expect("add TF edge");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(20.0, 0.0), Coord::xy(21.0, 0.0)])),
+            &[("DIR", FieldValue::Text("B".to_string()))],
+        )
+        .expect("add B edge");
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut incidents = Layer::new("incidents")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    incidents
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add FT incident");
+    incidents
+        .add_feature(Some(Geometry::Point(Coord::xy(11.0, 0.0))), &[])
+        .expect("add TF incident");
+    incidents
+        .add_feature(Some(Geometry::Point(Coord::xy(21.0, 0.0))), &[])
+        .expect("add B reverse incident");
+    wbvector::write(&incidents, &incidents_path, VectorFormat::GeoPackage).expect("write incidents");
+
+    let mut facilities = Layer::new("facilities")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    facilities
+        .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
+        .expect("add FT facility");
+    facilities
+        .add_feature(Some(Geometry::Point(Coord::xy(10.0, 0.0))), &[])
+        .expect("add TF facility");
+    facilities
+        .add_feature(Some(Geometry::Point(Coord::xy(20.0, 0.0))), &[])
+        .expect("add B reverse facility");
+    wbvector::write(&facilities, &facilities_path, VectorFormat::GeoPackage).expect("write facilities");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("incidents".to_string(), json!(incidents_path.to_string_lossy().to_string()));
+    args.insert("facilities".to_string(), json!(facilities_path.to_string_lossy().to_string()));
+    args.insert("one_way_field".to_string(), json!("DIR"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("closest_facility_network", &args, &context(&caps))
+        .expect("closest_facility_network run");
+
+    let out = wbvector::read(&out_path).expect("read closest facility output");
+    assert_eq!(out.features.len(), 3, "expected one route per incident");
+
+    let incident_idx = out.schema.field_index("INCIDENT_FID").expect("INCIDENT_FID field");
+    let facility_idx = out.schema.field_index("FACILITY_FID").expect("FACILITY_FID field");
+    let cost_idx = out.schema.field_index("COST").expect("COST field");
+
+    let mut seen = std::collections::HashMap::<i64, (i64, f64)>::new();
+    for feature in &out.features {
+        let incident_fid = match &feature.attributes[incident_idx] {
+            FieldValue::Integer(v) => *v,
+            other => panic!("expected integer INCIDENT_FID, got {:?}", other),
+        };
+        let facility_fid = match &feature.attributes[facility_idx] {
+            FieldValue::Integer(v) => *v,
+            other => panic!("expected integer FACILITY_FID, got {:?}", other),
+        };
+        let cost = match &feature.attributes[cost_idx] {
+            FieldValue::Float(v) => *v,
+            FieldValue::Integer(v) => *v as f64,
+            other => panic!("expected numeric COST, got {:?}", other),
+        };
+        seen.insert(incident_fid, (facility_fid, cost));
+    }
+
+    for incident_fid in 1..=3 {
+        let (facility_fid, cost) = seen
+            .get(&incident_fid)
+            .copied()
+            .expect("missing incident route");
+        let expected_facility = match incident_fid {
+            1 => 1,
+            2 => 2,
+            3 => 3,
+            _ => unreachable!(),
+        };
+        assert_eq!(facility_fid, expected_facility, "unexpected facility chosen for incident {}", incident_fid);
+        assert!((cost - 1.0).abs() < 1.0e-9, "expected unit-cost route for incident {}", incident_fid);
+    }
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&incidents_path);
+    let _ = std::fs::remove_file(&facilities_path);
+    let _ = std::fs::remove_file(&out_path);
 }
 
 #[test]
@@ -23325,6 +23798,142 @@ fn network_routes_from_od_outputs_route_geometry_and_cost() {
             assert!((coords[2].x - 2.0).abs() < 1.0e-9);
         }
         other => panic!("expected linestring route geometry, got {:?}", other),
+    }
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&origins_path);
+    let _ = std::fs::remove_file(&destinations_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn network_routes_from_od_supports_ft_tf_b_one_way_values() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_network_routes_from_od_ft_tf_b");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let origins_path = std::env::temp_dir().join(format!("{tag}_origins.gpkg"));
+    let destinations_path = std::env::temp_dir().join(format!("{tag}_destinations.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_routes.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines.schema.add_field(FieldDef::new("DIR", FieldType::Text));
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[("DIR", FieldValue::Text("FT".to_string()))],
+        )
+        .expect("add FT component");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(10.0, 0.0), Coord::xy(11.0, 0.0)])),
+            &[("DIR", FieldValue::Text("TF".to_string()))],
+        )
+        .expect("add TF component");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(20.0, 0.0), Coord::xy(21.0, 0.0)])),
+            &[("DIR", FieldValue::Text("B".to_string()))],
+        )
+        .expect("add B component");
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut origins = Layer::new("origins")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add origin FT");
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(11.0, 0.0))), &[])
+        .expect("add origin TF");
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(20.0, 0.0))), &[])
+        .expect("add origin B forward");
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(21.0, 0.0))), &[])
+        .expect("add origin B reverse");
+    wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage).expect("write origins");
+
+    let mut destinations = Layer::new("destinations")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
+        .expect("add destination FT");
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(10.0, 0.0))), &[])
+        .expect("add destination TF");
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(21.0, 0.0))), &[])
+        .expect("add destination B forward");
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(20.0, 0.0))), &[])
+        .expect("add destination B reverse");
+    wbvector::write(&destinations, &destinations_path, VectorFormat::GeoPackage)
+        .expect("write destinations");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert("destinations".to_string(), json!(destinations_path.to_string_lossy().to_string()));
+    args.insert("one_way_field".to_string(), json!("DIR"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("network_routes_from_od", &args, &context(&caps))
+        .expect("network_routes_from_od run");
+
+    let out = wbvector::read(&out_path).expect("read route output");
+    assert_eq!(out.features.len(), 6, "expected all reachable OD pairs within each component");
+
+    let origin_idx = out.schema.field_index("ORIGIN_FID").expect("ORIGIN_FID field");
+    let dest_idx = out.schema.field_index("DEST_FID").expect("DEST_FID field");
+    let cost_idx = out.schema.field_index("COST").expect("COST field");
+
+    let mut seen = std::collections::HashMap::<(i64, i64), f64>::new();
+    for feature in &out.features {
+        let origin_fid = match &feature.attributes[origin_idx] {
+            FieldValue::Integer(v) => *v,
+            other => panic!("expected integer ORIGIN_FID, got {:?}", other),
+        };
+        let dest_fid = match &feature.attributes[dest_idx] {
+            FieldValue::Integer(v) => *v,
+            other => panic!("expected integer DEST_FID, got {:?}", other),
+        };
+        let cost = match &feature.attributes[cost_idx] {
+            FieldValue::Float(v) => *v,
+            FieldValue::Integer(v) => *v as f64,
+            other => panic!("expected numeric COST, got {:?}", other),
+        };
+        seen.insert((origin_fid, dest_fid), cost);
+    }
+
+    let expected = [
+        ((1, 1), 1.0, "expected FT route A->B"),
+        ((2, 2), 1.0, "expected TF route D->C"),
+        ((3, 3), 1.0, "expected B route E->F"),
+        ((4, 4), 1.0, "expected B route F->E"),
+        ((3, 4), 0.0, "expected zero-cost same-node route from E to E"),
+        ((4, 3), 0.0, "expected zero-cost same-node route from F to F"),
+    ];
+    for ((origin_fid, dest_fid), expected_cost, message) in expected {
+        let actual_cost = seen
+            .get(&(origin_fid, dest_fid))
+            .copied()
+            .unwrap_or_else(|| panic!("{}", message));
+        assert!(
+            (actual_cost - expected_cost).abs() < 1.0e-9,
+            "{}: expected {}, got {}",
+            message,
+            expected_cost,
+            actual_cost
+        );
     }
 
     let _ = std::fs::remove_file(&network_path);

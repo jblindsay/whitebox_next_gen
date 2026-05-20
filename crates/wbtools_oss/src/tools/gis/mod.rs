@@ -27269,6 +27269,60 @@ fn parse_one_way_flag(value: &wbvector::FieldValue) -> Result<bool, ToolError> {
     parse_boolean_field_flag(value, "one_way_field")
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OneWayDirection {
+    Forward,
+    Reverse,
+    Bidirectional,
+}
+
+fn normalize_one_way_field_value(value: &wbvector::FieldValue) -> String {
+    match value {
+        wbvector::FieldValue::Text(text) => text.trim().to_ascii_lowercase(),
+        wbvector::FieldValue::Integer(v) => v.to_string(),
+        wbvector::FieldValue::Float(v) => v.to_string(),
+        wbvector::FieldValue::Boolean(v) => {
+            if *v {
+                "1".to_string()
+            } else {
+                "0".to_string()
+            }
+        }
+        wbvector::FieldValue::Date(text) | wbvector::FieldValue::DateTime(text) => {
+            text.trim().to_ascii_lowercase()
+        }
+        wbvector::FieldValue::Blob(_) | wbvector::FieldValue::Null => String::new(),
+    }
+}
+
+fn classify_one_way_direction(
+    value: &wbvector::FieldValue,
+    forward_value: Option<&str>,
+    reverse_value: Option<&str>,
+) -> OneWayDirection {
+    let normalized = normalize_one_way_field_value(value);
+    if let Some(forward) = forward_value {
+        if normalized == forward.trim().to_ascii_lowercase() {
+            return OneWayDirection::Forward;
+        }
+    }
+    if let Some(reverse) = reverse_value {
+        if normalized == reverse.trim().to_ascii_lowercase() {
+            return OneWayDirection::Reverse;
+        }
+    }
+    match normalized.as_str() {
+        "ft" | "forward" | "fwd" | "oneway" | "one_way" | "1" | "true" | "t" | "yes" | "y" => {
+            OneWayDirection::Forward
+        }
+        "tf" | "reverse" | "backward" | "back" => OneWayDirection::Reverse,
+        "b" | "both" | "bidirectional" | "two_way" | "twoway" | "0" | "false" | "f" | "no" | "n" => {
+            OneWayDirection::Bidirectional
+        }
+        _ => OneWayDirection::Bidirectional,
+    }
+}
+
 fn validate_network_node_cost_args(args: &ToolArgs) -> Result<(), ToolError> {
     let node_cost_points = parse_optional_string_arg(args, "node_cost_points");
     let node_cost_field = parse_optional_string_arg(args, "node_cost_field");
@@ -28005,6 +28059,8 @@ fn build_line_network_graph(
     snap_tolerance: f64,
     edge_cost_field: Option<&str>,
     one_way_field: Option<&str>,
+    one_way_forward_value: Option<&str>,
+    one_way_reverse_value: Option<&str>,
     blocked_field: Option<&str>,
     temporal_cost_options: Option<&NetworkTemporalCostOptions>,
     node_cost_options: Option<&NetworkNodeCostOptions>,
@@ -28099,15 +28155,6 @@ fn build_line_network_graph(
             } else {
                 base_cost
             };
-            let is_one_way = if let Some(idx) = one_way_idx {
-                let value = input.features[line.source_index]
-                    .attributes
-                    .get(idx)
-                    .ok_or_else(|| ToolError::Execution("one_way_field missing on feature".to_string()))?;
-                parse_one_way_flag(value)?
-            } else {
-                false
-            };
             let u = intern_network_node(
                 &mut node_map,
                 &mut nodes,
@@ -28122,9 +28169,22 @@ fn build_line_network_graph(
                 b,
                 snap_tolerance,
             );
-            adjacency[u].push((v, cost));
-            if !is_one_way {
-                adjacency[v].push((u, cost));
+            let direction = if let Some(idx) = one_way_idx {
+                let value = input.features[line.source_index]
+                    .attributes
+                    .get(idx)
+                    .ok_or_else(|| ToolError::Execution("one_way_field missing on feature".to_string()))?;
+                classify_one_way_direction(value, one_way_forward_value, one_way_reverse_value)
+            } else {
+                OneWayDirection::Bidirectional
+            };
+            match direction {
+                OneWayDirection::Forward => adjacency[u].push((v, cost)),
+                OneWayDirection::Reverse => adjacency[v].push((u, cost)),
+                OneWayDirection::Bidirectional => {
+                    adjacency[u].push((v, cost));
+                    adjacency[v].push((u, cost));
+                }
             }
         }
     }
@@ -28333,6 +28393,8 @@ fn build_line_network_graph_mode_aware(
     snap_tolerance: f64,
     edge_cost_field: Option<&str>,
     one_way_field: Option<&str>,
+    one_way_forward_value: Option<&str>,
+    one_way_reverse_value: Option<&str>,
     blocked_field: Option<&str>,
     temporal_cost_options: Option<&NetworkTemporalCostOptions>,
     node_cost_options: Option<&NetworkNodeCostOptions>,
@@ -28463,16 +28525,6 @@ fn build_line_network_graph_mode_aware(
             } else {
                 base_cost
             };
-
-            let is_one_way = if let Some(idx) = one_way_idx {
-                let value = input.features[line.source_index]
-                    .attributes
-                    .get(idx)
-                    .ok_or_else(|| ToolError::Execution("one_way_field missing on feature".to_string()))?;
-                parse_one_way_flag(value)?
-            } else {
-                false
-            };
             let u = intern_network_node(
                 &mut node_map,
                 &mut nodes,
@@ -28487,9 +28539,22 @@ fn build_line_network_graph_mode_aware(
                 b,
                 snap_tolerance,
             );
-            adjacency[u].push((v, cost));
-            if !is_one_way {
-                adjacency[v].push((u, cost));
+            let direction = if let Some(idx) = one_way_idx {
+                let value = input.features[line.source_index]
+                    .attributes
+                    .get(idx)
+                    .ok_or_else(|| ToolError::Execution("one_way_field missing on feature".to_string()))?;
+                classify_one_way_direction(value, one_way_forward_value, one_way_reverse_value)
+            } else {
+                OneWayDirection::Bidirectional
+            };
+            match direction {
+                OneWayDirection::Forward => adjacency[u].push((v, cost)),
+                OneWayDirection::Reverse => adjacency[v].push((u, cost)),
+                OneWayDirection::Bidirectional => {
+                    adjacency[u].push((v, cost));
+                    adjacency[v].push((u, cost));
+                }
             }
         }
     }
@@ -29481,7 +29546,7 @@ impl Tool for ShortestPathNetworkTool {
                 ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
                 ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from start/end coordinates to nearest network node.", required: false },
                 ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
-                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (supports FT/TF/B plus legacy boolean values).", required: false },
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
                 ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
                 ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
@@ -29527,7 +29592,7 @@ impl Tool for ShortestPathNetworkTool {
                 ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
                 ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from start/end coordinates to nearest network node.".to_string(), required: false },
                 ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
-                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (supports FT/TF/B plus legacy boolean values).".to_string(), required: false },
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
                 ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
                 ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
@@ -29692,9 +29757,11 @@ impl Tool for ShortestPathNetworkTool {
             snap_tolerance,
             edge_cost_field,
             one_way_field,
+            None,
+            None,
             blocked_field,
             temporal_options.as_ref(),
-        node_cost_options.as_ref(),
+            node_cost_options.as_ref(),
         )?;
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
         if let Some(path) = turn_restrictions_csv {
@@ -30572,7 +30639,7 @@ impl Tool for NetworkCentralityMetricsTool {
                 ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
                 ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
                 ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
-                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (supports FT/TF/B plus legacy boolean values).", required: false },
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from graph construction (true/1/yes blocks).", required: false },
                 ToolParamSpec { name: "output", description: "Output point vector path.", required: true },
             ],
@@ -30596,7 +30663,7 @@ impl Tool for NetworkCentralityMetricsTool {
                 ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
                 ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
                 ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
-                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (supports FT/TF/B plus legacy boolean values).".to_string(), required: false },
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from graph construction (true/1/yes blocks).".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output point vector path.".to_string(), required: true },
             ],
@@ -30648,6 +30715,8 @@ impl Tool for NetworkCentralityMetricsTool {
             snap_tolerance,
             edge_cost_field,
             one_way_field,
+            None,
+            None,
             blocked_field,
             None,
             None,
@@ -30766,7 +30835,7 @@ impl Tool for NetworkAccessibilityMetricsTool {
                 ToolParamSpec { name: "decay_function", description: "Optional decay function: 'none' (default), 'linear', or 'exponential' for distance-weighted accessibility.", required: false },
                 ToolParamSpec { name: "decay_parameter", description: "Optional decay parameter (lambda for exponential, rate for linear).", required: false },
                 ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
-                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (supports FT/TF/B plus legacy boolean values).", required: false },
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
                 ToolParamSpec { name: "node_cost_points", description: "Optional point layer providing per-node entry costs (e.g., intersection delay).", required: false },
                 ToolParamSpec { name: "node_cost_field", description: "Numeric field in node_cost_points containing non-negative per-node costs.", required: false },
@@ -30803,7 +30872,7 @@ impl Tool for NetworkAccessibilityMetricsTool {
                 ToolParamDescriptor { name: "decay_function".to_string(), description: "Optional decay function: 'none' (default), 'linear', or 'exponential' for distance-weighted accessibility.".to_string(), required: false },
                 ToolParamDescriptor { name: "decay_parameter".to_string(), description: "Optional decay parameter (lambda for exponential, rate for linear).".to_string(), required: false },
                 ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
-                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (supports FT/TF/B plus legacy boolean values).".to_string(), required: false },
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
                 ToolParamDescriptor { name: "node_cost_points".to_string(), description: "Optional point layer providing per-node entry costs (e.g., intersection delay).".to_string(), required: false },
                 ToolParamDescriptor { name: "node_cost_field".to_string(), description: "Numeric field in node_cost_points containing non-negative per-node costs.".to_string(), required: false },
@@ -30914,6 +30983,8 @@ impl Tool for NetworkAccessibilityMetricsTool {
             snap_tolerance,
             edge_cost_field,
             one_way_field,
+            None,
+            None,
             blocked_field,
             None,
             node_cost_options.as_ref(),
@@ -31029,7 +31100,7 @@ impl Tool for OdSensitivityAnalysisTool {
                 ToolParamSpec { name: "monte_carlo_samples", description: "Number of Monte Carlo samples for perturbation analysis (default 1, max 100).", required: false },
                 ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
                 ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from origin/destination points to nearest network node.", required: false },
-                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges.", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (supports FT/TF/B plus legacy boolean values).", required: false },
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges.", required: false },
                 ToolParamSpec { name: "node_cost_points", description: "Optional point layer providing per-node entry costs (e.g., intersection delay).", required: false },
                 ToolParamSpec { name: "node_cost_field", description: "Numeric field in node_cost_points containing non-negative per-node costs.", required: false },
@@ -31066,7 +31137,7 @@ impl Tool for OdSensitivityAnalysisTool {
                 ToolParamDescriptor { name: "monte_carlo_samples".to_string(), description: "Number of Monte Carlo samples for perturbation analysis (default 1, max 100).".to_string(), required: false },
                 ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
                 ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from origin/destination points to nearest network node.".to_string(), required: false },
-                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges.".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (supports FT/TF/B plus legacy boolean values).".to_string(), required: false },
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges.".to_string(), required: false },
                 ToolParamDescriptor { name: "node_cost_points".to_string(), description: "Optional point layer providing per-node entry costs (e.g., intersection delay).".to_string(), required: false },
                 ToolParamDescriptor { name: "node_cost_field".to_string(), description: "Numeric field in node_cost_points containing non-negative per-node costs.".to_string(), required: false },
@@ -31173,6 +31244,8 @@ impl Tool for OdSensitivityAnalysisTool {
             snap_tolerance,
             Some(edge_cost_field),
             one_way_field,
+            None,
+            None,
             blocked_field,
             None,
             node_cost_options.as_ref(),
@@ -31442,7 +31515,7 @@ impl Tool for NetworkNodeDegreeTool {
         let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
         let output_path = parse_vector_path_arg(args, "output")?;
 
-        let graph = build_line_network_graph(&input, snap_tolerance, None, None, None, None, None)?;
+        let graph = build_line_network_graph(&input, snap_tolerance, None, None, None, None, None, None, None)?;
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(
                 "input network contains no usable line segments".to_string(),
@@ -31519,7 +31592,7 @@ impl Tool for NetworkServiceAreaTool {
                 ToolParamSpec { name: "mode_speed_overrides", description: "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12).", required: false },
                 ToolParamSpec { name: "allowed_modes", description: "Optional comma-separated allow-list of modes to include when mode_field is provided.", required: false },
                 ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
-                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (supports FT/TF/B plus legacy boolean values).", required: false },
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
                 ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
                 ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
@@ -31572,7 +31645,7 @@ impl Tool for NetworkServiceAreaTool {
                 ToolParamDescriptor { name: "mode_speed_overrides".to_string(), description: "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12).".to_string(), required: false },
                 ToolParamDescriptor { name: "allowed_modes".to_string(), description: "Optional comma-separated allow-list of modes to include when mode_field is provided.".to_string(), required: false },
                 ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
-                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (supports FT/TF/B plus legacy boolean values).".to_string(), required: false },
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
                 ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
                 ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
@@ -31800,6 +31873,8 @@ impl Tool for NetworkServiceAreaTool {
                 snap_tolerance,
                 edge_cost_field,
                 one_way_field,
+                None,
+                None,
                 blocked_field,
                 temporal_options.as_ref(),
                 node_cost_options.as_ref(),
@@ -31814,6 +31889,8 @@ impl Tool for NetworkServiceAreaTool {
                 snap_tolerance,
                 edge_cost_field,
                 one_way_field,
+                None,
+                None,
                 blocked_field,
                 temporal_options.as_ref(),
                 node_cost_options.as_ref(),
@@ -32387,6 +32464,61 @@ impl Tool for NetworkServiceAreaTool {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classify_one_way_direction_supports_forward_reverse_and_bidirectional() {
+        let forward = Some("FT");
+        let reverse = Some("TF");
+
+        assert_eq!(
+            classify_one_way_direction(&wbvector::FieldValue::Text("FT".to_string()), forward, reverse),
+            OneWayDirection::Forward
+        );
+        assert_eq!(
+            classify_one_way_direction(&wbvector::FieldValue::Text("TF".to_string()), forward, reverse),
+            OneWayDirection::Reverse
+        );
+        assert_eq!(
+            classify_one_way_direction(&wbvector::FieldValue::Text("B".to_string()), forward, reverse),
+            OneWayDirection::Bidirectional
+        );
+        assert_eq!(
+            classify_one_way_direction(&wbvector::FieldValue::Null, forward, reverse),
+            OneWayDirection::Bidirectional
+        );
+    }
+
+    #[test]
+    fn classify_one_way_direction_is_case_and_whitespace_tolerant() {
+        let forward = Some("forward");
+        let reverse = Some("reverse");
+
+        assert_eq!(
+            classify_one_way_direction(&wbvector::FieldValue::Text("  FORWARD  ".to_string()), forward, reverse),
+            OneWayDirection::Forward
+        );
+        assert_eq!(
+            classify_one_way_direction(&wbvector::FieldValue::Text(" reverse ".to_string()), forward, reverse),
+            OneWayDirection::Reverse
+        );
+    }
+
+    #[test]
+    fn classify_one_way_direction_supports_legacy_boolean_form() {
+        assert_eq!(
+            classify_one_way_direction(&wbvector::FieldValue::Boolean(true), None, None),
+            OneWayDirection::Forward
+        );
+        assert_eq!(
+            classify_one_way_direction(&wbvector::FieldValue::Boolean(false), None, None),
+            OneWayDirection::Bidirectional
+        );
+    }
+}
+
 impl Tool for MapMatchingV1Tool {
     fn metadata(&self) -> ToolMetadata {
         ToolMetadata {
@@ -32404,7 +32536,7 @@ impl Tool for MapMatchingV1Tool {
                 ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
                 ToolParamSpec { name: "max_snap_distance", description: "Optional max distance for snapping trajectory points to network nodes.", required: false },
                 ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
-                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (supports FT/TF/B plus legacy boolean values).", required: false },
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
                 ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
                 ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
@@ -32450,7 +32582,7 @@ impl Tool for MapMatchingV1Tool {
                 ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
                 ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance for snapping trajectory points to network nodes.".to_string(), required: false },
                 ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
-                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (supports FT/TF/B plus legacy boolean values).".to_string(), required: false },
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
                 ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
                 ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
@@ -32609,6 +32741,8 @@ impl Tool for MapMatchingV1Tool {
             snap_tolerance,
             edge_cost_field,
             one_way_field,
+            None,
+            None,
             blocked_field,
             None,
             None,
@@ -32989,7 +33123,7 @@ impl Tool for NetworkTopologyAuditTool {
             params: vec![
                 ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
                 ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
-                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way edges for directional analysis.", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way edges (supports FT/TF/B plus legacy boolean values).", required: false },
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked edges to exclude from analysis.", required: false },
                 ToolParamSpec { name: "report", description: "Optional JSON output path for the audit summary report.", required: false },
                 ToolParamSpec { name: "output", description: "Output point vector path for per-node diagnostics.", required: true },
@@ -33013,7 +33147,7 @@ impl Tool for NetworkTopologyAuditTool {
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
                 ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
-                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way edges for directional analysis.".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way edges (supports FT/TF/B plus legacy boolean values).".to_string(), required: false },
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked edges to exclude from analysis.".to_string(), required: false },
                 ToolParamDescriptor { name: "report".to_string(), description: "Optional JSON output path for the audit summary report.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output point vector path for per-node diagnostics.".to_string(), required: true },
@@ -33063,7 +33197,7 @@ impl Tool for NetworkTopologyAuditTool {
         let report_path = parse_optional_string_arg(args, "report");
         let output_path = parse_vector_path_arg(args, "output")?;
 
-        let graph = build_line_network_graph(&input, snap_tolerance, None, one_way_field, blocked_field, None, None)?;
+        let graph = build_line_network_graph(&input, snap_tolerance, None, one_way_field, None, None, blocked_field, None, None)?;
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(
                 "input network contains no usable line segments".to_string(),
@@ -33362,7 +33496,7 @@ impl Tool for NetworkOdCostMatrixTool {
                 ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
                 ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from origin/destination points to nearest network node.", required: false },
                 ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
-                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (supports FT/TF/B plus legacy boolean values).", required: false },
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
                 ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
                 ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
@@ -33407,7 +33541,7 @@ impl Tool for NetworkOdCostMatrixTool {
                 ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
                 ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from origin/destination points to nearest network node.".to_string(), required: false },
                 ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
-                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (supports FT/TF/B plus legacy boolean values).".to_string(), required: false },
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
                 ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
                 ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
@@ -33582,6 +33716,8 @@ impl Tool for NetworkOdCostMatrixTool {
             snap_tolerance,
             edge_cost_field,
             one_way_field,
+            None,
+            None,
             blocked_field,
             temporal_options.as_ref(),
             node_cost_options.as_ref(),
@@ -33749,7 +33885,7 @@ impl Tool for NetworkConnectedComponentsTool {
         let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
         let output_path = parse_vector_path_arg(args, "output")?;
 
-        let graph = build_line_network_graph(&input, snap_tolerance, None, None, None, None, None)?;
+        let graph = build_line_network_graph(&input, snap_tolerance, None, None, None, None, None, None, None)?;
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(
                 "input network contains no usable line segments".to_string(),
@@ -33823,7 +33959,7 @@ impl Tool for NetworkRoutesFromOdTool {
                 ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
                 ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from origin/destination points to nearest network node.", required: false },
                 ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
-                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (supports FT/TF/B plus legacy boolean values).", required: false },
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
                 ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
                 ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
@@ -33868,7 +34004,7 @@ impl Tool for NetworkRoutesFromOdTool {
                 ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
                 ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from origin/destination points to nearest network node.".to_string(), required: false },
                 ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
-                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (supports FT/TF/B plus legacy boolean values).".to_string(), required: false },
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
                 ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
                 ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
@@ -34040,6 +34176,8 @@ impl Tool for NetworkRoutesFromOdTool {
             snap_tolerance,
             edge_cost_field,
             one_way_field,
+            None,
+            None,
             blocked_field,
             temporal_options.as_ref(),
             node_cost_options.as_ref(),
@@ -34411,6 +34549,8 @@ impl Tool for ClosestFacilityNetworkTool {
             snap_tolerance,
             edge_cost_field,
             one_way_field,
+            None,
+            None,
             blocked_field,
             temporal_options.as_ref(),
             node_cost_options.as_ref(),
@@ -34903,6 +35043,8 @@ impl Tool for LocationAllocationNetworkTool {
             snap_tolerance,
             edge_cost_field,
             one_way_field,
+            None,
+            None,
             blocked_field,
             temporal_options.as_ref(),
             node_cost_options.as_ref(),
@@ -40019,6 +40161,8 @@ impl Tool for KShortestPathsNetworkTool {
             snap_tolerance,
             edge_cost_field,
             one_way_field,
+            None,
+            None,
             blocked_field,
             temporal_options.as_ref(),
             node_cost_options.as_ref(),

@@ -236,6 +236,10 @@ catchment = wbe.vector.network_analysis.network_service_area(
 wbe.write_vector(catchment, 'fire_catchment_5min.shp')
 ```
 
+If your network encodes one-way streets, pass `one_way_field` and use FT/TF/B
+style values when available (`FT` = first-to-last only, `TF` = last-to-first
+only, `B` = bidirectional). Legacy boolean-style values are still accepted.
+
 To model rush-hour conditions, pass a temporal speed profile and apply turn
 penalties. Edge speeds are scaled by the profile multipliers at the specified
 departure time.
@@ -294,6 +298,9 @@ wbe.write_vector(routes_to_hosp, 'routes_to_hospital.shp')
 # Output carries INCIDENT_FID, FACILITY_FID, and COST fields per route.
 ```
 
+If your network uses explicit one-way encodings, `closest_facility_network()`
+accepts FT/TF/B values as well as legacy boolean-style one-way fields.
+
 For peak-hour response-time analysis, combine turn penalties with a temporal
 speed profile.
 
@@ -348,6 +355,9 @@ cost_csv = wbe.vector.network_analysis.network_od_cost_matrix(
 print('OD matrix written to:', cost_csv)
 ```
 
+If your network uses explicit one-way encodings, `network_od_cost_matrix()`
+accepts FT/TF/B values as well as legacy boolean-style one-way fields.
+
 The CSV is directly usable in pandas or any tabular analysis tool.
 
 ```python
@@ -396,6 +406,9 @@ od_routes = wbe.vector.network_analysis.network_routes_from_od(
 )
 wbe.write_vector(od_routes, 'od_routes_schools_to_libraries.shp')
 ```
+
+If your network uses explicit one-way encodings, `network_routes_from_od()`
+accepts FT/TF/B values as well as legacy boolean-style one-way fields.
 
 ---
 
@@ -473,6 +486,7 @@ accessibility = wbe.compute_network_accessibility(
     origins=residents,
     destinations=supermarkets,
     edge_cost_field='MINUTES',
+    one_way_field='DIR',
     node_cost_points='intersection_delay_points.shp',
     node_cost_field='DELAY_MIN',
     node_cost_snap_distance=25.0,
@@ -483,6 +497,10 @@ accessibility = wbe.compute_network_accessibility(
 wbe.write_vector(accessibility, 'food_accessibility.shp')
 # Each origin point carries an ACCESS_SCORE field.
 ```
+
+When a `one_way_field` is provided, one-way values can use FT/TF/B conventions
+(`FT` = first-to-last only, `TF` = last-to-first only, `B` = bidirectional),
+as well as legacy boolean-style encodings.
 
 ---
 

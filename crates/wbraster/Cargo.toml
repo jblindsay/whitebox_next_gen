@@ -1,6 +1,6 @@
 [package]
 name = "wbraster"
-version = "0.1.5"
+version = "0.2.0"
 edition = "2021"
 authors = ["John Lindsay, Whitebox Geospatial Inc."]
 description = "A pure-Rust library for reading and writing raster GIS formats"

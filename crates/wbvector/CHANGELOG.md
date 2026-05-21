@@ -22,6 +22,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Fixed
 - `Schema` now supports replacing an existing field definition by name, allowing tools to upsert Float metadata over stale Integer fields instead of silently ignoring duplicate names.
 - Add Geometry Attributes now overwrites existing geometry-measure fields in place, preserving floating-point precision on reruns so AREA/LENGTH/PERIM values do not collapse to integer zeros.
+- Shapefile polygon parsing now preserves exteriors even when rings use uniform CCW winding, preventing valid polygons from being decoded as empty geometries on real-world datasets.
 
 ### Added
 - `VectorReprojectOptions::warn_on_area_of_use_mismatch` (default `false`) and

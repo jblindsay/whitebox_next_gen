@@ -1,6 +1,6 @@
 [package]
 name = "wbtopology"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 authors = ["John Lindsay, Whitebox Geospatial Inc."]
 description = "A pure-Rust topology suite inspired by JTS"
@@ -18,7 +18,7 @@ name = "wbtopology"
 path = "src/lib.rs"
 
 [dependencies]
-wbvector = { path = "../wbvector", version = "0.1.3" }
+wbvector = { path = "../wbvector", version = "0.1.4" }
 rayon = { version = "1.10", optional = true }
 robust = "1.2.0"
 

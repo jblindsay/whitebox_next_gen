@@ -216,15 +216,28 @@ fn parse_shape(data: &[u8]) -> Result<Geometry> {
                     Ring::new(cs)
                 })
                 .collect();
-            // Shapefile: exterior = CW (negative signed area), holes = CCW
-            let (exteriors, holes) = partition_rings(rings);
-            if exteriors.len() <= 1 {
-                let exterior = exteriors.into_iter().next().unwrap_or_default();
-                Ok(Geometry::Polygon { exterior, interiors: holes })
+            if rings.len() == 1 {
+                let exterior = rings.into_iter().next().unwrap_or_default();
+                Ok(Geometry::Polygon { exterior, interiors: vec![] })
             } else {
-                // Multiple exterior rings → MultiPolygon (simplified: no hole assignment)
-                let polys = exteriors.into_iter().map(|e| (e, vec![])).collect();
-                Ok(Geometry::MultiPolygon(polys))
+                let has_positive = rings.iter().any(|ring| ring.signed_area() > 0.0);
+                let has_negative = rings.iter().any(|ring| ring.signed_area() < 0.0);
+                if has_positive && has_negative {
+                    // Mixed winding: keep the legacy exterior/hole split.
+                    let (exteriors, holes) = partition_rings(rings);
+                    if exteriors.len() <= 1 {
+                        let exterior = exteriors.into_iter().next().unwrap_or_default();
+                        Ok(Geometry::Polygon { exterior, interiors: holes })
+                    } else {
+                        // Multiple exterior rings → MultiPolygon (simplified: no hole assignment)
+                        let polys = exteriors.into_iter().map(|e| (e, vec![])).collect();
+                        Ok(Geometry::MultiPolygon(polys))
+                    }
+                } else {
+                    // Uniform winding across all rings: preserve all rings as polygon exteriors.
+                    let polys = rings.into_iter().map(|e| (e, vec![])).collect();
+                    Ok(Geometry::MultiPolygon(polys))
+                }
             }
         }
         SHP_MULTIPOINT | SHP_MULTIPOINT_M | SHP_MULTIPOINT_Z => {
@@ -676,6 +689,36 @@ mod tests {
     use super::*;
     use crate::feature::{FieldDef, FieldType};
 
+    fn polygon_shape_bytes(coords: &[Coord]) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&SHP_POLYGON.to_le_bytes());
+
+        let mut min_x = f64::INFINITY;
+        let mut min_y = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+        for c in coords {
+            min_x = min_x.min(c.x);
+            min_y = min_y.min(c.y);
+            max_x = max_x.max(c.x);
+            max_y = max_y.max(c.y);
+        }
+
+        buf.extend_from_slice(&min_x.to_le_bytes());
+        buf.extend_from_slice(&min_y.to_le_bytes());
+        buf.extend_from_slice(&max_x.to_le_bytes());
+        buf.extend_from_slice(&max_y.to_le_bytes());
+        buf.extend_from_slice(&1i32.to_le_bytes());
+        buf.extend_from_slice(&(coords.len() as i32).to_le_bytes());
+        buf.extend_from_slice(&0i32.to_le_bytes());
+        for c in coords {
+            buf.extend_from_slice(&c.x.to_le_bytes());
+            buf.extend_from_slice(&c.y.to_le_bytes());
+        }
+
+        buf
+    }
+
     fn point_layer() -> Layer {
         let mut l = Layer::new("pts")
             .with_geom_type(GeometryType::Point)
@@ -725,6 +768,27 @@ mod tests {
         let out = read(&path).unwrap();
         assert_eq!(out.len(), 1);
         assert!(matches!(&out[0].geometry, Some(Geometry::Polygon { .. })));
+    }
+
+    #[test]
+    fn parse_polygon_with_ccw_winding_keeps_exterior_ring() {
+        let ring = vec![
+            Coord::xy(0.0, 0.0),
+            Coord::xy(1.0, 0.0),
+            Coord::xy(1.0, 1.0),
+            Coord::xy(0.0, 1.0),
+            Coord::xy(0.0, 0.0),
+        ];
+
+        let geom = parse_shape(&polygon_shape_bytes(&ring)).expect("parse ccw polygon");
+        match geom {
+            Geometry::Polygon { exterior, interiors } => {
+                assert_eq!(exterior.len(), 4);
+                assert!(interiors.is_empty());
+                assert!(exterior.signed_area().abs() > 0.0);
+            }
+            other => panic!("expected polygon geometry, got {:?}", other),
+        }
     }
 
     #[test]

@@ -227,12 +227,13 @@ def unregister_dock_widget(iface, dock) -> bool:
         return False
 
 
-def open_processing_algorithm_dialog(iface, provider_id: str, tool_id: str) -> bool:
+def open_processing_algorithm_dialog(iface, provider_id: str, tool_id: str, params: dict | None = None) -> bool:
     """Open a processing algorithm dialog with API fallbacks.
 
     Returns True if any known host API successfully opens a dialog.
     """
     full_id = f"{provider_id}:{tool_id}"
+    initial_params = dict(params or {})
 
     # Resolve the algorithm object up front so we can avoid ambiguous short-id
     # routing in hosts/providers where similarly named tools exist.
@@ -247,8 +248,8 @@ def open_processing_algorithm_dialog(iface, provider_id: str, tool_id: str) -> b
 
     # Prefer interface methods that open a runnable processing dialog.
     candidates = [
-        ("openProcessingAlgorithmDialog", (full_id, {})),
-        ("showProcessingAlgorithmDialog", (full_id, {})),
+        ("openProcessingAlgorithmDialog", (full_id, initial_params)),
+        ("showProcessingAlgorithmDialog", (full_id, initial_params)),
         ("openProcessingAlgorithmDialog", (full_id,)),
         ("showProcessingAlgorithmDialog", (full_id,)),
     ]
@@ -256,8 +257,8 @@ def open_processing_algorithm_dialog(iface, provider_id: str, tool_id: str) -> b
     if alg_obj is not None:
         candidates.extend(
             [
-                ("openProcessingAlgorithmDialog", (alg_obj, {})),
-                ("showProcessingAlgorithmDialog", (alg_obj, {})),
+                ("openProcessingAlgorithmDialog", (alg_obj, initial_params)),
+                ("showProcessingAlgorithmDialog", (alg_obj, initial_params)),
                 ("openProcessingAlgorithmDialog", (alg_obj,)),
                 ("showProcessingAlgorithmDialog", (alg_obj,)),
             ]
@@ -282,8 +283,8 @@ def open_processing_algorithm_dialog(iface, provider_id: str, tool_id: str) -> b
 
         processing_candidates = [
             # execAlgorithmDialog tends to create a fully wired run flow.
-            ("execAlgorithmDialog", (full_id, {})),
-            ("showAlgorithmDialog", (full_id, {})),
+            ("execAlgorithmDialog", (full_id, initial_params)),
+            ("showAlgorithmDialog", (full_id, initial_params)),
             ("execAlgorithmDialog", (full_id,)),
             ("showAlgorithmDialog", (full_id,)),
         ]

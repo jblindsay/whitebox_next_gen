@@ -475,14 +475,41 @@ pts_raster = wbe.conversion.raster_vector_conversion.vector_points_to_raster(
 </code></pre>
 <hr />
 <h2 id="field-calculator"><a class="header" href="#field-calculator">Field Calculator</a></h2>
-<p>The field calculator tool evaluates an expression against the attribute table to create or update a field:</p>
-<pre><code class="language-python"># Compute a normalised shape index from existing area and perimeter fields
+<p>The field calculator supports SQL-style and expression-style updates for vector
+attributes, including:</p>
+<ul>
+<li>searched <code>CASE WHEN ... THEN ... ELSE ... END</code></li>
+<li>simple <code>CASE field WHEN value THEN ... END</code></li>
+<li><code>UPDATE ... SET ... [WHERE ...]</code> wrapper syntax</li>
+<li>SQL operators (<code>=</code>, <code>&lt;&gt;</code>, <code>AND</code>, <code>OR</code>, <code>NOT</code>), plus <code>IS NULL</code> / <code>IS NOT NULL</code></li>
+<li><code>CAST(... AS integer|float|text|boolean)</code></li>
+<li>preview-first execution with <code>preview_rows</code> (no output write required)</li>
+</ul>
+<p>Use it to create or update a field from existing attributes and geometry
+variables (<code>$area</code>, <code>$length</code>, <code>$perimeter</code>, centroid coordinates).</p>
+<pre><code class="language-python"># Compute/update SPEED from TYPE using SQL-style CASE
 watersheds = wbe.vector.attribute_analysis.field_calculator(
     input=watersheds,
-    field_name='SHAPE_IDX',
-    expression="'PERIMETER' / (2.0 * 3.14159 * sqrt('AREA' / 3.14159))"
+    field='SPEED',
+    field_type='integer',
+    expression="CASE WHEN TYPE == 'motorway' THEN 100 WHEN TYPE == 'primary' THEN 80 ELSE 60 END",
+    overwrite=True,
+    output='watersheds_speed.gpkg'
+)
+
+# Preview-only evaluation (returns preview payload, omits output write)
+preview = wbe.vector.attribute_analysis.field_calculator(
+    input=watersheds,
+    field='SPEED',
+    field_type='integer',
+    expression="CASE TYPE WHEN 'motorway' THEN 100 ELSE 60 END",
+    overwrite=True,
+    preview_rows=10
 )
 </code></pre>
+<p>When <code>preview_rows &gt; 0</code>, the tool returns preview records and normalized
+expression details that can be surfaced in UI workflows before committing
+final output writes.</p>
 <hr />
 <h2 id="topological-utilities"><a class="header" href="#topological-utilities">Topological Utilities</a></h2>
 <h3 id="repair-and-validation"><a class="header" href="#repair-and-validation">Repair and Validation</a></h3>

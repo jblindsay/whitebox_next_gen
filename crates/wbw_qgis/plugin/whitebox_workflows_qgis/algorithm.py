@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import glob
 import json
+import math
 import os
 import re
 import sqlite3
@@ -415,6 +416,150 @@ def _coerce_arg_from_default_type(value: Any, default_value: Any) -> Any:
         return value
 
     return value
+
+
+def _is_param_explicitly_set(parameters: Any, name: str) -> bool:
+    """Best-effort check whether a QGIS processing parameter was explicitly set."""
+    if parameters is None:
+        return False
+
+    sentinel = object()
+    try:
+        raw = parameters.get(name, sentinel)
+    except Exception:
+        raw = sentinel
+
+    if raw is sentinel or raw is None:
+        return False
+
+    is_null = getattr(raw, "isNull", None)
+    if callable(is_null):
+        try:
+            if bool(is_null()):
+                return False
+        except Exception:
+            pass
+
+    if isinstance(raw, str):
+        text = raw.strip().lower()
+        return text not in {"", "none", "null", "nan"}
+
+    if isinstance(raw, (list, tuple, dict, set)):
+        return len(raw) > 0
+
+    return True
+
+
+def _safe_json_loads(text: str, fallback: Any) -> Any:
+    try:
+        return json.loads(str(text or ""))
+    except Exception:
+        return fallback
+
+
+def _sanitize_args_using_runtime_schema(
+    tool_id: str,
+    args: dict[str, Any],
+    session,
+    feedback=None,
+) -> dict[str, Any]:
+    """Sanitize argument payload using runtime metadata when available.
+
+    This removes unknown parameters, normalizes optional textual nulls for
+    numeric fields, and coerces values using runtime defaults where possible.
+    """
+    if not isinstance(args, dict) or not args:
+        return args
+
+    metadata_raw = None
+    try:
+        metadata_raw = session.get_tool_metadata_json(tool_id)
+    except Exception:
+        return args
+
+    metadata = _safe_json_loads(metadata_raw, {})
+    if not isinstance(metadata, dict):
+        return args
+
+    params = metadata.get("params")
+    defaults = metadata.get("defaults")
+    if not isinstance(params, list):
+        params = []
+    if not isinstance(defaults, dict):
+        defaults = {}
+
+    allowed_names: set[str] = set()
+    required_names: set[str] = set()
+    for p in params:
+        if not isinstance(p, dict):
+            continue
+        name = str(p.get("name", "")).strip()
+        if not name:
+            continue
+        allowed_names.add(name)
+        if bool(p.get("required", False)):
+            required_names.add(name)
+
+    sanitized = dict(args)
+
+    # Drop unknown keys if runtime published a concrete schema.
+    if allowed_names:
+        unknown = [k for k in list(sanitized.keys()) if k not in allowed_names]
+        for k in unknown:
+            sanitized.pop(k, None)
+        if unknown and feedback is not None:
+            push_warn = getattr(feedback, "pushWarning", None)
+            if callable(push_warn):
+                push_warn(
+                    f"{tool_id}: dropped unsupported parameters from QGIS payload: {', '.join(sorted(unknown))}"
+                )
+
+    # Coerce values using runtime defaults and normalize optional textual nulls.
+    for k in list(sanitized.keys()):
+        v = sanitized.get(k)
+        default_v = defaults.get(k)
+        is_required = k in required_names
+
+        if v is None and not is_required:
+            sanitized.pop(k, None)
+            continue
+
+        if isinstance(v, str):
+            t = v.strip()
+            tl = t.lower()
+
+            # Normalize QGIS provider URIs for vector-like file paths.
+            if ("|" in t or "dbname=" in tl) and _looks_like_vector_file_path(_normalize_vector_input_source(t)):
+                t = _normalize_vector_input_source(t)
+                tl = t.lower()
+                sanitized[k] = t
+                v = t
+
+            if not t and not is_required:
+                sanitized.pop(k, None)
+                continue
+
+            # Treat textual null-like values as "unset" for optional params
+            # regardless of default type (numeric, enum/string, bool, paths).
+            if tl in {"none", "null", "nan"} and not is_required:
+                sanitized.pop(k, None)
+                continue
+
+            # Optional numeric params often arrive as textual null markers.
+            if isinstance(default_v, (int, float)) and tl in {"none", "null", "nan"} and not is_required:
+                sanitized.pop(k, None)
+                continue
+
+        if k in defaults:
+            coerced = _coerce_arg_from_default_type(sanitized.get(k), default_v)
+            if isinstance(coerced, float) and not math.isfinite(coerced):
+                if is_required:
+                    continue
+                sanitized.pop(k, None)
+                continue
+            sanitized[k] = coerced
+
+    return sanitized
 
 
 def _derive_group_name(manifest: dict[str, Any]) -> str:
@@ -938,20 +1083,28 @@ def _remove_existing_output_artifacts(path: str) -> None:
             f"{stem}.mxs",
             f"{stem}.xml",
         ]
+        failed: list[str] = []
         for patt in patterns:
             for f in glob.glob(patt):
                 try:
                     if os.path.isfile(f):
                         os.remove(f)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    failed.append(f"{f} ({exc})")
+        if failed:
+            raise RuntimeError(
+                "Cannot overwrite existing shapefile output because one or more sidecar files are locked or not writable: "
+                + "; ".join(failed)
+            )
         return
 
     try:
         if os.path.isfile(target):
             os.remove(target)
-    except Exception:
-        pass
+    except Exception as exc:
+        raise RuntimeError(
+            f"Cannot overwrite existing output file '{target}'. It may be locked by QGIS or not writable. Detail: {exc}"
+        )
 
 
 def _looks_like_vector_file_path(path: str) -> bool:
@@ -1044,69 +1197,6 @@ def _normalize_vector_input_source(source: Any) -> str:
     if not value:
         return ""
 
-
-    def _actionable_runtime_error_message(raw_message: str) -> str:
-        message = str(raw_message or "").strip() or "Unknown runtime error."
-        lower = message.lower()
-        recommendations: list[str] = []
-
-        def _add(rec: str) -> None:
-            if rec not in recommendations:
-                recommendations.append(rec)
-
-        if "include_pro=true requested" in lower and "does not include pro support" in lower:
-            _add("Rebuild/install whitebox_workflows with Pro support (for example: ./scripts/dev_python_install.sh --pro) or disable Include Pro in plugin settings.")
-
-        if (
-            "legacy whitebox_workflows runtime" in lower
-            or "requires whitebox_workflows next gen" in lower
-            or "unexpected keyword argument 'include_pro'" in lower
-            or "unexpected keyword argument 'tier'" in lower
-            or "has no attribute 'runtimesession'" in lower
-        ):
-            _add("Activate a whitebox_workflows Next Gen (v2.x) runtime and refresh the catalog.")
-
-        if "no external python interpreter was found" in lower:
-            _add("Set WBW_EXTERNAL_PYTHON to a valid interpreter that can import whitebox_workflows.")
-
-        if (
-            "no module named 'whitebox_workflows'" in lower
-            or "package is not available in this python environment" in lower
-        ):
-            _add("Install/activate whitebox_workflows in the runtime interpreter used by QGIS, then refresh catalog.")
-
-        if "permission denied" in lower or "read-only file system" in lower:
-            _add("Choose writable output paths and verify directory permissions.")
-
-        if "no such file or directory" in lower:
-            _add("Verify all input paths exist and output directories have been created.")
-
-        if "gpkg" in lower and ("schema" in lower or "malformed" in lower or "no such table" in lower):
-            _add("Use explicit non-temporary outputs when possible and validate GeoPackage schema before rerunning.")
-
-        _add("Open Whitebox panel -> Runtime Diagnostics for interpreter and tier details.")
-
-        if not recommendations:
-            return message
-
-        return message + "\n\nRecommended actions:\n- " + "\n- ".join(recommendations)
-
-
-    def _extract_backend_error_message(response: dict[str, Any]) -> str:
-        error_value = response.get("error")
-        if isinstance(error_value, str) and error_value.strip():
-            return error_value.strip()
-
-        status = str(response.get("status", "")).strip().lower()
-        if status in {"error", "failed", "failure"}:
-            for key in ("message", "detail", "details", "reason"):
-                value = response.get(key)
-                if isinstance(value, str) and value.strip():
-                    return value.strip()
-            return f"Runtime reported failure status: {status}."
-
-        return ""
-
     # File-based OGR layers often include provider options such as
     # "|layername=..." that the backend vector reader does not accept.
     if "|" in value:
@@ -1122,6 +1212,69 @@ def _normalize_vector_input_source(source: Any) -> str:
             value = candidate
 
     return value
+
+
+def _actionable_runtime_error_message(raw_message: str) -> str:
+    message = str(raw_message or "").strip() or "Unknown runtime error."
+    lower = message.lower()
+    recommendations: list[str] = []
+
+    def _add(rec: str) -> None:
+        if rec not in recommendations:
+            recommendations.append(rec)
+
+    if "include_pro=true requested" in lower and "does not include pro support" in lower:
+        _add("Rebuild/install whitebox_workflows with Pro support (for example: ./scripts/dev_python_install.sh --pro) or disable Include Pro in plugin settings.")
+
+    if (
+        "legacy whitebox_workflows runtime" in lower
+        or "requires whitebox_workflows next gen" in lower
+        or "unexpected keyword argument 'include_pro'" in lower
+        or "unexpected keyword argument 'tier'" in lower
+        or "has no attribute 'runtimesession'" in lower
+    ):
+        _add("Activate a whitebox_workflows Next Gen (v2.x) runtime and refresh the catalog.")
+
+    if "no external python interpreter was found" in lower:
+        _add("Set WBW_EXTERNAL_PYTHON to a valid interpreter that can import whitebox_workflows.")
+
+    if (
+        "no module named 'whitebox_workflows'" in lower
+        or "package is not available in this python environment" in lower
+    ):
+        _add("Install/activate whitebox_workflows in the runtime interpreter used by QGIS, then refresh catalog.")
+
+    if "permission denied" in lower or "read-only file system" in lower:
+        _add("Choose writable output paths and verify directory permissions.")
+
+    if "no such file or directory" in lower:
+        _add("Verify all input paths exist and output directories have been created.")
+
+    if "gpkg" in lower and ("schema" in lower or "malformed" in lower or "no such table" in lower):
+        _add("Use explicit non-temporary outputs when possible and validate GeoPackage schema before rerunning.")
+
+    _add("Open Whitebox panel -> Runtime Diagnostics for interpreter and tier details.")
+
+    if not recommendations:
+        return message
+
+    return message + "\n\nRecommended actions:\n- " + "\n- ".join(recommendations)
+
+
+def _extract_backend_error_message(response: dict[str, Any]) -> str:
+    error_value = response.get("error")
+    if isinstance(error_value, str) and error_value.strip():
+        return error_value.strip()
+
+    status = str(response.get("status", "")).strip().lower()
+    if status in {"error", "failed", "failure"}:
+        for key in ("message", "detail", "details", "reason"):
+            value = response.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return f"Runtime reported failure status: {status}."
+
+    return ""
 
 
 def _materialize_raster_input_source(
@@ -1811,6 +1964,30 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
         args: dict[str, Any] = {}
         temp_raster_inputs: list[str] = []
 
+        manifest_tier = str(self._manifest.get("license_tier", "") or "").strip().lower()
+        manifest_tier_name = str(self._manifest.get("license_tier_name", "") or "").strip().lower()
+        effective_manifest_tier = manifest_tier_name or manifest_tier
+
+        # Strict execution-path contract:
+        # - Pro-tier tools run through Pro runtime only.
+        # - Open/unknown-tier tools run through open runtime only.
+        # This ensures Pro users can execute both Pro and open tools while
+        # preventing open tools from being routed through Pro-only paths.
+        pro_tiers = {"pro", "enterprise", "professional"}
+        is_pro_tool = effective_manifest_tier in pro_tiers
+
+        if is_pro_tool:
+            if not bool(self._provider.include_pro):
+                raise QgsProcessingException(
+                    "This tool requires the Pro runtime path, but the provider is currently in open mode. "
+                    "Enable Pro runtime (include_pro=true) and retry."
+                )
+            exec_include_pro = True
+            exec_tier = "pro"
+        else:
+            exec_include_pro = False
+            exec_tier = "open"
+
         projection_wrapper_ids = {
             "reproject_raster",
             "reproject_lidar",
@@ -1823,6 +2000,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             name = str(spec.get("name", ""))
             kind = str(spec.get("kind", "string"))
             required = bool(spec.get("required", False))
+            is_set = _is_param_explicitly_set(parameters, name)
             if kind == "raster_in":
                 lyr = self.parameterAsRasterLayer(parameters, name, context)
                 if lyr is not None:
@@ -1870,11 +2048,22 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     else:
                         continue
             elif kind == "bool":
+                if not required and not is_set:
+                    continue
                 args[name] = bool(self.parameterAsBool(parameters, name, context))
             elif kind == "int":
+                if not required and not is_set:
+                    continue
                 args[name] = int(self.parameterAsInt(parameters, name, context))
             elif kind == "double":
-                args[name] = float(self.parameterAsDouble(parameters, name, context))
+                if not required and not is_set:
+                    continue
+                value = float(self.parameterAsDouble(parameters, name, context))
+                if not math.isfinite(value):
+                    if required:
+                        raise QgsProcessingException(f"Invalid numeric value for required parameter: {name}")
+                    continue
+                args[name] = value
             elif kind in ("file_out", "raster_out", "vector_out", "lidar_out"):
                 # Destination parameters should resolve to concrete output paths.
                 value = self.parameterAsOutputLayer(parameters, name, context)
@@ -1886,6 +2075,8 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     continue
                 args[name] = str(value)
             elif kind == "enum":
+                if not required and not is_set:
+                    continue
                 options = [str(o) for o in spec.get("enum_options", [])]
                 idx = int(self.parameterAsInt(parameters, name, context))
                 if idx < 0 or idx >= len(options):
@@ -1894,6 +2085,8 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     continue
                 args[name] = options[idx]
             else:
+                if not required and not is_set:
+                    continue
                 value = self.parameterAsString(parameters, name, context)
                 if not value:
                     if required:
@@ -1909,18 +2102,80 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                 if key in args:
                     args[key] = _coerce_arg_from_default_type(args.get(key), default_value)
 
+        # Ensure payload is JSON-safe and omit optional null/non-finite numeric values
+        # (QGIS optional numeric widgets often surface as NaN when left blank).
+        required_params = {
+            str(spec.get("name", ""))
+            for spec in self._param_specs
+            if bool(spec.get("required", False))
+        }
+        for key in list(args.keys()):
+            value = args.get(key)
+            if value is None:
+                if key in required_params:
+                    raise QgsProcessingException(f"Missing required parameter: {key}")
+                del args[key]
+                continue
+            if isinstance(value, float) and not math.isfinite(value):
+                if key in required_params:
+                    raise QgsProcessingException(f"Invalid numeric value for required parameter: {key}")
+                del args[key]
+
+        # Normalize provider URIs (e.g., ".gpkg|layername=...") for any
+        # vector-like string argument, including params inferred as generic
+        # file/string rather than explicit vector_in.
+        for key, value in list(args.items()):
+            if not isinstance(value, str):
+                continue
+            raw = value.strip()
+            if not raw:
+                continue
+            if "|" not in raw and "dbname=" not in raw.lower():
+                continue
+
+            normalized = _normalize_vector_input_source(raw)
+            if normalized == raw:
+                continue
+            if _looks_like_vector_file_path(normalized):
+                args[key] = normalized
+
         session = None
         if self.name() not in projection_wrapper_ids:
             session = create_runtime_session(
-                include_pro=self._provider.include_pro,
-                tier=self._provider.tier,
+                include_pro=exec_include_pro,
+                tier=exec_tier,
             )
 
-        # Bridge common equivalent parameter names across tool families.
-        if "input" not in args and "dem" in args:
-            args["input"] = args["dem"]
-        if "dem" not in args and "input" in args:
-            args["dem"] = args["input"]
+            # Normalize payload against runtime schema to avoid frontend/runtime
+            # drift (unknown keys, textual nulls for optional numerics, etc.).
+            args = _sanitize_args_using_runtime_schema(
+                self.name(),
+                args,
+                session,
+                feedback,
+            )
+
+        # Emit concise execution diagnostics for QA and reproducibility.
+        push_info = getattr(feedback, "pushInfo", None)
+        if callable(push_info):
+            try:
+                push_info(
+                    f"{self.name()}: exec_mode include_pro={exec_include_pro}, tier={exec_tier}, arg_keys={','.join(sorted(args.keys()))}"
+                )
+            except Exception:
+                pass
+
+        # Bridge equivalent `input`/`dem` names only for tools that actually
+        # declare a DEM parameter.
+        has_dem_param = any(
+            str(spec.get("name", "")).strip().lower() == "dem"
+            for spec in self._param_specs
+        )
+        if has_dem_param:
+            if "input" not in args and "dem" in args:
+                args["input"] = args["dem"]
+            if "dem" not in args and "input" in args:
+                args["dem"] = args["input"]
 
         # Fallback for tools that strictly require `input` while manifests expose
         # a different primary input key.
@@ -1967,8 +2222,8 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                 response = run_projection_wrapper(
                     self.name(),
                     args,
-                    include_pro=self._provider.include_pro,
-                    tier=self._provider.tier,
+                    include_pro=exec_include_pro,
+                    tier=exec_tier,
                 )
                 response_raw = json.dumps(response)
             else:
@@ -1978,16 +2233,51 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     stream_adapter,
                 )
         except Exception as exc:
+            # Reliability retry: if runtime tools fail, re-sanitize against
+            # schema and retry exactly once before surfacing the error.
+            if (
+                session is not None
+                and self.name() not in projection_wrapper_ids
+            ):
+                try:
+                    retry_args = _sanitize_args_using_runtime_schema(
+                        self.name(),
+                        args,
+                        session,
+                        feedback,
+                    )
+                    if retry_args != args:
+                        response_raw = session.run_tool_json_stream(
+                            self.name(),
+                            json.dumps(retry_args),
+                            stream_adapter,
+                        )
+                        args = retry_args
+                        exc = None
+                except Exception:
+                    pass
+
+            if exc is None:
+                pass
+            else:
+                for tmp_path in temp_raster_inputs:
+                    try:
+                        os.remove(tmp_path)
+                    except Exception:
+                        pass
+                if isinstance(exc, QgsProcessingException):
+                    raise
+                if isinstance(exc, RuntimeBootstrapError):
+                    raise QgsProcessingException(_actionable_runtime_error_message(str(exc))) from exc
+                raise QgsProcessingException(_actionable_runtime_error_message(str(exc))) from exc
+
+        if response_raw is None:
             for tmp_path in temp_raster_inputs:
                 try:
                     os.remove(tmp_path)
                 except Exception:
                     pass
-            if isinstance(exc, QgsProcessingException):
-                raise
-            if isinstance(exc, RuntimeBootstrapError):
-                raise QgsProcessingException(_actionable_runtime_error_message(str(exc))) from exc
-            raise QgsProcessingException(_actionable_runtime_error_message(str(exc))) from exc
+            raise QgsProcessingException("Runtime call did not return a result payload.")
 
         if stream_adapter.cancelled:
             for tmp_path in temp_raster_inputs:

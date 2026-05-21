@@ -557,6 +557,44 @@ print(result)
 <p><strong>Note:</strong> This workflow requires a <code>WbEnvironment</code> initialized with a valid
 Pro licence.</p>
 </blockquote>
+<h3 id="pro-sweep-diagnostics-for-siting-workflows"><a class="header" href="#pro-sweep-diagnostics-for-siting-workflows">Pro Sweep Diagnostics for Siting Workflows</a></h3>
+<p>For scenario testing in Pro siting workflows, <code>wind_turbine_siting</code> and
+<code>solar_site_suitability_analysis</code> accept <code>sweep_spec_json</code> and produce
+additional sweep outputs:</p>
+<ul>
+<li><code>run_matrix_summary</code> (CSV)</li>
+<li><code>sensitivity_report</code> (JSON)</li>
+<li><code>sensitivity_report_html</code> (HTML)</li>
+<li><code>stability_map</code> (GeoTIFF; <code>3=high</code>, <code>2=medium</code>, <code>1=low</code>)</li>
+</ul>
+<p>The JSON sensitivity report includes a normalized primary metric span and
+stability class fields for quick robustness screening:</p>
+<ul>
+<li><code>metrics.primary_metric</code></li>
+<li><code>metrics.primary_relative_span</code></li>
+<li><code>metrics.stability_class</code> with values <code>high</code>, <code>medium</code>, or <code>low</code></li>
+</ul>
+<p>Example:</p>
+<pre><code class="language-python">import json
+import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier="pro")
+
+sweep_spec = {
+  "schema_version": "1.0.0",
+  "sweep_mode": "grid",
+  "parameters": [
+    {"name": "candidate_threshold", "values": [0.65, 0.7, 0.75]},
+  ],
+}
+
+score, conf, summary = wbe.wind_turbine_siting(
+  dem="dem.tif",
+  settlements="settlements.gpkg",
+  sweep_spec_json=json.dumps(sweep_spec),
+  output_prefix="wind_sweep",
+)
+</code></pre>
 <hr />
 <h2 id="complete-terrain-analysis-pipeline"><a class="header" href="#complete-terrain-analysis-pipeline">Complete Terrain Analysis Pipeline</a></h2>
 <p>The following script assembles a typical geomorphometric analysis workflow

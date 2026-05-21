@@ -207,6 +207,19 @@ impl Schema {
         self.fields.push(def);
     }
 
+    /// Add or replace a field definition by name, returning its schema index.
+    pub fn upsert_field(&mut self, def: FieldDef) -> usize {
+        if let Some(&i) = self.index.get(&def.name) {
+            self.fields[i] = def;
+            i
+        } else {
+            let i = self.fields.len();
+            self.index.insert(def.name.clone(), i);
+            self.fields.push(def);
+            i
+        }
+    }
+
     /// Returns all field definitions in schema order.
     pub fn fields(&self)          -> &[FieldDef]       { &self.fields }
     /// Returns the number of fields in the schema.

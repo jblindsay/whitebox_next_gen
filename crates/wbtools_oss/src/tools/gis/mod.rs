@@ -23,12 +23,13 @@ fn max_distance_squared(
     let d31_sq = (x3 - x1).powi(2) + (y3 - y1).powi(2) + (z3 - z1).powi(2);
     d12_sq.max(d23_sq).max(d31_sq)
 }
-use evalexpr::{build_operator_tree, ContextWithMutableVariables, HashMapContext, Value};
+use evalexpr::{build_operator_tree, ContextWithMutableFunctions, ContextWithMutableVariables, Function, HashMapContext, Value};
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
 use nalgebra::{DMatrix, DVector, Matrix5, RowVector5, Vector5};
 use rayon::prelude::*;
 use serde_json::json;
+use wbprojection::Crs;
 use wbcore::{PercentCoalescer,
     parse_optional_output_path, parse_vector_path_arg, IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH, LicenseTier, Tool, ToolArgs, ToolCategory, ToolContext,
     ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor, ToolParamSpec,
@@ -14490,6 +14491,14 @@ fn coord_dist2(a: &wbvector::Coord, b: &wbvector::Coord) -> f64 {
     dx * dx + dy * dy
 }
 
+fn network_segment_length(a: &wbvector::Coord, b: &wbvector::Coord, use_geodesic: bool) -> f64 {
+    if use_geodesic {
+        geodesic_segment_length_m(a, b)
+    } else {
+        coord_dist2(a, b).sqrt()
+    }
+}
+
 fn coord_eq_eps(a: &wbvector::Coord, b: &wbvector::Coord, eps: f64) -> bool {
     coord_dist2(a, b) <= eps * eps
 }
@@ -19925,6 +19934,162 @@ fn topo_geometry_boundary_length(g: &TopoGeometry) -> f64 {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MeasurementMode {
+    Auto,
+    Planar,
+    Geodesic,
+}
+
+impl MeasurementMode {
+    fn parse(value: Option<&str>) -> Result<Self, ToolError> {
+        match value.unwrap_or("auto").trim().to_ascii_lowercase().as_str() {
+            "auto" => Ok(Self::Auto),
+            "planar" => Ok(Self::Planar),
+            "geodesic" => Ok(Self::Geodesic),
+            other => Err(ToolError::Validation(format!(
+                "invalid measurement_mode '{}'; expected one of: auto, planar, geodesic",
+                other
+            ))),
+        }
+    }
+}
+
+fn layer_crs_is_geographic(layer: &wbvector::Layer) -> bool {
+    if let Some(epsg) = layer.crs_epsg() {
+        if let Ok(crs) = Crs::from_epsg(epsg) {
+            return crs.is_geographic();
+        }
+    }
+
+    if let Some(wkt) = layer.crs_wkt() {
+        if let Ok(crs) = wbprojection::from_wkt(wkt) {
+            return crs.is_geographic();
+        }
+    }
+
+    false
+}
+
+fn geodesic_segment_length_m(a: &wbvector::Coord, b: &wbvector::Coord) -> f64 {
+    const EARTH_RADIUS_M: f64 = 6_371_008.8;
+    let lat1 = a.y.to_radians();
+    let lon1 = a.x.to_radians();
+    let lat2 = b.y.to_radians();
+    let lon2 = b.x.to_radians();
+    let dlat = lat2 - lat1;
+    let dlon = lon2 - lon1;
+    let h = (0.5 * dlat).sin().powi(2) + lat1.cos() * lat2.cos() * (0.5 * dlon).sin().powi(2);
+    2.0 * EARTH_RADIUS_M * h.clamp(0.0, 1.0).sqrt().asin()
+}
+
+fn geodesic_polyline_length_m(coords: &[wbvector::Coord], closed: bool) -> f64 {
+    if coords.len() < 2 {
+        return 0.0;
+    }
+    let mut len = 0.0;
+    for i in 0..(coords.len() - 1) {
+        len += geodesic_segment_length_m(&coords[i], &coords[i + 1]);
+    }
+    if closed {
+        let first = &coords[0];
+        let last = &coords[coords.len() - 1];
+        if (first.x - last.x).abs() > f64::EPSILON || (first.y - last.y).abs() > f64::EPSILON {
+            len += geodesic_segment_length_m(last, first);
+        }
+    }
+    len
+}
+
+fn geodesic_ring_area_m2(coords: &[wbvector::Coord]) -> f64 {
+    const EARTH_RADIUS_M: f64 = 6_371_008.8;
+    if coords.len() < 3 {
+        return 0.0;
+    }
+    let mut sum = 0.0;
+    for i in 0..coords.len() {
+        let j = (i + 1) % coords.len();
+        let lon1 = coords[i].x.to_radians();
+        let lat1 = coords[i].y.to_radians();
+        let lon2 = coords[j].x.to_radians();
+        let lat2 = coords[j].y.to_radians();
+        let mut dlon = lon2 - lon1;
+        if dlon > std::f64::consts::PI {
+            dlon -= 2.0 * std::f64::consts::PI;
+        } else if dlon < -std::f64::consts::PI {
+            dlon += 2.0 * std::f64::consts::PI;
+        }
+        sum += dlon * (lat1.sin() + lat2.sin());
+    }
+    0.5 * EARTH_RADIUS_M * EARTH_RADIUS_M * sum.abs()
+}
+
+fn geodesic_geometry_area_m2(geometry: &wbvector::Geometry) -> f64 {
+    match geometry {
+        wbvector::Geometry::Polygon { exterior, interiors } => {
+            let mut area = geodesic_ring_area_m2(exterior.coords());
+            for hole in interiors {
+                area -= geodesic_ring_area_m2(hole.coords());
+            }
+            area.max(0.0)
+        }
+        wbvector::Geometry::MultiPolygon(polys) => polys
+            .iter()
+            .map(|(exterior, interiors)| {
+                let mut area = geodesic_ring_area_m2(exterior.coords());
+                for hole in interiors {
+                    area -= geodesic_ring_area_m2(hole.coords());
+                }
+                area.max(0.0)
+            })
+            .sum(),
+        wbvector::Geometry::GeometryCollection(parts) => {
+            parts.iter().map(geodesic_geometry_area_m2).sum()
+        }
+        _ => 0.0,
+    }
+}
+
+fn geodesic_geometry_length_m(geometry: &wbvector::Geometry) -> f64 {
+    match geometry {
+        wbvector::Geometry::LineString(coords) => geodesic_polyline_length_m(coords, false),
+        wbvector::Geometry::MultiLineString(lines) => lines
+            .iter()
+            .map(|coords| geodesic_polyline_length_m(coords, false))
+            .sum(),
+        wbvector::Geometry::GeometryCollection(parts) => {
+            parts.iter().map(geodesic_geometry_length_m).sum()
+        }
+        _ => 0.0,
+    }
+}
+
+fn geodesic_geometry_perimeter_m(geometry: &wbvector::Geometry) -> f64 {
+    match geometry {
+        wbvector::Geometry::Polygon { exterior, interiors } => {
+            let mut perimeter = geodesic_polyline_length_m(exterior.coords(), true);
+            for hole in interiors {
+                perimeter += geodesic_polyline_length_m(hole.coords(), true);
+            }
+            perimeter
+        }
+        wbvector::Geometry::MultiPolygon(polys) => polys
+            .iter()
+            .map(|(exterior, interiors)| {
+                let mut perimeter = geodesic_polyline_length_m(exterior.coords(), true);
+                for hole in interiors {
+                    perimeter += geodesic_polyline_length_m(hole.coords(), true);
+                }
+                perimeter
+            })
+            .sum(),
+        wbvector::Geometry::GeometryCollection(parts) => {
+            parts.iter().map(geodesic_geometry_perimeter_m).sum()
+        }
+        _ => geodesic_geometry_length_m(geometry),
+    }
+}
+
 fn parse_bool_arg(args: &ToolArgs, key: &str, default: bool) -> bool {
     args.get(key).and_then(|v| v.as_bool()).unwrap_or(default)
 }
@@ -20177,6 +20342,718 @@ fn evalexpr_to_field_value(value: &Value, field_type: &str) -> wbvector::FieldVa
             Err(_) => wbvector::FieldValue::Null,
         },
     }
+}
+
+struct FieldCalculatorNormalizedExpression {
+    assignment_expr: String,
+    where_expr: Option<String>,
+}
+
+fn parse_field_calculator_preview_rows(args: &ToolArgs) -> Result<usize, ToolError> {
+    let Some(value) = args.get("preview_rows") else {
+        return Ok(0);
+    };
+    let rows = value.as_u64().ok_or_else(|| {
+        ToolError::Validation("parameter 'preview_rows' must be a non-negative integer".to_string())
+    })?;
+    usize::try_from(rows).map_err(|_| {
+        ToolError::Validation("parameter 'preview_rows' is too large for this platform".to_string())
+    })
+}
+
+fn normalize_field_calculator_expression(
+    expression: &str,
+) -> Result<FieldCalculatorNormalizedExpression, ToolError> {
+    let sql_normalized = strip_optional_update_set_wrapper(expression)?;
+    let assignment_expr = normalize_field_calculator_sql(&sql_normalized.assignment_expr)?;
+    Ok(FieldCalculatorNormalizedExpression {
+        assignment_expr,
+        where_expr: sql_normalized
+            .where_expr
+            .map(|expr| normalize_field_calculator_sql(&expr))
+            .transpose()?,
+    })
+}
+
+fn normalize_field_calculator_sql(expression: &str) -> Result<String, ToolError> {
+    let case_normalized = translate_case_expression(expression)?;
+    let cast_normalized = translate_cast_expressions(&case_normalized)?;
+    let null_normalized = translate_is_null_predicates(&cast_normalized)?;
+    Ok(translate_sql_operators_and_literals(&null_normalized))
+}
+
+fn strip_optional_update_set_wrapper(
+    expression: &str,
+) -> Result<FieldCalculatorNormalizedExpression, ToolError> {
+    let trimmed = expression.trim().trim_end_matches(';').trim();
+    if !starts_with_ascii_keyword(trimmed, "UPDATE") {
+        return Ok(FieldCalculatorNormalizedExpression {
+            assignment_expr: trimmed.to_string(),
+            where_expr: None,
+        });
+    }
+
+    let set_idx = find_keyword_top_level(trimmed, "SET", 0).ok_or_else(|| {
+        ToolError::Validation(
+            "SQL UPDATE form must include SET (e.g., UPDATE roads SET SPEED = ... )".to_string(),
+        )
+    })?;
+    let update_tail = trimmed[(set_idx + 3)..].trim();
+
+    let (assignment, where_expr) = if let Some(where_idx) = find_keyword_top_level(update_tail, "WHERE", 0)
+    {
+        let lhs = update_tail[..where_idx].trim();
+        let rhs = update_tail[(where_idx + 5)..].trim();
+        if rhs.is_empty() {
+            return Err(ToolError::Validation(
+                "SQL UPDATE WHERE clause must contain a non-empty boolean expression".to_string(),
+            ));
+        }
+        (lhs, Some(rhs.to_string()))
+    } else {
+        (update_tail, None)
+    };
+
+    let eq_idx = find_top_level_char(assignment, '=')
+        .ok_or_else(|| ToolError::Validation("SQL UPDATE form must include an assignment using '='".to_string()))?;
+    let rhs = assignment[(eq_idx + 1)..].trim();
+    if rhs.is_empty() {
+        return Err(ToolError::Validation(
+            "SQL UPDATE assignment must include a non-empty expression on the right-hand side"
+                .to_string(),
+        ));
+    }
+
+    Ok(FieldCalculatorNormalizedExpression {
+        assignment_expr: rhs.to_string(),
+        where_expr,
+    })
+}
+
+fn translate_case_expression(expression: &str) -> Result<String, ToolError> {
+    let trimmed = expression.trim().trim_end_matches(';').trim();
+    if !starts_with_ascii_keyword(trimmed, "CASE") {
+        return Ok(trimmed.to_string());
+    }
+
+    let mut pos = 4usize;
+    pos = skip_ascii_whitespace(trimmed, pos);
+
+    let case_operand = if starts_with_ascii_keyword_at(trimmed, pos, "WHEN") {
+        None
+    } else {
+        let when_idx = find_keyword_top_level(trimmed, "WHEN", pos).ok_or_else(|| {
+            ToolError::Validation(
+                "CASE expression must include at least one WHEN clause".to_string(),
+            )
+        })?;
+        let operand = trimmed[pos..when_idx].trim();
+        if operand.is_empty() {
+            return Err(ToolError::Validation(
+                "simple CASE expression must include a comparison operand before WHEN"
+                    .to_string(),
+            ));
+        }
+        pos = when_idx;
+        Some(normalize_field_calculator_sql(operand)?)
+    };
+
+    let mut when_then_pairs = Vec::<(String, String)>::new();
+    let mut else_expr: Option<String> = None;
+
+    loop {
+        pos = skip_ascii_whitespace(trimmed, pos);
+        if starts_with_ascii_keyword_at(trimmed, pos, "WHEN") {
+            pos += 4;
+            let then_idx = find_keyword_top_level(trimmed, "THEN", pos).ok_or_else(|| {
+                ToolError::Validation(
+                    "CASE expression is missing THEN in one of its WHEN clauses".to_string(),
+                )
+            })?;
+            let when_term = trimmed[pos..then_idx].trim();
+            if when_term.is_empty() {
+                return Err(ToolError::Validation(
+                    "CASE WHEN clause must include a non-empty condition".to_string(),
+                ));
+            }
+
+            let condition = if let Some(case_operand_expr) = case_operand.as_ref() {
+                let normalized_when_term = normalize_field_calculator_sql(when_term)?;
+                format!("({case_operand_expr}) == ({normalized_when_term})")
+            } else {
+                normalize_field_calculator_sql(when_term)?
+            };
+
+            pos = then_idx + 4;
+            let (control_idx, control_kw) = find_next_case_control_keyword(trimmed, pos).ok_or_else(|| {
+                ToolError::Validation(
+                    "CASE expression must include END and may include additional WHEN clauses or ELSE"
+                        .to_string(),
+                )
+            })?;
+            let value_expr = trimmed[pos..control_idx].trim();
+            if value_expr.is_empty() {
+                return Err(ToolError::Validation(
+                    "CASE THEN clause must include a non-empty result expression".to_string(),
+                ));
+            }
+
+            when_then_pairs.push((condition, normalize_field_calculator_sql(value_expr)?));
+            match control_kw {
+                "WHEN" => {
+                    pos = control_idx;
+                }
+                "ELSE" => {
+                    pos = control_idx + 4;
+                    let end_idx = find_keyword_top_level(trimmed, "END", pos).ok_or_else(|| {
+                        ToolError::Validation(
+                            "CASE expression with ELSE must terminate with END".to_string(),
+                        )
+                    })?;
+                    let default_expr = trimmed[pos..end_idx].trim();
+                    if default_expr.is_empty() {
+                        return Err(ToolError::Validation(
+                            "CASE ELSE clause must include a non-empty result expression"
+                                .to_string(),
+                        ));
+                    }
+                    else_expr = Some(normalize_field_calculator_sql(default_expr)?);
+                    pos = end_idx + 3;
+                    break;
+                }
+                "END" => {
+                    pos = control_idx + 3;
+                    break;
+                }
+                _ => {
+                    return Err(ToolError::Validation(
+                        "invalid CASE control keyword".to_string(),
+                    ))
+                }
+            }
+        } else {
+            return Err(ToolError::Validation(
+                "CASE expression must use CASE WHEN ... THEN ... [WHEN ... THEN ...] [ELSE ...] END"
+                    .to_string(),
+            ));
+        }
+    }
+
+    if when_then_pairs.is_empty() {
+        return Err(ToolError::Validation(
+            "CASE expression must contain at least one WHEN ... THEN ... clause".to_string(),
+        ));
+    }
+
+    let trailing = trimmed[pos..].trim();
+    if !trailing.is_empty() {
+        return Err(ToolError::Validation(
+            "CASE expression may only contain whitespace after END".to_string(),
+        ));
+    }
+
+    let mut rewritten = else_expr.unwrap_or_else(|| "0".to_string());
+    for (condition, value_expr) in when_then_pairs.into_iter().rev() {
+        rewritten = format!("if(({condition}), ({value_expr}), ({rewritten}))");
+    }
+    Ok(rewritten)
+}
+
+fn skip_ascii_whitespace(input: &str, start: usize) -> usize {
+    let mut idx = start.min(input.len());
+    while idx < input.len() {
+        let ch = input.as_bytes()[idx];
+        if !(ch as char).is_ascii_whitespace() {
+            break;
+        }
+        idx += 1;
+    }
+    idx
+}
+
+fn translate_cast_expressions(input: &str) -> Result<String, ToolError> {
+    let bytes = input.as_bytes();
+    let mut out = String::with_capacity(input.len());
+    let mut idx = 0usize;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+
+    while idx < bytes.len() {
+        let byte = bytes[idx];
+        match byte {
+            b'\'' if !in_double_quote => {
+                in_single_quote = !in_single_quote;
+                out.push(byte as char);
+                idx += 1;
+                continue;
+            }
+            b'"' if !in_single_quote => {
+                in_double_quote = !in_double_quote;
+                out.push(byte as char);
+                idx += 1;
+                continue;
+            }
+            _ => {}
+        }
+
+        if !in_single_quote
+            && !in_double_quote
+            && starts_with_ascii_keyword_at(input, idx, "CAST")
+        {
+            let open_idx = skip_ascii_whitespace(input, idx + 4);
+            if open_idx >= bytes.len() || bytes[open_idx] != b'(' {
+                return Err(ToolError::Validation(
+                    "CAST must be followed by parentheses".to_string(),
+                ));
+            }
+            let close_idx = find_matching_paren(input, open_idx).ok_or_else(|| {
+                ToolError::Validation("CAST expression has unmatched parentheses".to_string())
+            })?;
+            let inner = input[(open_idx + 1)..close_idx].trim();
+            let as_idx = find_keyword_top_level(inner, "AS", 0).ok_or_else(|| {
+                ToolError::Validation(
+                    "CAST expression must use CAST(expression AS type)".to_string(),
+                )
+            })?;
+            let expr = inner[..as_idx].trim();
+            let target_type = inner[(as_idx + 2)..].trim();
+            if expr.is_empty() || target_type.is_empty() {
+                return Err(ToolError::Validation(
+                    "CAST expression must include both a source expression and a target type"
+                        .to_string(),
+                ));
+            }
+            let normalized_expr = normalize_field_calculator_sql(expr)?;
+            let function_name = match target_type.to_ascii_lowercase().as_str() {
+                "int" | "integer" => "cast_integer",
+                "float" | "double" | "real" => "cast_float",
+                "text" | "string" => "cast_text",
+                "bool" | "boolean" => "cast_boolean",
+                "date" | "datetime" | "json" => "cast_text",
+                _ => {
+                    return Err(ToolError::Validation(format!(
+                        "unsupported CAST target type '{}'; supported types are integer, float, text, boolean, date, datetime, json",
+                        target_type
+                    )))
+                }
+            };
+            out.push_str(&format!("{function_name}(({normalized_expr}))"));
+            idx = close_idx + 1;
+            continue;
+        }
+
+        out.push(byte as char);
+        idx += 1;
+    }
+
+    Ok(out)
+}
+
+fn translate_is_null_predicates(input: &str) -> Result<String, ToolError> {
+    let replacements = [
+        (" IS NOT NULL", " != null"),
+        (" IS NULL", " == null"),
+    ];
+    let mut out = input.to_string();
+    for (needle, replacement) in replacements {
+        out = replace_keyword_tail_outside_quotes(&out, needle, replacement)?;
+    }
+    Ok(out)
+}
+
+fn replace_keyword_tail_outside_quotes(
+    input: &str,
+    needle: &str,
+    replacement: &str,
+) -> Result<String, ToolError> {
+    let bytes = input.as_bytes();
+    let needle_bytes = needle.as_bytes();
+    let mut out = String::with_capacity(input.len());
+    let mut idx = 0usize;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+
+    while idx < bytes.len() {
+        let byte = bytes[idx];
+        match byte {
+            b'\'' if !in_double_quote => in_single_quote = !in_single_quote,
+            b'"' if !in_single_quote => in_double_quote = !in_double_quote,
+            _ => {}
+        }
+
+        if !in_single_quote
+            && !in_double_quote
+            && idx + needle_bytes.len() <= bytes.len()
+            && ascii_slice_eq_ignore_case(&bytes[idx..(idx + needle_bytes.len())], needle_bytes)
+        {
+            out.push_str(replacement);
+            idx += needle_bytes.len();
+            continue;
+        }
+
+        out.push(byte as char);
+        idx += 1;
+    }
+
+    Ok(out)
+}
+
+fn translate_sql_operators_and_literals(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = String::with_capacity(input.len() + 8);
+    let mut idx = 0usize;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+
+    while idx < bytes.len() {
+        let byte = bytes[idx];
+
+        if byte == b'\'' && !in_double_quote {
+            in_single_quote = !in_single_quote;
+            out.push('"');
+            idx += 1;
+            continue;
+        }
+        if byte == b'"' && !in_single_quote {
+            in_double_quote = !in_double_quote;
+            out.push('"');
+            idx += 1;
+            continue;
+        }
+
+        if !in_single_quote && !in_double_quote {
+            if idx + 2 <= bytes.len() && &bytes[idx..(idx + 2)] == b"<>" {
+                out.push_str("!=");
+                idx += 2;
+                continue;
+            }
+            if starts_with_ascii_keyword_at(input, idx, "AND") {
+                out.push_str("&&");
+                idx += 3;
+                continue;
+            }
+            if starts_with_ascii_keyword_at(input, idx, "OR") {
+                out.push_str("||");
+                idx += 2;
+                continue;
+            }
+            if starts_with_ascii_keyword_at(input, idx, "NOT") {
+                out.push('!');
+                idx += 3;
+                continue;
+            }
+            if byte == b'=' {
+                let prev = idx.checked_sub(1).and_then(|p| bytes.get(p)).copied();
+                let next = bytes.get(idx + 1).copied();
+                if prev != Some(b'>')
+                    && prev != Some(b'<')
+                    && prev != Some(b'!')
+                    && prev != Some(b'=')
+                    && next != Some(b'=')
+                {
+                    out.push_str("==");
+                    idx += 1;
+                    continue;
+                }
+            }
+        }
+
+        out.push(byte as char);
+        idx += 1;
+    }
+
+    out
+}
+
+fn find_matching_paren(input: &str, open_idx: usize) -> Option<usize> {
+    let bytes = input.as_bytes();
+    if bytes.get(open_idx) != Some(&b'(') {
+        return None;
+    }
+    let mut depth = 0i32;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    for (idx, byte) in bytes.iter().enumerate().skip(open_idx) {
+        match *byte {
+            b'\'' if !in_double_quote => in_single_quote = !in_single_quote,
+            b'"' if !in_single_quote => in_double_quote = !in_double_quote,
+            b'(' if !in_single_quote && !in_double_quote => depth += 1,
+            b')' if !in_single_quote && !in_double_quote => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(idx);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn add_field_calculator_functions(context: &mut HashMapContext) -> Result<(), ToolError> {
+    context
+        .set_function(
+            "cast_integer".to_string(),
+            Function::new(|value| Ok(Value::Int(cast_evalexpr_value_to_i64(value)?))),
+        )
+        .map_err(|e| ToolError::Execution(format!("failed registering cast_integer: {e}")))?;
+    context
+        .set_function(
+            "cast_float".to_string(),
+            Function::new(|value| Ok(Value::Float(cast_evalexpr_value_to_f64(value)?))),
+        )
+        .map_err(|e| ToolError::Execution(format!("failed registering cast_float: {e}")))?;
+    context
+        .set_function(
+            "cast_text".to_string(),
+            Function::new(|value| Ok(Value::String(cast_evalexpr_value_to_string(value)?))),
+        )
+        .map_err(|e| ToolError::Execution(format!("failed registering cast_text: {e}")))?;
+    context
+        .set_function(
+            "cast_boolean".to_string(),
+            Function::new(|value| Ok(Value::Boolean(cast_evalexpr_value_to_bool(value)?))),
+        )
+        .map_err(|e| ToolError::Execution(format!("failed registering cast_boolean: {e}")))?;
+    Ok(())
+}
+
+fn cast_evalexpr_value_to_i64(value: &Value) -> Result<i64, evalexpr::EvalexprError<evalexpr::DefaultNumericTypes>> {
+    match value {
+        Value::Tuple(values) if values.len() == 1 => cast_evalexpr_value_to_i64(&values[0]),
+        Value::Int(v) => Ok(*v),
+        Value::Float(v) => Ok(*v as i64),
+        Value::Boolean(v) => Ok(if *v { 1 } else { 0 }),
+        Value::String(v) => v.trim().parse::<i64>().map_err(|_| {
+            evalexpr::EvalexprError::CustomMessage(format!("cannot CAST '{}' to integer", v))
+        }),
+        Value::Empty => Ok(0),
+        other => Err(evalexpr::EvalexprError::CustomMessage(format!(
+            "cannot CAST {:?} to integer",
+            other
+        ))),
+    }
+}
+
+fn cast_evalexpr_value_to_f64(value: &Value) -> Result<f64, evalexpr::EvalexprError<evalexpr::DefaultNumericTypes>> {
+    match value {
+        Value::Tuple(values) if values.len() == 1 => cast_evalexpr_value_to_f64(&values[0]),
+        Value::Int(v) => Ok(*v as f64),
+        Value::Float(v) => Ok(*v),
+        Value::Boolean(v) => Ok(if *v { 1.0 } else { 0.0 }),
+        Value::String(v) => v.trim().parse::<f64>().map_err(|_| {
+            evalexpr::EvalexprError::CustomMessage(format!("cannot CAST '{}' to float", v))
+        }),
+        Value::Empty => Ok(0.0),
+        other => Err(evalexpr::EvalexprError::CustomMessage(format!(
+            "cannot CAST {:?} to float",
+            other
+        ))),
+    }
+}
+
+fn cast_evalexpr_value_to_string(value: &Value) -> Result<String, evalexpr::EvalexprError<evalexpr::DefaultNumericTypes>> {
+    match value {
+        Value::Tuple(values) if values.len() == 1 => cast_evalexpr_value_to_string(&values[0]),
+        Value::String(v) => Ok(v.clone()),
+        Value::Int(v) => Ok(v.to_string()),
+        Value::Float(v) => Ok(v.to_string()),
+        Value::Boolean(v) => Ok(v.to_string()),
+        Value::Empty => Ok(String::new()),
+        other => Err(evalexpr::EvalexprError::CustomMessage(format!(
+            "cannot CAST {:?} to text",
+            other
+        ))),
+    }
+}
+
+fn cast_evalexpr_value_to_bool(value: &Value) -> Result<bool, evalexpr::EvalexprError<evalexpr::DefaultNumericTypes>> {
+    match value {
+        Value::Tuple(values) if values.len() == 1 => cast_evalexpr_value_to_bool(&values[0]),
+        Value::Boolean(v) => Ok(*v),
+        Value::Int(v) => Ok(*v != 0),
+        Value::Float(v) => Ok(*v != 0.0),
+        Value::String(v) => match v.trim().to_ascii_lowercase().as_str() {
+            "true" | "t" | "yes" | "y" | "1" => Ok(true),
+            "false" | "f" | "no" | "n" | "0" | "" => Ok(false),
+            _ => Err(evalexpr::EvalexprError::CustomMessage(format!(
+                "cannot CAST '{}' to boolean",
+                v
+            ))),
+        },
+        Value::Empty => Ok(false),
+        other => Err(evalexpr::EvalexprError::CustomMessage(format!(
+            "cannot CAST {:?} to boolean",
+            other
+        ))),
+    }
+}
+
+fn build_field_calculator_context(
+    layer: &wbvector::Layer,
+    feature: &wbvector::Feature,
+) -> Result<HashMapContext, ToolError> {
+    let mut context = HashMapContext::new();
+    add_field_calculator_functions(&mut context)?;
+
+    for (field_idx, field_def) in layer.schema.fields().iter().enumerate() {
+        if field_idx >= feature.attributes.len() {
+            continue;
+        }
+        let value = field_value_to_evalexpr(&feature.attributes[field_idx]);
+        context
+            .set_value(field_def.name.clone(), value)
+            .map_err(|e| ToolError::Execution(format!("failed setting expression variable: {}", e)))?;
+    }
+
+    if let Some(geometry) = feature.geometry.as_ref() {
+        let topo = wb_geometry_to_topo(geometry)?;
+        context
+            .set_value("$area".to_string(), Value::Float(geometry_area(&topo)))
+            .map_err(|e| ToolError::Execution(format!("failed setting $area: {}", e)))?;
+        context
+            .set_value("$length".to_string(), Value::Float(geometry_length(&topo)))
+            .map_err(|e| ToolError::Execution(format!("failed setting $length: {}", e)))?;
+        if let Some(centroid) = geometry_centroid(&topo) {
+            context
+                .set_value("$x".to_string(), Value::Float(centroid.x))
+                .map_err(|e| ToolError::Execution(format!("failed setting $x: {}", e)))?;
+            context
+                .set_value("$y".to_string(), Value::Float(centroid.y))
+                .map_err(|e| ToolError::Execution(format!("failed setting $y: {}", e)))?;
+        }
+    }
+    context
+        .set_value("$fid".to_string(), Value::Int(feature.fid as i64))
+        .map_err(|e| ToolError::Execution(format!("failed setting $fid: {}", e)))?;
+    context
+        .set_value("null".to_string(), Value::Empty)
+        .map_err(|e| ToolError::Execution(format!("failed setting null: {}", e)))?;
+    context
+        .set_value("NULL".to_string(), Value::Empty)
+        .map_err(|e| ToolError::Execution(format!("failed setting NULL: {}", e)))?;
+
+    Ok(context)
+}
+
+fn field_value_to_json(value: &wbvector::FieldValue) -> serde_json::Value {
+    match value {
+        wbvector::FieldValue::Integer(v) => json!(v),
+        wbvector::FieldValue::Float(v) => json!(v),
+        wbvector::FieldValue::Text(v) => json!(v),
+        wbvector::FieldValue::Boolean(v) => json!(v),
+        wbvector::FieldValue::Date(v) => json!(v),
+        wbvector::FieldValue::DateTime(v) => json!(v),
+        wbvector::FieldValue::Null => serde_json::Value::Null,
+        wbvector::FieldValue::Blob(v) => json!(format!("<blob:{} bytes>", v.len())),
+    }
+}
+
+fn starts_with_ascii_keyword(input: &str, keyword: &str) -> bool {
+    starts_with_ascii_keyword_at(input, 0, keyword)
+}
+
+fn starts_with_ascii_keyword_at(input: &str, start: usize, keyword: &str) -> bool {
+    if start > input.len() {
+        return false;
+    }
+    let tail = &input[start..];
+    if tail.len() < keyword.len() {
+        return false;
+    }
+    if !ascii_slice_eq_ignore_case(&tail.as_bytes()[..keyword.len()], keyword.as_bytes()) {
+        return false;
+    }
+    let boundary_after = start + keyword.len();
+    boundary_after == input.len() || !is_ascii_ident_char(input.as_bytes()[boundary_after])
+}
+
+fn find_top_level_char(input: &str, target: char) -> Option<usize> {
+    let bytes = input.as_bytes();
+    let target_byte = target as u8;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut paren_depth = 0i32;
+    for (idx, byte) in bytes.iter().enumerate() {
+        match *byte {
+            b'\'' if !in_double_quote => in_single_quote = !in_single_quote,
+            b'"' if !in_single_quote => in_double_quote = !in_double_quote,
+            b'(' if !in_single_quote && !in_double_quote => paren_depth += 1,
+            b')' if !in_single_quote && !in_double_quote && paren_depth > 0 => paren_depth -= 1,
+            _ => {}
+        }
+        if !in_single_quote && !in_double_quote && paren_depth == 0 && *byte == target_byte {
+            return Some(idx);
+        }
+    }
+    None
+}
+
+fn find_keyword_top_level(input: &str, keyword: &str, start: usize) -> Option<usize> {
+    if keyword.is_empty() || start >= input.len() {
+        return None;
+    }
+    let bytes = input.as_bytes();
+    let kw_bytes = keyword.as_bytes();
+    if kw_bytes.len() > bytes.len() {
+        return None;
+    }
+
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut paren_depth = 0i32;
+    let mut idx = start;
+    while idx + kw_bytes.len() <= bytes.len() {
+        let byte = bytes[idx];
+        match byte {
+            b'\'' if !in_double_quote => in_single_quote = !in_single_quote,
+            b'"' if !in_single_quote => in_double_quote = !in_double_quote,
+            b'(' if !in_single_quote && !in_double_quote => paren_depth += 1,
+            b')' if !in_single_quote && !in_double_quote && paren_depth > 0 => paren_depth -= 1,
+            _ => {}
+        }
+
+        if !in_single_quote
+            && !in_double_quote
+            && paren_depth == 0
+            && ascii_slice_eq_ignore_case(&bytes[idx..(idx + kw_bytes.len())], kw_bytes)
+        {
+            let before_ok = idx == 0 || !is_ascii_ident_char(bytes[idx - 1]);
+            let after = idx + kw_bytes.len();
+            let after_ok = after == bytes.len() || !is_ascii_ident_char(bytes[after]);
+            if before_ok && after_ok {
+                return Some(idx);
+            }
+        }
+
+        idx += 1;
+    }
+    None
+}
+
+fn find_next_case_control_keyword(input: &str, start: usize) -> Option<(usize, &'static str)> {
+    let mut next: Option<(usize, &'static str)> = None;
+    for keyword in ["WHEN", "ELSE", "END"] {
+        if let Some(idx) = find_keyword_top_level(input, keyword, start) {
+            match next {
+                Some((best_idx, _)) if best_idx <= idx => {}
+                _ => next = Some((idx, keyword)),
+            }
+        }
+    }
+    next
+}
+
+fn ascii_slice_eq_ignore_case(a: &[u8], b: &[u8]) -> bool {
+    a.len() == b.len()
+        && a
+            .iter()
+            .zip(b.iter())
+            .all(|(left, right)| left.to_ascii_uppercase() == right.to_ascii_uppercase())
+}
+
+fn is_ascii_ident_char(byte: u8) -> bool {
+    (byte as char).is_ascii_alphanumeric() || byte == b'_'
 }
 
 fn collect_points_from_geometry(geometry: &wbvector::Geometry, points: &mut Vec<wbvector::Coord>) {
@@ -21107,9 +21984,10 @@ impl Tool for AddGeometryAttributesTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
-                ToolParamSpec { name: "area", description: "Include AREA field (default true).", required: false },
-                ToolParamSpec { name: "length", description: "Include LENGTH field (default true).", required: false },
-                ToolParamSpec { name: "perimeter", description: "Include PERIMETER field (default true).", required: false },
+                ToolParamSpec { name: "measurement_mode", description: "Measurement method: auto (default), planar, or geodesic.", required: false },
+                ToolParamSpec { name: "area", description: "Include area field (AREA_M2 for geodesic, AREA_MAP2 for planar).", required: false },
+                ToolParamSpec { name: "length", description: "Include length field (LENGTH_M for geodesic, LENGTH_MAP for planar).", required: false },
+                ToolParamSpec { name: "perimeter", description: "Include perimeter field (PERIM_M for geodesic, PERIM_MAP for planar).", required: false },
                 ToolParamSpec { name: "centroid", description: "Include centroid X/Y fields (default true).", required: false },
                 ToolParamSpec { name: "output", description: "Output vector path.", required: true },
             ],
@@ -21123,6 +22001,7 @@ impl Tool for AddGeometryAttributesTool {
         defaults.insert("length".to_string(), json!(true));
         defaults.insert("perimeter".to_string(), json!(true));
         defaults.insert("centroid".to_string(), json!(true));
+        defaults.insert("measurement_mode".to_string(), json!("auto"));
         let mut example_args = defaults.clone();
         example_args.insert("output".to_string(), json!("geometry_attributes.shp"));
 
@@ -21134,9 +22013,10 @@ impl Tool for AddGeometryAttributesTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
-                ToolParamDescriptor { name: "area".to_string(), description: "Include AREA field (default true).".to_string(), required: false },
-                ToolParamDescriptor { name: "length".to_string(), description: "Include LENGTH field (default true).".to_string(), required: false },
-                ToolParamDescriptor { name: "perimeter".to_string(), description: "Include PERIMETER field (default true).".to_string(), required: false },
+                ToolParamDescriptor { name: "measurement_mode".to_string(), description: "Measurement method: auto (default), planar, or geodesic.".to_string(), required: false },
+                ToolParamDescriptor { name: "area".to_string(), description: "Include area field (AREA_M2 for geodesic, AREA_MAP2 for planar).".to_string(), required: false },
+                ToolParamDescriptor { name: "length".to_string(), description: "Include length field (LENGTH_M for geodesic, LENGTH_MAP for planar).".to_string(), required: false },
+                ToolParamDescriptor { name: "perimeter".to_string(), description: "Include perimeter field (PERIM_M for geodesic, PERIM_MAP for planar).".to_string(), required: false },
                 ToolParamDescriptor { name: "centroid".to_string(), description: "Include centroid X/Y fields (default true).".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
             ],
@@ -21153,6 +22033,7 @@ impl Tool for AddGeometryAttributesTool {
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = load_vector_arg(args, "input")?;
+        let _ = MeasurementMode::parse(parse_optional_string_arg(args, "measurement_mode"))?;
         let _ = parse_vector_path_arg(args, "output")?;
         Ok(())
     }
@@ -21165,21 +22046,64 @@ impl Tool for AddGeometryAttributesTool {
         let include_length = parse_bool_arg(args, "length", true);
         let include_perimeter = parse_bool_arg(args, "perimeter", true);
         let include_centroid = parse_bool_arg(args, "centroid", true);
+        let measurement_mode = MeasurementMode::parse(parse_optional_string_arg(args, "measurement_mode"))?;
+
+        let use_geodesic = match measurement_mode {
+            MeasurementMode::Auto => layer_crs_is_geographic(&input),
+            MeasurementMode::Planar => false,
+            MeasurementMode::Geodesic => true,
+        };
+
+        let area_field_name = if use_geodesic { "AREA_M2" } else { "AREA_MAP2" };
+        let length_field_name = if use_geodesic { "LENGTH_M" } else { "LENGTH_MAP" };
+        let perimeter_field_name = if use_geodesic { "PERIM_M" } else { "PERIM_MAP" };
 
         let mut output = input.clone();
-        if include_area {
-            output.schema.add_field(wbvector::FieldDef::new("AREA", wbvector::FieldType::Float));
-        }
-        if include_length {
-            output.schema.add_field(wbvector::FieldDef::new("LENGTH", wbvector::FieldType::Float));
-        }
-        if include_perimeter {
-            output.schema.add_field(wbvector::FieldDef::new("PERIMETER", wbvector::FieldType::Float));
-        }
-        if include_centroid {
-            output.schema.add_field(wbvector::FieldDef::new("CENTROID_X", wbvector::FieldType::Float));
-            output.schema.add_field(wbvector::FieldDef::new("CENTROID_Y", wbvector::FieldType::Float));
-        }
+        let area_idx = if include_area {
+            Some(
+                output
+                    .schema
+                    .upsert_field(wbvector::FieldDef::new(area_field_name, wbvector::FieldType::Float).precision(6)),
+            )
+        } else {
+            None
+        };
+        let length_idx = if include_length {
+            Some(
+                output
+                    .schema
+                    .upsert_field(wbvector::FieldDef::new(length_field_name, wbvector::FieldType::Float).precision(6)),
+            )
+        } else {
+            None
+        };
+        let perimeter_idx = if include_perimeter {
+            Some(
+                output
+                    .schema
+                    .upsert_field(wbvector::FieldDef::new(perimeter_field_name, wbvector::FieldType::Float).precision(6)),
+            )
+        } else {
+            None
+        };
+        let centroid_x_idx = if include_centroid {
+            Some(
+                output
+                    .schema
+                    .upsert_field(wbvector::FieldDef::new("CENTROID_X", wbvector::FieldType::Float).precision(6)),
+            )
+        } else {
+            None
+        };
+        let centroid_y_idx = if include_centroid {
+            Some(
+                output
+                    .schema
+                    .upsert_field(wbvector::FieldDef::new("CENTROID_Y", wbvector::FieldType::Float).precision(6)),
+            )
+        } else {
+            None
+        };
 
         let total = output.features.len().max(1);
         let computed_values: Result<Vec<Vec<wbvector::FieldValue>>, ToolError> = output
@@ -21190,17 +22114,31 @@ impl Tool for AddGeometryAttributesTool {
                 let mut values = Vec::new();
 
                 if let Some(geometry) = feature.geometry.as_ref() {
-                    let topo = wb_geometry_to_topo(geometry)?;
-                    if include_area {
-                        values.push(wbvector::FieldValue::Float(geometry_area(&topo)));
+                    if use_geodesic {
+                        if include_area {
+                            values.push(wbvector::FieldValue::Float(geodesic_geometry_area_m2(geometry)));
+                        }
+                        if include_length {
+                            values.push(wbvector::FieldValue::Float(geodesic_geometry_length_m(geometry)));
+                        }
+                        if include_perimeter {
+                            values.push(wbvector::FieldValue::Float(geodesic_geometry_perimeter_m(geometry)));
+                        }
+                    } else {
+                        let topo = wb_geometry_to_topo(geometry)?;
+                        if include_area {
+                            values.push(wbvector::FieldValue::Float(geometry_area(&topo)));
+                        }
+                        if include_length {
+                            values.push(wbvector::FieldValue::Float(geometry_length(&topo)));
+                        }
+                        if include_perimeter {
+                            values.push(wbvector::FieldValue::Float(topo_geometry_boundary_length(&topo)));
+                        }
                     }
-                    if include_length {
-                        values.push(wbvector::FieldValue::Float(geometry_length(&topo)));
-                    }
-                    if include_perimeter {
-                        values.push(wbvector::FieldValue::Float(topo_geometry_boundary_length(&topo)));
-                    }
+
                     if include_centroid {
+                        let topo = wb_geometry_to_topo(geometry)?;
                         if let Some(centroid) = geometry_centroid(&topo) {
                             values.push(wbvector::FieldValue::Float(centroid.x));
                             values.push(wbvector::FieldValue::Float(centroid.y));
@@ -21231,7 +22169,22 @@ impl Tool for AddGeometryAttributesTool {
         let computed_values = computed_values?;
 
         for (index, values) in computed_values.into_iter().enumerate() {
-            output.features[index].attributes.extend(values);
+            let mut iter = values.into_iter();
+            if let Some(field_idx) = area_idx {
+                output.features[index].set_by_index(field_idx, iter.next().unwrap_or(wbvector::FieldValue::Null));
+            }
+            if let Some(field_idx) = length_idx {
+                output.features[index].set_by_index(field_idx, iter.next().unwrap_or(wbvector::FieldValue::Null));
+            }
+            if let Some(field_idx) = perimeter_idx {
+                output.features[index].set_by_index(field_idx, iter.next().unwrap_or(wbvector::FieldValue::Null));
+            }
+            if let Some(field_idx) = centroid_x_idx {
+                output.features[index].set_by_index(field_idx, iter.next().unwrap_or(wbvector::FieldValue::Null));
+            }
+            if let Some(field_idx) = centroid_y_idx {
+                output.features[index].set_by_index(field_idx, iter.next().unwrap_or(wbvector::FieldValue::Null));
+            }
             coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
         }
 
@@ -21669,16 +22622,17 @@ impl Tool for FieldCalculatorTool {
         ToolMetadata {
             id: "field_calculator",
             display_name: "Field Calculator",
-            summary: "Calculates a field value from an expression using feature attributes and geometry variables.",
+            summary: "Calculates a field value from an expression using feature attributes and geometry variables; supports SQL-style CASE, CAST, null checks, and UPDATE ... SET ... [WHERE ...] wrappers.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
                 ToolParamSpec { name: "field", description: "Output field name.", required: true },
                 ToolParamSpec { name: "field_type", description: "Output field type: float, integer, text.", required: false },
-                ToolParamSpec { name: "expression", description: "Expression evaluated per feature.", required: true },
+                ToolParamSpec { name: "expression", description: "Expression evaluated per feature. Supports SQL-style CASE, CAST(... AS type), IS NULL/IS NOT NULL, and UPDATE ... SET FIELD = ... [WHERE ...] wrappers.", required: true },
                 ToolParamSpec { name: "overwrite", description: "Overwrite existing field if present (default true).", required: false },
-                ToolParamSpec { name: "output", description: "Output vector path.", required: true },
+                ToolParamSpec { name: "preview_rows", description: "Optional number of preview rows to return in the result payload. When > 0, output may be omitted for preview-only evaluation.", required: false },
+                ToolParamSpec { name: "output", description: "Output vector path. Optional when preview_rows > 0.", required: false },
             ],
         }
     }
@@ -21690,22 +22644,24 @@ impl Tool for FieldCalculatorTool {
         defaults.insert("field_type".to_string(), json!("float"));
         defaults.insert("expression".to_string(), json!("VALUE * 2.0 + $area"));
         defaults.insert("overwrite".to_string(), json!(true));
+        defaults.insert("preview_rows".to_string(), json!(0));
         let mut example_args = defaults.clone();
         example_args.insert("output".to_string(), json!("field_calc.shp"));
 
         ToolManifest {
             id: "field_calculator".to_string(),
             display_name: "Field Calculator".to_string(),
-            summary: "Calculates a field value from an expression using feature attributes and geometry variables.".to_string(),
+            summary: "Calculates a field value from an expression using feature attributes and geometry variables; supports SQL-style CASE, CAST, null checks, and UPDATE ... SET ... [WHERE ...] wrappers.".to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
                 ToolParamDescriptor { name: "field".to_string(), description: "Output field name.".to_string(), required: true },
                 ToolParamDescriptor { name: "field_type".to_string(), description: "Output field type: float, integer, text.".to_string(), required: false },
-                ToolParamDescriptor { name: "expression".to_string(), description: "Expression evaluated per feature.".to_string(), required: true },
+                ToolParamDescriptor { name: "expression".to_string(), description: "Expression evaluated per feature. Supports SQL-style CASE, CAST(... AS type), IS NULL/IS NOT NULL, and UPDATE ... SET FIELD = ... [WHERE ...] wrappers.".to_string(), required: true },
                 ToolParamDescriptor { name: "overwrite".to_string(), description: "Overwrite existing field if present (default true).".to_string(), required: false },
-                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
+                ToolParamDescriptor { name: "preview_rows".to_string(), description: "Optional number of preview rows to return in the result payload. When > 0, output may be omitted for preview-only evaluation.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path. Optional when preview_rows > 0.".to_string(), required: false },
             ],
             defaults,
             examples: vec![ToolExample {
@@ -21722,11 +22678,23 @@ impl Tool for FieldCalculatorTool {
         let input = load_vector_arg(args, "input")?;
         let field_name = parse_string_arg(args, "field")?;
         let _ = sanitize_field_name_for_output(field_name);
+        let preview_rows = parse_field_calculator_preview_rows(args)?;
 
         let expression = parse_string_arg(args, "expression")?;
-        build_operator_tree::<evalexpr::DefaultNumericTypes>(expression).map_err(|e| {
+        let normalized_expression = normalize_field_calculator_expression(expression)?;
+        build_operator_tree::<evalexpr::DefaultNumericTypes>(
+            normalized_expression.assignment_expr.as_str(),
+        )
+        .map_err(|e| {
             ToolError::Validation(format!("invalid expression: {}", e))
         })?;
+        if let Some(where_expression) = normalized_expression.where_expr.as_ref() {
+            build_operator_tree::<evalexpr::DefaultNumericTypes>(where_expression.as_str()).map_err(
+                |e| {
+                    ToolError::Validation(format!("invalid WHERE expression: {}", e))
+                },
+            )?;
+        }
 
         let field_type = parse_optional_string_arg(args, "field_type").unwrap_or("float");
         match field_type.to_ascii_lowercase().as_str() {
@@ -21748,7 +22716,13 @@ impl Tool for FieldCalculatorTool {
             }
         }
 
-        let _ = parse_vector_path_arg(args, "output")?;
+        let output_path = parse_optional_output_path(args, "output")?;
+        if output_path.is_none() && preview_rows == 0 {
+            return Err(ToolError::Validation(
+                "either 'output' must be provided or 'preview_rows' must be greater than 0"
+                    .to_string(),
+            ));
+        }
         Ok(())
     }
 
@@ -21756,16 +22730,28 @@ impl Tool for FieldCalculatorTool {
         let coalescer = PercentCoalescer::new(1, 99);
         let input = load_vector_arg(args, "input")?;
         let field_name = sanitize_field_name_for_output(parse_string_arg(args, "field")?);
+        let preview_rows = parse_field_calculator_preview_rows(args)?;
         let field_type = parse_optional_string_arg(args, "field_type")
             .unwrap_or("float")
             .to_ascii_lowercase();
         let expression = parse_string_arg(args, "expression")?;
+        let normalized_expression = normalize_field_calculator_expression(expression)?;
         let overwrite = parse_bool_arg(args, "overwrite", true);
-        let output_path = parse_vector_path_arg(args, "output")?;
+        let output_path = parse_optional_output_path(args, "output")?
+            .map(|p| p.to_string_lossy().to_string());
 
-        let tree = build_operator_tree::<evalexpr::DefaultNumericTypes>(expression).map_err(|e| {
-            ToolError::Validation(format!("invalid expression: {}", e))
-        })?;
+        let tree = build_operator_tree::<evalexpr::DefaultNumericTypes>(
+            normalized_expression.assignment_expr.as_str(),
+        )
+        .map_err(|e| ToolError::Validation(format!("invalid expression: {}", e)))?;
+        let where_tree = if let Some(where_expression) = normalized_expression.where_expr.as_ref() {
+            Some(
+                build_operator_tree::<evalexpr::DefaultNumericTypes>(where_expression.as_str())
+                    .map_err(|e| ToolError::Validation(format!("invalid WHERE expression: {}", e)))?,
+            )
+        } else {
+            None
+        };
 
         let mut output = input.clone();
         let existing_idx = output.schema.field_index(&field_name);
@@ -21791,67 +22777,95 @@ impl Tool for FieldCalculatorTool {
         };
 
         let total = output.features.len().max(1);
-        let computed_values: Result<Vec<wbvector::FieldValue>, ToolError> = output
+        let computed_values: Result<Vec<Option<wbvector::FieldValue>>, ToolError> = output
             .features
             .par_iter()
             .enumerate()
             .map(|(_, feature)| {
-            let mut context = HashMapContext::new();
+            let context = build_field_calculator_context(&output, feature)?;
 
-            for (field_idx, field_def) in output.schema.fields().iter().enumerate() {
-                if field_idx >= feature.attributes.len() {
-                    continue;
-                }
-                let value = field_value_to_evalexpr(&feature.attributes[field_idx]);
-                context
-                    .set_value(field_def.name.clone(), value)
-                    .map_err(|e| ToolError::Execution(format!("failed setting expression variable: {}", e)))?;
-            }
-
-            if let Some(geometry) = feature.geometry.as_ref() {
-                let topo = wb_geometry_to_topo(geometry)?;
-                context
-                    .set_value("$area".to_string(), Value::Float(geometry_area(&topo)))
-                    .map_err(|e| ToolError::Execution(format!("failed setting $area: {}", e)))?;
-                context
-                    .set_value("$length".to_string(), Value::Float(geometry_length(&topo)))
-                    .map_err(|e| ToolError::Execution(format!("failed setting $length: {}", e)))?;
-                if let Some(centroid) = geometry_centroid(&topo) {
-                    context
-                        .set_value("$x".to_string(), Value::Float(centroid.x))
-                        .map_err(|e| ToolError::Execution(format!("failed setting $x: {}", e)))?;
-                    context
-                        .set_value("$y".to_string(), Value::Float(centroid.y))
-                        .map_err(|e| ToolError::Execution(format!("failed setting $y: {}", e)))?;
+            if let Some(filter_tree) = where_tree.as_ref() {
+                let should_update = filter_tree
+                    .eval_boolean_with_context(&context)
+                    .map_err(|e| ToolError::Execution(format!("WHERE evaluation failed: {}", e)))?;
+                if !should_update {
+                    return Ok(None);
                 }
             }
-            context
-                .set_value("$fid".to_string(), Value::Int(feature.fid as i64))
-                .map_err(|e| ToolError::Execution(format!("failed setting $fid: {}", e)))?;
 
             let value = tree
                 .eval_with_context(&context)
                 .map_err(|e| ToolError::Execution(format!("expression evaluation failed: {}", e)))?;
 
             let converted = evalexpr_to_field_value(&value, field_type.as_str());
-            Ok(converted)
+            Ok(Some(converted))
         })
         .collect();
         let computed_values = computed_values?;
 
-        for (index, converted) in computed_values.into_iter().enumerate() {
+        for (index, maybe_converted) in computed_values.iter().cloned().enumerate() {
             let feature = &mut output.features[index];
             if target_idx < feature.attributes.len() {
-                feature.attributes[target_idx] = converted;
+                if let Some(converted) = maybe_converted {
+                    feature.attributes[target_idx] = converted;
+                }
             } else {
-                feature.attributes.push(converted);
+                feature
+                    .attributes
+                    .push(maybe_converted.unwrap_or(wbvector::FieldValue::Null));
             }
 
             coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
         }
 
-        let output_locator = write_vector_output(&output, output_path.trim())?;
-        Ok(build_vector_result(output_locator))
+        let mut result = ToolRunResult::default();
+        if let Some(output_path) = output_path.as_ref() {
+            let output_locator = write_vector_output(&output, output_path.trim())?;
+            result.outputs.insert("path".to_string(), json!(output_locator));
+        }
+
+        if preview_rows > 0 {
+            let preview = output
+                .features
+                .iter()
+                .zip(input.features.iter())
+                .zip(computed_values.iter())
+                .take(preview_rows)
+                .map(|((updated_feature, original_feature), maybe_computed)| {
+                    let original_value = original_feature
+                        .attributes
+                        .get(target_idx)
+                        .cloned()
+                        .unwrap_or(wbvector::FieldValue::Null);
+                    let resulting_value = updated_feature
+                        .attributes
+                        .get(target_idx)
+                        .cloned()
+                        .unwrap_or(wbvector::FieldValue::Null);
+                    json!({
+                        "fid": updated_feature.fid,
+                        "will_update": maybe_computed.is_some(),
+                        "original_value": field_value_to_json(&original_value),
+                        "computed_value": maybe_computed.as_ref().map(field_value_to_json).unwrap_or(serde_json::Value::Null),
+                        "result_value": field_value_to_json(&resulting_value)
+                    })
+                })
+                .collect::<Vec<_>>();
+            result.outputs.insert("preview".to_string(), json!(preview));
+            result
+                .outputs
+                .insert("preview_rows".to_string(), json!(preview.len()));
+            result
+                .outputs
+                .insert("normalized_expression".to_string(), json!(normalized_expression.assignment_expr));
+            if let Some(where_expression) = normalized_expression.where_expr {
+                result
+                    .outputs
+                    .insert("normalized_where".to_string(), json!(where_expression));
+            }
+        }
+
+        Ok(result)
     }
 }
 
@@ -28066,6 +29080,7 @@ fn build_line_network_graph(
     node_cost_options: Option<&NetworkNodeCostOptions>,
 ) -> Result<LineNetworkGraph, ToolError> {
     let lines = collect_layer_linework(input, false)?;
+    let use_geodesic = layer_crs_is_geographic(input);
     let edge_cost_idx = resolve_network_edge_cost_field(input, edge_cost_field)?;
     let one_way_idx = resolve_network_one_way_field(input, one_way_field)?;
     let blocked_idx = resolve_network_blocked_field(input, blocked_field)?;
@@ -28080,7 +29095,7 @@ fn build_line_network_graph(
         for seg_idx in 1..line.coords.len() {
             let a = &line.coords[seg_idx - 1];
             let b = &line.coords[seg_idx];
-            let length = coord_dist2(a, b).sqrt();
+            let length = network_segment_length(a, b, use_geodesic);
             if length <= 0.0 {
                 continue;
             }
@@ -28404,6 +29419,7 @@ fn build_line_network_graph_mode_aware(
     allowed_modes: &HashSet<String>,
 ) -> Result<LineNetworkGraph, ToolError> {
     let lines = collect_layer_linework(input, false)?;
+    let use_geodesic = layer_crs_is_geographic(input);
     let edge_cost_idx = resolve_network_edge_cost_field(input, edge_cost_field)?;
     let one_way_idx = resolve_network_one_way_field(input, one_way_field)?;
     let blocked_idx = resolve_network_blocked_field(input, blocked_field)?;
@@ -28449,7 +29465,7 @@ fn build_line_network_graph_mode_aware(
         for seg_idx in 1..line.coords.len() {
             let a = &line.coords[seg_idx - 1];
             let b = &line.coords[seg_idx];
-            let length = coord_dist2(a, b).sqrt();
+            let length = network_segment_length(a, b, use_geodesic);
             if length <= 0.0 {
                 continue;
             }
@@ -28661,6 +29677,7 @@ fn build_multimodal_network_graph(
         .schema
         .field_index(mode_field)
         .ok_or_else(|| ToolError::Validation(format!("mode_field '{}' was not found", mode_field)))?;
+    let use_geodesic = layer_crs_is_geographic(input);
 
     let lines = collect_layer_linework(input, false)?;
     let mut node_map = HashMap::<NetworkNodeKey, usize>::new();
@@ -28704,7 +29721,7 @@ fn build_multimodal_network_graph(
         for seg_idx in 1..line.coords.len() {
             let a = &line.coords[seg_idx - 1];
             let b = &line.coords[seg_idx];
-            let length = coord_dist2(a, b).sqrt();
+            let length = network_segment_length(a, b, use_geodesic);
             if length <= 0.0 {
                 continue;
             }

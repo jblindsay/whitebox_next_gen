@@ -7,6 +7,13 @@ sensitivity analysis, multimodal transit modelling, map matching, and fleet
 dispatch optimization. This chapter walks through those capabilities in order,
 mirroring the prepare-then-query-then-scale-up workflow used in practice.
 
+### Capability Note (Open Tier)
+
+The workflows in this chapter target the open-tier engine and include advanced
+network controls such as turn/u-turn penalties, node-entry costs, and optional
+time-dependent edge profiles (`temporal_cost_profile` + `departure_time`) for
+scenario and peak-period analysis.
+
 ---
 
 ## Session Setup

@@ -231,13 +231,37 @@ wbw_vector_points_to_raster(i = points$file_path(), output = 'points_raster.tif'
 ## Field Calculator
 
 ```r
-# Compute area in hectares and write to existing field
-wbw_field_calculator(i         = polys$file_path(),
-  output    = 'parcels_calc.shp',
-  field_name = 'AREA_HA',
-  py_statement = '@Area / 10000.0',
-  analyse   = FALSE)
+# SQL-style field update through runtime tool invocation
+fc_result <- s$run_tool(
+  'field_calculator',
+  list(
+    input      = polys$file_path(),
+    field      = 'AREA_HA',
+    field_type = 'float',
+    expression = 'CASE WHEN AREA_M2 IS NULL THEN NULL ELSE AREA_M2 / 10000.0 END',
+    overwrite  = TRUE,
+    output     = 'parcels_calc.gpkg'
+  )
+)
+
+# Preview-only mode (no output write); returns preview payload
+fc_preview <- s$run_tool(
+  'field_calculator',
+  list(
+    input        = polys$file_path(),
+    field        = 'SPEED',
+    field_type   = 'integer',
+    expression   = "CASE TYPE WHEN 'motorway' THEN 100 ELSE 60 END",
+    overwrite    = TRUE,
+    preview_rows = 10
+  )
+)
+
+print(fc_preview$outputs$preview)
 ```
+
+`field_calculator` now supports SQL-style `CASE`, `UPDATE ... SET ... WHERE ...`
+wrappers, SQL operators/null predicates, and `CAST(... AS type)` expressions.
 
 ---
 

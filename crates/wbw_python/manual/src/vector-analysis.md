@@ -403,16 +403,44 @@ pts_raster = wbe.conversion.raster_vector_conversion.vector_points_to_raster(
 
 ## Field Calculator
 
-The field calculator tool evaluates an expression against the attribute table to create or update a field:
+The field calculator supports SQL-style and expression-style updates for vector
+attributes, including:
+
+- searched `CASE WHEN ... THEN ... ELSE ... END`
+- simple `CASE field WHEN value THEN ... END`
+- `UPDATE ... SET ... [WHERE ...]` wrapper syntax
+- SQL operators (`=`, `<>`, `AND`, `OR`, `NOT`), plus `IS NULL` / `IS NOT NULL`
+- `CAST(... AS integer|float|text|boolean)`
+- preview-first execution with `preview_rows` (no output write required)
+
+Use it to create or update a field from existing attributes and geometry
+variables (`$area`, `$length`, `$perimeter`, centroid coordinates).
 
 ```python
-# Compute a normalised shape index from existing area and perimeter fields
+# Compute/update SPEED from TYPE using SQL-style CASE
 watersheds = wbe.vector.attribute_analysis.field_calculator(
     input=watersheds,
-    field_name='SHAPE_IDX',
-    expression="'PERIMETER' / (2.0 * 3.14159 * sqrt('AREA' / 3.14159))"
+    field='SPEED',
+    field_type='integer',
+    expression="CASE WHEN TYPE == 'motorway' THEN 100 WHEN TYPE == 'primary' THEN 80 ELSE 60 END",
+    overwrite=True,
+    output='watersheds_speed.gpkg'
+)
+
+# Preview-only evaluation (returns preview payload, omits output write)
+preview = wbe.vector.attribute_analysis.field_calculator(
+    input=watersheds,
+    field='SPEED',
+    field_type='integer',
+    expression="CASE TYPE WHEN 'motorway' THEN 100 ELSE 60 END",
+    overwrite=True,
+    preview_rows=10
 )
 ```
+
+When `preview_rows > 0`, the tool returns preview records and normalized
+expression details that can be surfaced in UI workflows before committing
+final output writes.
 
 ---
 

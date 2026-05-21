@@ -8,6 +8,14 @@ three common tracks:
 - OD and nearest-facility analysis
 - Stream-network hierarchy and connectivity
 
+### Capability Note (Open Tier)
+
+Whitebox open tier provides advanced network tools directly in the QGIS plugin,
+including shortest path, k-shortest alternatives, service areas, OD matrices,
+closest facility, location-allocation, and multimodal OD/routes. Advanced
+impedance controls include one-way directionality, turn/u-turn penalties,
+optional node-entry costs, and optional temporal cost profiles.
+
 ---
 
 ## Core Concepts You Should Know First
@@ -70,7 +78,8 @@ Recommended fields:
 - TIME_MIN (derived)
 - ONEWAY (optional directional control)
 
-Use this prepared layer as the routing network for native QGIS algorithms.
+Use this prepared layer as the routing network for Whitebox network-analysis
+tools in the Processing Toolbox.
 
 ---
 
@@ -126,62 +135,104 @@ Practical pattern:
 
 When node-cost parameters are omitted, routing uses edge impedance only.
 
-### Step 3 - Shortest Path
+### Step 3 - Shortest Path and K-Shortest Alternatives
 
-Processing Toolbox -> Network Analysis:
+Processing Toolbox -> Whitebox Workflows -> Network Analysis:
 
-- Shortest Path (Point to Point)
-- Shortest Path (Layer to Point)
-- Shortest Path (Point to Layer)
+- `Shortest Path Network`
+- `K Shortest Paths Network`
 
-Use the prepared cost field (distance or time) consistently.
+Recommended parameters:
+
+| Parameter | Example |
+|-----------|---------|
+| Input network | roads_prepared.shp |
+| Start / End | route endpoints or point features |
+| Edge cost field | TIME_MIN |
+| One-way field | ONEWAY |
+| Turn penalty | 0.3 to 0.8 (minutes) |
+| U-turn penalty | 2.0 to 4.0 (minutes) |
+
+Use k-shortest outputs when teaching resilience, alternate routing, or
+choice-model concepts.
 
 ---
 
 ### Step 4 - Service Area (Isochrone)
 
-Processing Toolbox -> Network Analysis -> Service Area (From Layer)
+Processing Toolbox -> Whitebox Workflows -> Network Analysis ->
+`Network Service Area`
 
 Recommended parameters:
 
 | Parameter | Example |
 |-----------|---------|
 | Network layer | roads_prepared.shp |
-| Strategy | Shortest |
-| Start points | facilities.shp |
-| Travel cost | 5.0 (minutes) or 3000 (meters) |
+| Origins | facilities.shp |
+| Max cost | 5.0 (minutes) or 3000 (meters) |
+| Output mode | polygon or edges |
+| Polygon merge origins | true/false |
+| Edge cost field | TIME_MIN |
+| One-way field | ONEWAY |
 
-Export output lines and optional polygons for reporting.
+Advanced options (recommended for realistic urban travel times):
 
----
-
-### Step 5 - Closest Facility Pattern
-
-Use Service Area and shortest-path tools together:
-
-- Build candidate facilities
-- Route demand points to nearest reachable facilities
-- Summarize cost by facility catchment
-
-For large batches, run model-builder or Python Console loops.
+- `node_cost_points`, `node_cost_field`, `node_cost_snap_distance`
+- `turn_penalty`, `u_turn_penalty`, `forbid_u_turns`
+- `temporal_cost_profile`, `departure_time`, `temporal_mode`
 
 ---
 
-## Workflow C: OD-Style Batch Analysis in QGIS
+### Step 5 - Closest Facility and OD Matrices
 
-QGIS does not provide a single OD matrix tool equivalent to the Python/R
-chapters, so the standard QGIS pattern is:
+Processing Toolbox -> Whitebox Workflows -> Network Analysis:
 
-- Iterate origins and destinations in batch
-- Run shortest path for each pair
-- Aggregate travel cost in an output table
+- `Closest Facility Network`
+- `Network OD Cost Matrix`
+- `Network Routes From OD`
 
-Use this when you need accessibility summaries or assignment baselines directly
-inside QGIS projects.
+Use these for assignment, accessibility summaries, and route materialization.
+OD matrix output is ideal for downstream tabular analysis (Python/R/pandas).
 
 ---
 
-## Workflow D: Hydrologic Stream Networks
+## Workflow C: Location-Allocation and Accessibility
+
+Processing Toolbox -> Whitebox Workflows -> Network Analysis:
+
+- `Location Allocation Network`
+- `Compute Network Accessibility`
+
+Recommended location-allocation pattern:
+
+1. Prepare candidate sites and weighted demand points.
+2. Select solver mode (`minimize_impedance`, `maximize_coverage`, or
+  `maximize_attendance`).
+3. Compare static-cost and peak-period temporal-profile runs.
+
+Recommended accessibility pattern:
+
+1. Provide origins and destination opportunities.
+2. Set impedance cutoff and decay function.
+3. Map/compare resulting accessibility scores across scenarios.
+
+## Workflow D: Multimodal Network Analysis
+
+Processing Toolbox -> Whitebox Workflows -> Network Analysis:
+
+- `Multimodal Shortest Path`
+- `Multimodal OD Cost Matrix`
+- `Multimodal Routes From OD`
+
+Requirements:
+
+- mode field on network edges (e.g., walk/bus/rail)
+- allowed-modes and transfer-penalty configuration
+- optional temporal profile for schedule/peak scenarios
+
+---
+
+## Workflow E: Hydrologic Stream Networks
 
 Hydrologic network tools remain an important part of network analysis and are
 included here as a dedicated sub-workflow rather than the entire chapter.
@@ -217,14 +268,27 @@ processing.run('whitebox_workflows:add_geometry_attributes', {
     'output': '/data/roads_prepared.shp',
 })
 
-# Service area from facilities
-processing.run('native:serviceareafromlayer', {
-    'INPUT': '/data/roads_prepared.shp',
-    'STRATEGY': 0,
-    'START_POINTS': '/data/facilities.shp',
-    'TRAVEL_COST': 5.0,
-    'OUTPUT_LINES': '/data/service_area_lines.shp',
-    'OUTPUT': 'TEMPORARY_OUTPUT',
+# Whitebox network service area
+processing.run('whitebox_workflows:network_service_area', {
+  'input': '/data/roads_prepared.shp',
+  'origins': '/data/facilities.shp',
+  'max_cost': 5.0,
+  'output_mode': 'polygon',
+  'edge_cost_field': 'TIME_MIN',
+  'one_way_field': 'ONEWAY',
+  'turn_penalty': 0.4,
+  'u_turn_penalty': 2.5,
+  'output': '/data/service_area_5min.shp',
+})
+
+# Whitebox OD matrix
+processing.run('whitebox_workflows:network_od_cost_matrix', {
+  'input': '/data/roads_prepared.shp',
+  'origins': '/data/origins.shp',
+  'destinations': '/data/destinations.shp',
+  'edge_cost_field': 'TIME_MIN',
+  'one_way_field': 'ONEWAY',
+  'output': '/data/od_costs.csv',
 })
 
 # Stream order

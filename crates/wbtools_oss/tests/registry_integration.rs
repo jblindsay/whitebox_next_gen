@@ -16805,6 +16805,7 @@ fn add_geometry_attributes_adds_expected_area_and_centroid() {
     args.insert("length".to_string(), json!(false));
     args.insert("perimeter".to_string(), json!(false));
     args.insert("centroid".to_string(), json!(true));
+    args.insert("measurement_mode".to_string(), json!("planar"));
     args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
     registry
         .run("add_geometry_attributes", &args, &context(&caps))
@@ -16813,7 +16814,10 @@ fn add_geometry_attributes_adds_expected_area_and_centroid() {
     let out = wbvector::read(&out_path).expect("read output polygons");
     assert_eq!(out.features.len(), 1);
 
-    let area_idx = out.schema.field_index("AREA").expect("AREA field exists");
+    let area_idx = out
+        .schema
+        .field_index("AREA_MAP2")
+        .expect("AREA_MAP2 field exists");
     let cx_idx = out.schema.field_index("CENTROID_X").expect("CENTROID_X field exists");
     let cy_idx = out.schema.field_index("CENTROID_Y").expect("CENTROID_Y field exists");
     let attrs = &out.features[0].attributes;
@@ -16821,7 +16825,7 @@ fn add_geometry_attributes_adds_expected_area_and_centroid() {
     match &attrs[area_idx] {
         FieldValue::Float(v) => assert!((*v - 1.0).abs() < 1.0e-9, "expected area 1.0, got {}", v),
         FieldValue::Integer(v) => assert_eq!(*v, 1, "expected area 1, got {}", v),
-        other => panic!("expected numeric AREA, got {:?}", other),
+        other => panic!("expected numeric AREA_MAP2, got {:?}", other),
     }
     match &attrs[cx_idx] {
         FieldValue::Float(v) => assert!((*v - 0.5).abs() < 1.0e-9, "expected centroid x 0.5, got {}", v),
@@ -16834,6 +16838,148 @@ fn add_geometry_attributes_adds_expected_area_and_centroid() {
 
     let _ = std::fs::remove_file(&input_path);
     let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn add_geometry_attributes_preserves_decimal_area_in_shapefile_output() {
+    use wbvector::{Coord, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_add_geometry_attributes_shp_precision");
+    let input_path = std::env::temp_dir().join(format!("{tag}_in.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.shp"));
+
+    let mut polygons = Layer::new("polygons")
+        .with_geom_type(GeometryType::Polygon)
+        .with_epsg(4326);
+    polygons
+        .add_feature(
+            Some(Geometry::polygon(
+                vec![
+                    Coord::xy(0.0, 0.0),
+                    Coord::xy(0.1, 0.0),
+                    Coord::xy(0.1, 0.1),
+                    Coord::xy(0.0, 0.1),
+                    Coord::xy(0.0, 0.0),
+                ],
+                vec![],
+            )),
+            &[],
+        )
+        .expect("add polygon feature");
+    wbvector::write(&polygons, &input_path, VectorFormat::GeoPackage).expect("write polygon input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("area".to_string(), json!(true));
+    args.insert("length".to_string(), json!(false));
+    args.insert("perimeter".to_string(), json!(false));
+    args.insert("centroid".to_string(), json!(false));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("add_geometry_attributes", &args, &context(&caps))
+        .expect("add_geometry_attributes run");
+
+    let out = wbvector::read(&out_path).expect("read output shapefile");
+    assert_eq!(out.features.len(), 1);
+
+    let area_field = out.schema.field("AREA_M2").expect("AREA_M2 field exists");
+    assert!(
+        area_field.precision > 0,
+        "AREA_M2 field precision should preserve decimal area values in DBF"
+    );
+
+    let area_idx = out
+        .schema
+        .field_index("AREA_M2")
+        .expect("AREA_M2 field exists");
+    let area_value = out.features[0].attributes[area_idx]
+        .as_f64()
+        .expect("AREA_M2 value should be numeric");
+    assert!(
+        area_value > 0.0,
+        "tiny polygon area should remain non-zero in shapefile output"
+    );
+
+    let _ = std::fs::remove_file(&input_path);
+    for ext in ["shp", "shx", "dbf", "prj"] {
+        let _ = std::fs::remove_file(out_path.with_extension(ext));
+    }
+}
+
+#[test]
+fn add_geometry_attributes_replaces_existing_integer_area_field_with_float_values() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_add_geometry_attributes_existing_integer_area");
+    let input_path = std::env::temp_dir().join(format!("{tag}_in.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.shp"));
+
+    let mut polygons = Layer::new("polygons")
+        .with_geom_type(GeometryType::Polygon)
+        .with_epsg(3857);
+    polygons
+        .schema
+        .add_field(FieldDef::new("AREA_MAP2", FieldType::Integer));
+    polygons
+        .add_feature(
+            Some(Geometry::polygon(
+                vec![
+                    Coord::xy(0.0, 0.0),
+                    Coord::xy(0.1, 0.0),
+                    Coord::xy(0.1, 0.1),
+                    Coord::xy(0.0, 0.1),
+                    Coord::xy(0.0, 0.0),
+                ],
+                vec![],
+            )),
+            &[("AREA_MAP2", FieldValue::Integer(0))],
+        )
+        .expect("add polygon feature");
+    wbvector::write(&polygons, &input_path, VectorFormat::GeoPackage).expect("write polygon input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("area".to_string(), json!(true));
+    args.insert("length".to_string(), json!(false));
+    args.insert("perimeter".to_string(), json!(false));
+    args.insert("centroid".to_string(), json!(false));
+    args.insert("measurement_mode".to_string(), json!("planar"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("add_geometry_attributes", &args, &context(&caps))
+        .expect("add_geometry_attributes run");
+
+    let out = wbvector::read(&out_path).expect("read output shapefile");
+    assert_eq!(out.features.len(), 1);
+
+    let area_field = out.schema.field("AREA_MAP2").expect("AREA_MAP2 field exists");
+    assert_eq!(area_field.field_type, FieldType::Float, "AREA_MAP2 should be stored as Float");
+    assert!(
+        area_field.precision > 0,
+        "AREA_MAP2 precision should preserve decimal values"
+    );
+
+    let area_idx = out
+        .schema
+        .field_index("AREA_MAP2")
+        .expect("AREA_MAP2 field index exists");
+    let area_value = out.features[0].attributes[area_idx]
+        .as_f64()
+        .expect("AREA_MAP2 value should be numeric");
+    assert!(area_value > 0.0, "AREA_MAP2 should not remain zero after recomputation");
+
+    let _ = std::fs::remove_file(&input_path);
+    for ext in ["shp", "shx", "dbf", "prj"] {
+        let _ = std::fs::remove_file(out_path.with_extension(ext));
+    }
 }
 
 #[test]
@@ -16884,6 +17030,426 @@ fn field_calculator_writes_expression_result_to_output_field() {
 
     let _ = std::fs::remove_file(&input_path);
     let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn field_calculator_supports_case_when_expression() {
+    use wbvector::{FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_field_calculator_case_when");
+    let input_path = std::env::temp_dir().join(format!("{tag}_in.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut points = Layer::new("roads")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    points.add_field(FieldDef::new("TYPE", FieldType::Text));
+    points
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(10.0, 20.0))),
+            &[("TYPE", FieldValue::Text("motorway".to_string()))],
+        )
+        .expect("add motorway feature");
+    points
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(11.0, 21.0))),
+            &[("TYPE", FieldValue::Text("residential".to_string()))],
+        )
+        .expect("add residential feature");
+    wbvector::write(&points, &input_path, VectorFormat::GeoPackage).expect("write point input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("field".to_string(), json!("SPEED"));
+    args.insert("field_type".to_string(), json!("integer"));
+    args.insert(
+        "expression".to_string(),
+        json!(
+            "CASE WHEN TYPE == \"motorway\" THEN 100 WHEN TYPE == \"residential\" THEN 40 ELSE 60 END"
+        ),
+    );
+    args.insert("overwrite".to_string(), json!(true));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("field_calculator", &args, &context(&caps))
+        .expect("field_calculator run");
+
+    let out = wbvector::read(&out_path).expect("read field calculator output");
+    assert_eq!(out.features.len(), 2);
+
+    let speed_idx = out.schema.field_index("SPEED").expect("SPEED field exists");
+    let speed_0 = match &out.features[0].attributes[speed_idx] {
+        FieldValue::Integer(v) => *v,
+        other => panic!("expected integer SPEED on first feature, got {:?}", other),
+    };
+    let speed_1 = match &out.features[1].attributes[speed_idx] {
+        FieldValue::Integer(v) => *v,
+        other => panic!("expected integer SPEED on second feature, got {:?}", other),
+    };
+    assert_eq!(speed_0, 100);
+    assert_eq!(speed_1, 40);
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn field_calculator_supports_update_set_expression_wrapper() {
+    use wbvector::{FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_field_calculator_update_wrapper");
+    let input_path = std::env::temp_dir().join(format!("{tag}_in.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut points = Layer::new("roads")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    points.add_field(FieldDef::new("TYPE", FieldType::Text));
+    points
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(10.0, 20.0))),
+            &[("TYPE", FieldValue::Text("collector".to_string()))],
+        )
+        .expect("add collector feature");
+    wbvector::write(&points, &input_path, VectorFormat::GeoPackage).expect("write point input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("field".to_string(), json!("SPEED"));
+    args.insert("field_type".to_string(), json!("integer"));
+    args.insert(
+        "expression".to_string(),
+        json!(
+            "UPDATE roads SET SPEED = CASE WHEN TYPE == \"collector\" THEN 60 ELSE 35 END;"
+        ),
+    );
+    args.insert("overwrite".to_string(), json!(true));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("field_calculator", &args, &context(&caps))
+        .expect("field_calculator run");
+
+    let out = wbvector::read(&out_path).expect("read field calculator output");
+    assert_eq!(out.features.len(), 1);
+
+    let speed_idx = out.schema.field_index("SPEED").expect("SPEED field exists");
+    match &out.features[0].attributes[speed_idx] {
+        FieldValue::Integer(v) => assert_eq!(*v, 60),
+        other => panic!("expected integer SPEED=60, got {:?}", other),
+    }
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn field_calculator_supports_update_set_where_wrapper() {
+    use wbvector::{FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_field_calculator_update_where_wrapper");
+    let input_path = std::env::temp_dir().join(format!("{tag}_in.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut points = Layer::new("roads")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    points.add_field(FieldDef::new("TYPE", FieldType::Text));
+    points.add_field(FieldDef::new("SPEED", FieldType::Integer));
+    points
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(10.0, 20.0))),
+            &[
+                ("TYPE", FieldValue::Text("motorway".to_string())),
+                ("SPEED", FieldValue::Integer(40)),
+            ],
+        )
+        .expect("add motorway feature");
+    points
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(11.0, 21.0))),
+            &[
+                ("TYPE", FieldValue::Text("residential".to_string())),
+                ("SPEED", FieldValue::Integer(30)),
+            ],
+        )
+        .expect("add residential feature");
+    wbvector::write(&points, &input_path, VectorFormat::GeoPackage).expect("write point input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("field".to_string(), json!("SPEED"));
+    args.insert("field_type".to_string(), json!("integer"));
+    args.insert(
+        "expression".to_string(),
+        json!(
+            "UPDATE roads SET SPEED = CASE WHEN TYPE == \"motorway\" THEN 100 ELSE SPEED END WHERE TYPE == \"motorway\";"
+        ),
+    );
+    args.insert("overwrite".to_string(), json!(true));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("field_calculator", &args, &context(&caps))
+        .expect("field_calculator run");
+
+    let out = wbvector::read(&out_path).expect("read field calculator output");
+    assert_eq!(out.features.len(), 2);
+
+    let speed_idx = out.schema.field_index("SPEED").expect("SPEED field exists");
+    let speed_0 = match &out.features[0].attributes[speed_idx] {
+        FieldValue::Integer(v) => *v,
+        other => panic!("expected integer SPEED on first feature, got {:?}", other),
+    };
+    let speed_1 = match &out.features[1].attributes[speed_idx] {
+        FieldValue::Integer(v) => *v,
+        other => panic!("expected integer SPEED on second feature, got {:?}", other),
+    };
+
+    assert_eq!(speed_0, 100, "motorway record should be updated by WHERE");
+    assert_eq!(speed_1, 30, "non-matching record should remain unchanged");
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn field_calculator_supports_simple_case_form() {
+    use wbvector::{FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_field_calculator_simple_case");
+    let input_path = std::env::temp_dir().join(format!("{tag}_in.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut points = Layer::new("roads")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    points.add_field(FieldDef::new("TYPE", FieldType::Text));
+    points
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(10.0, 20.0))),
+            &[("TYPE", FieldValue::Text("motorway".to_string()))],
+        )
+        .expect("add motorway feature");
+    points
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(11.0, 21.0))),
+            &[("TYPE", FieldValue::Text("residential".to_string()))],
+        )
+        .expect("add residential feature");
+    wbvector::write(&points, &input_path, VectorFormat::GeoPackage).expect("write point input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("field".to_string(), json!("SPEED"));
+    args.insert("field_type".to_string(), json!("integer"));
+    args.insert(
+        "expression".to_string(),
+        json!("CASE TYPE WHEN 'motorway' THEN 100 WHEN 'residential' THEN 40 ELSE 60 END"),
+    );
+    args.insert("overwrite".to_string(), json!(true));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("field_calculator", &args, &context(&caps))
+        .expect("field_calculator run");
+
+    let out = wbvector::read(&out_path).expect("read field calculator output");
+    let speed_idx = out.schema.field_index("SPEED").expect("SPEED field exists");
+    assert_eq!(out.features.len(), 2);
+    assert!(matches!(out.features[0].attributes[speed_idx], FieldValue::Integer(100)));
+    assert!(matches!(out.features[1].attributes[speed_idx], FieldValue::Integer(40)));
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn field_calculator_supports_sql_operators_and_null_semantics() {
+    use wbvector::{FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_field_calculator_sql_ops");
+    let input_path = std::env::temp_dir().join(format!("{tag}_in.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut points = Layer::new("roads")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    points.add_field(FieldDef::new("TYPE", FieldType::Text));
+    points.add_field(FieldDef::new("NOTE", FieldType::Text));
+    points.add_field(FieldDef::new("SPEED", FieldType::Integer));
+    points
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(10.0, 20.0))),
+            &[
+                ("TYPE", FieldValue::Text("motorway".to_string())),
+                ("NOTE", FieldValue::Null),
+                ("SPEED", FieldValue::Integer(10)),
+            ],
+        )
+        .expect("add motorway feature");
+    points
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(11.0, 21.0))),
+            &[
+                ("TYPE", FieldValue::Text("service".to_string())),
+                ("NOTE", FieldValue::Text("kept".to_string())),
+                ("SPEED", FieldValue::Integer(20)),
+            ],
+        )
+        .expect("add service feature");
+    points
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(12.0, 22.0))),
+            &[
+                ("TYPE", FieldValue::Text("residential".to_string())),
+                ("NOTE", FieldValue::Text("keep".to_string())),
+                ("SPEED", FieldValue::Integer(30)),
+            ],
+        )
+        .expect("add residential feature");
+    wbvector::write(&points, &input_path, VectorFormat::GeoPackage).expect("write point input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("field".to_string(), json!("SPEED"));
+    args.insert("field_type".to_string(), json!("integer"));
+    args.insert(
+        "expression".to_string(),
+        json!(
+            "UPDATE roads SET SPEED = 99 WHERE TYPE <> 'service' AND NOT TYPE = 'residential' OR NOTE IS NULL;"
+        ),
+    );
+    args.insert("overwrite".to_string(), json!(true));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("field_calculator", &args, &context(&caps))
+        .expect("field_calculator run");
+
+    let out = wbvector::read(&out_path).expect("read field calculator output");
+    let speed_idx = out.schema.field_index("SPEED").expect("SPEED field exists");
+    assert!(matches!(out.features[0].attributes[speed_idx], FieldValue::Integer(99)));
+    assert!(matches!(out.features[1].attributes[speed_idx], FieldValue::Integer(20)));
+    assert!(matches!(out.features[2].attributes[speed_idx], FieldValue::Integer(30)));
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn field_calculator_supports_cast_functionality() {
+    use wbvector::{FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_field_calculator_cast");
+    let input_path = std::env::temp_dir().join(format!("{tag}_in.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut points = Layer::new("roads")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    points.add_field(FieldDef::new("SPD_TXT", FieldType::Text));
+    points
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(10.0, 20.0))),
+            &[("SPD_TXT", FieldValue::Text("55".to_string()))],
+        )
+        .expect("add feature");
+    wbvector::write(&points, &input_path, VectorFormat::GeoPackage).expect("write point input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("field".to_string(), json!("SPEED"));
+    args.insert("field_type".to_string(), json!("integer"));
+    args.insert("expression".to_string(), json!("CAST(SPD_TXT AS INTEGER) + 5"));
+    args.insert("overwrite".to_string(), json!(true));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("field_calculator", &args, &context(&caps))
+        .expect("field_calculator run");
+
+    let out = wbvector::read(&out_path).expect("read field calculator output");
+    let speed_idx = out.schema.field_index("SPEED").expect("SPEED field exists");
+    assert!(matches!(out.features[0].attributes[speed_idx], FieldValue::Integer(60)));
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn field_calculator_preview_only_returns_preview_rows() {
+    use wbvector::{FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_field_calculator_preview");
+    let input_path = std::env::temp_dir().join(format!("{tag}_in.gpkg"));
+
+    let mut points = Layer::new("roads")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    points.add_field(FieldDef::new("TYPE", FieldType::Text));
+    points
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(10.0, 20.0))),
+            &[("TYPE", FieldValue::Text("motorway".to_string()))],
+        )
+        .expect("add motorway feature");
+    points
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(11.0, 21.0))),
+            &[("TYPE", FieldValue::Text("collector".to_string()))],
+        )
+        .expect("add collector feature");
+    wbvector::write(&points, &input_path, VectorFormat::GeoPackage).expect("write point input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("field".to_string(), json!("SPEED"));
+    args.insert("field_type".to_string(), json!("integer"));
+    args.insert(
+        "expression".to_string(),
+        json!("CASE TYPE WHEN 'motorway' THEN 100 ELSE 60 END"),
+    );
+    args.insert("overwrite".to_string(), json!(true));
+    args.insert("preview_rows".to_string(), json!(2));
+    let result = registry
+        .run("field_calculator", &args, &context(&caps))
+        .expect("field_calculator preview run");
+
+    assert!(!result.outputs.contains_key("path"), "preview-only run should not write output path");
+    let preview = result
+        .outputs
+        .get("preview")
+        .and_then(|v| v.as_array())
+        .expect("preview array present");
+    assert_eq!(preview.len(), 2);
+    assert_eq!(preview[0].get("result_value").and_then(|v| v.as_i64()), Some(100));
+    assert_eq!(preview[1].get("result_value").and_then(|v| v.as_i64()), Some(60));
+
+    let _ = std::fs::remove_file(&input_path);
 }
 
 #[test]
@@ -17431,6 +17997,67 @@ fn shortest_path_network_finds_connected_route() {
 }
 
 #[test]
+fn shortest_path_network_geographic_crs_uses_geodesic_segment_lengths() {
+    use wbvector::{Coord, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_shortest_path_network_geodesic_4326");
+    let input_path = std::env::temp_dir().join(format!("{tag}_in.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[],
+        )
+        .expect("add edge 1");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(2.0, 0.0)])),
+            &[],
+        )
+        .expect("add edge 2");
+    wbvector::write(&lines, &input_path, VectorFormat::GeoPackage).expect("write network input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("start_x".to_string(), json!(0.0));
+    args.insert("start_y".to_string(), json!(0.0));
+    args.insert("end_x".to_string(), json!(2.0));
+    args.insert("end_y".to_string(), json!(0.0));
+    args.insert("max_snap_distance".to_string(), json!(0.25));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("shortest_path_network", &args, &context(&caps))
+        .expect("shortest_path_network run");
+
+    let out = wbvector::read(&out_path).expect("read shortest path output");
+    assert_eq!(out.features.len(), 1);
+
+    let cost_idx = out.schema.field_index("COST").expect("COST field");
+    let cost_m = match &out.features[0].attributes[cost_idx] {
+        FieldValue::Float(v) => *v,
+        FieldValue::Integer(v) => *v as f64,
+        other => panic!("expected numeric COST, got {:?}", other),
+    };
+
+    assert!(
+        cost_m > 200_000.0,
+        "expected meter-scale geodesic cost for ~2 degrees at equator, got {}",
+        cost_m
+    );
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
 fn multimodal_shortest_path_transfer_penalty_changes_route() {
     use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
 
@@ -17445,7 +18072,7 @@ fn multimodal_shortest_path_transfer_penalty_changes_route() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
 
     // Two-mode short corridor: A(0,0)->B(1,0) walk, B->C(2,0) transit.
@@ -17554,7 +18181,7 @@ fn multimodal_shortest_path_walk_drive_pattern() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
 
     lines
@@ -17621,7 +18248,7 @@ fn multimodal_shortest_path_walk_transit_pattern() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
 
     lines
@@ -17690,7 +18317,7 @@ fn multimodal_od_cost_matrix_writes_expected_batch_rows() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
     lines
         .add_feature(
@@ -17714,7 +18341,7 @@ fn multimodal_od_cost_matrix_writes_expected_batch_rows() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin A");
@@ -17725,7 +18352,7 @@ fn multimodal_od_cost_matrix_writes_expected_batch_rows() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
         .expect("add destination C");
@@ -17792,7 +18419,7 @@ fn multimodal_routes_from_od_outputs_route_geometry_and_modes() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
     lines
         .add_feature(
@@ -17810,7 +18437,7 @@ fn multimodal_routes_from_od_outputs_route_geometry_and_modes() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -17818,7 +18445,7 @@ fn multimodal_routes_from_od_outputs_route_geometry_and_modes() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(3.0, 0.0))), &[])
         .expect("add destination");
@@ -17903,7 +18530,7 @@ fn multimodal_od_cost_matrix_applies_temporal_cost_profile() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
     lines.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     lines
@@ -17937,7 +18564,7 @@ fn multimodal_od_cost_matrix_applies_temporal_cost_profile() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -17945,7 +18572,7 @@ fn multimodal_od_cost_matrix_applies_temporal_cost_profile() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(3.0, 0.0))), &[])
         .expect("add destination");
@@ -18014,7 +18641,7 @@ fn multimodal_routes_from_od_writes_scenario_bundle_outputs() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
     lines.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     lines
@@ -18039,7 +18666,7 @@ fn multimodal_routes_from_od_writes_scenario_bundle_outputs() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -18047,7 +18674,7 @@ fn multimodal_routes_from_od_writes_scenario_bundle_outputs() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(3.0, 0.0))), &[])
         .expect("add destination");
@@ -18156,7 +18783,7 @@ fn stream_c_temporal_routing_benchmark_fixture_switches_modes_across_scenarios()
     // 2) all-walk direct edge (wins when drive is heavily penalized)
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
     lines.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     lines
@@ -18190,7 +18817,7 @@ fn stream_c_temporal_routing_benchmark_fixture_switches_modes_across_scenarios()
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -18198,7 +18825,7 @@ fn stream_c_temporal_routing_benchmark_fixture_switches_modes_across_scenarios()
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(3.0, 0.0))), &[])
         .expect("add destination");
@@ -18317,7 +18944,7 @@ fn stream_c_uncertainty_benchmark_fixture_wider_disturbance_increases_variance()
 
     let mut network = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     network.schema.add_field(FieldDef::new("cost", FieldType::Float));
     for i in 0..6 {
         let x1 = i as f64;
@@ -18333,7 +18960,7 @@ fn stream_c_uncertainty_benchmark_fixture_wider_disturbance_increases_variance()
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -18341,7 +18968,7 @@ fn stream_c_uncertainty_benchmark_fixture_wider_disturbance_increases_variance()
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(6.0, 0.0))), &[])
         .expect("add destination");
@@ -18411,7 +19038,7 @@ fn shortest_path_network_uses_edge_cost_field_multiplier() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("IMP", FieldType::Float));
     lines
         .add_feature(
@@ -18498,7 +19125,7 @@ fn network_centrality_metrics_identifies_middle_node_as_most_central() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -18581,7 +19208,7 @@ fn network_accessibility_metrics_computes_weighted_accessibility_by_cutoff_and_d
     // Create a linear network segment (A-B-C)
     let mut network = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     network
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -18600,7 +19227,7 @@ fn network_accessibility_metrics_computes_weighted_accessibility_by_cutoff_and_d
     // Single origin at A (x=0)
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(
             Some(Geometry::Point(Coord::xy(0.0, 0.0))),
@@ -18613,7 +19240,7 @@ fn network_accessibility_metrics_computes_weighted_accessibility_by_cutoff_and_d
     // Two destinations at B and C (x=1 and x=2)
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(
             Some(Geometry::Point(Coord::xy(1.0, 0.0))),
@@ -18694,7 +19321,7 @@ fn network_accessibility_metrics_respects_ft_tf_b_one_way_values() {
     // Build a star-like local network around node B to validate FT/TF/B behavior.
     let mut network = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     network.schema.add_field(FieldDef::new("DIR", FieldType::Text));
 
     // A->B is FT, so B cannot traverse to A.
@@ -18729,7 +19356,7 @@ fn network_accessibility_metrics_respects_ft_tf_b_one_way_values() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
         .expect("add origin at B");
@@ -18737,7 +19364,7 @@ fn network_accessibility_metrics_respects_ft_tf_b_one_way_values() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add destination A");
@@ -18803,7 +19430,7 @@ fn od_sensitivity_analysis_computes_perturbed_od_costs_with_variance() {
     // Create a linear network with cost field
     let mut network = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     network.schema.add_field(wbvector::FieldDef::new("cost", wbvector::FieldType::Float));
     network
         .add_feature(
@@ -18823,7 +19450,7 @@ fn od_sensitivity_analysis_computes_perturbed_od_costs_with_variance() {
     // Single origin at x=0
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(
             Some(Geometry::Point(Coord::xy(0.0, 0.0))),
@@ -18836,7 +19463,7 @@ fn od_sensitivity_analysis_computes_perturbed_od_costs_with_variance() {
     // Single destination at x=2
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(
             Some(Geometry::Point(Coord::xy(2.0, 0.0))),
@@ -18909,7 +19536,7 @@ fn stream_d_centrality_metrics_benchmark_validates_correctness_across_network_to
     // Create a grid network (4x4 grid, 16 nodes, highly connected)
     let mut network = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     
     // Horizontal edges
     for row in 0..4 {
@@ -18996,7 +19623,7 @@ fn stream_d_accessibility_metrics_benchmark_validates_impedance_cutoff_and_decay
     // Create a star network with origin in center
     let mut network = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     for i in 0..8 {
         let angle = (i as f64 * std::f64::consts::PI * 2.0) / 8.0;
         let x = 5.0 + 3.0 * angle.cos();
@@ -19014,7 +19641,7 @@ fn stream_d_accessibility_metrics_benchmark_validates_impedance_cutoff_and_decay
     // Single origin at center
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(
             Some(Geometry::Point(Coord::xy(5.0, 5.0))),
@@ -19027,7 +19654,7 @@ fn stream_d_accessibility_metrics_benchmark_validates_impedance_cutoff_and_decay
     // 8 destinations at ends of spokes
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     for i in 0..8 {
         let angle = (i as f64 * std::f64::consts::PI * 2.0) / 8.0;
         let x = 5.0 + 3.0 * angle.cos();
@@ -19130,7 +19757,7 @@ fn stream_d_od_sensitivity_analysis_benchmark_validates_scaling_with_network_and
         // Create linear network
         let mut network = Layer::new("network")
             .with_geom_type(GeometryType::LineString)
-            .with_epsg(4326);
+            .with_epsg(3857);
         network.schema.add_field(wbvector::FieldDef::new("cost", wbvector::FieldType::Float));
 
         for i in 0..*num_segments {
@@ -19149,7 +19776,7 @@ fn stream_d_od_sensitivity_analysis_benchmark_validates_scaling_with_network_and
         // Single origin and destination at ends
         let mut origins = Layer::new("origins")
             .with_geom_type(GeometryType::Point)
-            .with_epsg(4326);
+            .with_epsg(3857);
         origins
             .add_feature(
                 Some(Geometry::Point(Coord::xy(0.0, 0.0))),
@@ -19161,7 +19788,7 @@ fn stream_d_od_sensitivity_analysis_benchmark_validates_scaling_with_network_and
 
         let mut destinations = Layer::new("destinations")
             .with_geom_type(GeometryType::Point)
-            .with_epsg(4326);
+            .with_epsg(3857);
         destinations
             .add_feature(
                 Some(Geometry::Point(Coord::xy(*num_segments as f64, 0.0))),
@@ -19220,7 +19847,7 @@ fn shortest_path_network_temporal_profile_changes_route_by_departure_time() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
 
     lines
@@ -19338,7 +19965,7 @@ fn shortest_path_network_temporal_profile_error_fallback_requires_coverage() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     lines
         .add_feature(
@@ -19403,7 +20030,7 @@ fn shortest_path_network_temporal_profile_report_emits_diagnostics() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     lines
         .add_feature(
@@ -19480,7 +20107,7 @@ fn shortest_path_network_respects_one_way_field_direction() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("ONEWAY", FieldType::Integer));
     lines
         .add_feature(
@@ -19533,7 +20160,7 @@ fn shortest_path_network_supports_ft_tf_b_one_way_values() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("DIR", FieldType::Text));
     lines
         .add_feature(
@@ -19608,7 +20235,7 @@ fn shortest_path_network_respects_blocked_field_edges() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("BLOCKED", FieldType::Integer));
     lines
         .add_feature(
@@ -19696,7 +20323,7 @@ fn shortest_path_network_respects_barrier_points() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -19713,7 +20340,7 @@ fn shortest_path_network_respects_barrier_points() {
 
     let mut barriers = Layer::new("barriers")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     barriers
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
         .expect("add barrier");
@@ -19755,7 +20382,7 @@ fn shortest_path_network_applies_turn_penalty_to_cost() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -19811,7 +20438,7 @@ fn shortest_path_network_can_forbid_left_turns() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("IMP", FieldType::Float));
     lines
         .add_feature(
@@ -19882,7 +20509,7 @@ fn shortest_path_network_respects_turn_restrictions_csv() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("IMP", FieldType::Float));
     lines
         .add_feature(
@@ -19962,7 +20589,7 @@ fn network_node_degree_identifies_junction_and_dead_ends() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -20037,7 +20664,7 @@ fn network_service_area_returns_nodes_within_max_cost() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -20054,7 +20681,7 @@ fn network_service_area_returns_nodes_within_max_cost() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -20106,7 +20733,7 @@ fn network_service_area_mode_allowlist_filters_edges() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
     lines
         .add_feature(
@@ -20130,7 +20757,7 @@ fn network_service_area_mode_allowlist_filters_edges() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -20170,7 +20797,7 @@ fn network_service_area_mode_speed_overrides_change_reachability() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
     lines
         .add_feature(
@@ -20188,7 +20815,7 @@ fn network_service_area_mode_speed_overrides_change_reachability() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -20228,7 +20855,7 @@ fn network_service_area_respects_ft_tf_b_one_way_values() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("DIR", FieldType::Text));
     lines
         .add_feature(
@@ -20264,7 +20891,7 @@ fn network_service_area_respects_ft_tf_b_one_way_values() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -20328,7 +20955,7 @@ fn network_service_area_nodes_output_supports_ring_costs() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -20345,7 +20972,7 @@ fn network_service_area_nodes_output_supports_ring_costs() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -20409,7 +21036,7 @@ fn network_service_area_temporal_profile_changes_reachability_by_departure_time(
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     lines
         .add_feature(
@@ -20439,7 +21066,7 @@ fn network_service_area_temporal_profile_changes_reachability_by_departure_time(
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -20505,7 +21132,7 @@ fn map_matching_v1_matches_clean_trajectory_and_emits_diagnostics() {
 
     let mut network = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     network.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     network
         .add_feature(
@@ -20523,7 +21150,7 @@ fn map_matching_v1_matches_clean_trajectory_and_emits_diagnostics() {
 
     let mut trajectory = Layer::new("trajectory")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     trajectory.schema.add_field(FieldDef::new("TS", FieldType::Text));
     trajectory
         .add_feature(
@@ -20613,7 +21240,7 @@ fn map_matching_v1_partial_unmatched_points_still_emit_outputs() {
 
     let mut network = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     network.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     network
         .add_feature(
@@ -20631,7 +21258,7 @@ fn map_matching_v1_partial_unmatched_points_still_emit_outputs() {
 
     let mut trajectory = Layer::new("trajectory")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     trajectory.schema.add_field(FieldDef::new("TS", FieldType::Text));
     trajectory
         .add_feature(
@@ -20726,7 +21353,7 @@ fn map_matching_v1_confidence_decreases_with_offset_noise() {
 
     let mut network = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     network.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     network
         .add_feature(
@@ -20738,7 +21365,7 @@ fn map_matching_v1_confidence_decreases_with_offset_noise() {
 
     let mut trajectory = Layer::new("trajectory")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     trajectory.schema.add_field(FieldDef::new("TS", FieldType::Text));
     trajectory
         .add_feature(
@@ -20816,7 +21443,7 @@ fn map_matching_v1_one_way_restriction_avoided() {
     // Single one-way edge: (0,0) → (2,0), digitized left-to-right.
     let mut network = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     network.schema.add_field(FieldDef::new("ONE_WAY", FieldType::Integer));
     network
         .add_feature(
@@ -20829,7 +21456,7 @@ fn map_matching_v1_one_way_restriction_avoided() {
     // Trajectory travels right-to-left — against the one-way direction.
     let mut trajectory = Layer::new("trajectory")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     trajectory.schema.add_field(FieldDef::new("TS", FieldType::Text));
     // Point 1 at t=T1: near right/end of edge → will snap to node (2,0)
     trajectory
@@ -20898,7 +21525,7 @@ fn network_topology_audit_reports_nodes_and_components() {
 
     let mut network = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     network.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     network
         .add_feature(
@@ -20989,7 +21616,7 @@ fn network_topology_audit_detects_disconnected_components_and_warns() {
 
     let mut network = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     network.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     network
         .add_feature(
@@ -21066,7 +21693,7 @@ fn network_service_area_temporal_profile_and_ring_costs_interact_consistently() 
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     lines
         .add_feature(
@@ -21096,7 +21723,7 @@ fn network_service_area_temporal_profile_and_ring_costs_interact_consistently() 
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -21186,7 +21813,7 @@ fn network_service_area_edges_temporal_profile_and_ring_costs_interact_consisten
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     lines
         .add_feature(
@@ -21216,7 +21843,7 @@ fn network_service_area_edges_temporal_profile_and_ring_costs_interact_consisten
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -21286,7 +21913,7 @@ fn network_service_area_polygons_temporal_profile_and_ring_costs_interact_consis
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     lines
         .add_feature(
@@ -21316,7 +21943,7 @@ fn network_service_area_polygons_temporal_profile_and_ring_costs_interact_consis
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -21406,7 +22033,7 @@ fn network_service_area_respects_barrier_points() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -21423,7 +22050,7 @@ fn network_service_area_respects_barrier_points() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -21431,7 +22058,7 @@ fn network_service_area_respects_barrier_points() {
 
     let mut barriers = Layer::new("barriers")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     barriers
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
         .expect("add barrier");
@@ -21472,7 +22099,7 @@ fn network_service_area_edges_output_trims_segments_by_remaining_cost() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("ONEWAY", FieldType::Integer));
     lines
         .add_feature(
@@ -21490,7 +22117,7 @@ fn network_service_area_edges_output_trims_segments_by_remaining_cost() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -21555,7 +22182,7 @@ fn network_service_area_edges_output_supports_ring_costs() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -21572,7 +22199,7 @@ fn network_service_area_edges_output_supports_ring_costs() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -21629,7 +22256,7 @@ fn network_service_area_polygons_output_emits_origin_hulls() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -21646,7 +22273,7 @@ fn network_service_area_polygons_output_emits_origin_hulls() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -21698,7 +22325,7 @@ fn network_service_area_polygons_output_supports_ring_costs() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -21715,7 +22342,7 @@ fn network_service_area_polygons_output_supports_ring_costs() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -21772,7 +22399,7 @@ fn network_service_area_polygons_output_emits_diagnostics_counts() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -21789,7 +22416,7 @@ fn network_service_area_polygons_output_emits_diagnostics_counts() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -21845,7 +22472,7 @@ fn network_service_area_polygons_output_tracks_partial_edge_frontier() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -21862,7 +22489,7 @@ fn network_service_area_polygons_output_tracks_partial_edge_frontier() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -21914,7 +22541,7 @@ fn network_service_area_polygons_output_emits_one_polygon_per_origin() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -21931,7 +22558,7 @@ fn network_service_area_polygons_output_emits_one_polygon_per_origin() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin 1");
@@ -21999,7 +22626,7 @@ fn network_service_area_polygons_can_merge_overlapping_origins() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -22016,7 +22643,7 @@ fn network_service_area_polygons_can_merge_overlapping_origins() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin 1");
@@ -22068,7 +22695,7 @@ fn network_service_area_polygons_can_merge_origins_by_ring() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     for segment in [(0.0, 1.0), (1.0, 2.0), (2.0, 3.0), (3.0, 4.0)] {
         lines
             .add_feature(
@@ -22081,7 +22708,7 @@ fn network_service_area_polygons_can_merge_origins_by_ring() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
         .expect("add origin 1");
@@ -22143,7 +22770,7 @@ fn network_service_area_polygons_output_respects_barrier_points() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -22160,7 +22787,7 @@ fn network_service_area_polygons_output_respects_barrier_points() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -22168,7 +22795,7 @@ fn network_service_area_polygons_output_respects_barrier_points() {
 
     let mut barriers = Layer::new("barriers")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     barriers
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
         .expect("add barrier");
@@ -22217,7 +22844,7 @@ fn network_service_area_polygons_output_respects_turn_restrictions_csv() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("IMP", FieldType::Float));
     lines
         .add_feature(
@@ -22247,7 +22874,7 @@ fn network_service_area_polygons_output_respects_turn_restrictions_csv() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -22305,7 +22932,7 @@ fn network_service_area_polygons_output_handles_duplicate_origins() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -22316,7 +22943,7 @@ fn network_service_area_polygons_output_handles_duplicate_origins() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin 1");
@@ -22368,7 +22995,7 @@ fn network_service_area_polygons_output_with_tiny_snap_tolerance() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(0.0, 0.000001)])),
@@ -22385,7 +23012,7 @@ fn network_service_area_polygons_output_with_tiny_snap_tolerance() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -22432,7 +23059,7 @@ fn network_service_area_polygons_output_single_reachable_node_has_degenerate_hul
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -22449,7 +23076,7 @@ fn network_service_area_polygons_output_single_reachable_node_has_degenerate_hul
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -22457,7 +23084,7 @@ fn network_service_area_polygons_output_single_reachable_node_has_degenerate_hul
 
     let mut barriers = Layer::new("barriers")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     barriers
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
         .expect("add barrier");
@@ -22512,7 +23139,7 @@ fn network_service_area_rejects_unknown_output_mode() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -22523,7 +23150,7 @@ fn network_service_area_rejects_unknown_output_mode() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -22567,7 +23194,7 @@ fn network_od_cost_matrix_writes_expected_cost_row() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -22584,7 +23211,7 @@ fn network_od_cost_matrix_writes_expected_cost_row() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -22592,7 +23219,7 @@ fn network_od_cost_matrix_writes_expected_cost_row() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
         .expect("add destination");
@@ -22641,7 +23268,7 @@ fn network_od_cost_matrix_uses_edge_cost_field_multiplier() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("IMP", FieldType::Float));
     lines
         .add_feature(
@@ -22659,7 +23286,7 @@ fn network_od_cost_matrix_uses_edge_cost_field_multiplier() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -22667,7 +23294,7 @@ fn network_od_cost_matrix_uses_edge_cost_field_multiplier() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
         .expect("add destination");
@@ -22713,7 +23340,7 @@ fn network_od_cost_matrix_supports_ft_tf_b_one_way_values() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("DIR", FieldType::Text));
     lines
         .add_feature(
@@ -22737,7 +23364,7 @@ fn network_od_cost_matrix_supports_ft_tf_b_one_way_values() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add FT origin");
@@ -22754,7 +23381,7 @@ fn network_od_cost_matrix_supports_ft_tf_b_one_way_values() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
         .expect("add FT destination");
@@ -22849,7 +23476,7 @@ fn network_od_cost_matrix_marks_unreachable_with_blocked_field() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("BLOCKED", FieldType::Integer));
     lines
         .add_feature(
@@ -22873,7 +23500,7 @@ fn network_od_cost_matrix_marks_unreachable_with_blocked_field() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -22881,7 +23508,7 @@ fn network_od_cost_matrix_marks_unreachable_with_blocked_field() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
         .expect("add destination");
@@ -22928,7 +23555,7 @@ fn network_od_cost_matrix_marks_unreachable_with_barriers() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -22945,7 +23572,7 @@ fn network_od_cost_matrix_marks_unreachable_with_barriers() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -22953,7 +23580,7 @@ fn network_od_cost_matrix_marks_unreachable_with_barriers() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
         .expect("add destination");
@@ -22962,7 +23589,7 @@ fn network_od_cost_matrix_marks_unreachable_with_barriers() {
 
     let mut barriers = Layer::new("barriers")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     barriers
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
         .expect("add barrier");
@@ -23009,7 +23636,7 @@ fn closest_facility_network_supports_ft_tf_b_one_way_values() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("DIR", FieldType::Text));
     lines
         .add_feature(
@@ -23033,7 +23660,7 @@ fn closest_facility_network_supports_ft_tf_b_one_way_values() {
 
     let mut incidents = Layer::new("incidents")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     incidents
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add FT incident");
@@ -23047,7 +23674,7 @@ fn closest_facility_network_supports_ft_tf_b_one_way_values() {
 
     let mut facilities = Layer::new("facilities")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     facilities
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
         .expect("add FT facility");
@@ -23131,7 +23758,7 @@ fn network_od_cost_matrix_applies_turn_penalty_to_cost() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -23148,7 +23775,7 @@ fn network_od_cost_matrix_applies_turn_penalty_to_cost() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -23156,7 +23783,7 @@ fn network_od_cost_matrix_applies_turn_penalty_to_cost() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 1.0))), &[])
         .expect("add destination");
@@ -23202,7 +23829,7 @@ fn network_od_cost_matrix_can_forbid_left_turns() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("IMP", FieldType::Float));
     lines
         .add_feature(
@@ -23232,7 +23859,7 @@ fn network_od_cost_matrix_can_forbid_left_turns() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -23240,7 +23867,7 @@ fn network_od_cost_matrix_can_forbid_left_turns() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 1.0))), &[])
         .expect("add destination");
@@ -23288,7 +23915,7 @@ fn network_od_cost_matrix_respects_turn_restrictions_csv() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("IMP", FieldType::Float));
     lines
         .add_feature(
@@ -23318,7 +23945,7 @@ fn network_od_cost_matrix_respects_turn_restrictions_csv() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -23326,7 +23953,7 @@ fn network_od_cost_matrix_respects_turn_restrictions_csv() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 1.0))), &[])
         .expect("add destination");
@@ -23384,7 +24011,7 @@ fn network_od_cost_matrix_applies_turn_cost_override_from_csv() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("IMP", FieldType::Float));
     lines
         .add_feature(
@@ -23414,7 +24041,7 @@ fn network_od_cost_matrix_applies_turn_cost_override_from_csv() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -23422,7 +24049,7 @@ fn network_od_cost_matrix_applies_turn_cost_override_from_csv() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 1.0))), &[])
         .expect("add destination");
@@ -23485,7 +24112,7 @@ fn network_od_cost_matrix_temporal_profile_changes_cost_by_departure_time() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     lines
         .add_feature(
@@ -23527,7 +24154,7 @@ fn network_od_cost_matrix_temporal_profile_changes_cost_by_departure_time() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -23535,7 +24162,7 @@ fn network_od_cost_matrix_temporal_profile_changes_cost_by_departure_time() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
         .expect("add destination");
@@ -23604,7 +24231,7 @@ fn network_connected_components_labels_disconnected_subnetworks() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -23671,7 +24298,7 @@ fn shortest_path_network_barrier_snap_distance_can_ignore_distant_barriers() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -23688,7 +24315,7 @@ fn shortest_path_network_barrier_snap_distance_can_ignore_distant_barriers() {
 
     let mut barriers = Layer::new("barriers")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     barriers
         .add_feature(Some(Geometry::Point(Coord::xy(1.15, 0.0))), &[])
         .expect("add near barrier");
@@ -23739,7 +24366,7 @@ fn network_routes_from_od_outputs_route_geometry_and_cost() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -23756,7 +24383,7 @@ fn network_routes_from_od_outputs_route_geometry_and_cost() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -23764,7 +24391,7 @@ fn network_routes_from_od_outputs_route_geometry_and_cost() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
         .expect("add destination");
@@ -23822,7 +24449,7 @@ fn network_routes_from_od_supports_ft_tf_b_one_way_values() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("DIR", FieldType::Text));
     lines
         .add_feature(
@@ -23846,7 +24473,7 @@ fn network_routes_from_od_supports_ft_tf_b_one_way_values() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin FT");
@@ -23863,7 +24490,7 @@ fn network_routes_from_od_supports_ft_tf_b_one_way_values() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
         .expect("add destination FT");
@@ -23959,7 +24586,7 @@ fn network_routes_from_od_respects_turn_restrictions_csv() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("IMP", FieldType::Float));
     lines
         .add_feature(
@@ -23989,7 +24616,7 @@ fn network_routes_from_od_respects_turn_restrictions_csv() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -23997,7 +24624,7 @@ fn network_routes_from_od_respects_turn_restrictions_csv() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 1.0))), &[])
         .expect("add destination");
@@ -24059,7 +24686,7 @@ fn network_routes_from_od_temporal_profile_changes_cost_by_departure_time() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     lines
         .add_feature(
@@ -24101,7 +24728,7 @@ fn network_routes_from_od_temporal_profile_changes_cost_by_departure_time() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -24109,7 +24736,7 @@ fn network_routes_from_od_temporal_profile_changes_cost_by_departure_time() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
         .expect("add destination");
@@ -24189,7 +24816,7 @@ fn network_routes_from_od_respects_barrier_points() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -24206,7 +24833,7 @@ fn network_routes_from_od_respects_barrier_points() {
 
     let mut origins = Layer::new("origins")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     origins
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin");
@@ -24214,7 +24841,7 @@ fn network_routes_from_od_respects_barrier_points() {
 
     let mut destinations = Layer::new("destinations")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     destinations
         .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
         .expect("add destination");
@@ -24223,7 +24850,7 @@ fn network_routes_from_od_respects_barrier_points() {
 
     let mut barriers = Layer::new("barriers")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     barriers
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
         .expect("add barrier");
@@ -24266,7 +24893,7 @@ fn closest_facility_network_routes_incidents_to_nearest_reachable_facility() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -24289,7 +24916,7 @@ fn closest_facility_network_routes_incidents_to_nearest_reachable_facility() {
 
     let mut incidents = Layer::new("incidents")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     incidents
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add incident 1");
@@ -24300,7 +24927,7 @@ fn closest_facility_network_routes_incidents_to_nearest_reachable_facility() {
 
     let mut facilities = Layer::new("facilities")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     facilities
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
         .expect("add facility 1");
@@ -24364,7 +24991,7 @@ fn closest_facility_network_tie_break_prefers_first_facility_feature() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -24381,7 +25008,7 @@ fn closest_facility_network_tie_break_prefers_first_facility_feature() {
 
     let mut incidents = Layer::new("incidents")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     incidents
         .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
         .expect("add center incident");
@@ -24389,7 +25016,7 @@ fn closest_facility_network_tie_break_prefers_first_facility_feature() {
 
     let mut facilities = Layer::new("facilities")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     facilities
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add facility first");
@@ -24444,7 +25071,7 @@ fn location_allocation_network_selects_two_facilities_and_allocates_demand() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -24473,7 +25100,7 @@ fn location_allocation_network_selects_two_facilities_and_allocates_demand() {
 
     let mut demand = Layer::new("demand")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     demand.schema.add_field(FieldDef::new("W", FieldType::Float));
     demand
         .add_feature(
@@ -24491,7 +25118,7 @@ fn location_allocation_network_selects_two_facilities_and_allocates_demand() {
 
     let mut facilities = Layer::new("facilities")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     facilities
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add facility 1");
@@ -24566,7 +25193,7 @@ fn location_allocation_network_exact_mode_reports_exact_solver_usage() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     for segment in [
         (0.0, 1.0),
         (1.0, 2.0),
@@ -24583,7 +25210,7 @@ fn location_allocation_network_exact_mode_reports_exact_solver_usage() {
 
     let mut demand = Layer::new("demand")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     demand
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add demand 1");
@@ -24594,7 +25221,7 @@ fn location_allocation_network_exact_mode_reports_exact_solver_usage() {
 
     let mut facilities = Layer::new("facilities")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     facilities
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add facility 1");
@@ -24645,7 +25272,7 @@ fn location_allocation_network_respects_facility_capacities() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     for segment in [
         (0.0, 1.0),
         (1.0, 2.0),
@@ -24663,7 +25290,7 @@ fn location_allocation_network_respects_facility_capacities() {
 
     let mut demand = Layer::new("demand")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     demand.schema.add_field(FieldDef::new("W", FieldType::Float));
     for x in [0.0, 1.0, 4.0] {
         demand
@@ -24674,7 +25301,7 @@ fn location_allocation_network_respects_facility_capacities() {
 
     let mut facilities = Layer::new("facilities")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     facilities.schema.add_field(FieldDef::new("CAP", FieldType::Float));
     facilities
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[("CAP", FieldValue::Float(1.0))])
@@ -24733,7 +25360,7 @@ fn location_allocation_network_respects_required_and_forbidden_facilities() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     for segment in [
         (0.0, 1.0),
         (1.0, 2.0),
@@ -24751,7 +25378,7 @@ fn location_allocation_network_respects_required_and_forbidden_facilities() {
 
     let mut demand = Layer::new("demand")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     demand
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add demand 1");
@@ -24762,7 +25389,7 @@ fn location_allocation_network_respects_required_and_forbidden_facilities() {
 
     let mut facilities = Layer::new("facilities")
         .with_geom_type(GeometryType::Point)
-        .with_epsg(4326);
+        .with_epsg(3857);
     facilities.schema.add_field(FieldDef::new("REQ", FieldType::Boolean));
     facilities.schema.add_field(FieldDef::new("BAN", FieldType::Boolean));
     facilities
@@ -24829,7 +25456,7 @@ fn k_shortest_paths_network_returns_multiple_ranked_routes() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines
         .add_feature(
             Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
@@ -24926,7 +25553,7 @@ fn k_shortest_paths_network_temporal_profile_changes_route_by_departure_time() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
 
     lines
@@ -25046,7 +25673,7 @@ fn k_shortest_paths_network_temporal_profile_error_fallback_requires_coverage() 
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
     lines
         .add_feature(
@@ -25111,7 +25738,7 @@ fn k_shortest_paths_network_respects_turn_restrictions_csv() {
 
     let mut lines = Layer::new("network")
         .with_geom_type(GeometryType::LineString)
-        .with_epsg(4326);
+        .with_epsg(3857);
     lines.schema.add_field(FieldDef::new("IMP", FieldType::Float));
     lines
         .add_feature(

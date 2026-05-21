@@ -390,6 +390,10 @@ class WhiteboxWorkflowsPlugin:
                 self._panel_visible = True
 
     def _open_tool_from_panel(self, tool_id: str):
+        if str(tool_id).strip().lower() == "field_calculator":
+            self._open_field_calculator_assistant(tool_id)
+            return
+
         provider_id = self.provider.id()
         opened = open_processing_algorithm_dialog(self.iface, provider_id, tool_id)
         if opened:
@@ -399,6 +403,47 @@ class WhiteboxWorkflowsPlugin:
         else:
             self._notify_warning(
                 f"Unable to open dialog for {tool_id}; host processing API not available."
+            )
+
+    def _open_field_calculator_assistant(self, tool_id: str):
+        launch_params = None
+        try:
+            from .field_calculator_dialog import run_field_calculator_assistant
+
+            launch_params = run_field_calculator_assistant(
+                self.iface,
+                include_pro=self.provider.include_pro,
+                tier=self.provider.tier,
+            )
+        except Exception as exc:
+            self._notify_warning(
+                f"Field Calculator assistant unavailable; opening standard dialog ({exc})."
+            )
+            launch_params = None
+
+        if launch_params == {}:
+            # Assistant was opened and then cancelled.
+            return
+
+        provider_id = self.provider.id()
+        opened = open_processing_algorithm_dialog(
+            self.iface,
+            provider_id,
+            tool_id,
+            params=launch_params,
+        )
+        if opened:
+            self._record_last_tool(tool_id)
+            self._record_recent_tool(tool_id)
+            if launch_params:
+                self._notify_info(
+                    "Opened Field Calculator processing dialog with assistant parameters."
+                )
+            else:
+                self._notify_info("Opening tool: field_calculator")
+        else:
+            self._notify_warning(
+                "Unable to open dialog for field_calculator; host processing API not available."
             )
 
     def _open_tool_from_recent(self, tool_id: str):

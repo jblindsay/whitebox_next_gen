@@ -124,6 +124,50 @@ Export the selection as `priority_parcels.shp` using
 
 ---
 
+### Step 5b — Field Calculator Assistant (Expression + Preview Workflow)
+
+Use this when you need guided expression authoring for derived attributes
+(for example TYPE-to-SPEED conversion before network impedance analysis).
+
+Open from the **Whitebox panel** (recommended path):
+
+**Whitebox panel → tool search → `field_calculator`**
+
+The assistant provides:
+
+- expression editor with SQL-style presets/snippets
+- geometry token insertion (`$area`, `$length`, `$perimeter`, centroid tokens)
+- category and keyword snippet filtering
+- preview table driven by backend `preview_rows` payload
+- one-click handoff to the standard processing dialog with prefilled parameters
+
+Supported expression features include:
+
+- `CASE WHEN ... THEN ... ELSE ... END`
+- simple `CASE field WHEN value THEN ... END`
+- optional `UPDATE ... SET ... WHERE ...` wrapper syntax
+- SQL operators (`=`, `<>`, `AND`, `OR`, `NOT`) and null predicates
+- `CAST(... AS integer|float|text|boolean)`
+
+Example expression:
+
+```sql
+UPDATE roads SET SPEED = CASE
+  WHEN TYPE == 'motorway' THEN 100
+  WHEN TYPE == 'primary' THEN 80
+  WHEN TYPE == 'collector' THEN 60
+  ELSE 40
+END
+```
+
+Notes:
+
+- Launching `field_calculator` from the Whitebox panel opens the assistant.
+- Launching from the generic Processing Toolbox can open the standard dialog
+  directly, depending on host/API path.
+
+---
+
 ### Step 6 — Clip Parcels to Study Area (Optional)
 
 **Processing Toolbox → Whitebox Workflows → Vector Analysis →

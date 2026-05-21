@@ -3204,6 +3204,44 @@ print(result)
 <p><strong>Note:</strong> This workflow requires a <code>WbEnvironment</code> initialized with a valid
 Pro licence.</p>
 </blockquote>
+<h3 id="pro-sweep-diagnostics-for-siting-workflows"><a class="header" href="#pro-sweep-diagnostics-for-siting-workflows">Pro Sweep Diagnostics for Siting Workflows</a></h3>
+<p>For scenario testing in Pro siting workflows, <code>wind_turbine_siting</code> and
+<code>solar_site_suitability_analysis</code> accept <code>sweep_spec_json</code> and produce
+additional sweep outputs:</p>
+<ul>
+<li><code>run_matrix_summary</code> (CSV)</li>
+<li><code>sensitivity_report</code> (JSON)</li>
+<li><code>sensitivity_report_html</code> (HTML)</li>
+<li><code>stability_map</code> (GeoTIFF; <code>3=high</code>, <code>2=medium</code>, <code>1=low</code>)</li>
+</ul>
+<p>The JSON sensitivity report includes a normalized primary metric span and
+stability class fields for quick robustness screening:</p>
+<ul>
+<li><code>metrics.primary_metric</code></li>
+<li><code>metrics.primary_relative_span</code></li>
+<li><code>metrics.stability_class</code> with values <code>high</code>, <code>medium</code>, or <code>low</code></li>
+</ul>
+<p>Example:</p>
+<pre><code class="language-python">import json
+import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier="pro")
+
+sweep_spec = {
+  "schema_version": "1.0.0",
+  "sweep_mode": "grid",
+  "parameters": [
+    {"name": "candidate_threshold", "values": [0.65, 0.7, 0.75]},
+  ],
+}
+
+score, conf, summary = wbe.wind_turbine_siting(
+  dem="dem.tif",
+  settlements="settlements.gpkg",
+  sweep_spec_json=json.dumps(sweep_spec),
+  output_prefix="wind_sweep",
+)
+</code></pre>
 <hr />
 <h2 id="complete-terrain-analysis-pipeline"><a class="header" href="#complete-terrain-analysis-pipeline">Complete Terrain Analysis Pipeline</a></h2>
 <p>The following script assembles a typical geomorphometric analysis workflow
@@ -5930,14 +5968,41 @@ pts_raster = wbe.conversion.raster_vector_conversion.vector_points_to_raster(
 </code></pre>
 <hr />
 <h2 id="field-calculator"><a class="header" href="#field-calculator">Field Calculator</a></h2>
-<p>The field calculator tool evaluates an expression against the attribute table to create or update a field:</p>
-<pre><code class="language-python"># Compute a normalised shape index from existing area and perimeter fields
+<p>The field calculator supports SQL-style and expression-style updates for vector
+attributes, including:</p>
+<ul>
+<li>searched <code>CASE WHEN ... THEN ... ELSE ... END</code></li>
+<li>simple <code>CASE field WHEN value THEN ... END</code></li>
+<li><code>UPDATE ... SET ... [WHERE ...]</code> wrapper syntax</li>
+<li>SQL operators (<code>=</code>, <code>&lt;&gt;</code>, <code>AND</code>, <code>OR</code>, <code>NOT</code>), plus <code>IS NULL</code> / <code>IS NOT NULL</code></li>
+<li><code>CAST(... AS integer|float|text|boolean)</code></li>
+<li>preview-first execution with <code>preview_rows</code> (no output write required)</li>
+</ul>
+<p>Use it to create or update a field from existing attributes and geometry
+variables (<code>$area</code>, <code>$length</code>, <code>$perimeter</code>, centroid coordinates).</p>
+<pre><code class="language-python"># Compute/update SPEED from TYPE using SQL-style CASE
 watersheds = wbe.vector.attribute_analysis.field_calculator(
     input=watersheds,
-    field_name='SHAPE_IDX',
-    expression="'PERIMETER' / (2.0 * 3.14159 * sqrt('AREA' / 3.14159))"
+    field='SPEED',
+    field_type='integer',
+    expression="CASE WHEN TYPE == 'motorway' THEN 100 WHEN TYPE == 'primary' THEN 80 ELSE 60 END",
+    overwrite=True,
+    output='watersheds_speed.gpkg'
+)
+
+# Preview-only evaluation (returns preview payload, omits output write)
+preview = wbe.vector.attribute_analysis.field_calculator(
+    input=watersheds,
+    field='SPEED',
+    field_type='integer',
+    expression="CASE TYPE WHEN 'motorway' THEN 100 ELSE 60 END",
+    overwrite=True,
+    preview_rows=10
 )
 </code></pre>
+<p>When <code>preview_rows &gt; 0</code>, the tool returns preview records and normalized
+expression details that can be surfaced in UI workflows before committing
+final output writes.</p>
 <hr />
 <h2 id="topological-utilities"><a class="header" href="#topological-utilities">Topological Utilities</a></h2>
 <h3 id="repair-and-validation"><a class="header" href="#repair-and-validation">Repair and Validation</a></h3>
@@ -6216,6 +6281,11 @@ facility, OD cost matrices, location-allocation, accessibility metrics,
 sensitivity analysis, multimodal transit modelling, map matching, and fleet
 dispatch optimization. This chapter walks through those capabilities in the
 order you would encounter them in a real project.</p>
+<h3 id="capability-note-open-tier"><a class="header" href="#capability-note-open-tier">Capability Note (Open Tier)</a></h3>
+<p>The workflows in this chapter target the open-tier engine and include advanced
+network controls such as turn/u-turn penalties, node-entry costs, and optional
+time-dependent edge profiles (<code>temporal_cost_profile</code> + <code>departure_time</code>) for
+scenario and peak-period analysis.</p>
 <hr />
 <h2 id="core-concepts-you-should-know-first"><a class="header" href="#core-concepts-you-should-know-first">Core Concepts You Should Know First</a></h2>
 <p>Before running tools, it helps to align on a few core terms used throughout
@@ -6251,6 +6321,18 @@ network edges.</li>
 </ul>
 <p>If you keep these definitions in mind, each workflow step below becomes easier
 to interpret and validate.</p>
+<h3 id="modeling-intersection-delay-with-node-costs"><a class="header" href="#modeling-intersection-delay-with-node-costs">Modeling Intersection Delay With Node Costs</a></h3>
+<p>Network tools in this chapter support optional node-entry cost modeling for
+intersections, gates, crossings, or turn-heavy junctions:</p>
+<ul>
+<li><code>node_cost_points</code>: point layer containing node-cost observations.</li>
+<li><code>node_cost_field</code>: numeric field in <code>node_cost_points</code> with non-negative
+entry cost values.</li>
+<li><code>node_cost_snap_distance</code>: optional max assignment distance from each
+node-cost point to the nearest network node.</li>
+</ul>
+<p>Use node costs when edge impedance alone underestimates urban delay at
+intersections.</p>
 <hr />
 <h2 id="step-1--prepare-and-audit-the-network"><a class="header" href="#step-1--prepare-and-audit-the-network">Step 1 — Prepare and Audit the Network</a></h2>
 <p>Every routing workflow should begin with a topology check. A single dangling
@@ -6341,6 +6423,9 @@ can substantially alter optimal routes in dense urban networks.</p>
     snap_tolerance=20.0,
     edge_cost_field='MINUTES',
     one_way_field='ONEWAY',
+    node_cost_points='intersection_delay_points.shp',
+    node_cost_field='DELAY_MIN',
+    node_cost_snap_distance=25.0,
     turn_penalty=0.5,
     u_turn_penalty=3.0,
     forbid_u_turns=True
@@ -6383,6 +6468,35 @@ catchment = wbe.vector.network_analysis.network_service_area(
 )
 wbe.write_vector(catchment, 'fire_catchment_5min.shp')
 </code></pre>
+<p>If your network encodes one-way streets, pass <code>one_way_field</code> and use FT/TF/B
+style values when available (<code>FT</code> = first-to-last only, <code>TF</code> = last-to-first
+only, <code>B</code> = bidirectional). Legacy boolean-style values are still accepted.</p>
+<p>To model rush-hour conditions, pass a temporal speed profile and apply turn
+penalties. Edge speeds are scaled by the profile multipliers at the specified
+departure time.</p>
+<pre><code class="language-python">catchment_peak = wbe.vector.network_analysis.network_service_area(
+    roads,
+    origins=fire_stations,
+    max_cost=5.0,
+    snap_tolerance=20.0,
+    output_mode='polygon',
+    polygon_merge_origins=True,
+    edge_cost_field='MINUTES',
+    one_way_field='ONEWAY',
+    node_cost_points='intersection_delay_points.shp',
+    node_cost_field='DELAY_MIN',
+    node_cost_snap_distance=25.0,
+    turn_penalty=0.3,
+    u_turn_penalty=2.0,
+    forbid_u_turns=True,
+    temporal_cost_profile='rush_hour_profiles.csv',
+    temporal_edge_id_field='EDGE_ID',
+    departure_time='2024-06-15T08:00:00Z',
+    temporal_mode='multiplier',
+    temporal_fallback='static_cost'
+)
+wbe.write_vector(catchment_peak, 'fire_catchment_5min_am_peak.shp')
+</code></pre>
 <p>Use <code>output_mode='edges'</code> to retain the actual road arcs inside the catchment
 rather than fill a polygon — more appropriate when the network is sparse or
 when the arc-level result is needed for reporting.</p>
@@ -6406,6 +6520,31 @@ routes_to_hosp = wbe.vector.network_analysis.closest_facility_network(
 wbe.write_vector(routes_to_hosp, 'routes_to_hospital.shp')
 # Output carries INCIDENT_FID, FACILITY_FID, and COST fields per route.
 </code></pre>
+<p>If your network uses explicit one-way encodings, <code>closest_facility_network()</code>
+accepts FT/TF/B values as well as legacy boolean-style one-way fields.</p>
+<p>For peak-hour response-time analysis, combine turn penalties with a temporal
+speed profile.</p>
+<pre><code class="language-python">routes_peak = wbe.vector.network_analysis.closest_facility_network(
+    roads,
+    incidents=accidents,
+    facilities=hospitals,
+    snap_tolerance=20.0,
+    edge_cost_field='MINUTES',
+    one_way_field='ONEWAY',
+    node_cost_points='intersection_delay_points.shp',
+    node_cost_field='DELAY_MIN',
+    node_cost_snap_distance=25.0,
+    turn_penalty=0.5,
+    u_turn_penalty=3.0,
+    forbid_u_turns=True,
+    temporal_cost_profile='rush_hour_profiles.csv',
+    temporal_edge_id_field='EDGE_ID',
+    departure_time='2024-06-15T08:00:00Z',
+    temporal_mode='multiplier',
+    temporal_fallback='static_cost'
+)
+wbe.write_vector(routes_peak, 'routes_to_hospital_am_peak.shp')
+</code></pre>
 <hr />
 <h2 id="step-5--od-cost-matrix-and-batch-route-export"><a class="header" href="#step-5--od-cost-matrix-and-batch-route-export">Step 5 — OD Cost Matrix and Batch Route Export</a></h2>
 <p>When you need costs between many origins and many destinations simultaneously,
@@ -6427,10 +6566,33 @@ cost_csv = wbe.vector.network_analysis.network_od_cost_matrix(
 )
 print('OD matrix written to:', cost_csv)
 </code></pre>
+<p>If your network uses explicit one-way encodings, <code>network_od_cost_matrix()</code>
+accepts FT/TF/B values as well as legacy boolean-style one-way fields.</p>
 <p>The CSV is directly usable in pandas or any tabular analysis tool.</p>
 <pre><code class="language-python">import pandas as pd
 df = pd.read_csv(cost_csv)
 print(df.groupby('ORIGIN_FID')['COST'].min().describe())
+</code></pre>
+<p>For a time-of-day comparison, run a second matrix at AM-peak departure and
+compare cost distributions.</p>
+<pre><code class="language-python">cost_csv_am = wbe.vector.network_analysis.network_od_cost_matrix(
+    roads,
+    origins=schools,
+    destinations=libraries,
+    snap_tolerance=20.0,
+    edge_cost_field='MINUTES',
+    one_way_field='ONEWAY',
+    node_cost_points='intersection_delay_points.shp',
+    node_cost_field='DELAY_MIN',
+    node_cost_snap_distance=25.0,
+    turn_penalty=0.5,
+    temporal_cost_profile='am_peak_profiles.csv',
+    temporal_edge_id_field='EDGE_ID',
+    departure_time='2024-06-15T08:00:00Z',
+    temporal_mode='multiplier',
+    temporal_fallback='static_cost'
+)
+print('AM-peak OD matrix written to:', cost_csv_am)
 </code></pre>
 <h3 id="materializing-od-routes-as-geometry"><a class="header" href="#materializing-od-routes-as-geometry">Materializing OD Routes as Geometry</a></h3>
 <p>To visualize or spatially analyse the actual path lines between OD pairs, use
@@ -6445,6 +6607,8 @@ print(df.groupby('ORIGIN_FID')['COST'].min().describe())
 )
 wbe.write_vector(od_routes, 'od_routes_schools_to_libraries.shp')
 </code></pre>
+<p>If your network uses explicit one-way encodings, <code>network_routes_from_od()</code>
+accepts FT/TF/B values as well as legacy boolean-style one-way fields.</p>
 <hr />
 <h2 id="step-6--location-allocation"><a class="header" href="#step-6--location-allocation">Step 6 — Location-Allocation</a></h2>
 <p><code>location_allocation_network()</code> solves the classic p-median problem: given
@@ -6468,6 +6632,28 @@ wbe.write_vector(sited, 'selected_facilities.shp')
 # SELECTED == 1 on the four chosen candidate sites.
 # Demand points carry ASSIGNED_FID linking each to its nearest selected site.
 </code></pre>
+<p>To optimise facility placement under peak-hour travel times rather than
+free-flow speeds, pass a temporal profile.</p>
+<pre><code class="language-python">sited_peak = wbe.vector.network_analysis.location_allocation_network(
+    roads,
+    demand_points=demand,
+    facilities=candidates,
+    facility_count=4,
+    solver_mode='minimize_impedance',
+    demand_weight_field='POP',
+    snap_tolerance=20.0,
+    edge_cost_field='MINUTES',
+    node_cost_points='intersection_delay_points.shp',
+    node_cost_field='DELAY_MIN',
+    node_cost_snap_distance=25.0,
+    temporal_cost_profile='am_peak_profiles.csv',
+    temporal_edge_id_field='EDGE_ID',
+    departure_time='2024-06-15T08:00:00Z',
+    temporal_mode='multiplier',
+    temporal_fallback='static_cost'
+)
+wbe.write_vector(sited_peak, 'selected_facilities_am_peak.shp')
+</code></pre>
 <p>Solver modes include <code>minimize_impedance</code> (p-median), <code>maximize_coverage</code>, and
 <code>maximize_attendance</code>. Required and forbidden facility flags let you fix certain
 sites open or closed before the solver runs.</p>
@@ -6486,6 +6672,10 @@ accessibility = wbe.compute_network_accessibility(
     origins=residents,
     destinations=supermarkets,
     edge_cost_field='MINUTES',
+    one_way_field='DIR',
+    node_cost_points='intersection_delay_points.shp',
+    node_cost_field='DELAY_MIN',
+    node_cost_snap_distance=25.0,
     impedance_cutoff=30.0,
     decay_function='negative_exponential',
     decay_parameter=0.1
@@ -6493,6 +6683,9 @@ accessibility = wbe.compute_network_accessibility(
 wbe.write_vector(accessibility, 'food_accessibility.shp')
 # Each origin point carries an ACCESS_SCORE field.
 </code></pre>
+<p>When a <code>one_way_field</code> is provided, one-way values can use FT/TF/B conventions
+(<code>FT</code> = first-to-last only, <code>TF</code> = last-to-first only, <code>B</code> = bidirectional),
+as well as legacy boolean-style encodings.</p>
 <hr />
 <h2 id="step-8--od-sensitivity-analysis"><a class="header" href="#step-8--od-sensitivity-analysis">Step 8 — OD Sensitivity Analysis</a></h2>
 <p><code>analyze_od_cost_sensitivity()</code> quantifies how stable OD costs are under
@@ -6504,6 +6697,9 @@ hypothetical congestion or road-closure scenarios.</p>
     origins=schools,
     destinations=libraries,
     edge_cost_field='MINUTES',
+    node_cost_points='intersection_delay_points.shp',
+    node_cost_field='DELAY_MIN',
+    node_cost_snap_distance=25.0,
     impedance_disturbance_range=0.2,  # ±20 % perturbation
     monte_carlo_samples=500
 )

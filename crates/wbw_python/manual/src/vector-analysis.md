@@ -93,7 +93,11 @@ wbe.conversion.vector_table_io.export_table_to_csv(watersheds, 'watershed_attrib
 ### Listing Unique Values
 
 ```python
-wbe.vector.attribute_analysis.list_unique_values(watersheds, field_name='REGION')
+wbe.vector.attribute_analysis.list_unique_values(
+    watersheds,
+    field_name='REGION',
+    output_path='watersheds_region_unique_values.csv',
+)
 ```
 
 ---

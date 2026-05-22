@@ -264,7 +264,10 @@ pct_equal = wbe.raster.overlay_math.percent_equal_to(dem, filter_size_x=9, filte
 ### Unique-Value Enumeration
 
 ```python
-wbe.raster.general.list_unique_values_raster(landcover)  # prints class codes and pixel counts
+wbe.raster.general.list_unique_values_raster(
+    landcover,
+    output_path='landcover_unique_values.csv',
+)  # writes category counts to CSV and returns report JSON
 ```
 
 ---

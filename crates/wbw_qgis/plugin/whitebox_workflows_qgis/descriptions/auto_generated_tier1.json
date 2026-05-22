@@ -279,7 +279,7 @@
         "label": "Number of trees (default 200). [optional]"
       },
       "output": {
-        "label": "Output predictions CSV path. [optional]"
+        "label": "Output predictions CSV path."
       }
     }
   },
@@ -302,7 +302,7 @@
         "label": "Number of trees (default 200). [optional]"
       },
       "output": {
-        "label": "Output predictions CSV path. [optional]"
+        "label": "Output predictions CSV path."
       }
     }
   },
@@ -899,7 +899,7 @@
         "label": "Reference class field (default class). [optional]"
       },
       "output": {
-        "label": "Output JSON report path. [optional]"
+        "label": "Output JSON report path."
       }
     }
   },
@@ -2974,7 +2974,7 @@
         "label": "Input segment-label raster."
       },
       "output": {
-        "label": "Output CSV path. [optional]"
+        "label": "Output CSV path."
       }
     }
   },
@@ -2985,7 +2985,7 @@
         "label": "Input segment-label raster. (default segments.tif)."
       },
       "output": {
-        "label": "Output CSV path. [optional]"
+        "label": "Output CSV path."
       }
     }
   },
@@ -2999,7 +2999,7 @@
         "label": "Array of single-band input rasters used for spectral features. (default ['red.tif', 'green.tif', 'nir.tif'])."
       },
       "output": {
-        "label": "Output CSV path. [optional]"
+        "label": "Output CSV path."
       }
     }
   },
@@ -3016,7 +3016,7 @@
         "label": "Quantization levels for GLCM (default 16). [optional]"
       },
       "output": {
-        "label": "Output CSV path. [optional]"
+        "label": "Output CSV path."
       }
     }
   },
@@ -4612,7 +4612,7 @@
         "label": "Input vector path. (default input.gpkg)."
       },
       "output": {
-        "label": "Output CSV path. (default topology_report.csv). [optional]"
+        "label": "Output CSV path."
       }
     }
   },

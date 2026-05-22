@@ -733,6 +733,43 @@ def _is_raster_path(path: str) -> bool:
     return p.endswith((".tif", ".tiff", ".img", ".bil", ".flt", ".sdat", ".rdc"))
 
 
+def _is_non_layer_file_path(path: str) -> bool:
+    p = str(path).strip().lower()
+    return p.endswith((".csv", ".json", ".txt", ".html", ".htm", ".xml"))
+
+
+def _emit_non_layer_output_messages(result: dict[str, Any], feedback) -> None:
+    emitted = False
+    for key, value in sorted(result.items()):
+        if not isinstance(value, str):
+            continue
+        candidate = value.strip()
+        if not candidate:
+            continue
+        if candidate.startswith("memory:"):
+            continue
+        if not _is_non_layer_file_path(candidate):
+            continue
+
+        exists = False
+        try:
+            exists = os.path.exists(os.path.expanduser(candidate))
+        except Exception:
+            exists = False
+
+        label = key or "output"
+        if exists:
+            feedback.pushInfo(f"Created {label} file: {candidate}")
+        else:
+            feedback.pushInfo(f"Reported {label} file path: {candidate}")
+        emitted = True
+
+    if emitted:
+        feedback.pushInfo(
+            "CSV/JSON/TXT/HTML outputs are not auto-loaded as map layers. Open them from the path above."
+        )
+
+
 def _coerce_render_hints(raw: Any) -> dict[str, str]:
     if not isinstance(raw, dict):
         return {}
@@ -2454,6 +2491,8 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                 feedback.pushInfo(f"Render hint for {key}: {hint}")
                 if hint in ("categorical", "categorical_raster"):
                     _apply_categorical_raster_render_hint(value, feedback, self.name(), key)
+
+            _emit_non_layer_output_messages(result, feedback)
 
         # QGIS may load the output layer after processAlgorithm returns and ignore
         # temporary-layer styling. Attach a post-load hook for MSTP class output.

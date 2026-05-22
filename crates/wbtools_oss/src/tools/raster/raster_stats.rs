@@ -192,6 +192,20 @@ fn write_html_report(path: &str, html: &str) -> Result<String, ToolError> {
     Ok(output_path.to_string_lossy().to_string())
 }
 
+fn write_text_report(path: &std::path::Path, text: &str, label: &str) -> Result<String, ToolError> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| ToolError::Execution(format!("failed creating {} output directory: {}", label, e)))?;
+        }
+    }
+
+    std::fs::write(path, text)
+        .map_err(|e| ToolError::Execution(format!("failed writing {} output: {}", label, e)))?;
+
+    Ok(path.to_string_lossy().to_string())
+}
+
 fn html_document(title: &str, body: &str) -> String {
     format!(
         "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n<head>\n<meta content=\"text/html; charset=UTF-8\" http-equiv=\"content-type\">\n<title>{title}</title>{}\n</head>\n<body>\n{}\n</body>",
@@ -1049,6 +1063,11 @@ impl Tool for RasterSummaryStatsTool {
                     description: "Input raster path.",
                     required: true,
                 },
+                ToolParamSpec {
+                    name: "output",
+                    description: "Optional output report path (.json or .csv).",
+                    required: false,
+                },
             ],
         }
     }
@@ -1059,6 +1078,7 @@ impl Tool for RasterSummaryStatsTool {
 
         let mut example = ToolArgs::new();
         example.insert("input".to_string(), json!("dem.tif"));
+        example.insert("output".to_string(), json!("dem_summary_stats.json"));
 
         ToolManifest {
             id: "raster_summary_stats".to_string(),
@@ -1066,11 +1086,18 @@ impl Tool for RasterSummaryStatsTool {
             summary: "Computes basic summary statistics for valid raster cells.".to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
-            params: vec![ToolParamDescriptor {
-                name: "input".to_string(),
-                description: "Input raster path.".to_string(),
-                required: true,
-            }],
+            params: vec![
+                ToolParamDescriptor {
+                    name: "input".to_string(),
+                    description: "Input raster path.".to_string(),
+                    required: true,
+                },
+                ToolParamDescriptor {
+                    name: "output".to_string(),
+                    description: "Optional output report path (.json or .csv).".to_string(),
+                    required: false,
+                },
+            ],
             defaults,
             examples: vec![ToolExample {
                 name: "basic_raster_summary_stats".to_string(),
@@ -1084,11 +1111,24 @@ impl Tool for RasterSummaryStatsTool {
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = parse_raster_path_arg(args, "input")?;
+        if let Some(path) = parse_optional_output_path(args, "output")? {
+            let ext = path
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_ascii_lowercase())
+                .unwrap_or_default();
+            if ext != "json" && ext != "csv" {
+                return Err(ToolError::Validation(
+                    "output must be a .json or .csv path".to_string(),
+                ));
+            }
+        }
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_raster_path_arg(args, "input")?;
+        let output_path = parse_optional_output_path(args, "output")?;
         let input = load_raster(&input_path, "input")?;
 
         let (count, min_val, max_val, sum, sum2) = (0..input.data.len())
@@ -1147,6 +1187,27 @@ impl Tool for RasterSummaryStatsTool {
 
         let mut outputs = BTreeMap::new();
         outputs.insert("report".to_string(), json!(report));
+        if let Some(path) = output_path.as_ref() {
+            let ext = path
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_ascii_lowercase())
+                .unwrap_or_default();
+            let content = if ext == "csv" {
+                format!(
+                    "metric,value\ncount,{}\nmin,{}\nmax,{}\nmean,{}\nstdev,{}\nsum,{}\n",
+                    count, min_val, max_val, mean, stdev, sum
+                )
+            } else {
+                outputs
+                    .get("report")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("{}")
+                    .to_string()
+            };
+            let written = write_text_report(path, &content, "report")?;
+            outputs.insert("path".to_string(), json!(written));
+        }
         Ok(ToolRunResult { outputs })
     }
 }
@@ -1334,6 +1395,11 @@ impl Tool for ListUniqueValuesRasterTool {
                     required: true,
                 },
                 ToolParamSpec {
+                    name: "output",
+                    description: "Optional output CSV path.",
+                    required: false,
+                },
+                ToolParamSpec {
                     name: "strict_parity",
                     description: "When true, return complete category-frequency output (default true).",
                     required: false,
@@ -1370,6 +1436,11 @@ impl Tool for ListUniqueValuesRasterTool {
                     required: true,
                 },
                 ToolParamDescriptor {
+                    name: "output".to_string(),
+                    description: "Optional output CSV path.".to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
                     name: "strict_parity".to_string(),
                     description: "When true, return complete category-frequency output (default true).".to_string(),
                     required: false,
@@ -1393,11 +1464,22 @@ impl Tool for ListUniqueValuesRasterTool {
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = parse_raster_path_arg(args, "input")?;
+        if let Some(path) = parse_optional_output_path(args, "output")? {
+            let is_csv = path
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|s| s.eq_ignore_ascii_case("csv"))
+                .unwrap_or(false);
+            if !is_csv {
+                return Err(ToolError::Validation("output must be a .csv path".to_string()));
+            }
+        }
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_raster_path_arg(args, "input")?;
+        let output_path = parse_optional_output_path(args, "output")?;
         let strict_parity = args
             .get("strict_parity")
             .and_then(|v| v.as_bool())
@@ -1457,6 +1539,10 @@ impl Tool for ListUniqueValuesRasterTool {
 
             outputs.insert("report".to_string(), json!(report));
             outputs.insert("table_csv".to_string(), json!(table_csv));
+            if let Some(path) = output_path.as_ref() {
+                let written = write_text_report(path, &table_csv, "CSV")?;
+                outputs.insert("path".to_string(), json!(written));
+            }
             return Ok(ToolRunResult { outputs });
         }
 
@@ -1482,6 +1568,15 @@ impl Tool for ListUniqueValuesRasterTool {
         .to_string();
 
         outputs.insert("report".to_string(), json!(report));
+        if let Some(path) = output_path.as_ref() {
+            let mut table_csv = String::from("Category\n");
+            for value in &values {
+                table_csv.push_str(&format!("{}\n", value));
+            }
+            let written = write_text_report(path, &table_csv, "CSV")?;
+            outputs.insert("path".to_string(), json!(written));
+            outputs.insert("table_csv".to_string(), json!(table_csv));
+        }
         Ok(ToolRunResult { outputs })
     }
 }
@@ -6661,6 +6756,7 @@ impl Tool for ListUniqueValuesTool {
             params: vec![
                 ToolParamSpec { name: "input", description: "Input vector path.", required: true },
                 ToolParamSpec { name: "field", description: "Attribute field name.", required: true },
+                ToolParamSpec { name: "output", description: "Optional output CSV path.", required: false },
             ],
         }
     }
@@ -6682,6 +6778,7 @@ impl Tool for ListUniqueValuesTool {
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Input vector path.".to_string(), required: true },
                 ToolParamDescriptor { name: "field".to_string(), description: "Attribute field name.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Optional output CSV path.".to_string(), required: false },
             ],
             defaults,
             examples: vec![ToolExample {
@@ -6700,11 +6797,22 @@ impl Tool for ListUniqueValuesTool {
             .get("field")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::Validation("parameter 'field' is required".to_string()))?;
+        if let Some(path) = parse_optional_output_path(args, "output")? {
+            let is_csv = path
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|s| s.eq_ignore_ascii_case("csv"))
+                .unwrap_or(false);
+            if !is_csv {
+                return Err(ToolError::Validation("output must be a .csv path".to_string()));
+            }
+        }
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_vector_path_arg(args, "input")?;
+        let output_path = parse_optional_output_path(args, "output")?;
         let field = args
             .get("field")
             .and_then(|v| v.as_str())
@@ -6743,9 +6851,20 @@ impl Tool for ListUniqueValuesTool {
 
         let freq: BTreeMap<String, usize> = freq_hash.into_iter().collect();
 
+        let mut table_csv = String::from("Category,Frequency\n");
+        for (category, count) in &freq {
+            let escaped = category.replace('"', "\"\"");
+            table_csv.push_str(&format!("\"{}\",{}\n", escaped, count));
+        }
+
         let report = json!({"field": field, "categories": freq}).to_string();
         let mut outputs = BTreeMap::new();
         outputs.insert("report".to_string(), json!(report));
+        outputs.insert("table_csv".to_string(), json!(table_csv));
+        if let Some(path) = output_path.as_ref() {
+            let written = write_text_report(path, &table_csv, "CSV")?;
+            outputs.insert("path".to_string(), json!(written));
+        }
         Ok(ToolRunResult { outputs })
     }
 }

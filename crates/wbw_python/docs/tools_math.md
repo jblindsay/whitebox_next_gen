@@ -783,11 +783,16 @@ Lists unique raster values (integers) up to a maximum count and returns a JSON r
 |---|---|---|---|
 | `input` | Raster | yes | Input raster object. |
 | `max_values` | int | no | Maximum values to return (default 10000). |
+| `output_path` | string | no | Optional output CSV path. |
 
 **WbEnvironment usage**
 
 ```python
-unique_json = env.list_unique_values_raster(classified_raster, max_values=5000)
+unique_json = env.list_unique_values_raster(
+    classified_raster,
+    max_values=5000,
+    output_path="classified_unique_values.csv",
+)
 ```
 
 ---
@@ -906,11 +911,16 @@ Reports unique value counts for a vector attribute field and returns a JSON repo
 |---|---|---|---|
 | `input` | Vector | yes | Input vector object. |
 | `field_name` | string | yes | Attribute field name to summarize. |
+| `output_path` | string | no | Optional output CSV path. |
 
 **WbEnvironment usage**
 
 ```python
-report_json = env.list_unique_values(parcels, "landuse")
+report_json = env.list_unique_values(
+    parcels,
+    "landuse",
+    output_path="parcels_landuse_unique_values.csv",
+)
 ```
 
 ---

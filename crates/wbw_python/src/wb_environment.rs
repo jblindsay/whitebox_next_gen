@@ -18208,16 +18208,21 @@ impl WbEnvironment {
         extract_output_string_by_key("raster_histogram", &response, "report")
     }
 
-    #[pyo3(signature = (input, max_values=10000, callback=None))]
+    #[pyo3(signature = (input, max_values=10000, output_path=None, callback=None))]
     fn list_unique_values_raster(
         &self,
         input: &Raster,
         max_values: usize,
+        output_path: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<String> {
+        let resolved_output = self.resolve_output_path_for_wd(output_path);
         let mut args = serde_json::Map::new();
         args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
         args.insert("max_values".to_string(), json!(max_values));
+        if let Some(ref out) = resolved_output {
+            args.insert("output".to_string(), json!(out));
+        }
 
         let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
@@ -18491,16 +18496,21 @@ impl WbEnvironment {
         Ok(Raster { file_path: out_path, active_band: input.active_band })
     }
 
-    #[pyo3(signature = (input, field_name, callback=None))]
+    #[pyo3(signature = (input, field_name, output_path=None, callback=None))]
     fn list_unique_values(
         &self,
         input: &Vector,
         field_name: &str,
+        output_path: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<String> {
+        let resolved_output = self.resolve_output_path_for_wd(output_path);
         let mut args = serde_json::Map::new();
         args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
         args.insert("field".to_string(), json!(field_name));
+        if let Some(ref out) = resolved_output {
+            args.insert("output".to_string(), json!(out));
+        }
 
         let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
@@ -28288,26 +28298,18 @@ impl WbEnvironment {
         extract_output_string_by_key("vector_summary_statistics", &response, "path")
     }
 
-    #[pyo3(signature = (input, output_path=None, callback=None))]
+    #[pyo3(signature = (input, output_path, callback=None))]
     fn topology_validation_report(
         &self,
         input: &Vector,
-        output_path: Option<&str>,
+        output_path: &str,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<String> {
-        let output = self
-            .resolve_output_path_for_wd(output_path)
-            .unwrap_or_else(|| {
-                let stem = input
-                    .file_path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("vector");
-                self.working_directory
-                    .join(format!("{}_topology_report.csv", stem))
-                    .to_string_lossy()
-                    .to_string()
-            });
+        let output = self.resolve_output_path_for_wd(Some(output_path)).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "parameter 'output_path' is required",
+            )
+        })?;
         let mut args = serde_json::Map::new();
         args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
         args.insert("output".to_string(), json!(output));

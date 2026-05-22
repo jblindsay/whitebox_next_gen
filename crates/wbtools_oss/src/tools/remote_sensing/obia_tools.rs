@@ -65,23 +65,6 @@ fn parse_f64_arg(args: &ToolArgs, name: &str, default_value: f64) -> f64 {
         .unwrap_or(default_value)
 }
 
-fn output_path_or_default(input_path: &str, suffix: &str, ext: &str, explicit: Option<String>) -> String {
-    if let Some(path) = explicit {
-        return path;
-    }
-    let p = Path::new(input_path);
-    let parent = p.parent().unwrap_or_else(|| Path::new("."));
-    let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
-    parent
-        .join(format!("{stem}_{suffix}.{ext}"))
-        .to_string_lossy()
-        .to_string()
-}
-
-fn output_csv_path_or_default(base_path: &str, suffix: &str, explicit: Option<String>) -> String {
-    output_path_or_default(base_path, suffix, "csv", explicit)
-}
-
 fn result_path_from_outputs(outputs: &BTreeMap<String, serde_json::Value>) -> Option<String> {
     outputs
         .get("path")
@@ -579,7 +562,7 @@ impl Tool for ObjectFeaturesSpectralBasicTool {
             params: vec![
                 ToolParamSpec { name: "segments", description: "Input segment-label raster.", required: true },
                 ToolParamSpec { name: "inputs", description: "Array of single-band input rasters used for spectral features.", required: true },
-                ToolParamSpec { name: "output", description: "Output CSV path.", required: false },
+                ToolParamSpec { name: "output", description: "Output CSV path.", required: true },
             ],
         }
     }
@@ -638,11 +621,7 @@ impl Tool for ObjectFeaturesSpectralBasicTool {
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let segments_path = parse_required_path_arg(args, "segments")?;
         let input_paths = parse_raster_list_arg(args, "inputs")?;
-        let output_path = output_csv_path_or_default(
-            &segments_path,
-            "object_features_spectral",
-            parse_optional_path_arg(args, "output"),
-        );
+        let output_path = parse_required_path_arg(args, "output")?;
 
         let segments = Raster::read(&segments_path)
             .map_err(|e| ToolError::Execution(format!("failed reading segments raster: {e}")))?;
@@ -755,7 +734,7 @@ impl Tool for ObjectFeaturesShapeBasicTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "segments", description: "Input segment-label raster.", required: true },
-                ToolParamSpec { name: "output", description: "Output CSV path.", required: false },
+                ToolParamSpec { name: "output", description: "Output CSV path.", required: true },
             ],
         }
     }
@@ -810,11 +789,7 @@ impl Tool for ObjectFeaturesShapeBasicTool {
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let segments_path = parse_required_path_arg(args, "segments")?;
-        let output_path = output_csv_path_or_default(
-            &segments_path,
-            "object_features_shape",
-            parse_optional_path_arg(args, "output"),
-        );
+        let output_path = parse_required_path_arg(args, "output")?;
 
         let segments = Raster::read(&segments_path)
             .map_err(|e| ToolError::Execution(format!("failed reading segments raster: {e}")))?;
@@ -921,7 +896,7 @@ impl Tool for ObjectFeaturesTextureGlcmBasicTool {
                 ToolParamSpec { name: "segments", description: "Input segment-label raster.", required: true },
                 ToolParamSpec { name: "input", description: "Single-band intensity raster for texture analysis.", required: true },
                 ToolParamSpec { name: "levels", description: "Quantization levels for GLCM (default 16).", required: false },
-                ToolParamSpec { name: "output", description: "Output CSV path.", required: false },
+                ToolParamSpec { name: "output", description: "Output CSV path.", required: true },
             ],
         }
     }
@@ -984,11 +959,7 @@ impl Tool for ObjectFeaturesTextureGlcmBasicTool {
         let segments_path = parse_required_path_arg(args, "segments")?;
         let input_path = parse_required_path_arg(args, "input")?;
         let levels = parse_usize_arg(args, "levels", 16).clamp(4, 64);
-        let output_path = output_csv_path_or_default(
-            &segments_path,
-            "object_features_texture",
-            parse_optional_path_arg(args, "output"),
-        );
+        let output_path = parse_required_path_arg(args, "output")?;
 
         let segments = Raster::read(&segments_path)
             .map_err(|e| ToolError::Execution(format!("failed reading segments raster: {e}")))?;
@@ -1148,7 +1119,7 @@ impl Tool for ClassifyObjectsRandomForestTool {
                 ToolParamSpec { name: "segment_id_field", description: "Segment ID field name (default segment_id).", required: false },
                 ToolParamSpec { name: "class_field", description: "Class label field in training CSV (default class).", required: false },
                 ToolParamSpec { name: "n_trees", description: "Number of trees (default 200).", required: false },
-                ToolParamSpec { name: "output", description: "Output predictions CSV path.", required: false },
+                ToolParamSpec { name: "output", description: "Output predictions CSV path.", required: true },
             ],
         }
     }
@@ -1217,11 +1188,7 @@ impl Tool for ClassifyObjectsRandomForestTool {
             .and_then(serde_json::Value::as_str)
             .unwrap_or("class");
         let n_trees = parse_usize_arg(args, "n_trees", 200).max(10) as u16;
-        let output_path = output_csv_path_or_default(
-            &features_path,
-            "object_predictions",
-            parse_optional_path_arg(args, "output"),
-        );
+        let output_path = parse_required_path_arg(args, "output")?;
 
         let (f_headers, f_rows) = parse_simple_csv(&features_path)?;
         let seg_col = find_header_index(&f_headers, seg_field)?;
@@ -1363,7 +1330,7 @@ impl Tool for EvaluateObjectClassificationAccuracyTool {
                 ToolParamSpec { name: "segment_id_field", description: "Segment ID field name (default segment_id).", required: false },
                 ToolParamSpec { name: "predicted_field", description: "Predicted class field (default predicted_class).", required: false },
                 ToolParamSpec { name: "reference_field", description: "Reference class field (default class).", required: false },
-                ToolParamSpec { name: "output", description: "Output JSON report path.", required: false },
+                ToolParamSpec { name: "output", description: "Output JSON report path.", required: true },
             ],
         }
     }
@@ -1435,12 +1402,7 @@ impl Tool for EvaluateObjectClassificationAccuracyTool {
             .get("reference_field")
             .and_then(serde_json::Value::as_str)
             .unwrap_or("class");
-        let output_path = output_path_or_default(
-            &pred_path,
-            "object_accuracy",
-            "json",
-            parse_optional_path_arg(args, "output"),
-        );
+        let output_path = parse_required_path_arg(args, "output")?;
 
         let (p_headers, p_rows) = parse_simple_csv(&pred_path)?;
         let p_seg_col = find_header_index(&p_headers, seg_field)?;
@@ -2349,7 +2311,7 @@ impl Tool for ObjectFeaturesContextNeighborsTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "segments", description: "Input segment-label raster.", required: true },
-                ToolParamSpec { name: "output", description: "Output CSV path.", required: false },
+                ToolParamSpec { name: "output", description: "Output CSV path.", required: true },
             ],
         }
     }
@@ -2381,11 +2343,7 @@ impl Tool for ObjectFeaturesContextNeighborsTool {
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let segments_path = parse_required_path_arg(args, "segments")?;
-        let output_path = output_csv_path_or_default(
-            &segments_path,
-            "object_features_context",
-            parse_optional_path_arg(args, "output"),
-        );
+        let output_path = parse_required_path_arg(args, "output")?;
         let adj = adjacency_from_segments(&segments_path)?;
         let header = vec![
             "segment_id".to_string(),
@@ -2422,7 +2380,7 @@ impl Tool for ObjectFeaturesTopologyRelationsTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "segments", description: "Input segment-label raster.", required: true },
-                ToolParamSpec { name: "output", description: "Output CSV path.", required: false },
+                ToolParamSpec { name: "output", description: "Output CSV path.", required: true },
             ],
         }
     }
@@ -2454,11 +2412,7 @@ impl Tool for ObjectFeaturesTopologyRelationsTool {
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let segments_path = parse_required_path_arg(args, "segments")?;
-        let output_path = output_csv_path_or_default(
-            &segments_path,
-            "object_features_topology",
-            parse_optional_path_arg(args, "output"),
-        );
+        let output_path = parse_required_path_arg(args, "output")?;
         let adj = adjacency_from_segments(&segments_path)?;
         let header = vec![
             "segment_id".to_string(),
@@ -2580,7 +2534,7 @@ impl Tool for ClassifyObjectsRulesBasicTool {
                 ToolParamSpec { name: "features", description: "Input object-features CSV.", required: true },
                 ToolParamSpec { name: "rules", description: "Rules CSV with columns: feature, op, value, class, [priority].", required: true },
                 ToolParamSpec { name: "default_class", description: "Fallback class when no rules match.", required: false },
-                ToolParamSpec { name: "output", description: "Output predictions CSV path.", required: false },
+                ToolParamSpec { name: "output", description: "Output predictions CSV path.", required: true },
             ],
         }
     }
@@ -2619,11 +2573,7 @@ impl Tool for ClassifyObjectsRulesBasicTool {
             .and_then(serde_json::Value::as_str)
             .unwrap_or("unclassified")
             .to_string();
-        let output_path = output_csv_path_or_default(
-            &features_path,
-            "object_predictions_rules",
-            parse_optional_path_arg(args, "output"),
-        );
+        let output_path = parse_required_path_arg(args, "output")?;
 
         let (f_headers, f_rows) = parse_simple_csv(&features_path)?;
         let seg_col = find_header_index(&f_headers, "segment_id")?;
@@ -2722,7 +2672,7 @@ impl Tool for ObjectClassProbabilityMapsTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "predictions", description: "Predictions CSV with segment_id and predicted_class.", required: true },
-                ToolParamSpec { name: "output", description: "Output probability CSV path.", required: false },
+                ToolParamSpec { name: "output", description: "Output probability CSV path.", required: true },
             ],
         }
     }
@@ -2754,11 +2704,7 @@ impl Tool for ObjectClassProbabilityMapsTool {
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let pred_path = parse_required_path_arg(args, "predictions")?;
-        let output_path = output_csv_path_or_default(
-            &pred_path,
-            "object_class_probabilities",
-            parse_optional_path_arg(args, "output"),
-        );
+        let output_path = parse_required_path_arg(args, "output")?;
         let (h, rows) = parse_simple_csv(&pred_path)?;
         let seg_col = find_header_index(&h, "segment_id")?;
         let cls_col = find_header_index(&h, "predicted_class")?;
@@ -2796,7 +2742,7 @@ impl Tool for ObjectUncertaintyDiagnosticsProTool {
             params: vec![
                 ToolParamSpec { name: "probabilities", description: "Input probabilities CSV with probability and uncertainty columns.", required: true },
                 ToolParamSpec { name: "low_conf_threshold", description: "Low-confidence threshold on probability (default 0.7).", required: false },
-                ToolParamSpec { name: "output", description: "Output diagnostics JSON path.", required: false },
+                ToolParamSpec { name: "output", description: "Output diagnostics JSON path.", required: true },
             ],
         }
     }
@@ -2829,12 +2775,7 @@ impl Tool for ObjectUncertaintyDiagnosticsProTool {
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let probs_path = parse_required_path_arg(args, "probabilities")?;
         let low_conf_threshold = parse_f64_arg(args, "low_conf_threshold", 0.7).clamp(0.0, 1.0);
-        let output_path = output_path_or_default(
-            &probs_path,
-            "object_uncertainty_diagnostics",
-            "json",
-            parse_optional_path_arg(args, "output"),
-        );
+        let output_path = parse_required_path_arg(args, "output")?;
         let (h, rows) = parse_simple_csv(&probs_path)?;
         let p_col = find_header_index(&h, "probability")?;
         let mut probs = Vec::new();
@@ -2888,7 +2829,7 @@ impl Tool for BuildObjectHierarchyMultiscaleTool {
             params: vec![
                 ToolParamSpec { name: "coarse_segments", description: "Coarse segment raster.", required: true },
                 ToolParamSpec { name: "fine_segments", description: "Fine segment raster.", required: true },
-                ToolParamSpec { name: "output", description: "Output hierarchy CSV path.", required: false },
+                ToolParamSpec { name: "output", description: "Output hierarchy CSV path.", required: true },
             ],
         }
     }
@@ -2922,7 +2863,7 @@ impl Tool for BuildObjectHierarchyMultiscaleTool {
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let coarse = parse_required_path_arg(args, "coarse_segments")?;
         let fine = parse_required_path_arg(args, "fine_segments")?;
-        let output = output_csv_path_or_default(&fine, "segment_hierarchy", parse_optional_path_arg(args, "output"));
+        let output = parse_required_path_arg(args, "output")?;
         build_segment_hierarchy_csv(&coarse, &fine, &output)?;
         let mut outputs = BTreeMap::new();
         outputs.insert("output".to_string(), serde_json::json!(output));
@@ -2944,7 +2885,7 @@ impl Tool for PropagateLabelsAcrossHierarchyTool {
                 ToolParamSpec { name: "hierarchy", description: "Hierarchy CSV with fine_segment_id and coarse_segment_id.", required: true },
                 ToolParamSpec { name: "parent_labels", description: "Parent labels CSV with coarse_segment_id and class.", required: true },
                 ToolParamSpec { name: "child_labels", description: "Optional child labels CSV with fine_segment_id and class.", required: false },
-                ToolParamSpec { name: "output", description: "Output propagated labels CSV path.", required: false },
+                ToolParamSpec { name: "output", description: "Output propagated labels CSV path.", required: true },
             ],
         }
     }
@@ -2978,11 +2919,7 @@ impl Tool for PropagateLabelsAcrossHierarchyTool {
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let hierarchy_path = parse_required_path_arg(args, "hierarchy")?;
         let parent_labels_path = parse_required_path_arg(args, "parent_labels")?;
-        let output_path = output_csv_path_or_default(
-            &hierarchy_path,
-            "propagated_labels",
-            parse_optional_path_arg(args, "output"),
-        );
+        let output_path = parse_required_path_arg(args, "output")?;
 
         let (h_head, h_rows) = parse_simple_csv(&hierarchy_path)?;
         let fine_col = find_header_index(&h_head, "fine_segment_id")?;
@@ -3148,7 +3085,7 @@ impl Tool for EvaluateSegmentationQualityProTool {
             params: vec![
                 ToolParamSpec { name: "segments", description: "Input segment-label raster.", required: true },
                 ToolParamSpec { name: "reference", description: "Optional reference label raster for overlap-based diagnostics.", required: false },
-                ToolParamSpec { name: "output", description: "Output JSON report path.", required: false },
+                ToolParamSpec { name: "output", description: "Output JSON report path.", required: true },
             ],
         }
     }
@@ -3180,12 +3117,7 @@ impl Tool for EvaluateSegmentationQualityProTool {
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let segments_path = parse_required_path_arg(args, "segments")?;
-        let output_path = output_path_or_default(
-            &segments_path,
-            "segmentation_quality",
-            "json",
-            parse_optional_path_arg(args, "output"),
-        );
+        let output_path = parse_required_path_arg(args, "output")?;
         let seg = Raster::read(&segments_path)
             .map_err(|e| ToolError::Execution(format!("failed reading segments raster: {e}")))?;
         let rows = seg.rows;
@@ -3408,7 +3340,7 @@ impl Tool for ObiaAuditReportProTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "artifacts", description: "Array of artifact paths to audit.", required: true },
-                ToolParamSpec { name: "output", description: "Output audit report JSON path.", required: false },
+                ToolParamSpec { name: "output", description: "Output audit report JSON path.", required: true },
             ],
         }
     }
@@ -3476,12 +3408,7 @@ impl Tool for ObiaAuditReportProTool {
             "artifacts": audited,
         });
 
-        let output_path = output_path_or_default(
-            "obia_audit",
-            "report",
-            "json",
-            parse_optional_path_arg(args, "output"),
-        );
+        let output_path = parse_required_path_arg(args, "output")?;
         if let Some(parent) = Path::new(&output_path).parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
                 ToolError::Execution(format!("failed creating output directory '{}': {e}", parent.display()))

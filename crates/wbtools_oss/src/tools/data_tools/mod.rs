@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::json;
 use rayon::prelude::*;
@@ -56,17 +55,6 @@ pub struct VectorPolygonsToRasterTool;
 pub struct MergeVectorsTool;
 pub struct MultipartToSinglepartTool;
 pub struct SinglepartToMultipartTool;
-
-fn derived_vector_output_path(input: &str, suffix: &str) -> PathBuf {
-    let input = Path::new(input);
-    let parent = input.parent().unwrap_or_else(|| Path::new("."));
-    let stem = input.file_stem().and_then(|s| s.to_str()).unwrap_or("layer");
-    let millis = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    parent.join(format!("{stem}_{suffix}_{millis}.geojson"))
-}
 
 fn ensure_parent_dir(path: &Path) -> Result<(), ToolError> {
     if let Some(parent) = path.parent() {
@@ -1800,7 +1788,7 @@ impl Tool for TopologyValidationReportTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "input", description: "Input vector path.", required: true },
-                ToolParamSpec { name: "output", description: "Output CSV path.", required: false },
+                ToolParamSpec { name: "output", description: "Output CSV path.", required: true },
             ],
         }
     }
@@ -1822,7 +1810,7 @@ impl Tool for TopologyValidationReportTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Input vector path.".to_string(), required: true },
-                ToolParamDescriptor { name: "output".to_string(), description: "Output CSV path. If omitted, a CSV path is derived beside the input.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output CSV path.".to_string(), required: true },
             ],
             defaults,
             examples: vec![ToolExample {
@@ -1837,11 +1825,15 @@ impl Tool for TopologyValidationReportTool {
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = parse_vector_path_arg(args, "input")?;
-        let output = parse_optional_output_path(args, "output")?;
-        if let Some(path) = output {
-            if path.extension().and_then(|s| s.to_str()).map(|s| s.eq_ignore_ascii_case("csv")) != Some(true) {
-                return Err(ToolError::Validation("output must be a .csv path".to_string()));
-            }
+        let output = parse_optional_output_path(args, "output")?
+            .ok_or_else(|| ToolError::Validation("missing required parameter 'output'".to_string()))?;
+        if output
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|s| s.eq_ignore_ascii_case("csv"))
+            != Some(true)
+        {
+            return Err(ToolError::Validation("output must be a .csv path".to_string()));
         }
         Ok(())
     }
@@ -1849,7 +1841,7 @@ impl Tool for TopologyValidationReportTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_vector_path_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?
-            .unwrap_or_else(|| derived_vector_output_path(&input_path, "topology_report").with_extension("csv"));
+            .ok_or_else(|| ToolError::Validation("missing required parameter 'output'".to_string()))?;
 
         ctx.progress.info("running topology_validation_report");
         let input = read_vector_layer(&input_path, "input")?;

@@ -31,6 +31,7 @@ try:
         QgsProcessingParameterEnum,
         QgsProcessingParameterFile,
         QgsProcessingParameterFileDestination,
+        QgsProcessingParameterField,
         QgsProcessingParameterNumber,
         QgsProcessingParameterRasterLayer,
         QgsProcessingParameterRasterDestination,
@@ -78,6 +79,7 @@ except ImportError:  # pragma: no cover
     QgsProcessingParameterEnum = _Dummy
     QgsProcessingParameterFile = _Dummy
     QgsProcessingParameterFileDestination = _Dummy
+    QgsProcessingParameterField = _Dummy
     QgsProcessingParameterMultipleRasterLayers = _Dummy
     QgsProcessingParameterNumber = _Dummy
     QgsProcessingParameterRasterLayer = _Dummy
@@ -726,6 +728,62 @@ def _infer_kind(name: str, description: str, default_value: Any = None) -> str:
         return "file_in"
 
     return "string"
+
+
+def _looks_like_attribute_field(name: str, description: str) -> bool:
+    n = (name or "").strip().lower()
+    d = (description or "").strip().lower()
+    if not n:
+        return False
+    if n in {"field", "field_name", "attribute_field", "target_field", "join_field"}:
+        return True
+    if "field" in n and not any(tok in n for tok in ("output", "path", "file", "folder", "directory")):
+        return True
+    return "attribute field" in d
+
+
+def _pick_field_parent(name: str, description: str, vector_param_names: list[str]) -> str | None:
+    if not vector_param_names:
+        return None
+    if len(vector_param_names) == 1:
+        return vector_param_names[0]
+
+    n = (name or "").strip().lower()
+    d = (description or "").strip().lower()
+
+    # Direct affinity for common roles.
+    role_preference = (
+        ("training", "training_data"),
+        ("source", "source"),
+        ("target", "target"),
+        ("join", "join"),
+        ("input", "input"),
+        ("points", "points"),
+    )
+    for role_tok, vp_hint in role_preference:
+        if role_tok in n or role_tok in d:
+            for vp in vector_param_names:
+                vpl = vp.lower()
+                if vp_hint in vpl:
+                    return vp
+
+    # Match vector parameter names/tokens against field parameter name/description.
+    for vp in vector_param_names:
+        vpl = vp.lower()
+        if vpl and (vpl in n or vpl in d):
+            return vp
+        tokens = [t for t in re.split(r"[_\W]+", vpl) if t]
+        if tokens and any(tok in n or tok in d for tok in tokens):
+            return vp
+
+    # Reasonable fallback order for generic 'field' params.
+    fallback_order = ("input", "points", "training", "source", "target", "join")
+    for token in fallback_order:
+        for vp in vector_param_names:
+            if token in vp.lower():
+                return vp
+
+    return vector_param_names[0]
 
 
 def _is_raster_path(path: str) -> bool:
@@ -1636,7 +1694,19 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
 
     def initAlgorithm(self, _config=None):
         self._param_specs = []
-        for p in self._manifest.get("params", []):
+        params_list = list(self._manifest.get("params", []))
+        vector_param_names: list[str] = []
+        for vp in params_list:
+            vp_name = str(vp.get("name", "") or "")
+            if not vp_name:
+                continue
+            vp_desc = str(vp.get("description", vp_name) or vp_name)
+            vp_default = self._manifest.get("defaults", {}).get(vp_name)
+            if vp_default is None and "default" in vp:
+                vp_default = vp.get("default")
+            if _infer_kind(vp_name, vp_desc, vp_default) == "vector_in":
+                vector_param_names.append(vp_name)
+        for p in params_list:
             name = p.get("name", "")
             if not name:
                 continue
@@ -1646,18 +1716,41 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             if default_value is None and "default" in p:
                 default_value = p.get("default")
             kind = _infer_kind(name, description, default_value)
+            field_parent = None
+            if (
+                kind == "string"
+                and vector_param_names
+                and _looks_like_attribute_field(name, description)
+            ):
+                kind = "field"
+                field_parent = _pick_field_parent(name, description, vector_param_names)
             enum_options = _extract_enum_options(name, description, default_value)
 
             # If an output destination is ambiguous, bias to the tool family so
             # QGIS can treat it as a loadable layer destination.
             if kind == "file_out":
+                # Keep explicit table/report outputs as generic file destinations
+                # even when taxonomy category is vector/raster family.
+                non_layer_output_hint = any(
+                    tok in name.lower() or tok in description.lower()
+                    for tok in (
+                        "csv",
+                        "json",
+                        "html",
+                        "txt",
+                        "xml",
+                        "report",
+                        "table",
+                    )
+                )
                 cat = str(self._manifest.get("category", "")).lower()
-                if "vector" in cat:
-                    kind = "vector_out"
-                elif "lidar" in cat:
-                    kind = "lidar_out"
-                elif any(tok in cat for tok in ("raster", "terrain", "hydrology")):
-                    kind = "raster_out"
+                if not non_layer_output_hint:
+                    if "vector" in cat:
+                        kind = "vector_out"
+                    elif "lidar" in cat:
+                        kind = "lidar_out"
+                    elif any(tok in cat for tok in ("raster", "terrain", "hydrology")):
+                        kind = "raster_out"
 
             if kind == "string" and len(enum_options) >= 2:
                 kind = "enum"
@@ -1739,6 +1832,14 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     name,
                     description,
                     [QgsProcessing.TypeVectorAnyGeometry],
+                    defaultValue=None,
+                    optional=not required,
+                )
+            elif kind == "field":
+                qgs_param = QgsProcessingParameterField(
+                    name,
+                    description,
+                    parentLayerParameterName=field_parent,
                     defaultValue=None,
                     optional=not required,
                 )
@@ -1895,6 +1996,14 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                         defaultValue=None,
                         optional=not required,
                     )
+                elif kind == "field":
+                    qgs_param = QgsProcessingParameterField(
+                        name,
+                        description,
+                        parentLayerParameterName=field_parent,
+                        defaultValue=None,
+                        optional=not required,
+                    )
                 elif kind == "bool":
                     qgs_param = QgsProcessingParameterBoolean(
                         name,
@@ -2004,6 +2113,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     "kind": kind,
                     "required": required or kind in ("file_out", "raster_out", "vector_out", "lidar_out"),
                     "enum_options": enum_options,
+                    "field_parent": field_parent,
                 }
             )
 

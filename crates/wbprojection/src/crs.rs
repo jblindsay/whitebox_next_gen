@@ -38,9 +38,25 @@ fn sample_vertical_offset_with_policy(
         Ok(v) => Ok(Some(v)),
         Err(e) => match policy {
             CrsTransformPolicy::Strict => Err(e),
+            CrsTransformPolicy::Auto => Err(e),
             CrsTransformPolicy::FallbackToIdentityGridShift => Ok(None),
         },
     }
+}
+
+fn datums_are_ballpark_equivalent(src: &Datum, dst: &Datum) -> bool {
+    if src == dst {
+        return true;
+    }
+
+    let src_name = src.name;
+    let dst_name = dst.name;
+    let src_is_wgs84 = src_name == "WGS 84";
+    let dst_is_wgs84 = dst_name == "WGS 84";
+    let src_is_nad83 = matches!(src_name, "NAD 83" | "NAD83(NSRS2007)" | "NAD83(HARN)");
+    let dst_is_nad83 = matches!(dst_name, "NAD 83" | "NAD83(NSRS2007)" | "NAD83(HARN)");
+
+    (src_is_wgs84 && dst_is_nad83) || (src_is_nad83 && dst_is_wgs84)
 }
 
 /// Policy controlling behavior when datum transforms cannot be applied exactly.
@@ -48,6 +64,9 @@ fn sample_vertical_offset_with_policy(
 pub enum CrsTransformPolicy {
     /// Return errors for missing grids, out-of-extent coordinates, and other datum issues.
     Strict,
+    /// Prefer ballpark-equivalent datum treatment for common interoperable pairs
+    /// (currently WGS84 <-> NAD83 family) while retaining strict grid behavior.
+    Auto,
     /// For grid-shift failures, fall back to identity shift instead of returning an error.
     FallbackToIdentityGridShift,
 }
@@ -625,6 +644,7 @@ impl Crs {
     ) -> Result<(f64, f64, f64)> {
         let datum_policy = match policy {
             CrsTransformPolicy::Strict => DatumTransformPolicy::Strict,
+            CrsTransformPolicy::Auto => DatumTransformPolicy::Strict,
             CrsTransformPolicy::FallbackToIdentityGridShift => {
                 DatumTransformPolicy::FallbackToIdentityGridShift
             }
@@ -675,6 +695,25 @@ impl Crs {
             }
         };
 
+        if matches!(policy, CrsTransformPolicy::Auto)
+            && datums_are_ballpark_equivalent(&self.datum, &target.datum)
+        {
+            return match target.projection.params().kind {
+                ProjectionKind::Geocentric => Ok(geodetic_to_ecef(
+                    src_lat_rad,
+                    src_lon_rad,
+                    src_h,
+                    &target.datum.ellipsoid,
+                )),
+                _ => {
+                    let (out_x, out_y) = target
+                        .projection
+                        .forward(to_degrees(src_lon_rad), to_degrees(src_lat_rad))?;
+                    Ok((out_x, out_y, src_h))
+                }
+            };
+        }
+
         // Step 2: source datum geodetic -> WGS84 geodetic
         let (wgs_lat, wgs_lon, wgs_h) = self
             .datum
@@ -719,6 +758,7 @@ impl Crs {
     ) -> Result<CrsTransformTrace> {
         let datum_policy = match policy {
             CrsTransformPolicy::Strict => DatumTransformPolicy::Strict,
+            CrsTransformPolicy::Auto => DatumTransformPolicy::Strict,
             CrsTransformPolicy::FallbackToIdentityGridShift => {
                 DatumTransformPolicy::FallbackToIdentityGridShift
             }
@@ -728,6 +768,18 @@ impl Crs {
         let (lon_deg, lat_deg) = self.projection.inverse(x, y)?;
         let lon = to_radians(lon_deg);
         let lat = to_radians(lat_deg);
+
+        if matches!(policy, CrsTransformPolicy::Auto)
+            && datums_are_ballpark_equivalent(&self.datum, &target.datum)
+        {
+            let (out_x, out_y) = target.projection.forward(lon_deg, lat_deg)?;
+            return Ok(CrsTransformTrace {
+                x: out_x,
+                y: out_y,
+                source_grid: None,
+                target_grid: None,
+            });
+        }
 
         // Step 2: source datum geodetic → WGS84 geodetic
         let src_trace = self

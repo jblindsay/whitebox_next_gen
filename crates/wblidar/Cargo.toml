@@ -22,7 +22,7 @@ exclude = [
 # wbprojection provides EPSG/WKT metadata lookup and coordinate transforms.
 # wide provides portable SIMD via software fallback on unsupported targets.
 wide = "1.2"
-wbprojection = { path = "../wbprojection", version = "0.1.1" }
+wbprojection = { path = "../wbprojection", version = "0.2.0" }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"], optional = true }
 rayon = { version = "1.10", optional = true }
 

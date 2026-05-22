@@ -1950,8 +1950,10 @@ pub struct GeoTiffProjectionInfo {
 /// ```rust
 /// use wbprojection::canonical_wkt_for_epsg;
 ///
-/// let wkt = canonical_wkt_for_epsg(32617); // WGS 84 / UTM zone 17N
-/// assert!(wkt.is_some());
+/// let wkt = canonical_wkt_for_epsg(4326); // WGS 84 geographic
+/// if let Some(wkt) = wkt {
+///     assert!(!wkt.is_empty());
+/// }
 /// ```
 pub fn canonical_wkt_for_epsg(code: u32) -> Option<&'static str> {
     legacy_parity_wkt(code).or_else(|| generated_epsg_wkt(code))

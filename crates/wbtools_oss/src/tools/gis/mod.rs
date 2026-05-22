@@ -12140,7 +12140,7 @@ impl Tool for ExtractByAttributeTool {
                 },
                 ToolParamSpec {
                     name: "statement",
-                    description: "Boolean expression evaluated against attribute fields.",
+                    description: "Boolean expression evaluated against attribute fields; accepts SQL-style AND/OR/NOT/XOR aliases.",
                     required: true,
                 },
                 ToolParamSpec {
@@ -12173,7 +12173,7 @@ impl Tool for ExtractByAttributeTool {
                 },
                 ToolParamDescriptor {
                     name: "statement".to_string(),
-                    description: "Boolean expression evaluated against attribute fields.".to_string(),
+                    description: "Boolean expression evaluated against attribute fields; accepts SQL-style AND/OR/NOT/XOR aliases.".to_string(),
                     required: true,
                 },
                 ToolParamDescriptor {
@@ -12210,7 +12210,8 @@ impl Tool for ExtractByAttributeTool {
                 "statement must be a non-empty expression".to_string(),
             ));
         }
-        build_operator_tree::<evalexpr::DefaultNumericTypes>(statement).map_err(|e| {
+        let normalized_statement = normalize_extract_by_attribute_statement(statement)?;
+        build_operator_tree::<evalexpr::DefaultNumericTypes>(&normalized_statement).map_err(|e| {
             ToolError::Validation(format!("invalid statement expression: {e}"))
         })?;
         let _ = parse_vector_path_arg(args, "output")?;
@@ -12225,7 +12226,8 @@ impl Tool for ExtractByAttributeTool {
             .and_then(|v| v.as_str())
             .map(str::trim)
             .ok_or_else(|| ToolError::Validation("parameter 'statement' is required".to_string()))?;
-        let tree = build_operator_tree::<evalexpr::DefaultNumericTypes>(statement)
+        let normalized_statement = normalize_extract_by_attribute_statement(statement)?;
+        let tree = build_operator_tree::<evalexpr::DefaultNumericTypes>(&normalized_statement)
             .map_err(|e| ToolError::Validation(format!("invalid statement expression: {e}")))?;
         let output_path = parse_vector_path_arg(args, "output")?;
 
@@ -20382,6 +20384,11 @@ fn normalize_field_calculator_sql(expression: &str) -> Result<String, ToolError>
     Ok(translate_sql_operators_and_literals(&null_normalized))
 }
 
+fn normalize_extract_by_attribute_statement(statement: &str) -> Result<String, ToolError> {
+    let null_normalized = translate_is_null_predicates(statement)?;
+    Ok(translate_sql_operators_and_literals(&null_normalized))
+}
+
 fn strip_optional_update_set_wrapper(
     expression: &str,
 ) -> Result<FieldCalculatorNormalizedExpression, ToolError> {
@@ -20739,6 +20746,12 @@ fn translate_sql_operators_and_literals(input: &str) -> String {
             }
             if starts_with_ascii_keyword_at(input, idx, "NOT") {
                 out.push('!');
+                idx += 3;
+                continue;
+            }
+            if starts_with_ascii_keyword_at(input, idx, "XOR") {
+                // Logical XOR for boolean conditions.
+                out.push_str("!=");
                 idx += 3;
                 continue;
             }

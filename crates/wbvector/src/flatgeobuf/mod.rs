@@ -325,21 +325,15 @@ fn from_bytes_with_expected_count(data: &[u8], expected_count_override: Option<u
     }
     let hdr_data = &data[12..12 + hdr_size];
 
-    let mut expected_count: Option<usize> = expected_count_override;
+    let expected_count: Option<usize> = expected_count_override;
 
     if let Ok(hdr) = hg::root_as_header(hdr_data) {
-        if expected_count.is_none() {
-            expected_count = Some(hdr.features_count() as usize);
-        }
         if let Ok(layer) = from_bytes_standard(data, hdr_size, hdr, expected_count) {
             return Ok(layer);
         }
     }
 
     if let Ok(hdr) = hg::size_prefixed_root_as_header(hdr_data) {
-        if expected_count.is_none() {
-            expected_count = Some(hdr.features_count() as usize);
-        }
         if let Ok(layer) = from_bytes_standard(data, hdr_size, hdr, expected_count) {
             return Ok(layer);
         }
@@ -467,7 +461,7 @@ fn from_bytes_standard(
         }
     }
 
-    let expected_count = expected_count_override.unwrap_or(hdr.features_count() as usize);
+    let expected_count = expected_count_override.unwrap_or(0);
     let base_pos = 12 + hdr_size;
     let mut start_positions: Vec<usize> = Vec::new();
     if hdr.index_node_size() > 0 && expected_count > 0 {
@@ -735,6 +729,9 @@ fn parse_feature_record_compat<'a>(
     feat_buf_extended: &'a [u8],
 ) -> Option<(fg::Feature<'a>, usize)> {
     let decode = |buf: &'a [u8]| -> Option<(fg::Feature<'a>, usize)> {
+        if let Ok(v) = fg::root_as_feature(buf) {
+            return Some((v, buf.len()));
+        }
         if let Ok(v) = fg::size_prefixed_root_as_feature(buf) {
             let consumed = if buf.len() >= 4 {
                 4usize.saturating_add(u32::from_le_bytes(buf[0..4].try_into().ok()?) as usize)
@@ -742,9 +739,6 @@ fn parse_feature_record_compat<'a>(
                 buf.len()
             };
             return Some((v, consumed.min(buf.len())));
-        }
-        if let Ok(v) = fg::root_as_feature(buf) {
-            return Some((v, buf.len()));
         }
         None
     };
@@ -1706,8 +1700,20 @@ fn decode_geom(data: &[u8], _header_gt: u8, header_has_z: bool) -> Result<Geomet
     let stride    = if has_z { 3usize } else { 2 };
 
     let n_pts = u32::from_le_bytes(data[2..6].try_into().unwrap()) as usize;
-    let coord_bytes = n_pts * stride * 8;
-    let min_len = 6 + coord_bytes + 4;
+    let coord_bytes = n_pts
+        .checked_mul(stride)
+        .and_then(|v| v.checked_mul(8))
+        .ok_or_else(|| GeoError::InvalidFgbFeature {
+            index: 0,
+            msg: "geom coordinate byte count overflow".into(),
+        })?;
+    let min_len = 6usize
+        .checked_add(coord_bytes)
+        .and_then(|v| v.checked_add(4))
+        .ok_or_else(|| GeoError::InvalidFgbFeature {
+            index: 0,
+            msg: "geom length overflow".into(),
+        })?;
 
     if data.len() < min_len {
         return Err(GeoError::InvalidFgbFeature { index: 0, msg: "geom data truncated".into() });
@@ -1722,8 +1728,27 @@ fn decode_geom(data: &[u8], _header_gt: u8, header_has_z: bool) -> Result<Geomet
         coords.push(Coord { x, y, z, m: None });
     }
 
-    let ends_off  = 6 + coord_bytes;
-    let n_ends    = u32::from_le_bytes(data[ends_off..ends_off+4].try_into().unwrap()) as usize;
+    let ends_off = min_len - 4;
+    let n_ends = u32::from_le_bytes(data[ends_off..ends_off + 4].try_into().unwrap()) as usize;
+    let ends_bytes = n_ends
+        .checked_mul(4)
+        .ok_or_else(|| GeoError::InvalidFgbFeature {
+            index: 0,
+            msg: "geom ends byte count overflow".into(),
+        })?;
+    let ends_end = ends_off
+        .checked_add(4)
+        .and_then(|v| v.checked_add(ends_bytes))
+        .ok_or_else(|| GeoError::InvalidFgbFeature {
+            index: 0,
+            msg: "geom ends length overflow".into(),
+        })?;
+    if ends_end > data.len() {
+        return Err(GeoError::InvalidFgbFeature {
+            index: 0,
+            msg: "geom ends truncated".into(),
+        });
+    }
     let ends: Vec<usize> = (0..n_ends).map(|i| {
         let off = ends_off + 4 + i * 4;
         u32::from_le_bytes(data[off..off+4].try_into().unwrap()) as usize

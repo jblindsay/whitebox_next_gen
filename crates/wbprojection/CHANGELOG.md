@@ -6,6 +6,32 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-21
+
+### Added
+- `CrsTransformPolicy::Auto` for interoperability-focused horizontal datum handling.
+  In `Auto` mode, WGS84 <-> NAD83-family transforms are treated as ballpark
+  equivalent (no explicit datum shift) while preserving strict projection math.
+
+### Changed
+- Added explicit datum-equivalence routing in CRS transform paths
+  (`transform_to_3d_with_policy` and `transform_to_with_trace`) with
+  interoperability-first (`Auto`) behavior used by vector reprojection flows.
+
+### Fixed
+- Implemented `DatumTransform::GridShift` in trace-aware geodetic datum paths
+  so strict mode now surfaces missing/out-of-extent grid errors, fallback mode
+  can still degrade to identity, and transform traces report selected grid names.
+- Synchronized README supported-code totals with the current EPSG registry,
+  restoring readme/count consistency tests.
+- Updated Molodensky round-trip height test tolerance to a realistic
+  centimetre-scale bound for inverse-by-negation behavior, preventing a false
+  negative in the datum regression suite.
+
+### Tests
+- Added regression coverage verifying `CrsTransformPolicy::Auto` keeps
+  NAD83->WGS84 coordinates invariant in the expected ballpark-equivalent case.
+
 ## [0.1.1] – 2026-05-09 (Reaffirmed)
 
 ### Testing

@@ -19,10 +19,25 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- Interoperability-focused datum handling is now the sole vector reprojection
+	mode, routed through `CrsTransformPolicy::Auto`.
+
+### Changed
+- Vector coordinate reprojection now routes through
+	`Crs::transform_to_with_policy(..., CrsTransformPolicy::Auto)` by default,
+	eliminating the temporary legacy datum-mode branch.
+
 ### Fixed
 - `Schema` now supports replacing an existing field definition by name, allowing tools to upsert Float metadata over stale Integer fields instead of silently ignoring duplicate names.
 - Add Geometry Attributes now overwrites existing geometry-measure fields in place, preserving floating-point precision on reruns so AREA/LENGTH/PERIM values do not collapse to integer zeros.
 - Shapefile polygon parsing now preserves exteriors even when rings use uniform CCW winding, preventing valid polygons from being decoded as empty geometries on real-world datasets.
+- FlatGeobuf `from_bytes` now avoids false-negative expected-count enforcement
+	for direct native parsing and no longer fails valid in-memory roundtrips when
+	header/index scan candidates differ across producer layouts.
+- FlatGeobuf legacy geometry decode now includes explicit overflow/truncation
+	bounds checks for coordinate and ends buffers, preventing slice overrun
+	panics on malformed/truncated geometry payloads.
 
 ### Added
 - `VectorReprojectOptions::warn_on_area_of_use_mismatch` (default `false`) and

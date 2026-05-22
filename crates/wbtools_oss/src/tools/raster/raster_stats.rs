@@ -340,7 +340,8 @@ fn parse_raster_input_list(args: &ToolArgs, key: &str) -> Result<Vec<String>, To
 }
 
 fn normalize_conditional_expression(s: &str) -> String {
-    s.replace("NoData", "nodata")
+    let normalized = s
+        .replace("NoData", "nodata")
         .replace("Nodata", "nodata")
         .replace("NODATA", "nodata")
         .replace("NULL", "nodata")
@@ -357,12 +358,87 @@ fn normalize_conditional_expression(s: &str) -> String {
         .replace("Rows", "rows")
         .replace("ROW", "row")
         .replace("Row", "row")
-        .replace(" or ", " || ")
-        .replace(" OR ", " || ")
-        .replace(" and ", " && ")
-        .replace(" AND ", " && ")
         .replace("pi()", "pi")
-        .replace("e()", "e")
+        .replace("e()", "e");
+    translate_sql_logical_aliases(&normalized)
+}
+
+fn translate_sql_logical_aliases(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = String::with_capacity(input.len() + 8);
+    let mut idx = 0usize;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+
+    while idx < bytes.len() {
+        let byte = bytes[idx];
+
+        if byte == b'\'' && !in_double_quote {
+            in_single_quote = !in_single_quote;
+            out.push(byte as char);
+            idx += 1;
+            continue;
+        }
+        if byte == b'"' && !in_single_quote {
+            in_double_quote = !in_double_quote;
+            out.push(byte as char);
+            idx += 1;
+            continue;
+        }
+
+        if !in_single_quote && !in_double_quote {
+            if starts_with_ascii_keyword_at(input, idx, "AND") {
+                out.push_str("&&");
+                idx += 3;
+                continue;
+            }
+            if starts_with_ascii_keyword_at(input, idx, "OR") {
+                out.push_str("||");
+                idx += 2;
+                continue;
+            }
+            if starts_with_ascii_keyword_at(input, idx, "NOT") {
+                out.push('!');
+                idx += 3;
+                continue;
+            }
+            if starts_with_ascii_keyword_at(input, idx, "XOR") {
+                out.push_str("!=");
+                idx += 3;
+                continue;
+            }
+        }
+
+        out.push(byte as char);
+        idx += 1;
+    }
+
+    out
+}
+
+fn starts_with_ascii_keyword_at(input: &str, start: usize, keyword: &str) -> bool {
+    let bytes = input.as_bytes();
+    let kw = keyword.as_bytes();
+    if start + kw.len() > bytes.len() {
+        return false;
+    }
+
+    let slice = &bytes[start..(start + kw.len())];
+    if !slice.iter().zip(kw.iter()).all(|(a, b)| a.eq_ignore_ascii_case(b)) {
+        return false;
+    }
+
+    let prev_is_word = start
+        .checked_sub(1)
+        .and_then(|i| bytes.get(i))
+        .map(|b| b.is_ascii_alphanumeric() || *b == b'_')
+        .unwrap_or(false);
+    let next_is_word = bytes
+        .get(start + kw.len())
+        .map(|b| b.is_ascii_alphanumeric() || *b == b'_')
+        .unwrap_or(false);
+
+    !prev_is_word && !next_is_word
 }
 
 fn eval_value_to_bool(v: EvalValue) -> Result<bool, ToolError> {

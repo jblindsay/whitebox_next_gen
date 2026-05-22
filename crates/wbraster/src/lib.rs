@@ -6,18 +6,24 @@
 //!
 //! | Format | Read | Write | Extension(s) |
 //! |---|---|---|---|
+//! | DTED | ✓ | ✓ | `.dt0`, `.dt1`, `.dt2` |
 //! | Esri ASCII Grid | ✓ | ✓ | `.asc`, `.grd` |
 //! | Esri Binary Grid | ✓ | ✓ | `.adf` (workspace) |
+//! | Esri Float Grid | ✓ | ✓ | `.flt` + `.hdr` |
 //! | GRASS ASCII Raster | ✓ | ✓ | `.asc`, `.txt` |
 //! | Surfer GRD | ✓ | ✓ | `.grd` |
 //! | PCRaster | ✓ | ✓ | `.map` |
 //! | SAGA Binary Grid | ✓ | ✓ | `.sdat` / `.sgrd` |
 //! | Idrisi/TerrSet Raster | ✓ | ✓ | `.rst` / `.rdc` |
 //! | ER Mapper | ✓ | ✓ | `.ers` / `.ers` data |
+//! | ERDAS IMAGINE HFA | ✓ | — | `.img` |
 //! | ENVI HDR Labelled Raster | ✓ | ✓ | `.hdr` + `.img/.dat/.bin/.raw/.bil/.bsq/.bip` |
 //! | GeoTIFF / BigTIFF / COG | ✓ | ✓ | `.tif` / `.tiff` |
 //! | GeoPackage Raster (Phase 4) | ✓ | ✓ | `.gpkg` |
 //! | JPEG 2000 / GeoJP2 | ✓ | ✓ | `.jp2` |
+//! | PNG + World File | ✓ | ✓ | `.png` + `.pgw/.pngw/.wld` |
+//! | JPEG + World File | ✓ | ✓ | `.jpg/.jpeg` + `.jgw/.jpgw/.jpegw/.wld` |
+//! | XYZ ASCII Grid | ✓ | ✓ | `.xyz` |
 //! | Zarr v2/v3 (MVP) | ✓ | ✓ | `.zarr` |
 //!
 //! ## Quick Start

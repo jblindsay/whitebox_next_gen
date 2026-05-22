@@ -103,7 +103,7 @@ except Exception:  # pragma: no cover
 class WhiteboxWorkflowsPlugin:
     def __init__(self, iface):
         self.iface = iface
-        self.provider = WhiteboxProcessingProvider()
+        self.provider = WhiteboxProcessingProvider(iface=iface)
         self._provider_registered = False
         self._menu_label = "&Whitebox Workflows"
         self._diagnostics_action = None
@@ -406,7 +406,9 @@ class WhiteboxWorkflowsPlugin:
             )
 
     def _open_field_calculator_assistant(self, tool_id: str):
-        launch_params = None
+        self._notify_info(
+            "Opening Field Calculator Assistant. After review, the standard processing dialog will open with prefilled parameters."
+        )
         try:
             from .field_calculator_dialog import run_field_calculator_assistant
 
@@ -417,9 +419,9 @@ class WhiteboxWorkflowsPlugin:
             )
         except Exception as exc:
             self._notify_warning(
-                f"Field Calculator assistant unavailable; opening standard dialog ({exc})."
+                f"Field Calculator assistant unavailable; panel launch requires assistant ({exc})."
             )
-            launch_params = None
+            return
 
         if launch_params == {}:
             # Assistant was opened and then cancelled.
@@ -814,6 +816,27 @@ class WhiteboxWorkflowsPlugin:
 
         self._favorite_defaults_applied = True
 
+    def _apply_panel_tool_aliases(self, catalog: list[dict]) -> None:
+        # Field Calculator has a dedicated assistant in the panel path; make the
+        # panel label explicit so users can distinguish it from the generic
+        # processing dialog entry.
+        for item in catalog:
+            tool_id = str(item.get("id", "")).strip().lower()
+            if tool_id != "field_calculator":
+                continue
+
+            item["display_name"] = "Field Calculator Assistant"
+            summary = str(item.get("summary", "")).strip()
+            assistant_note = (
+                "Opens a guided assistant with expression snippets and preview "
+                "before launching the processing dialog."
+            )
+            if assistant_note not in summary:
+                if summary:
+                    item["summary"] = f"{summary} {assistant_note}"
+                else:
+                    item["summary"] = assistant_note
+
     def _load_quick_open_preference(self):
         try:
             settings = QSettings()
@@ -1054,6 +1077,7 @@ class WhiteboxWorkflowsPlugin:
             return
 
         available, locked = summarize_catalog(catalog)
+        self._apply_panel_tool_aliases(catalog)
         self._apply_catalog_display_defaults(catalog)
 
         payload = gather_runtime_diagnostics(

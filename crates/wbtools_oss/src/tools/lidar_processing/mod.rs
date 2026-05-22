@@ -2003,6 +2003,84 @@ fn parse_modify_statements(text: &str) -> Result<Vec<String>, ToolError> {
     Ok(parts)
 }
 
+fn normalize_filter_lidar_statement(statement: &str) -> String {
+    let bytes = statement.as_bytes();
+    let mut out = String::with_capacity(statement.len() + 8);
+    let mut idx = 0usize;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+
+    while idx < bytes.len() {
+        let byte = bytes[idx];
+
+        if byte == b'\'' && !in_double_quote {
+            in_single_quote = !in_single_quote;
+            out.push(byte as char);
+            idx += 1;
+            continue;
+        }
+        if byte == b'"' && !in_single_quote {
+            in_double_quote = !in_double_quote;
+            out.push(byte as char);
+            idx += 1;
+            continue;
+        }
+
+        if !in_single_quote && !in_double_quote {
+            if starts_with_ascii_keyword_at(statement, idx, "AND") {
+                out.push_str("&&");
+                idx += 3;
+                continue;
+            }
+            if starts_with_ascii_keyword_at(statement, idx, "OR") {
+                out.push_str("||");
+                idx += 2;
+                continue;
+            }
+            if starts_with_ascii_keyword_at(statement, idx, "NOT") {
+                out.push('!');
+                idx += 3;
+                continue;
+            }
+            if starts_with_ascii_keyword_at(statement, idx, "XOR") {
+                out.push_str("!=");
+                idx += 3;
+                continue;
+            }
+        }
+
+        out.push(byte as char);
+        idx += 1;
+    }
+
+    out
+}
+
+fn starts_with_ascii_keyword_at(input: &str, start: usize, keyword: &str) -> bool {
+    let bytes = input.as_bytes();
+    let kw = keyword.as_bytes();
+    if start + kw.len() > bytes.len() {
+        return false;
+    }
+
+    let slice = &bytes[start..(start + kw.len())];
+    if !slice.iter().zip(kw.iter()).all(|(a, b)| a.eq_ignore_ascii_case(b)) {
+        return false;
+    }
+
+    let prev_is_word = start
+        .checked_sub(1)
+        .and_then(|i| bytes.get(i))
+        .map(|b| b.is_ascii_alphanumeric() || *b == b'_')
+        .unwrap_or(false);
+    let next_is_word = bytes
+        .get(start + kw.len())
+        .map(|b| b.is_ascii_alphanumeric() || *b == b'_')
+        .unwrap_or(false);
+
+    !prev_is_word && !next_is_word
+}
+
 fn parse_assignment_lhs(statement: &str) -> Option<String> {
     let s = statement.trim_start();
     let mut lhs = String::new();
@@ -8003,7 +8081,7 @@ impl Tool for FilterLidarTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "statement", description: "Boolean expression, e.g. '!is_noise && class == 2'.", required: true, ..Default::default() },
+                ToolParamSpec { name: "statement", description: "Boolean expression, e.g. '!is_noise && class == 2' or 'NOT is_noise AND class == 2'.", required: true, ..Default::default() },
                 ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
                 ToolParamSpec { name: "output", description: "Optional output LiDAR path for single-input mode.", required: false, ..Default::default() },
             ],
@@ -8020,7 +8098,8 @@ impl Tool for FilterLidarTool {
         if statement.is_empty() {
             return Err(ToolError::Validation("statement must be non-empty".to_string()));
         }
-        let _ = build_operator_tree::<DefaultNumericTypes>(statement)
+        let normalized_statement = normalize_filter_lidar_statement(statement);
+        let _ = build_operator_tree::<DefaultNumericTypes>(&normalized_statement)
             .map_err(|e| ToolError::Validation(format!("invalid statement expression: {e}")))?;
         let _ = parse_optional_lidar_output_path(args)?;
         Ok(())
@@ -8034,7 +8113,8 @@ impl Tool for FilterLidarTool {
             .map(str::trim)
             .ok_or_else(|| ToolError::Validation("statement is required".to_string()))?
             .to_string();
-        let tree = build_operator_tree::<DefaultNumericTypes>(&statement)
+        let normalized_statement = normalize_filter_lidar_statement(&statement);
+        let tree = build_operator_tree::<DefaultNumericTypes>(&normalized_statement)
             .map_err(|e| ToolError::Validation(format!("invalid statement expression: {e}")))?;
         let output_path = parse_optional_lidar_output_path(args)?;
 

@@ -1516,6 +1516,87 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
         # Fallback: get_help_url already returns a file:// URI
         return get_help_url(self.name())
 
+    def createCustomParametersWidget(self, parent=None):
+        # QGIS calls this hook expecting a *dialog* for full custom algorithm
+        # UIs (it invokes dlg.exec()). For Field Calculator, provide a launcher
+        # dialog that opens the assistant and then hands off to the standard
+        # processing dialog with prefilled parameters.
+        if self.name() != "field_calculator":
+            return None
+
+        if bool(getattr(self._provider, "_skip_next_field_calculator_autolaunch", False)):
+            setattr(self._provider, "_skip_next_field_calculator_autolaunch", False)
+            return None
+
+        try:
+            from qgis.PyQt.QtCore import QTimer
+            from qgis.PyQt.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout
+        except Exception:
+            return None
+
+        algorithm = self
+
+        class _FieldCalculatorAssistantLauncher(QDialog):
+            def __init__(self, parent_widget=None):
+                super().__init__(parent_widget)
+                self._launched = False
+                self.setWindowTitle("Field Calculator Assistant")
+                layout = QVBoxLayout(self)
+                layout.addWidget(
+                    QLabel(
+                        "Launching Field Calculator Assistant...\n"
+                        "The standard processing dialog will open with prefilled parameters."
+                    )
+                )
+                button = QPushButton("Launch Assistant Now")
+                button.clicked.connect(self._launch)
+                layout.addWidget(button)
+                QTimer.singleShot(0, self._launch)
+
+            def _launch(self):
+                if self._launched:
+                    return
+                self._launched = True
+
+                iface = getattr(algorithm._provider, "iface", None)
+                if iface is None:
+                    self.reject()
+                    return
+
+                try:
+                    from .field_calculator_dialog import run_field_calculator_assistant
+                    from .host_api import open_processing_algorithm_dialog
+                except Exception:
+                    self.reject()
+                    return
+
+                try:
+                    params = run_field_calculator_assistant(
+                        iface,
+                        include_pro=bool(getattr(algorithm._provider, "include_pro", True)),
+                        tier=str(getattr(algorithm._provider, "tier", "open")),
+                    )
+                except Exception:
+                    self.reject()
+                    return
+
+                if params == {}:
+                    self.reject()
+                    return
+
+                setattr(algorithm._provider, "_skip_next_field_calculator_autolaunch", True)
+                opened = open_processing_algorithm_dialog(
+                    iface,
+                    str(algorithm._provider.id()),
+                    "field_calculator",
+                    params=params,
+                )
+                if not opened:
+                    setattr(algorithm._provider, "_skip_next_field_calculator_autolaunch", False)
+                self.reject()
+
+        return _FieldCalculatorAssistantLauncher(parent)
+
     def initAlgorithm(self, _config=None):
         self._param_specs = []
         for p in self._manifest.get("params", []):

@@ -1223,6 +1223,21 @@ fn crs_nad83_to_wgs84_shift_is_small() {
 }
 
 #[test]
+fn crs_auto_policy_treats_nad83_wgs84_as_ballpark_equivalent() {
+    let nad83 = Crs::from_epsg(4269).unwrap();
+    let wgs84 = Crs::from_epsg(4326).unwrap();
+
+    let lon0 = -79.3832;
+    let lat0 = 43.6532;
+    let (lon_auto, lat_auto) = nad83
+        .transform_to_with_policy(lon0, lat0, &wgs84, CrsTransformPolicy::Auto)
+        .unwrap();
+
+    assert!((lon_auto - lon0).abs() < 1e-12);
+    assert!((lat_auto - lat0).abs() < 1e-12);
+}
+
+#[test]
 fn crs_nad83_csrs_to_wgs84_round_trip() {
     let csrs = Crs::from_epsg(4617).unwrap();
     let wgs84 = Crs::from_epsg(4326).unwrap();

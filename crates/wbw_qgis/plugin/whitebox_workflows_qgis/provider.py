@@ -19,10 +19,11 @@ except ImportError:  # pragma: no cover
 
 
 class WhiteboxProcessingProvider(QgsProcessingProvider):
-    def __init__(self, include_pro: bool = True, tier: str = "open"):
+    def __init__(self, include_pro: bool = True, tier: str = "open", iface=None):
         super().__init__()
         self._include_pro = include_pro
         self._tier = tier
+        self.iface = iface
         self._catalog: list[dict] = []
         self._help_index: dict[str, str] = {}  # tool_id -> cached html path
 

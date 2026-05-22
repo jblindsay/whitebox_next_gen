@@ -3,7 +3,7 @@
 //! This module transforms layer geometries between CRS definitions using EPSG
 //! codes or explicit `wbprojection::Crs` objects.
 
-use wbprojection::Crs;
+use wbprojection::{Crs, CrsTransformPolicy};
 
 use crate::crs;
 use crate::error::{GeoError, Result};
@@ -589,7 +589,7 @@ fn reproject_coord(
     }
 
     let (mut x, y) = src
-        .transform_to(coord.x, coord.y, dst)
+        .transform_to_with_policy(coord.x, coord.y, dst, CrsTransformPolicy::Auto)
         .map_err(|e| GeoError::Projection(format!("coordinate transform failed: {e}")))?;
 
     if !x.is_finite() || !y.is_finite() {
@@ -1034,6 +1034,29 @@ mod tests {
         } else {
             panic!("expected Point");
         }
+    }
+
+    #[test]
+    fn reprojection_uses_auto_policy_for_wgs84_to_nad83_paths() {
+        let mut layer = Layer::new("merc")
+            .with_geom_type(GeometryType::Point)
+            .with_crs_epsg(3857);
+        layer
+            .add_feature(Some(Geometry::point(-8_868_000.0, 5_410_000.0)), &[])
+            .unwrap();
+
+        let out = layer_to_epsg_with_options(&layer, 26917, &VectorReprojectOptions::new())
+            .unwrap();
+
+        let (x, y) = match &out.features[0].geometry {
+            Some(Geometry::Point(c)) => (c.x, c.y),
+            _ => panic!("expected Point in output"),
+        };
+
+        // Auto-policy path should stay close to current GDAL behavior for this
+        // WGS84 Web Mercator -> NAD83 UTM17N scenario.
+        assert!((x - 607_870.525_104_465).abs() < 0.5, "unexpected easting: {x}");
+        assert!((y - 4_832_831.366_179_22).abs() < 0.5, "unexpected northing: {y}");
     }
 
     #[test]

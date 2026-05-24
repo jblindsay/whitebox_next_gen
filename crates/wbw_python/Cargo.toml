@@ -23,7 +23,7 @@ wbvector = { path = "../wbvector", features = ["geoparquet", "kmz", "osmpbf"] }
 wblidar = { path = "../wblidar" }
 wbtopology = { path = "../wbtopology" }
 serde_json.workspace = true
-pyo3 = { version = "0.28.2", features = ["macros"] }
+pyo3 = { version = "0.28.2", features = ["macros", "abi3-py39"] }
 ureq = { version = "2.12.1", features = ["json"] }
 rayon = "1"
 uuid = { version = "1.11", features = ["v4"] }

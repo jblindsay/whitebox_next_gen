@@ -5,6 +5,7 @@ from typing import Any
 
 from .algorithm import _materialize_vector_input_source
 from .bootstrap import RuntimeBootstrapError, create_runtime_session
+from .host_api import run_dialog
 
 try:
     from qgis.PyQt.QtCore import Qt
@@ -624,10 +625,9 @@ def run_field_calculator_assistant(iface, include_pro: bool = True, tier: str = 
         tier=tier,
         parent=iface.mainWindow() if iface is not None else None,
     )
-    exec_fn = getattr(dialog, "exec", None) or getattr(dialog, "exec_", None)
-    if not callable(exec_fn):
+    result = run_dialog(dialog)
+    if result is None:
         return None
-    result = exec_fn()
     accepted = bool(result)
     if not accepted:
         return {}

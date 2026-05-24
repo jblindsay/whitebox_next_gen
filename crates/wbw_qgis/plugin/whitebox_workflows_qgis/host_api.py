@@ -23,6 +23,60 @@ def qgis_major_version() -> int:
         return 0
 
 
+def is_supported_host_major(major: int) -> bool:
+    """Return whether the plugin supports the host major version."""
+    return major in (0, 3, 4)
+
+
+def is_supported_host() -> bool:
+    """Return whether the current host major version is supported."""
+    return is_supported_host_major(qgis_major_version())
+
+
+def host_capabilities(iface) -> dict:
+    """Summarize host compatibility capabilities for startup diagnostics."""
+    major = qgis_major_version()
+    version = qgis_version_string()
+
+    has_processing_registry = resolve_processing_registry(iface) is not None
+    has_add_to_menu = callable(getattr(iface, "addPluginToMenu", None))
+    has_plugin_menu = callable(getattr(iface, "pluginMenu", None))
+    has_main_window = callable(getattr(iface, "mainWindow", None))
+    has_add_toolbar_icon = callable(getattr(iface, "addToolBarIcon", None))
+    has_remove_from_menu = callable(getattr(iface, "removePluginMenu", None))
+    has_remove_toolbar_icon = callable(getattr(iface, "removeToolBarIcon", None))
+    has_add_dock_widget = callable(getattr(iface, "addDockWidget", None))
+    has_remove_dock_widget = callable(getattr(iface, "removeDockWidget", None))
+
+    can_register_actions = any((has_add_to_menu, has_plugin_menu, has_main_window))
+    can_unregister_actions = any((has_remove_from_menu, has_remove_toolbar_icon, has_plugin_menu, has_main_window))
+
+    missing_required = []
+    if not has_processing_registry:
+        missing_required.append("processing_registry")
+    if not can_register_actions:
+        missing_required.append("action_registration")
+    if not has_add_dock_widget:
+        missing_required.append("dock_registration")
+    if not has_remove_dock_widget:
+        missing_required.append("dock_unregistration")
+    if not can_unregister_actions:
+        missing_required.append("action_unregistration")
+
+    return {
+        "major": major,
+        "version": version,
+        "supported_major": is_supported_host_major(major),
+        "processing_registry": has_processing_registry,
+        "action_registration": can_register_actions,
+        "action_unregistration": can_unregister_actions,
+        "dock_registration": has_add_dock_widget,
+        "dock_unregistration": has_remove_dock_widget,
+        "missing_required": missing_required,
+        "partial": len(missing_required) > 0,
+    }
+
+
 def _registry_from_iface(iface):
     getter = getattr(iface, "processingRegistry", None)
     if getter is None:
@@ -304,3 +358,141 @@ def open_processing_algorithm_dialog(iface, provider_id: str, tool_id: str, para
         pass
 
     return False
+
+
+def run_menu(menu, global_pos):
+    """Run a context menu with Qt5/Qt6 execution fallback.
+
+    QGIS3_COMPAT: keep `exec_` fallback until QGIS 3 sunset.
+    """
+    runner = getattr(menu, "exec", None)
+    if callable(runner):
+        try:
+            return runner(global_pos)
+        except Exception:
+            pass
+
+    runner_legacy = getattr(menu, "exec_", None)
+    if callable(runner_legacy):
+        try:
+            return runner_legacy(global_pos)
+        except Exception:
+            pass
+
+    return None
+
+
+def run_dialog(dialog):
+    """Execute a modal dialog with Qt5/Qt6 execution fallback.
+
+    QGIS3_COMPAT: keep `exec_` fallback until QGIS 3 sunset.
+    """
+    runner = getattr(dialog, "exec", None)
+    if callable(runner):
+        try:
+            return runner()
+        except Exception:
+            pass
+
+    runner_legacy = getattr(dialog, "exec_", None)
+    if callable(runner_legacy):
+        try:
+            return runner_legacy()
+        except Exception:
+            pass
+
+    return None
+
+
+def open_local_file(path: str) -> bool:
+    """Best-effort open of a local file path in the host OS shell."""
+    try:
+        from qgis.PyQt.QtGui import QDesktopServices  # type: ignore[import]
+        from qgis.PyQt.QtCore import QUrl  # type: ignore[import]
+
+        return bool(QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))))
+    except Exception:
+        return False
+
+
+def push_host_message(iface, title: str, message: str, level: str = "info") -> bool:
+    """Push a host message via message bar with severity fallback mapping.
+
+    Returns True when a message was delivered through the host bar.
+    """
+    try:
+        bar_getter = getattr(iface, "messageBar", None)
+        if not callable(bar_getter):
+            return False
+        bar = bar_getter()
+        if bar is None:
+            return False
+
+        level_key = str(level or "info").strip().lower()
+        method_name = {
+            "warning": "pushWarning",
+            "error": "pushCritical",
+            "critical": "pushCritical",
+            "info": "pushInfo",
+        }.get(level_key, "pushInfo")
+
+        push = getattr(bar, method_name, None)
+        if callable(push):
+            push(title, message)
+            return True
+
+        # Fallback to info if severity-specific push is unavailable.
+        fallback = getattr(bar, "pushInfo", None)
+        if callable(fallback):
+            fallback(title, message)
+            return True
+    except Exception:
+        return False
+
+    return False
+
+
+def show_info_dialog(iface, title: str, message: str) -> bool:
+    """Show an informational host dialog when available.
+
+    Returns True when a dialog was shown.
+    """
+    try:
+        from qgis.PyQt.QtWidgets import QMessageBox  # type: ignore[import]
+
+        parent = None
+        main_window_getter = getattr(iface, "mainWindow", None)
+        if callable(main_window_getter):
+            parent = main_window_getter()
+        QMessageBox.information(parent, title, message)
+        return True
+    except Exception:
+        return False
+
+
+def resolve_qevent_type(qevent_cls, name: str, default: int):
+    """Resolve QEvent type values across Qt5/Qt6 namespaces."""
+    direct = getattr(qevent_cls, name, None)
+    if direct is not None:
+        return direct
+
+    event_type_enum = getattr(qevent_cls, "Type", None)
+    nested = getattr(event_type_enum, name, None) if event_type_enum is not None else None
+    if nested is not None:
+        return nested
+
+    return default
+
+
+def resolve_qt_constant(qt_cls, name: str, enum_name: str, default: int):
+    """Resolve Qt constants across Qt5 direct and Qt6 nested enum namespaces."""
+    direct = getattr(qt_cls, name, None)
+    if direct is not None:
+        return direct
+
+    nested_enum = getattr(qt_cls, enum_name, None)
+    nested = getattr(nested_enum, name, None) if nested_enum is not None else None
+    if nested is not None:
+        return nested
+
+    return default

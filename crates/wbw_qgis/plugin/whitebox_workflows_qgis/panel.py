@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .host_api import resolve_qevent_type, resolve_qt_constant
+
 try:
     from qgis.PyQt.QtCore import QEvent, Qt
     from qgis.PyQt.QtGui import QKeySequence, QShortcut
@@ -190,35 +192,13 @@ except Exception:  # pragma: no cover
 from .settings import AVAILABLE_LABEL_STYLE, LOCKED_LABEL_STYLE, status_style, tier_style
 
 
-def _resolve_qevent_type(name: str, default: int):
-    direct = getattr(QEvent, name, None)
-    if direct is not None:
-        return direct
-    event_type_enum = getattr(QEvent, "Type", None)
-    nested = getattr(event_type_enum, name, None) if event_type_enum is not None else None
-    if nested is not None:
-        return nested
-    return default
-
-
-def _resolve_qt_constant(name: str, enum_name: str, default: int):
-    direct = getattr(Qt, name, None)
-    if direct is not None:
-        return direct
-    nested_enum = getattr(Qt, enum_name, None)
-    nested = getattr(nested_enum, name, None) if nested_enum is not None else None
-    if nested is not None:
-        return nested
-    return default
-
-
-EVENT_TYPE_FOCUS_IN = _resolve_qevent_type("FocusIn", 8)
-EVENT_TYPE_MOUSE_BUTTON_RELEASE = _resolve_qevent_type("MouseButtonRelease", 3)
-EVENT_TYPE_KEY_PRESS = _resolve_qevent_type("KeyPress", 6)
-CONTEXT_MENU_POLICY_CUSTOM = _resolve_qt_constant("CustomContextMenu", "ContextMenuPolicy", 0)
-KEY_RETURN = _resolve_qt_constant("Key_Return", "Key", 0)
-KEY_ENTER = _resolve_qt_constant("Key_Enter", "Key", 0)
-KEY_SPACE = _resolve_qt_constant("Key_Space", "Key", 0)
+EVENT_TYPE_FOCUS_IN = resolve_qevent_type(QEvent, "FocusIn", 8)
+EVENT_TYPE_MOUSE_BUTTON_RELEASE = resolve_qevent_type(QEvent, "MouseButtonRelease", 3)
+EVENT_TYPE_KEY_PRESS = resolve_qevent_type(QEvent, "KeyPress", 6)
+CONTEXT_MENU_POLICY_CUSTOM = resolve_qt_constant(Qt, "CustomContextMenu", "ContextMenuPolicy", 0)
+KEY_RETURN = resolve_qt_constant(Qt, "Key_Return", "Key", 0)
+KEY_ENTER = resolve_qt_constant(Qt, "Key_Enter", "Key", 0)
+KEY_SPACE = resolve_qt_constant(Qt, "Key_Space", "Key", 0)
 
 
 class WhiteboxDockPanel(QDockWidget):

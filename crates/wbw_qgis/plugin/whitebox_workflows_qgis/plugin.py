@@ -12,15 +12,20 @@ from .bootstrap import (
 )
 from .diagnostics import diagnostics_text, gather_runtime_diagnostics
 from .host_api import (
+    host_capabilities,
+    open_local_file,
     open_processing_algorithm_dialog,
-    qgis_major_version,
+    push_host_message,
     qgis_version_string,
     register_dock_widget,
     register_plugin_action,
+    run_dialog,
+    run_menu,
     register_provider,
     unregister_dock_widget,
     unregister_plugin_action,
     unregister_provider,
+    show_info_dialog,
 )
 from .panel import WhiteboxDockPanel, summarize_catalog
 from .provider import WhiteboxProcessingProvider
@@ -36,7 +41,7 @@ from .settings import WhiteboxPluginSettings, WhiteboxSettingsDialog
 try:
     from qgis.PyQt.QtGui import QAction, QIcon
     from qgis.PyQt.QtCore import QSettings
-    from qgis.PyQt.QtWidgets import QApplication, QInputDialog, QLineEdit, QMenu, QMessageBox
+    from qgis.PyQt.QtWidgets import QApplication, QInputDialog, QLineEdit, QMenu
 except Exception:  # pragma: no cover
     class QAction:  # type: ignore[override]
         def __init__(self, *_args, **_kwargs):
@@ -48,15 +53,6 @@ except Exception:  # pragma: no cover
     class QIcon:  # type: ignore[override]
         def __init__(self, *_args, **_kwargs):
             pass
-
-    class QMessageBox:  # type: ignore[override]
-        @staticmethod
-        def information(*_args, **_kwargs):
-            return None
-
-        @staticmethod
-        def warning(*_args, **_kwargs):
-            return None
 
     class QApplication:  # type: ignore[override]
         @staticmethod
@@ -207,10 +203,26 @@ class WhiteboxWorkflowsPlugin:
         return self._plugin_icon_named("WbW_refresh")
 
     def initGui(self):
-        # QGIS 4 is the primary target; avoid hard-fail in unknown hosts.
-        major = qgis_major_version()
-        if major not in (0, 4):
+        # Support QGIS 3/4 from one codebase; unsupported majors are rejected.
+        host_info = host_capabilities(self.iface)
+        major = int(host_info.get("major", 0) or 0)
+        if not bool(host_info.get("supported_major", False)):
+            push_host_message(
+                self.iface,
+                "Whitebox Workflows",
+                f"Unsupported QGIS major version: {major or 'unknown'}.",
+                level="warning",
+            )
             return
+
+        if host_info.get("partial"):
+            missing = ", ".join(host_info.get("missing_required") or [])
+            push_host_message(
+                self.iface,
+                "Whitebox Workflows",
+                f"Host compatibility is partial; some features may be unavailable ({missing}).",
+                level="warning",
+            )
 
         if not register_provider(self.iface, self.provider):
             return
@@ -236,13 +248,9 @@ class WhiteboxWorkflowsPlugin:
 
         # Helpful startup message where the host exposes a message bar.
         msg = f"Whitebox Workflows provider loaded (QGIS {qgis_version_string() or 'unknown'})."
-        try:
-            bar = self.iface.messageBar()
-            push = getattr(bar, "pushInfo", None)
-            if push is not None:
-                push("Whitebox Workflows", msg)
-        except Exception:
-            pass
+        if host_info.get("partial"):
+            msg += " Compatibility mode enabled."
+        push_host_message(self.iface, "Whitebox Workflows", msg, level="info")
 
     def _install_actions(self):
         panel_action = QAction("Show Whitebox Panel", self.iface.mainWindow())
@@ -544,12 +552,14 @@ class WhiteboxWorkflowsPlugin:
         )
 
         try:
-            QMessageBox.information(
-                self.iface.mainWindow(),
-                "Whitebox Workflows Recipe Access",
-                message,
-            )
-            return
+            if show_info_dialog(self.iface, "Whitebox Workflows Recipe Access", message):
+                return
+        except Exception:
+            pass
+
+        try:
+            if show_info_dialog(None, "Whitebox Workflows Recipe Access", message):
+                return
         except Exception:
             pass
 
@@ -576,13 +586,7 @@ class WhiteboxWorkflowsPlugin:
         path_str = str(path)
 
         # Best-effort host/system open.
-        opened = False
-        try:
-            from qgis.PyQt.QtGui import QDesktopServices  # type: ignore[import]
-            from qgis.PyQt.QtCore import QUrl  # type: ignore[import]
-            opened = bool(QDesktopServices.openUrl(QUrl.fromLocalFile(path_str)))
-        except Exception:
-            opened = False
+        opened = open_local_file(path_str)
 
         if not opened:
             try:
@@ -615,12 +619,14 @@ class WhiteboxWorkflowsPlugin:
             lines.extend([f"- {w}" for w in warnings])
             message = "\n".join(lines)
             try:
-                QMessageBox.information(
-                    self.iface.mainWindow(),
-                    "Whitebox Workflows Recipe Validation",
-                    message,
-                )
-                return
+                if show_info_dialog(self.iface, "Whitebox Workflows Recipe Validation", message):
+                    return
+            except Exception:
+                pass
+
+            try:
+                if show_info_dialog(None, "Whitebox Workflows Recipe Validation", message):
+                    return
             except Exception:
                 pass
             self._notify_warning(message)
@@ -632,12 +638,14 @@ class WhiteboxWorkflowsPlugin:
             f"Usable recipes loaded: {built_in_count}"
         )
         try:
-            QMessageBox.information(
-                self.iface.mainWindow(),
-                "Whitebox Workflows Recipe Validation",
-                message,
-            )
-            return
+            if show_info_dialog(self.iface, "Whitebox Workflows Recipe Validation", message):
+                return
+        except Exception:
+            pass
+
+        try:
+            if show_info_dialog(None, "Whitebox Workflows Recipe Validation", message):
+                return
         except Exception:
             pass
         self._notify_info(message)
@@ -768,7 +776,7 @@ class WhiteboxWorkflowsPlugin:
             favorite_action = menu.addAction("Add Favorite")
         copy_action = menu.addAction("Copy Tool ID")
 
-        selected = self._run_menu(menu, global_pos)
+        selected = run_menu(menu, global_pos)
         if selected is open_action:
             self._open_tool_from_panel(tool_id)
             return
@@ -781,15 +789,6 @@ class WhiteboxWorkflowsPlugin:
         if selected is copy_action:
             QApplication.clipboard().setText(tool_id)
             self._notify_info(f"Copied tool id: {tool_id}")
-
-    def _run_menu(self, menu: QMenu, global_pos):
-        runner = getattr(menu, "exec", None)
-        if callable(runner):
-            return runner(global_pos)
-        runner_legacy = getattr(menu, "exec_", None)
-        if callable(runner_legacy):
-            return runner_legacy(global_pos)
-        return None
 
     def _load_recent_tools(self):
         try:
@@ -1097,9 +1096,7 @@ class WhiteboxWorkflowsPlugin:
             dlg = WhiteboxSettingsDialog(current, parent=self.iface.mainWindow())
         except Exception:
             return
-        exec_fn = getattr(dlg, "exec", None) or getattr(dlg, "exec_", None)
-        if callable(exec_fn):
-            exec_fn()
+        run_dialog(dlg)
         if not dlg.was_accepted():
             return
         updated = dlg.read_settings()
@@ -1207,9 +1204,7 @@ class WhiteboxWorkflowsPlugin:
             if callable(set_default):
                 set_default(update_btn)
 
-            exec_fn = getattr(msg_box, "exec", None) or getattr(msg_box, "exec_", None)
-            if callable(exec_fn):
-                exec_fn()
+            run_dialog(msg_box)
 
             clicked = getattr(msg_box, "clickedButton", None)
             clicked_button = clicked() if callable(clicked) else None
@@ -1368,22 +1363,23 @@ class WhiteboxWorkflowsPlugin:
         text = f"{text}\n\n{update_policy}"
 
         try:
-            QMessageBox.information(
-                self.iface.mainWindow(),
-                "Whitebox Workflows Diagnostics",
-                text,
-            )
-            return
+            if show_info_dialog(self.iface, "Whitebox Workflows Diagnostics", text):
+                return
         except Exception:
             pass
 
         try:
-            bar = self.iface.messageBar()
-            push = getattr(bar, "pushWarning", None)
-            if push is not None:
-                push("Whitebox Workflows", "Diagnostics unavailable as dialog; see logs.")
+            if show_info_dialog(None, "Whitebox Workflows Diagnostics", text):
+                return
         except Exception:
             pass
+
+        push_host_message(
+            self.iface,
+            "Whitebox Workflows",
+            "Diagnostics unavailable as dialog; see logs.",
+            level="warning",
+        )
 
     def _refresh_catalog(self, *_args, silent: bool = False):
         # Pull recents from persisted settings so tools run from the Processing
@@ -1492,24 +1488,10 @@ class WhiteboxWorkflowsPlugin:
             )
 
     def _notify_info(self, message: str):
-        try:
-            bar = self.iface.messageBar()
-            push = getattr(bar, "pushInfo", None)
-            if push is not None:
-                push("Whitebox Workflows", message)
-                return
-        except Exception:
-            pass
+        push_host_message(self.iface, "Whitebox Workflows", message, level="info")
 
     def _notify_warning(self, message: str):
-        try:
-            bar = self.iface.messageBar()
-            push = getattr(bar, "pushWarning", None)
-            if push is not None:
-                push("Whitebox Workflows", message)
-                return
-        except Exception:
-            pass
+        push_host_message(self.iface, "Whitebox Workflows", message, level="warning")
 
     def _get_capability_value(self, capabilities, *keys):
         if not isinstance(capabilities, dict):

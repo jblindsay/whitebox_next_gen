@@ -1,6 +1,7 @@
 [general]
 name=Whitebox Workflows
-qgisMinimumVersion=4.0
+qgisMinimumVersion=3.28
+qgisMaximumVersion=4.99
 description=Dynamic Whitebox Workflows Processing provider and local execution plugin.
 version=2.0.0
 author=Whitebox Geospatial Inc.

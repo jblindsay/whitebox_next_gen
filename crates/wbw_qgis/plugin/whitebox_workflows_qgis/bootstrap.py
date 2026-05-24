@@ -6,10 +6,33 @@ import json
 import os
 import shutil
 import subprocess
+import urllib.request
 from pathlib import Path
 
 
 _EXTERNAL_SESSION_CACHE: dict[tuple[str, bool, str], "ExternalRuntimeSession"] = {}
+_RUNTIME_MODE = "auto"
+_RUNTIME_LOCAL_PYTHON = ""
+
+
+def set_runtime_preferences(mode: str = "auto", local_python: str = "") -> None:
+    """Set runtime interpreter selection preferences for this plugin process.
+
+    mode values:
+    - auto: prefer discovered external interpreter, then current runtime
+    - local: force a caller-provided local interpreter path
+    - qgis: force current in-process Python runtime
+    """
+    global _RUNTIME_MODE, _RUNTIME_LOCAL_PYTHON
+    normalized = str(mode or "auto").strip().lower()
+    if normalized not in {"auto", "local", "qgis"}:
+        normalized = "auto"
+    _RUNTIME_MODE = normalized
+    _RUNTIME_LOCAL_PYTHON = str(local_python or "").strip()
+
+
+def get_runtime_preferences() -> tuple[str, str]:
+    return _RUNTIME_MODE, _RUNTIME_LOCAL_PYTHON
 
 
 class RuntimeBootstrapError(RuntimeError):
@@ -454,6 +477,16 @@ class ExternalRuntimeSession:
 
 
 def _discover_external_python() -> str | None:
+    mode, local_python = get_runtime_preferences()
+    if mode == "qgis":
+        return None
+
+    if mode == "local":
+        p = Path(local_python).expanduser()
+        if p.exists() and os.access(p, os.X_OK):
+            return str(p)
+        return None
+
     env_candidate = os.environ.get("WBW_EXTERNAL_PYTHON")
     if env_candidate:
         p = Path(env_candidate).expanduser()
@@ -483,6 +516,187 @@ def load_whitebox_workflows():
             "The whitebox_workflows package is not available in this Python environment. "
             "Install or activate a QGIS-compatible WbW-Py build before loading the plugin."
         ) from exc
+
+
+def _effective_python_for_backend_ops() -> str | None:
+    """Return the python executable used for backend package ops.
+
+    In qgis mode, use the current in-process interpreter executable.
+    In auto/local mode, use the selected external interpreter.
+    """
+    mode, _local_python = get_runtime_preferences()
+    if mode == "qgis":
+        try:
+            import sys
+
+            return str(sys.executable)
+        except Exception:
+            return None
+    return _discover_external_python()
+
+
+def get_backend_interpreter_path() -> str:
+    interpreter = _effective_python_for_backend_ops()
+    if not interpreter:
+        raise RuntimeBootstrapError(
+            "No Python interpreter is available for whitebox_workflows package operations."
+        )
+    return interpreter
+
+
+def get_installed_whitebox_workflows_version() -> str:
+    interpreter = get_backend_interpreter_path()
+    runner = (
+        "import importlib.metadata as md\n"
+        "try:\n"
+        "    print(md.version('whitebox-workflows'))\n"
+        "except Exception:\n"
+        "    print('')\n"
+    )
+    completed = subprocess.run(
+        [interpreter, "-c", runner],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_build_clean_env(),
+    )
+    if completed.returncode != 0:
+        stderr = completed.stderr.strip() or completed.stdout.strip() or "unknown version query error"
+        raise RuntimeBootstrapError(
+            f"Failed checking installed whitebox_workflows version via {interpreter}: {stderr}"
+        )
+    return completed.stdout.strip()
+
+
+def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec: str = "") -> dict:
+    """Install or upgrade whitebox-workflows in the selected interpreter."""
+    interpreter = get_backend_interpreter_path()
+    package_spec = "whitebox-workflows"
+    cleaned_spec = str(version_spec or "").strip()
+    if cleaned_spec:
+        package_spec = f"whitebox-workflows{cleaned_spec}"
+
+    command = [interpreter, "-m", "pip", "install"]
+    if upgrade:
+        command.append("--upgrade")
+    command.append(package_spec)
+
+    completed = subprocess.run(
+        command,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_build_clean_env(),
+    )
+    stdout = completed.stdout.strip()
+    stderr = completed.stderr.strip()
+
+    if completed.returncode != 0:
+        detail = stderr or stdout or "unknown pip install error"
+        raise RuntimeBootstrapError(
+            f"Failed to install {package_spec} via {interpreter}: {detail}"
+        )
+
+    installed = ""
+    try:
+        installed = get_installed_whitebox_workflows_version()
+    except Exception:
+        installed = ""
+
+    # Existing cached sessions may point to a stale module build.
+    _EXTERNAL_SESSION_CACHE.clear()
+
+    return {
+        "interpreter": interpreter,
+        "installed_version": installed,
+        "stdout": stdout,
+        "stderr": stderr,
+        "upgraded": bool(upgrade),
+    }
+
+
+def fetch_latest_whitebox_workflows_version(timeout_seconds: float = 4.0) -> str:
+    url = "https://pypi.org/pypi/whitebox-workflows/json"
+    try:
+        with urllib.request.urlopen(url, timeout=float(timeout_seconds)) as response:
+            payload = response.read().decode("utf-8", errors="replace")
+        parsed = json.loads(payload)
+        info = parsed.get("info", {}) if isinstance(parsed, dict) else {}
+        version = str(info.get("version", "")).strip()
+        return version
+    except Exception as exc:
+        raise RuntimeBootstrapError(f"Unable to query latest whitebox-workflows version from PyPI: {exc}")
+
+
+def _normalize_version_for_compare(raw: str) -> tuple:
+    text = str(raw or "").strip().lower()
+    if not text:
+        return tuple()
+    parts = []
+    token = ""
+    for ch in text:
+        if ch.isalnum():
+            token += ch
+            continue
+        if token:
+            parts.append(token)
+            token = ""
+    if token:
+        parts.append(token)
+
+    normalized = []
+    for part in parts:
+        if part.isdigit():
+            normalized.append((0, int(part)))
+        else:
+            normalized.append((1, part))
+    return tuple(normalized)
+
+
+def is_version_newer(candidate: str, current: str) -> bool:
+    return _normalize_version_for_compare(candidate) > _normalize_version_for_compare(current)
+
+
+def backend_update_status() -> dict:
+    """Return installed/latest version status for whitebox-workflows.
+
+    This function never raises; failures are captured in an error field.
+    """
+    result = {
+        "interpreter": "",
+        "installed_version": "",
+        "latest_version": "",
+        "update_available": False,
+        "error": "",
+    }
+    try:
+        result["interpreter"] = get_backend_interpreter_path()
+        result["installed_version"] = get_installed_whitebox_workflows_version()
+        result["latest_version"] = fetch_latest_whitebox_workflows_version()
+        installed = str(result.get("installed_version", "")).strip()
+        latest = str(result.get("latest_version", "")).strip()
+        if installed and latest:
+            result["update_available"] = is_version_newer(latest, installed)
+        elif latest and not installed:
+            result["update_available"] = True
+    except Exception as exc:
+        result["error"] = str(exc)
+    return result
+
+
+def backend_install_status() -> dict:
+    """Return local installation status without querying remote package indexes."""
+    result = {
+        "interpreter": "",
+        "installed_version": "",
+        "error": "",
+    }
+    try:
+        result["interpreter"] = get_backend_interpreter_path()
+        result["installed_version"] = get_installed_whitebox_workflows_version()
+    except Exception as exc:
+        result["error"] = str(exc)
+    return result
 
 
 def _build_clean_env() -> dict[str, str]:

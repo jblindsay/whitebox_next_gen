@@ -2,13 +2,13 @@
 name=Whitebox Workflows
 qgisMinimumVersion=4.0
 description=Dynamic Whitebox Workflows Processing provider and local execution plugin.
-version=0.1.0
+version=2.0.0
 author=Whitebox Geospatial Inc.
 email=support@whiteboxgeo.com
 about=QGIS-first frontend for Whitebox Workflows with dynamic tool discovery, licensing awareness, and local execution.
 category=Analysis
 icon=icon.png
-experimental=True
+experimental=False
 deprecated=False
 hasProcessingProvider=True
 homepage=https://www.whiteboxgeo.com

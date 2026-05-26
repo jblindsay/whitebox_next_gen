@@ -1770,9 +1770,9 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             if kind in ("file_out", "raster_out", "vector_out"):
                 lower_desc = output_description.lower()
                 is_mstp = self.name() == "multiscale_topographic_position_class"
-                is_auxiliary_output = (
-                    "report" in name.lower() or "diagnostic" in name.lower() or
-                    "report" in lower_desc or "diagnostic" in lower_desc
+                is_auxiliary_output = any(
+                    token in name.lower() or token in lower_desc
+                    for token in ("report", "diagnostic")
                 )
                 if "optional" in lower_desc and not is_mstp and not is_auxiliary_output:
                     output_description = "Output destination path (required in QGIS plugin)."

@@ -4,7 +4,8 @@ This changelog tracks user-visible changes to the Whitebox Workflows QGIS plugin
 
 ## Unreleased
 
-- No unreleased entries yet.
+- Fixed packaged plugin validator/lint issues in staged sources (including whitespace/style/import/name checks reported by QGIS plugin validation).
+- Rebuilt the packaged plugin zip after lint cleanup.
 
 ## 2.0.4 - 2026-05-26
 

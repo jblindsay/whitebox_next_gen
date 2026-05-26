@@ -41,7 +41,7 @@ from .settings import WhiteboxPluginSettings, WhiteboxSettingsDialog
 try:
     from qgis.PyQt.QtGui import QAction, QIcon
     from qgis.PyQt.QtCore import QSettings
-    from qgis.PyQt.QtWidgets import QApplication, QInputDialog, QLineEdit, QMenu
+    from qgis.PyQt.QtWidgets import QApplication, QInputDialog, QLineEdit, QMenu, QMessageBox
 except Exception:  # pragma: no cover
     class QAction:  # type: ignore[override]
         def __init__(self, *_args, **_kwargs):
@@ -84,6 +84,44 @@ except Exception:  # pragma: no cover
         @staticmethod
         def getText(*_args, **_kwargs):
             return "", False
+
+    class QMessageBox:  # type: ignore[override]
+        Yes = 1
+        No = 0
+
+        class StandardButton:
+            Yes = 1
+            No = 0
+
+        class ButtonRole:
+            AcceptRole = 0
+            RejectRole = 1
+            DestructiveRole = 2
+
+        @staticmethod
+        def question(*_args, **_kwargs):
+            return QMessageBox.No
+
+        def __init__(self, *_args, **_kwargs):
+            self._clicked = None
+
+        def setWindowTitle(self, *_args, **_kwargs):
+            return None
+
+        def setText(self, *_args, **_kwargs):
+            return None
+
+        def addButton(self, *_args, **_kwargs):
+            button = object()
+            if self._clicked is None:
+                self._clicked = button
+            return button
+
+        def setDefaultButton(self, *_args, **_kwargs):
+            return None
+
+        def clickedButton(self):
+            return self._clicked
 
     class QLineEdit:  # type: ignore[override]
         class EchoMode:
@@ -323,7 +361,7 @@ class WhiteboxWorkflowsPlugin:
 
     def _activate_license(self, *_args):
         from .bootstrap import invoke_license_function
-        
+
         key, ok = self._prompt_text("Activate Whitebox License", "License key")
         if not ok or not key:
             return
@@ -358,7 +396,7 @@ class WhiteboxWorkflowsPlugin:
 
     def _deactivate_license(self, *_args):
         from .bootstrap import invoke_license_function
-        
+
         try:
             message = invoke_license_function("deactivate_license", from_transfer=False)
             self._notify_info(str(message))
@@ -368,7 +406,7 @@ class WhiteboxWorkflowsPlugin:
 
     def _transfer_license(self, *_args):
         from .bootstrap import invoke_license_function
-        
+
         try:
             payload_raw = invoke_license_function("transfer_license")
             payload = payload_raw
@@ -1199,16 +1237,20 @@ class WhiteboxWorkflowsPlugin:
         self._save_quick_open_preference()
         self._save_panel_ui_state()
         # Apply runtime discovery preferences; refresh catalog if they changed.
-        runtime_changed = (
-            updated.include_pro != self.provider.include_pro
-            or updated.tier != self.provider.tier
-            or updated.runtime_mode != self._runtime_mode
-            or updated.local_python_path != self._runtime_local_python
+        runtime_changed = any(
+            (
+                updated.include_pro != self.provider.include_pro,
+                updated.tier != self.provider.tier,
+                updated.runtime_mode != self._runtime_mode,
+                updated.local_python_path != self._runtime_local_python,
+            )
         )
-        backend_policy_changed = (
-            updated.auto_install_backend != self._auto_install_backend
-            or updated.auto_check_backend_updates != self._auto_check_backend_updates
-            or updated.skip_auto_update_checks_in_local_mode != self._skip_auto_update_checks_in_local_mode
+        backend_policy_changed = any(
+            (
+                updated.auto_install_backend != self._auto_install_backend,
+                updated.auto_check_backend_updates != self._auto_check_backend_updates,
+                updated.skip_auto_update_checks_in_local_mode != self._skip_auto_update_checks_in_local_mode,
+            )
         )
 
         self._runtime_mode = updated.runtime_mode

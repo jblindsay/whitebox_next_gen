@@ -643,8 +643,6 @@ def _derive_remote_sensing_category(item: dict) -> str:
     return "Remote Sensing"
 
 
-
-
 # ---------------------------------------------------------------------------
 # Canonical taxonomy index — loaded from tool_taxonomy.resolved.json which is
 # the single source of truth shared across all three frontends.

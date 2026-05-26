@@ -5,7 +5,6 @@ Parses HTML help files from the legacy plugin to extract tool descriptions
 and parameter documentation for enriching the QGIS parameter dialogs.
 """
 
-import os
 import re
 import html
 from pathlib import Path
@@ -72,8 +71,7 @@ class ToolHelpProvider:
         if help_dir is None:
             # Try standard locations
             candidates = [
-                Path.home()
-                / "Documents/programming/Rust/whitebox_workflows/wbw_qgis/help",
+                Path.home() / "Documents/programming/Rust/whitebox_workflows/wbw_qgis/help",
                 Path(__file__).parent / "help",
             ]
             for cand in candidates:

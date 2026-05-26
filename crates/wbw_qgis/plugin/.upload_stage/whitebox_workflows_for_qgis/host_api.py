@@ -42,7 +42,6 @@ def host_capabilities(iface) -> dict:
     has_add_to_menu = callable(getattr(iface, "addPluginToMenu", None))
     has_plugin_menu = callable(getattr(iface, "pluginMenu", None))
     has_main_window = callable(getattr(iface, "mainWindow", None))
-    has_add_toolbar_icon = callable(getattr(iface, "addToolBarIcon", None))
     has_remove_from_menu = callable(getattr(iface, "removePluginMenu", None))
     has_remove_toolbar_icon = callable(getattr(iface, "removeToolBarIcon", None))
     has_add_dock_widget = callable(getattr(iface, "addDockWidget", None))

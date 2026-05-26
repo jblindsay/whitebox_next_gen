@@ -407,6 +407,53 @@ class PluginPanelWiringTests(unittest.TestCase):
             ],
         )
 
+    def test_init_gui_checks_backend_before_provider_registration(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        calls = []
+
+        with patch.object(
+            plugin,
+            "host_capabilities",
+            lambda _iface: {"major": 4, "supported_major": True, "partial": False, "missing_required": []},
+        ), patch.object(
+            instance,
+            "_ensure_backend_available",
+            lambda *args, **kwargs: calls.append(("ensure", kwargs.get("interactive"))) or True,
+        ), patch.object(
+            plugin,
+            "register_provider",
+            lambda _iface, _provider: calls.append("register_provider") or True,
+        ), patch.object(
+            instance,
+            "_install_panel",
+            lambda *_a, **_k: calls.append("install_panel"),
+        ), patch.object(
+            instance,
+            "_install_actions",
+            lambda *_a, **_k: calls.append("install_actions"),
+        ), patch.object(
+            instance,
+            "_refresh_catalog",
+            lambda *_a, **_k: None,
+        ), patch.object(
+            instance,
+            "_check_backend_updates",
+            lambda *_a, **_k: None,
+        ):
+            instance.initGui()
+
+        self.assertEqual(
+            calls,
+            [
+                "install_panel",
+                "install_actions",
+                ("ensure", False),
+                "register_provider",
+            ],
+        )
+
     def test_init_gui_noops_on_unsupported_qgis_major(self):
         iface = _FakeIface()
         instance = plugin.WhiteboxWorkflowsPlugin(iface)
@@ -453,13 +500,24 @@ class PluginPanelWiringTests(unittest.TestCase):
             lambda *_a, **_k: setup_calls.append("install_actions"),
         ), patch.object(
             instance,
+            "_ensure_backend_available",
+            lambda *args, **kwargs: setup_calls.append(("ensure", kwargs.get("interactive"))) or True,
+        ), patch.object(
+            instance,
             "_refresh_catalog",
             lambda *_a, **_k: setup_calls.append("refresh_catalog"),
         ):
             instance.initGui()
 
         self.assertFalse(instance._provider_registered)
-        self.assertEqual(setup_calls, [])
+        self.assertEqual(
+            setup_calls,
+            [
+                "install_panel",
+                "install_actions",
+                ("ensure", False),
+            ],
+        )
 
     def test_install_panel_wires_refresh_callback_to_plugin_handler(self):
         iface = _FakeIface()

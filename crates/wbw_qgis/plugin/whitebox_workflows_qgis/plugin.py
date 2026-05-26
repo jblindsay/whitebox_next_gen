@@ -224,10 +224,6 @@ class WhiteboxWorkflowsPlugin:
                 level="warning",
             )
 
-        if not register_provider(self.iface, self.provider):
-            return
-        self._provider_registered = True
-
         self._load_recent_tools()
         self._load_favorite_tools()
         self._load_runtime_preferences()
@@ -242,6 +238,12 @@ class WhiteboxWorkflowsPlugin:
 
         if not self._ensure_backend_available(interactive=False):
             self._ensure_backend_available(interactive=True)
+
+        # Ensure backend install/activation checks run before provider
+        # registration, because addProvider() may eagerly call provider.load().
+        if not register_provider(self.iface, self.provider):
+            return
+        self._provider_registered = True
 
         self._refresh_catalog(silent=True)
         self._check_backend_updates(manual=False)

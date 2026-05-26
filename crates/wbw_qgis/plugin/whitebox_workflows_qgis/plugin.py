@@ -41,7 +41,7 @@ from .settings import WhiteboxPluginSettings, WhiteboxSettingsDialog
 try:
     from qgis.PyQt.QtGui import QAction, QIcon
     from qgis.PyQt.QtCore import QSettings
-    from qgis.PyQt.QtWidgets import QApplication, QInputDialog, QLineEdit, QMenu
+    from qgis.PyQt.QtWidgets import QApplication, QInputDialog, QLineEdit, QMenu, QMessageBox
 except Exception:  # pragma: no cover
     class QAction:  # type: ignore[override]
         def __init__(self, *_args, **_kwargs):
@@ -84,6 +84,44 @@ except Exception:  # pragma: no cover
         @staticmethod
         def getText(*_args, **_kwargs):
             return "", False
+
+    class QMessageBox:  # type: ignore[override]
+        Yes = 1
+        No = 0
+
+        class StandardButton:
+            Yes = 1
+            No = 0
+
+        class ButtonRole:
+            AcceptRole = 0
+            RejectRole = 1
+            DestructiveRole = 2
+
+        @staticmethod
+        def question(*_args, **_kwargs):
+            return QMessageBox.No
+
+        def __init__(self, *_args, **_kwargs):
+            self._clicked = None
+
+        def setWindowTitle(self, *_args, **_kwargs):
+            return None
+
+        def setText(self, *_args, **_kwargs):
+            return None
+
+        def addButton(self, *_args, **_kwargs):
+            button = object()
+            if self._clicked is None:
+                self._clicked = button
+            return button
+
+        def setDefaultButton(self, *_args, **_kwargs):
+            return None
+
+        def clickedButton(self):
+            return self._clicked
 
     class QLineEdit:  # type: ignore[override]
         class EchoMode:

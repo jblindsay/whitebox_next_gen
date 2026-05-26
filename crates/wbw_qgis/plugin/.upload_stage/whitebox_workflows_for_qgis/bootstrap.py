@@ -480,6 +480,58 @@ def _discover_external_python() -> str | None:
     return candidates[0] if candidates else None
 
 
+def _is_probably_python_executable(path_text: str | None) -> bool:
+    text = str(path_text or "").strip()
+    if not text:
+        return False
+    try:
+        name = Path(text).name.lower()
+    except Exception:
+        return False
+    if os.name == "nt":
+        return name.startswith("python") and name.endswith(".exe")
+    return name.startswith("python")
+
+
+def _discover_embedded_qgis_python(path_text: str | None) -> str | None:
+    raw = str(path_text or "").strip()
+    if os.name != "nt" or not raw:
+        return None
+
+    try:
+        exe_path = Path(raw)
+    except Exception:
+        return None
+
+    if not exe_path.exists():
+        return None
+
+    # Typical QGIS launcher layout:
+    # C:\Program Files\QGIS <ver>\bin\qgis-bin.exe -> ..\apps\Python<xy>\python.exe
+    parent = exe_path.parent
+    if parent.name.lower() != "bin":
+        return None
+
+    install_root = parent.parent
+    apps_dir = install_root / "apps"
+    if not apps_dir.exists() or not apps_dir.is_dir():
+        return None
+
+    try:
+        python_dirs = sorted(
+            child for child in apps_dir.iterdir() if child.is_dir() and child.name.lower().startswith("python")
+        )
+    except Exception:
+        return None
+
+    for python_dir in python_dirs:
+        embedded = python_dir / "python.exe"
+        if embedded.exists() and os.access(embedded, os.X_OK):
+            return str(embedded)
+
+    return None
+
+
 def _rewrite_windows_qgis_launcher(path_text: str | None) -> str:
     raw = str(path_text or "").strip()
     if os.name != "nt" or not raw:
@@ -588,7 +640,19 @@ def _effective_python_for_backend_ops() -> str | None:
         try:
             import sys
 
-            return str(sys.executable)
+            current = str(sys.executable)
+            rewritten = _rewrite_windows_qgis_launcher(current)
+            if _is_probably_python_executable(rewritten):
+                return rewritten
+
+            embedded = _discover_embedded_qgis_python(current)
+            if _is_probably_python_executable(embedded):
+                return embedded
+
+            if _is_probably_python_executable(current):
+                return current
+
+            return None
         except Exception:
             return None
     return _discover_external_python()

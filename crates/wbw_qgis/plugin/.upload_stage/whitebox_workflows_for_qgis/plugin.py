@@ -224,10 +224,6 @@ class WhiteboxWorkflowsPlugin:
                 level="warning",
             )
 
-        if not register_provider(self.iface, self.provider):
-            return
-        self._provider_registered = True
-
         self._load_recent_tools()
         self._load_favorite_tools()
         self._load_runtime_preferences()
@@ -242,6 +238,12 @@ class WhiteboxWorkflowsPlugin:
 
         if not self._ensure_backend_available(interactive=False):
             self._ensure_backend_available(interactive=True)
+
+        # Ensure backend install/activation checks run before provider
+        # registration, because addProvider() may eagerly call provider.load().
+        if not register_provider(self.iface, self.provider):
+            return
+        self._provider_registered = True
 
         self._refresh_catalog(silent=True)
         self._check_backend_updates(manual=False)
@@ -321,7 +323,7 @@ class WhiteboxWorkflowsPlugin:
 
     def _activate_license(self, *_args):
         from .bootstrap import invoke_license_function
-
+        
         key, ok = self._prompt_text("Activate Whitebox License", "License key")
         if not ok or not key:
             return
@@ -356,7 +358,7 @@ class WhiteboxWorkflowsPlugin:
 
     def _deactivate_license(self, *_args):
         from .bootstrap import invoke_license_function
-
+        
         try:
             message = invoke_license_function("deactivate_license", from_transfer=False)
             self._notify_info(str(message))
@@ -366,7 +368,7 @@ class WhiteboxWorkflowsPlugin:
 
     def _transfer_license(self, *_args):
         from .bootstrap import invoke_license_function
-
+        
         try:
             payload_raw = invoke_license_function("transfer_license")
             payload = payload_raw
@@ -436,8 +438,12 @@ class WhiteboxWorkflowsPlugin:
                 self._panel_visible = True
 
     def _open_tool_from_panel(self, tool_id: str):
-        if str(tool_id).strip().lower() == "field_calculator":
+        tool_id_lc = str(tool_id).strip().lower()
+        if tool_id_lc == "field_calculator":
             self._open_field_calculator_assistant(tool_id)
+            return
+        if tool_id_lc == "raster_calculator":
+            self._open_raster_calculator_assistant(tool_id)
             return
 
         provider_id = self.provider.id()
@@ -492,6 +498,49 @@ class WhiteboxWorkflowsPlugin:
         else:
             self._notify_warning(
                 "Unable to open dialog for field_calculator; host processing API not available."
+            )
+
+    def _open_raster_calculator_assistant(self, tool_id: str):
+        self._notify_info(
+            "Opening Raster Calculator Assistant. After review, the standard processing dialog will open with prefilled parameters."
+        )
+        try:
+            from .raster_calculator_dialog import run_raster_calculator_assistant
+
+            launch_params = run_raster_calculator_assistant(
+                self.iface,
+                include_pro=self.provider.include_pro,
+                tier=self.provider.tier,
+            )
+        except Exception as exc:
+            self._notify_warning(
+                f"Raster Calculator assistant unavailable; panel launch requires assistant ({exc})."
+            )
+            return
+
+        if launch_params == {}:
+            # Assistant was opened and then cancelled.
+            return
+
+        provider_id = self.provider.id()
+        opened = open_processing_algorithm_dialog(
+            self.iface,
+            provider_id,
+            tool_id,
+            params=launch_params,
+        )
+        if opened:
+            self._record_last_tool(tool_id)
+            self._record_recent_tool(tool_id)
+            if launch_params:
+                self._notify_info(
+                    "Opened Raster Calculator processing dialog with assistant parameters."
+                )
+            else:
+                self._notify_info("Opening tool: raster_calculator")
+        else:
+            self._notify_warning(
+                "Unable to open dialog for raster_calculator; host processing API not available."
             )
 
     def _open_tool_from_recent(self, tool_id: str):
@@ -859,20 +908,32 @@ class WhiteboxWorkflowsPlugin:
         # processing dialog entry.
         for item in catalog:
             tool_id = str(item.get("id", "")).strip().lower()
-            if tool_id != "field_calculator":
+            if tool_id == "field_calculator":
+                item["display_name"] = "Field Calculator Assistant"
+                summary = str(item.get("summary", "")).strip()
+                assistant_note = (
+                    "Opens a guided assistant with expression snippets and preview "
+                    "before launching the processing dialog."
+                )
+                if assistant_note not in summary:
+                    if summary:
+                        item["summary"] = f"{summary} {assistant_note}"
+                    else:
+                        item["summary"] = assistant_note
                 continue
 
-            item["display_name"] = "Field Calculator Assistant"
-            summary = str(item.get("summary", "")).strip()
-            assistant_note = (
-                "Opens a guided assistant with expression snippets and preview "
-                "before launching the processing dialog."
-            )
-            if assistant_note not in summary:
-                if summary:
-                    item["summary"] = f"{summary} {assistant_note}"
-                else:
-                    item["summary"] = assistant_note
+            if tool_id == "raster_calculator":
+                item["display_name"] = "Raster Calculator Assistant"
+                summary = str(item.get("summary", "")).strip()
+                assistant_note = (
+                    "Opens a guided assistant for raster expression authoring and "
+                    "input ordering before launching the processing dialog."
+                )
+                if assistant_note not in summary:
+                    if summary:
+                        item["summary"] = f"{summary} {assistant_note}"
+                    else:
+                        item["summary"] = assistant_note
 
     def _load_quick_open_preference(self):
         try:
@@ -894,12 +955,17 @@ class WhiteboxWorkflowsPlugin:
                 settings.value(self._settings_key_include_pro, self.provider.include_pro),
                 self.provider.include_pro,
             )
-            self.provider.tier = str(
-                settings.value(self._settings_key_requested_tier, self.provider.tier)
-            ).strip().lower() or self.provider.tier
+            default_requested_tier = "pro"
+            if self._settings_contains(settings, self._settings_key_requested_tier):
+                tier_value = settings.value(self._settings_key_requested_tier, self.provider.tier)
+            else:
+                tier_value = default_requested_tier
+                settings.setValue(self._settings_key_requested_tier, default_requested_tier)
+
+            self.provider.tier = str(tier_value).strip().lower() or default_requested_tier
         except Exception:
             self.provider.include_pro = True
-            self.provider.tier = self.provider.tier or "open"
+            self.provider.tier = self.provider.tier or "pro"
 
     def _load_backend_preferences(self):
         try:
@@ -1008,6 +1074,19 @@ class WhiteboxWorkflowsPlugin:
         if value is None:
             return default
         return bool(value)
+
+    def _settings_contains(self, settings, key: str) -> bool:
+        contains = getattr(settings, "contains", None)
+        if callable(contains):
+            try:
+                return bool(contains(key))
+            except Exception:
+                pass
+        sentinel = "__WBW_MISSING__"
+        try:
+            return settings.value(key, sentinel) != sentinel
+        except Exception:
+            return False
 
     def _save_recent_tools(self):
         try:
@@ -1120,17 +1199,17 @@ class WhiteboxWorkflowsPlugin:
         self._save_quick_open_preference()
         self._save_panel_ui_state()
         # Apply runtime discovery preferences; refresh catalog if they changed.
-        runtime_changed = any((
-            updated.include_pro != self.provider.include_pro,
-            updated.tier != self.provider.tier,
-            updated.runtime_mode != self._runtime_mode,
-            updated.local_python_path != self._runtime_local_python,
-        ))
-        backend_policy_changed = any((
-            updated.auto_install_backend != self._auto_install_backend,
-            updated.auto_check_backend_updates != self._auto_check_backend_updates,
-            updated.skip_auto_update_checks_in_local_mode != self._skip_auto_update_checks_in_local_mode,
-        ))
+        runtime_changed = (
+            updated.include_pro != self.provider.include_pro
+            or updated.tier != self.provider.tier
+            or updated.runtime_mode != self._runtime_mode
+            or updated.local_python_path != self._runtime_local_python
+        )
+        backend_policy_changed = (
+            updated.auto_install_backend != self._auto_install_backend
+            or updated.auto_check_backend_updates != self._auto_check_backend_updates
+            or updated.skip_auto_update_checks_in_local_mode != self._skip_auto_update_checks_in_local_mode
+        )
 
         self._runtime_mode = updated.runtime_mode
         self._runtime_local_python = updated.local_python_path

@@ -6,6 +6,13 @@ This changelog tracks user-visible changes to the Whitebox Workflows QGIS plugin
 
 - No unreleased entries yet.
 
+## 2.0.4 - 2026-05-26
+
+- Fixed plugin startup order so backend availability/install checks run before provider registration, preventing early runtime bootstrap failures on fresh QGIS installs.
+- Resolved a Windows first-run issue where provider initialization could fail with `ModuleNotFoundError: No module named 'whitebox_workflows'` before users were prompted to install the backend.
+- Added regression coverage to ensure backend checks execute before processing provider registration.
+- Refreshed packaged plugin metadata and rebuilt the distribution zip for version 2.0.4.
+
 ## 2.0.3 - 2026-05-26
 
 - Fixed Windows external-runtime bootstrap selection so the plugin avoids invalid QGIS launcher interpreter paths and prefers the real embedded Python runtime when probing whitebox_workflows.

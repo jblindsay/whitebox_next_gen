@@ -2,7 +2,7 @@
 name=Whitebox Workflows
 qgisMinimumVersion=3.28
 qgisMaximumVersion=4.99
-description=Dynamic Whitebox Workflows Processing provider and local execution plugin.
+description=Provides access to the Whitebox Workflows Next Gen platform, with 700+ open-source tools for processing raster, vector, and lidar data. Please report issues to: https://github.com/jblindsay/whitebox_next_gen. 
 version=2.0.3
 author=John Lindsay, Whitebox Geospatial Inc.
 email=support@whiteboxgeo.com

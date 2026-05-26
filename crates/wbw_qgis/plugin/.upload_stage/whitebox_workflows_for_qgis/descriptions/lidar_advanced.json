@@ -1,0 +1,115 @@
+{
+  "lidar_qa_and_confidence": {
+    "description": "Assess LiDAR point-cloud quality and compute confidence metrics for terrain extraction readiness.",
+    "parameters": {
+      "input": {
+        "label": "Input LiDAR file (LAS/LAZ/ZLidar/COPC)."
+      },
+      "qa_mode": {
+        "label": "QA mode {strict, balanced, permissive, auto} (default auto). Strict flags more anomalies; permissive reduces false alarms.",
+        "tooltip": "Use strict for engineering-grade QA, balanced for general mapping, and permissive for noisy legacy datasets."
+      },
+      "block_size": {
+        "label": "QA grid cell size in XY units (default tool profile). Smaller cells capture local issues; larger cells smooth noise.",
+        "tooltip": "Typical values are 2-10 m in dense urban data and 5-25 m in regional datasets."
+      },
+      "max_building_size": {
+        "label": "Maximum expected building/object width in XY units. Helps separate terrain from large elevated structures."
+      },
+      "slope_threshold": {
+        "label": "Minimum edge slope in degrees for off-terrain detection. Higher values are more conservative in steep terrain."
+      },
+      "elev_threshold": {
+        "label": "Reference-surface elevation threshold in Z units. Controls when points are treated as elevated outliers."
+      },
+      "high_confidence_threshold": {
+        "label": "Threshold for high-confidence fraction metric (default from profile). Higher values produce stricter confidence scoring."
+      },
+      "adapt_by_slope": {
+        "label": "Enable slope-adaptive tolerance scaling [optional]",
+        "tooltip": "Recommended for mountainous terrain. Automatically relaxes or tightens tolerances based on local slope."
+      }
+    }
+  },
+  "lidar_terrain_product_suite": {
+    "description": "Generate terrain-focused raster products from LiDAR with consistent QA and surface controls.",
+    "parameters": {
+      "input": {
+        "label": "Input LiDAR path (LAS/LAZ)."
+      },
+      "profile": {
+        "label": "QA profile {strict, balanced, permissive} (default balanced). Controls filtering aggressiveness for terrain extraction.",
+        "tooltip": "Strict removes more non-terrain points but risks losing small terrain features; permissive preserves detail but may retain clutter."
+      },
+      "block_size": {
+        "label": "Grid cell size in map units for intermediate surfaces. Smaller values preserve detail but increase runtime and memory."
+      },
+      "max_building_size": {
+        "label": "Maximum expected structure width in map units. Used to stabilize terrain filtering near built features."
+      },
+      "slope_threshold": {
+        "label": "Minimum edge slope (degrees) for off-terrain removal. Increase in rough terrain to reduce false positives."
+      },
+      "elev_threshold": {
+        "label": "Reference-surface elevation threshold in Z units. Governs sensitivity to elevated non-ground returns."
+      },
+      "z_factor": {
+        "label": "Vertical scaling factor for slope/hillshade products (default 1.0). Use when vertical and horizontal units differ."
+      },
+      "hillshade_azimuth": {
+        "label": "Hillshade sun azimuth in degrees (default 315). Adjust for preferred illumination direction."
+      }
+    }
+  },
+  "individual_tree_segmentation": {
+    "description": "Segment individual tree crowns from LiDAR using adaptive bandwidth and vegetation filtering.",
+    "parameters": {
+      "input": {
+        "label": "Input LiDAR path or typed LiDAR object."
+      },
+      "only_use_veg": {
+        "label": "Use only vegetation classes [optional]",
+        "tooltip": "Enabled by default. Restricts segmentation to vegetation class codes to reduce non-tree detections."
+      },
+      "veg_classes": {
+        "label": "Vegetation class codes (comma-delimited or array; default 3,4,5). Set to match your classification scheme."
+      },
+      "min_height": {
+        "label": "Minimum point height for candidate trees in Z units (default 2.0). Increase to ignore shrubs/understory."
+      },
+      "max_height": {
+        "label": "Maximum point height [optional]. Use to exclude towers/noise or constrain species-specific canopy heights."
+      },
+      "bandwidth_min": {
+        "label": "Minimum horizontal bandwidth (default 1.0). Lower values allow finer crown separation."
+      },
+      "bandwidth_max": {
+        "label": "Maximum horizontal bandwidth (default 6.0). Higher values merge broader canopies and reduce over-segmentation."
+      },
+      "adaptive_bandwidth": {
+        "label": "Enable adaptive per-seed bandwidth [optional]",
+        "tooltip": "Recommended in mixed-age stands. Estimates local crown geometry and adjusts kernel width automatically."
+      }
+    }
+  },
+  "lidar_change_and_disturbance_analysis": {
+    "description": "Compare baseline and monitoring LiDAR epochs to quantify elevation change and disturbance intensity.",
+    "parameters": {
+      "baseline_tiles": {
+        "label": "Baseline LiDAR tiles (ordered list or directory). Represents pre-change condition."
+      },
+      "monitor_tiles": {
+        "label": "Monitoring LiDAR tiles (ordered list or directory). Represents post-change condition."
+      },
+      "resolution": {
+        "label": "Output raster resolution in map units. Smaller cells improve local detail but increase runtime/storage."
+      },
+      "min_change_m": {
+        "label": "Absolute elevation change threshold in meters. Changes below this are ignored in disturbance accounting."
+      },
+      "output_prefix": {
+        "label": "Output prefix for per-tile delta rasters and JSON summaries."
+      }
+    }
+  }
+}

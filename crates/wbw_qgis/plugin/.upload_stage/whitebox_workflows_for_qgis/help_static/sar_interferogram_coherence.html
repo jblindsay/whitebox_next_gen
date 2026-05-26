@@ -1,0 +1,67 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Estimate interferometric coherence between SAR acquisitions (direct, complex, or bundle modes).</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>SAR Interferogram and Coherence</strong></p>
+<h3>Problem It Solves</h3>
+<p>Can this SAR pair be converted into defensible interferogram/coherence products with auditable provenance and QA diagnostics?</p>
+<h3>Who It Is For</h3>
+<ul><li>InSAR practitioners and SAR operations teams requiring repeatable pair-level coherence/interferogram products.</li></ul>
+<h3>Primary User</h3>
+<p>Infrastructure deformation monitoring teams, hazard intelligence groups, and SAR analytics operations.</p>
+<h3>What It Does</h3>
+<ul><li>Produces interferogram, coherence, and valid-mask outputs from compatible SAR pairs in one dedicated workflow.</li><li>Accepts either direct SAR rasters, supported SAR bundles, or complex split real/imag SAR inputs.</li><li>Emits standardized machine-readable summary and optional HTML report artifacts for auditable downstream use.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Resolves reference and moving SAR inputs from either direct raster mode, bundle mode, or complex component mode.</li><li>Optionally performs internal `sar_coregistration` handoff when grids are mismatched, unless the caller explicitly asserts a prealigned pair.</li><li>Computes either complex-domain interferometric phase and coherence magnitude (complex mode) or amplitude-domain proxy interferogram/coherence (scalar mode).</li><li>Uses summed-area coherence kernels and parallel row-chunk evaluation to reduce runtime on larger scenes; optional fast mode can further decimate coherence sampling.</li><li>Indicative formulas: $\phi = \mathrm{atan2}(\Im(z), \Re(z))$ for interferometric phase where $z = s_{ref}\,\overline{s_{mov}}$, and local-window coherence proxy from normalized cross-correlation magnitude.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Unifies SAR pair ingest, optional alignment handoff, product generation, acceptance gating, and QA/report artifacts in one reproducible contract workflow.</li><li>Operational note:</li><li>When `auto_coregister_pair=true`, this tool invokes the existing `sar_coregistration` engine internally if the pair grids do not already match.</li><li>If the pair is known to already be aligned, prefer `assume_prealigned_pair=true` and leave `auto_coregister_pair=false` to avoid unnecessary alignment work.</li><li>Failed acceptance on the coreg residual gate indicates the pair/alignment should not be treated as registration-quality enough for trusted downstream interpretation.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>Teams need a dedicated production stage for interferogram/coherence outputs instead of ad hoc post-processing scripts.</p>
+<h3>Typical Presets</h3>
+<ul><li>scalar raster pair: direct amplitude-domain processing with optional auto-coregistration.</li><li>bundle pair: bundle-native measurement resolution with identical output contract.</li><li>complex split mode: complex-domain phase/coherence computation from explicit real/imag rasters.</li><li>fast large-scene mode: reduced coherence workload via `performance_profile="fast"`, optional `coherence_decimation`, and selective artifact writing.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>reference_sar or reference_sar_bundle</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no (unless complex mode)</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Reference SAR source provided either as a direct raster path or supported SAR bundle root.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>moving_sar or moving_sar_bundle</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no (unless complex mode)</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Moving SAR source provided either as a direct raster path or supported SAR bundle root.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>reference_sar_real, reference_sar_imag, moving_sar_real, moving_sar_imag</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no (complex mode)</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Complex input mode components for explicit complex-domain interferogram/coherence processing.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>reference_measurement_key, moving_measurement_key</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional bundle measurement selectors when SAR bundles include multiple measurement assets.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>auto_coregister_pair, assume_prealigned_pair, coreg_mode</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Pair-alignment controls: either invoke internal `sar_coregistration` when needed or explicitly assert the pair is already aligned.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>coreg_max_offset_px, coreg_decimation, coreg_min_overlap_fraction</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional scalar-mode coreg handoff tuning controls for search radius, sampling stride, and minimum overlap.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>coherence_window, performance_profile, coherence_decimation</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Coherence kernel controls. Fast mode can reduce effective window size and decimate coherence sampling on very large scenes.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>input_dem</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional DEM used for terrain-context masking and geometry-support pathways.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>write_interferogram, write_coherence, write_valid_mask, write_html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional artifact suppression controls used to reduce heavy-run output cost.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>output_layout, output_compression, output_tile_size</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF write-profile controls for standard vs COG-style output and compression behavior.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>output_prefix</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output artifact prefix.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>interferogram</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Interferogram raster (complex phase in complex mode, amplitude-domain proxy in scalar mode) when writing is enabled.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>coherence</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Coherence magnitude raster from local-window pair statistics when writing is enabled.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>valid_mask</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Binary/flag mask indicating valid pair-support pixels used during computation when writing is enabled.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, timings, and artifact paths.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability when writing is enabled.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+result = wbe.sar_interferogram_coherence(
+    reference_sar=&quot;output/sar_coreg_reference.tif&quot;,
+    moving_sar=&quot;output/sar_coreg_moving_aligned.tif&quot;,
+    assume_prealigned_pair=True,
+    coherence_window=7,
+    performance_profile=&quot;balanced&quot;,
+    output_prefix=&quot;output/sar_ifg_coh&quot;,
+)
+
+print(result)</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

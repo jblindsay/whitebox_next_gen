@@ -1,0 +1,22 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#e67e22;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Experimental</span></p>
+<p>Creates routed point events from a CSV event table and a route layer.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">vector</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">linear-referencing</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">events</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">csv</span></p>
+<h2>Parameters</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Name</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Required</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Default</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>routes</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input route line layer.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>routes.gpkg</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>events</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input CSV event table path.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>point_events.csv</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>event_route_field</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV field containing route identifiers.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>route_id</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>measure_field</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV field containing point-event measures.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>measure</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>route_id_field</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional route-layer field containing route identifiers. Defaults to feature FID.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>—</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>output</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output point vector path.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>—</td></tr>
+</tbody></table>
+<h2>Examples</h2>
+<p><em>Creates point events on routes from measure values stored in a CSV table.</em></p>
+<pre><code>wbe.route_event_points_from_table(event_route_field='route_id', events='point_events.csv', measure_field='measure', output='route_event_points.gpkg', route_id_field='RID', routes='routes.gpkg')</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

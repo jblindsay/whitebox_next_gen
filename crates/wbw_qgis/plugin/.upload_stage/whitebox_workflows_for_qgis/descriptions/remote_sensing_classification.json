@@ -1,0 +1,109 @@
+{
+  "random_forest_classification": {
+    "description": "Supervised Random Forest classification for multisource raster features using point/polygon training data.",
+    "parameters": {
+      "inputs": {
+        "label": "Input feature rasters (single-band list). Order must be consistent between training and prediction."
+      },
+      "training_data": {
+        "label": "Training vector layer (points or polygons) with class labels."
+      },
+      "class_field": {
+        "label": "Class label field in training attributes. Must contain categorical class IDs or names."
+      },
+      "scaling": {
+        "label": "Feature scaling {none, normalize, standardize} (default none). Use scaling when input bands have very different ranges."
+      },
+      "n_trees": {
+        "label": "Number of trees (default 200). More trees improve stability but increase runtime and memory."
+      },
+      "min_samples_leaf": {
+        "label": "Minimum samples per leaf (default 1). Higher values reduce overfitting but can smooth class boundaries."
+      },
+      "min_samples_split": {
+        "label": "Minimum samples required to split a node (default 2). Increase for noisier training sets."
+      },
+      "output": {
+        "label": "Output classified raster path [optional]. If omitted, result remains in memory."
+      }
+    }
+  },
+  "random_forest_regression": {
+    "description": "Random Forest regression for continuous targets (e.g., biomass, moisture, temperature) from raster predictors.",
+    "parameters": {
+      "inputs": {
+        "label": "Input predictor rasters (single-band list)."
+      },
+      "training_data": {
+        "label": "Training point layer with numeric target values."
+      },
+      "field": {
+        "label": "Numeric target field in training attributes."
+      },
+      "scaling": {
+        "label": "Feature scaling {none, normalize, standardize} (default none)."
+      },
+      "n_trees": {
+        "label": "Number of trees (default 200). Increase for smoother predictions and lower variance."
+      },
+      "min_samples_leaf": {
+        "label": "Minimum samples per leaf (default 1). Larger values regularize predictions."
+      },
+      "min_samples_split": {
+        "label": "Minimum samples to split (default 2). Increase for noisy or sparse training data."
+      },
+      "output": {
+        "label": "Output regression raster path [optional]."
+      }
+    }
+  },
+  "fuzzy_knn_classification": {
+    "description": "Fuzzy k-NN classification that yields soft class membership and optional probability surfaces.",
+    "parameters": {
+      "inputs": {
+        "label": "Input feature rasters (single-band list)."
+      },
+      "training_data": {
+        "label": "Training vector layer with labeled samples."
+      },
+      "class_field": {
+        "label": "Class field in training data attributes."
+      },
+      "scaling": {
+        "label": "Feature scaling {none, normalize, standardize} (default none)."
+      },
+      "k": {
+        "label": "Number of neighbors k (default 5). Higher k is smoother and less sensitive to noise; lower k preserves local detail."
+      },
+      "m": {
+        "label": "Fuzzy exponent m (>1, default 2.0). Higher m increases class overlap (softer memberships)."
+      },
+      "output": {
+        "label": "Output classified raster path [optional]."
+      },
+      "probability_output": {
+        "label": "Output membership-probability raster [optional]. Useful for uncertainty interpretation."
+      }
+    }
+  },
+  "wetland_hydrogeomorphic_classification": {
+    "description": "Classify wetlands into hydrogeomorphic classes using DEM context and wetland masks.",
+    "parameters": {
+      "dem": {
+        "label": "Input DEM raster."
+      },
+      "wetland_mask": {
+        "label": "Wetland mask raster (>0 treated as wetland)."
+      },
+      "max_polygon_features": {
+        "label": "Maximum output wetland polygon features. Increase for complex landscapes; reduce for faster runs."
+      },
+      "wetland_region": {
+        "label": "Regional HGM calibration pack. Select region matching local geomorphic-hydrologic setting."
+      },
+      "output_prefix": {
+        "label": "Output prefix for generated rasters/polygons/summaries."
+      }
+    }
+  }
+}

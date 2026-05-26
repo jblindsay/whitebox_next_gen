@@ -1,0 +1,7 @@
+<p>This filter is a modification of the <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#mean_filter">mean_filter</a>, whereby the highest and lowest values in the kernel are dropped, and the remaining values are averaged to replace the central pixel. The result is a low-pass smoothing filter that is more robust than the <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#mean_filter">mean_filter</a>, which is more strongly impacted by the presence of outlier values. It is named after a system of scoring Olympic events.</p> <p>Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code> flags. These dimensions should be odd, positive integer values (e.g. 3, 5, 7, 9, etc.).</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#mean_filter">mean_filter</a></p> <h2>Function Signature</h2> <p><code>def olympic_filter(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

@@ -1,0 +1,7 @@
+<p>This tool creates a new raster in which the value of each grid cell is determined by an input raster (<code>input</code>) and a collection of user-defined classes. The user must specify the <em>New</em> value, the <em>From</em> value, and the <em>To Just Less Than</em> value of each class triplet of the <code>reclass_value</code> parameter. Classes must be mutually exclusive. Reclass values must be presented as lists-of-lists, where each row of the list contains either three (<code>assign_mode=False</code>) or two  (<code>assign_mode=True</code>) values. If assign-mode is True, then the pair of values represent New value and Old value keys. As an example:</p> <p><code>reclassed = wbe.reclass(raster, [[1.0, 0.0, 100.0], [2.0, 100.0, 200.0]], assign_mode=False) </code></p> <h2>Function Signature</h2> <p><code>def reclass(self, raster: Raster, reclass_values: List[List[float]], assign_mode: bool = False) -&gt; Raster: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

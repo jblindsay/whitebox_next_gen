@@ -1,0 +1,7 @@
+<p>This tool calculates the orientation of polygon features based on the slope of a reduced major axis (RMA) regression line. The regression analysis use the vertices of the exterior hull nodes of a vector polygon. The only required input is the name of the vector polygon file. The orientation values, measured in degrees from north, will be placed in the accompanying attribute table as a new field (ORIENT). The value of the orientation measure for any polygon will depend on how elongated the feature is.</p> <p>Note that the output values are polygon orientations and not true directions. While directions may take values ranging from 0-360, orientation is expressed as an angle between 0 and 180 degrees clockwise from north. Lastly, the orientation measure may become unstable when polygons are oriented nearly vertical or horizontal.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#linearity_index">linearity_index</a>, <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#elongation_ratio">elongation_ratio</a></p> <h2>Function Signature</h2> <p><code>def patch_orientation(self, input: Vector) -&gt; Vector: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

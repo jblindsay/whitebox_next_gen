@@ -1,0 +1,7 @@
+<p>This tool delineates the minimum bounding box (MBB) for a group of vectors. The MBB is the smallest box to completely enclose a feature. The algorithm works by rotating the feature, calculating the axis-aligned bounding box for each rotation, and finding the box with the smallest area, length, width, or perimeter. The MBB is needed to compute several shape indices, such as the Elongation Ratio. The <code>MinimumBoundingEnvelop</code> tool can be used to calculate the axis-aligned bounding rectangle around each feature in a vector file.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#minimum_bounding_circle">minimum_bounding_circle</a>, <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#minimum_bounding_envelope">minimum_bounding_envelope</a>, <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#minimum_convex_hull">minimum_convex_hull</a></p> <h2>Function Signature</h2> <p><code>def minimum_bounding_box(self, input: Vector, min_criteria: str = "area", individual_feature_hulls: bool = True) -&gt; Vector: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

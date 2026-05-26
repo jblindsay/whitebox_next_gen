@@ -1,0 +1,7 @@
+<p>This tool identifies points where the features of two vector line/polygon layers intersect. The user must specify the names of two input vector line files and the output file. The output file will be a vector of POINT VectorGeometryType. If the input vectors intersect at a line segment, the beginning and end vertices of the segment will be present in the output file. A warning is issued if intersection line segments are identified during analysis. If no intersections are found between the input line files, the output file will not be saved and a warning will be issued.</p> <p>Each intersection point will contain <code>PARENT1</code> and <code>PARENT2</code> attribute fields, identifying the instersecting features in the first and second input line files respectively. Additionally, the output attribute table will contain all of the attributes (excluding <code>FID</code>s) of the two parent line features.</p> <h2>Function Signature</h2> <p><code>def line_intersections(self, input1: Vector, input2: Vector) -&gt; Vector: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

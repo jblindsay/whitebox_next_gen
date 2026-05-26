@@ -1355,7 +1355,7 @@ impl Tool for TopographicHachuresTool {
             display_name: "Topographic Hachures",
             summary: "Creates topographic hachure polylines from a raster surface.",
             category: ToolCategory::Vector,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec {
                     name: "dem",
@@ -1447,7 +1447,7 @@ impl Tool for TopographicHachuresTool {
             display_name: "Topographic Hachures".to_string(),
             summary: "Creates topographic hachure polylines from a DEM using contour-seeded downslope and upslope flowlines. Legacy authorship attribution is intentionally preserved for this tool.".to_string(),
             category: ToolCategory::Vector,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![],
             defaults,
             examples: vec![],

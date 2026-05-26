@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from pathlib import Path
 _EXTERNAL_SESSION_CACHE: dict[tuple[str, bool, str], "ExternalRuntimeSession"] = {}
 _RUNTIME_MODE = "auto"
 _RUNTIME_LOCAL_PYTHON = ""
+_NEXT_GEN_MIN_VERSION = "2.0.0"
 
 
 def set_runtime_preferences(mode: str = "auto", local_python: str = "") -> None:
@@ -120,7 +122,6 @@ class ExternalRuntimeSession:
             "import whitebox_workflows as wbw\n"
             "include_pro = bool(json.loads(sys.argv[1]))\n"
             "tier = str(sys.argv[2])\n"
-            "session = wbw.RuntimeSession(include_pro=include_pro, tier=tier)\n"
             "def _emit(prefix, text):\n"
             "    enc = base64.b64encode(text.encode('utf-8')).decode('ascii')\n"
             "    sys.stdout.write(prefix + enc + '\\n')\n"
@@ -154,11 +155,11 @@ class ExternalRuntimeSession:
             "    args_json = str(cmd.get('args_json', '{}'))\n"
             "    try:\n"
             "        try:\n"
-            "            out = session.run_tool_json_stream(tool_id, args_json, _emit_event)\n"
+            "            out = wbw.run_tool_json_stream_options(tool_id, args_json, _emit_event, include_pro, tier)\n"
             "        except TypeError:\n"
-            "            out = session.run_tool_json_stream(tool_id, args_json)\n"
+            "            out = wbw.run_tool_json_with_progress_options(tool_id, args_json, include_pro, tier)\n"
             "        except Exception:\n"
-            "            out = session.run_tool_json(tool_id, args_json)\n"
+            "            out = wbw.run_tool_json_with_options(tool_id, args_json, include_pro, tier)\n"
             "        out_text = out if isinstance(out, str) else json.dumps(out)\n"
             "        _emit('__WBW_WORKER_RESULT__', out_text)\n"
             "    except Exception as exc:\n"
@@ -202,6 +203,22 @@ class ExternalRuntimeSession:
                 process.kill()
             except Exception:
                 pass
+        finally:
+            try:
+                if process.stdin is not None:
+                    process.stdin.close()
+            except Exception:
+                pass
+            try:
+                if process.stdout is not None:
+                    process.stdout.close()
+            except Exception:
+                pass
+            try:
+                if process.stderr is not None:
+                    process.stderr.close()
+            except Exception:
+                pass
 
     def __del__(self):
         self._stop_stream_worker()
@@ -217,21 +234,24 @@ class ExternalRuntimeSession:
             "import json, sys\n"
             "import whitebox_workflows as wbw\n"
             "p = json.loads(sys.argv[1])\n"
-            "s = wbw.RuntimeSession(include_pro=bool(p.get('include_pro', True)), tier=str(p.get('tier', 'open')))\n"
+            "include_pro = bool(p.get('include_pro', True))\n"
+            "tier = str(p.get('tier', 'open'))\n"
             "m = p.get('method')\n"
             "if m == 'get_runtime_capabilities_json':\n"
-            "    out = s.get_runtime_capabilities_json()\n"
+            "    out = wbw.get_runtime_capabilities_json_with_options(include_pro, tier)\n"
             "elif m == 'list_tool_catalog_json':\n"
-            "    out = s.list_tool_catalog_json()\n"
+            "    out = wbw.list_tool_catalog_json_with_options(include_pro, tier)\n"
             "elif m == 'get_tool_metadata_json':\n"
-            "    out = s.get_tool_metadata_json(str(p.get('tool_id', '')))\n"
+            "    out = wbw.get_tool_metadata_json_with_options(str(p.get('tool_id', '')), include_pro, tier)\n"
             "elif m == 'run_tool_json_stream':\n"
             "    tool_id = str(p.get('tool_id', ''))\n"
             "    args_json = str(p.get('args_json', '{}'))\n"
             "    try:\n"
-            "        out = s.run_tool_json_stream(tool_id, args_json, lambda _evt: None)\n"
+            "        out = wbw.run_tool_json_stream_options(tool_id, args_json, lambda _evt: None, include_pro, tier)\n"
             "    except TypeError:\n"
-            "        out = s.run_tool_json_stream(tool_id, args_json)\n"
+            "        out = wbw.run_tool_json_with_progress_options(tool_id, args_json, include_pro, tier)\n"
+            "    except Exception:\n"
+            "        out = wbw.run_tool_json_with_options(tool_id, args_json, include_pro, tier)\n"
             "elif m == 'run_projection_wrapper_json':\n"
             "    tool_id = str(p.get('tool_id', ''))\n"
             "    args = json.loads(str(p.get('args_json', '{}')))\n"
@@ -388,7 +408,8 @@ class ExternalRuntimeSession:
             "import base64, json, sys\n"
             "import whitebox_workflows as wbw\n"
             "p = json.loads(sys.argv[1])\n"
-            "s = wbw.RuntimeSession(include_pro=bool(p.get('include_pro', True)), tier=str(p.get('tier', 'open')))\n"
+            "include_pro = bool(p.get('include_pro', True))\n"
+            "tier = str(p.get('tier', 'open'))\n"
             "tool_id = str(p.get('tool_id', ''))\n"
             "args_json = str(p.get('args_json', '{}'))\n"
             "def _emit_event(evt):\n"
@@ -403,11 +424,11 @@ class ExternalRuntimeSession:
             "    sys.stdout.write('__WBW_EVENT__' + enc + '\\n')\n"
             "    sys.stdout.flush()\n"
             "try:\n"
-            "    out = s.run_tool_json_stream(tool_id, args_json, _emit_event)\n"
+            "    out = wbw.run_tool_json_stream_options(tool_id, args_json, _emit_event, include_pro, tier)\n"
             "except TypeError:\n"
-            "    out = s.run_tool_json_stream(tool_id, args_json)\n"
+            "    out = wbw.run_tool_json_with_progress_options(tool_id, args_json, include_pro, tier)\n"
             "except Exception:\n"
-            "    out = s.run_tool_json(tool_id, args_json)\n"
+            "    out = wbw.run_tool_json_with_options(tool_id, args_json, include_pro, tier)\n"
             "if isinstance(out, str):\n"
             "    out_text = out\n"
             "else:\n"
@@ -420,51 +441,50 @@ class ExternalRuntimeSession:
         completed_result: str | None = None
         loose_stdout_lines: list[str] = []
 
-        process = subprocess.Popen(
+        with subprocess.Popen(
             [self._python_executable, "-c", runner, json.dumps(payload)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             env=self._build_clean_env(),
             bufsize=1,
-        )
-
-        assert process.stdout is not None
-        for raw_line in process.stdout:
-            line = raw_line.rstrip("\r\n")
-            if line.startswith("__WBW_EVENT__"):
-                enc = line[len("__WBW_EVENT__") :]
-                try:
-                    evt = base64.b64decode(enc).decode("utf-8", errors="replace")
-                except Exception:
-                    continue
-                if callable(_callback):
+        ) as process:
+            assert process.stdout is not None
+            for raw_line in process.stdout:
+                line = raw_line.rstrip("\r\n")
+                if line.startswith("__WBW_EVENT__"):
+                    enc = line[len("__WBW_EVENT__") :]
                     try:
-                        _callback(evt)
+                        evt = base64.b64decode(enc).decode("utf-8", errors="replace")
                     except Exception:
-                        pass
-                continue
-            if line.startswith("__WBW_RESULT__"):
-                enc = line[len("__WBW_RESULT__") :]
-                try:
-                    completed_result = base64.b64decode(enc).decode("utf-8", errors="replace")
-                except Exception:
-                    completed_result = "{}"
-                continue
-            if line.strip():
-                loose_stdout_lines.append(line)
+                        continue
+                    if callable(_callback):
+                        try:
+                            _callback(evt)
+                        except Exception:
+                            pass
+                    continue
+                if line.startswith("__WBW_RESULT__"):
+                    enc = line[len("__WBW_RESULT__") :]
+                    try:
+                        completed_result = base64.b64decode(enc).decode("utf-8", errors="replace")
+                    except Exception:
+                        completed_result = "{}"
+                    continue
+                if line.strip():
+                    loose_stdout_lines.append(line)
 
-        stderr_text = ""
-        if process.stderr is not None:
-            stderr_text = process.stderr.read().strip()
+            stderr_text = ""
+            if process.stderr is not None:
+                stderr_text = process.stderr.read().strip()
 
-        returncode = process.wait()
-        if returncode != 0:
-            detail = stderr_text or "\n".join(loose_stdout_lines).strip() or "unknown external runtime error"
-            raise RuntimeBootstrapError(
-                "External whitebox_workflows runtime failed via "
-                f"{self._python_executable}: {detail}"
-            )
+            returncode = process.wait()
+            if returncode != 0:
+                detail = stderr_text or "\n".join(loose_stdout_lines).strip() or "unknown external runtime error"
+                raise RuntimeBootstrapError(
+                    "External whitebox_workflows runtime failed via "
+                    f"{self._python_executable}: {detail}"
+                )
 
         if completed_result is not None:
             return completed_result
@@ -477,35 +497,95 @@ class ExternalRuntimeSession:
 
 
 def _discover_external_python() -> str | None:
+    candidates = _discover_external_python_candidates()
+    return candidates[0] if candidates else None
+
+
+def _rewrite_windows_qgis_launcher(path_text: str | None) -> str:
+    raw = str(path_text or "").strip()
+    if os.name != "nt" or not raw:
+        return raw
+
+    normalized = raw.replace("\\", "/").lower()
+    suffixes = ("/bin/python3.exe", "/bin/python.exe")
+    if not any(normalized.endswith(suffix) for suffix in suffixes):
+        return raw
+
+    install_root = raw[: raw.lower().rfind("bin\\python") if "bin\\python" in raw.lower() else raw.replace("\\", "/").lower().rfind("/bin/python")]
+    install_root = install_root.rstrip("\\/")
+    if not install_root:
+        return raw
+
+    apps_dir = Path(install_root) / "apps"
+    if not apps_dir.exists() or not apps_dir.is_dir():
+        return raw
+
+    python_dirs: list[Path] = []
+    try:
+        python_dirs = sorted(
+            child for child in apps_dir.iterdir() if child.is_dir() and child.name.lower().startswith("python")
+        )
+    except Exception:
+        return raw
+
+    for python_dir in python_dirs:
+        embedded = python_dir / "python.exe"
+        if embedded.exists() and os.access(embedded, os.X_OK):
+            return str(embedded)
+
+    return raw
+
+
+def _discover_external_python_candidates() -> list[str]:
     mode, local_python = get_runtime_preferences()
     if mode == "qgis":
-        return None
+        return []
+
+    ordered: list[str] = []
+
+    def _add_candidate(path_text: str | None) -> None:
+        p_text = str(path_text or "").strip()
+        if not p_text:
+            return
+        preferred = _rewrite_windows_qgis_launcher(p_text)
+        candidate_texts = [preferred]
+        if preferred != p_text:
+            candidate_texts.append(p_text)
+
+        for candidate_text in candidate_texts:
+            p = Path(candidate_text).expanduser()
+            if not p.exists() or not os.access(p, os.X_OK):
+                continue
+            value = str(p)
+            if preferred != p_text and value == str(Path(p_text).expanduser()):
+                continue
+            if value not in ordered:
+                ordered.append(value)
 
     if mode == "local":
-        p = Path(local_python).expanduser()
-        if p.exists() and os.access(p, os.X_OK):
-            return str(p)
-        return None
+        _add_candidate(local_python)
+        return ordered
 
     env_candidate = os.environ.get("WBW_EXTERNAL_PYTHON")
-    if env_candidate:
-        p = Path(env_candidate).expanduser()
-        if p.exists() and os.access(p, os.X_OK):
-            return str(p)
+    _add_candidate(env_candidate)
 
     default_candidates = [
         Path.home() / "Documents" / "programming" / "Rust" / "whitebox_next_gen" / ".venv-wbw" / "bin" / "python",
         Path.home() / "Documents" / "programming" / "python" / ".venv" / "bin" / "python",
         Path.home() / ".venv" / "bin" / "python",
+        Path("/opt/homebrew/bin/python3"),
+        Path("/opt/homebrew/bin/python"),
+        Path("/usr/local/bin/python3"),
+        Path("/usr/local/bin/python"),
     ]
     for candidate in default_candidates:
-        if candidate.exists() and os.access(candidate, os.X_OK):
-            return str(candidate)
+        _add_candidate(str(candidate))
 
     resolved = shutil.which("python3")
-    if resolved:
-        return resolved
-    return None
+    _add_candidate(resolved)
+    _add_candidate("/usr/bin/python3")
+
+    return ordered
 
 
 def load_whitebox_workflows():
@@ -544,8 +624,7 @@ def get_backend_interpreter_path() -> str:
     return interpreter
 
 
-def get_installed_whitebox_workflows_version() -> str:
-    interpreter = get_backend_interpreter_path()
+def _get_installed_whitebox_workflows_version_for_interpreter(interpreter: str) -> str:
     runner = (
         "import importlib.metadata as md\n"
         "try:\n"
@@ -566,6 +645,11 @@ def get_installed_whitebox_workflows_version() -> str:
             f"Failed checking installed whitebox_workflows version via {interpreter}: {stderr}"
         )
     return completed.stdout.strip()
+
+
+def get_installed_whitebox_workflows_version() -> str:
+    interpreter = get_backend_interpreter_path()
+    return _get_installed_whitebox_workflows_version_for_interpreter(interpreter)
 
 
 def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec: str = "") -> dict:
@@ -617,8 +701,15 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
 
 def fetch_latest_whitebox_workflows_version(timeout_seconds: float = 4.0) -> str:
     url = "https://pypi.org/pypi/whitebox-workflows/json"
+    parsed_url = urllib.parse.urlparse(url)
+    if parsed_url.scheme != "https" or parsed_url.netloc != "pypi.org":
+        raise RuntimeBootstrapError(
+            "Refusing to query package index from non-HTTPS or untrusted host."
+        )
+
     try:
-        with urllib.request.urlopen(url, timeout=float(timeout_seconds)) as response:
+        # URL is validated above (scheme + host allowlist).
+        with urllib.request.urlopen(url, timeout=float(timeout_seconds)) as response:  # nosec B310
             payload = response.read().decode("utf-8", errors="replace")
         parsed = json.loads(payload)
         info = parsed.get("info", {}) if isinstance(parsed, dict) else {}
@@ -655,6 +746,18 @@ def _normalize_version_for_compare(raw: str) -> tuple:
 
 def is_version_newer(candidate: str, current: str) -> bool:
     return _normalize_version_for_compare(candidate) > _normalize_version_for_compare(current)
+
+
+def _ensure_next_gen_min_version(installed_version: str, runtime_label: str) -> None:
+    version_text = str(installed_version or "").strip()
+    if not version_text:
+        return
+    if _normalize_version_for_compare(version_text) < _normalize_version_for_compare(_NEXT_GEN_MIN_VERSION):
+        raise RuntimeBootstrapError(
+            _next_gen_required_message(
+                f"{runtime_label} has whitebox_workflows {version_text}; required >= {_NEXT_GEN_MIN_VERSION}."
+            )
+        )
 
 
 def backend_update_status() -> dict:
@@ -808,32 +911,48 @@ def invoke_license_function(
 
 def create_runtime_session(include_pro: bool = True, tier: str = "open"):
     def _external_session(prefer_pro: bool, allow_downgrade: bool = True):
-        external_python = _discover_external_python()
-        if not external_python:
+        external_candidates = _discover_external_python_candidates()
+        if not external_candidates:
             raise RuntimeBootstrapError(
                 "No external Python interpreter was found for whitebox_workflows fallback."
             )
 
-        cache_key = (external_python, bool(prefer_pro), str(tier))
-        cached = _EXTERNAL_SESSION_CACHE.get(cache_key)
-        if cached is not None:
-            return cached
+        failures: list[str] = []
+        for external_python in external_candidates:
+            try:
+                detected_version = _get_installed_whitebox_workflows_version_for_interpreter(external_python)
+                _ensure_next_gen_min_version(detected_version, f"external runtime ({external_python})")
 
-        session = ExternalRuntimeSession(external_python, include_pro=prefer_pro, tier=tier)
-        try:
-            raw_caps = session.get_runtime_capabilities_json()
-            _parse_next_gen_capabilities(raw_caps, f"external runtime ({external_python})")
-            _EXTERNAL_SESSION_CACHE[cache_key] = session
-            return session
-        except RuntimeBootstrapError as exc:
-            if allow_downgrade and prefer_pro and _is_pro_unavailable_error(str(exc)):
-                downgraded = ExternalRuntimeSession(external_python, include_pro=False, tier=tier)
-                raw_caps = downgraded.get_runtime_capabilities_json()
+                cache_key = (external_python, bool(prefer_pro), str(tier))
+                cached = _EXTERNAL_SESSION_CACHE.get(cache_key)
+                if cached is not None:
+                    return cached
+
+                session = ExternalRuntimeSession(external_python, include_pro=prefer_pro, tier=tier)
+                raw_caps = session.get_runtime_capabilities_json()
                 _parse_next_gen_capabilities(raw_caps, f"external runtime ({external_python})")
-                downgraded_key = (external_python, False, str(tier))
-                _EXTERNAL_SESSION_CACHE[downgraded_key] = downgraded
-                return downgraded
-            raise
+                _EXTERNAL_SESSION_CACHE[cache_key] = session
+                return session
+            except RuntimeBootstrapError as exc:
+                if allow_downgrade and prefer_pro and _is_pro_unavailable_error(str(exc)):
+                    try:
+                        downgraded = ExternalRuntimeSession(external_python, include_pro=False, tier=tier)
+                        raw_caps = downgraded.get_runtime_capabilities_json()
+                        _parse_next_gen_capabilities(raw_caps, f"external runtime ({external_python})")
+                        downgraded_key = (external_python, False, str(tier))
+                        _EXTERNAL_SESSION_CACHE[downgraded_key] = downgraded
+                        return downgraded
+                    except RuntimeBootstrapError as downgrade_exc:
+                        failures.append(f"{external_python}: {downgrade_exc}")
+                        continue
+                failures.append(f"{external_python}: {exc}")
+                continue
+
+        detail = " | ".join(failures) if failures else "unknown external runtime initialization error"
+        raise RuntimeBootstrapError(
+            "Unable to initialize whitebox_workflows Next Gen runtime from discovered external interpreters. "
+            f"Tried: {', '.join(external_candidates)}. Detail: {detail}"
+        )
 
     # Prefer a discovered external runtime first. In environments where QGIS
     # ships with a different embedded Python package set, this avoids silently
@@ -847,6 +966,17 @@ def create_runtime_session(include_pro: bool = True, tier: str = "open"):
 
     try:
         wbw = load_whitebox_workflows()
+        try:
+            import sys
+
+            detected_version = _get_installed_whitebox_workflows_version_for_interpreter(str(sys.executable))
+            _ensure_next_gen_min_version(detected_version, "current Python runtime")
+        except RuntimeBootstrapError:
+            raise
+        except Exception:
+            # If version metadata is unavailable (e.g., editable/dev context),
+            # keep the existing capabilities-based gate below.
+            pass
         if not hasattr(wbw, "RuntimeSession"):
             try:
                 return _external_session(prefer_pro=include_pro, allow_downgrade=True)

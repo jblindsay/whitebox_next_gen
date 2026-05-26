@@ -1,0 +1,7 @@
+<p>This tool can be used to set the elevations contained in a set of input vector lake polygons (<code>lakes</code>) to a consistent value within an input (<code>dem</code>) digital elevation model (DEM). Lake flattening is a common pre-processing step for DEMs intended for use in hydrological applications. This algorithm determines lake elevation automatically based on the minimum perimeter elevation for each lake polygon. The minimum perimeter elevation is assumed to be the lake outlet elevation and is assigned to the entire interior region of lake polygons, excluding island geometries. Note, this tool will not provide satisfactory results if the input vector polygons contain wide river features rather than true lakes. When this is the case, the tool will lower the entire river to the elevation of its mouth, leading to the creation of an artificial gorge.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#fill_depressions">fill_depressions</a></p> <h2>Function Signature</h2> <p><code>def flatten_lakes(self, dem: Raster, lakes: Vector) -&gt; Raster: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

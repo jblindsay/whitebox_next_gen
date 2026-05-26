@@ -1,0 +1,7 @@
+<p>This tool calculates the number of downslope neighbours of each grid cell in a raster digital elevation model (DEM). The user must input a DEM (<code>dem</code>). The tool examines the eight neighbouring cells for each grid cell in a the DEM and counts the number of neighbours with an elevation less than the centre cell of the 3 x 3 window. The output image can therefore have values raning from 0 to 8. A raster grid cell with eight downslope neighbours is a peak and a cell with zero downslope neighbours is a pit. This tool can be used with the <code>NumUpslopeNeighbours</code> tool to assess the degree of local flow divergence/convergence.</p> <h2>See Also</h2> <p><code>NumUpslopeNeighbours</code></p> <h2>Function Signature</h2> <p><code>def num_downslope_neighbours(self, dem: Raster) -&gt; Raster: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

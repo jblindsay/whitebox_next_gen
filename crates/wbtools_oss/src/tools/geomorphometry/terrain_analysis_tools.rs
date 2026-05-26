@@ -2441,7 +2441,7 @@ impl TerrainAnalysisCore {
             display_name: "Assess Route",
             summary: "Segments route lines and evaluates per-segment terrain slope, relief, sinuosity, roughness, and visibility metrics from a DEM.",
             category: ToolCategory::Vector,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec {
                     name: "routes",
@@ -2486,7 +2486,7 @@ impl TerrainAnalysisCore {
             summary: "Segments route lines and evaluates per-segment terrain metrics from a DEM."
                 .to_string(),
             category: ToolCategory::Vector,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![],
             defaults,
             examples: vec![],
@@ -3005,7 +3005,7 @@ impl TerrainAnalysisCore {
             display_name: "Breakline Mapping",
             summary: "Maps breaklines by thresholding log-transformed curvedness and vectorizing thinned linear features.",
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec {
                     name: "input",
@@ -3049,7 +3049,7 @@ impl TerrainAnalysisCore {
             display_name: "Breakline Mapping".to_string(),
             summary: "Maps breaklines by thresholding log-transformed curvedness and vectorizing thinned linear features.".to_string(),
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor {
                     name: "input".to_string(),
@@ -4430,7 +4430,7 @@ impl TerrainAnalysisCore {
             display_name: "Low Points on Headwater Divides",
             summary: "Locates low pass points along divides between neighboring headwater subbasins.",
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec {
                     name: "dem",
@@ -4473,7 +4473,7 @@ impl TerrainAnalysisCore {
             display_name: "Low Points on Headwater Divides".to_string(),
             summary: "Locates low pass points along divides between neighboring headwater subbasins.".to_string(),
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor {
                     name: "dem".to_string(),

@@ -1,0 +1,7 @@
+<p>This tool can be used to list each of the unique values contained within a categorical field of an input vector file's attribute table. The tool outputs an HTML formatted report (<code>output</code>) containing a table of the unique values and their frequency of occurrence within the data. The user must specify the name of an input shapefile (<code>input</code>) and the name of one of the fields (<code>field</code>) contained in the associated attribute table. The specified field <em>should not contained floating-point numerical data</em>, since the number of categories will likely equal the number of records, which may be quite large. The tool effectively provides tabular output that is similar to the graphical output provided by the <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#attribute_histogram">attribute_histogram</a> tool, which, however, can be applied to continuous data.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#attribute_histogram">attribute_histogram</a></p> <h2>Function Signature</h2> <p><code>def list_unique_values(self, input: Vector, field_name: str) -&gt; Tuple[str, int]: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

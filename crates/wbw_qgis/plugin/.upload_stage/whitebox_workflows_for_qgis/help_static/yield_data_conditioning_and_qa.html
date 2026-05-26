@@ -1,0 +1,78 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Yield Data Conditioning and QA</strong></p>
+<h3>Problem It Solves</h3>
+<p>How do we turn raw, noisy harvest monitor points into defensible, analysis-ready yield products for management decisions?</p>
+<h3>Who It Is For</h3>
+<ul><li>Precision-ag service providers, agronomy analytics teams, and farm data engineering groups.</li></ul>
+<h3>Primary User</h3>
+<p>Enterprise farms, precision agriculture consultancies, and digital agronomy platforms.</p>
+<h3>What It Does</h3>
+<ul><li>Runs an end-to-end conditioning pipeline for noisy combine-harvester yield points.</li><li>Orchestrates edge QA, pass reconstruction, optional multi-header reconciliation, filtering, normalization, and swath map generation.</li><li>Produces contract-ready summary outputs for auditability and downstream zoning workflows.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Flags/removes likely edge points using local neighborhood support.</li><li>Optionally filters telemetry anomalies using speed and heading consistency thresholds.</li><li>Auto-resolves common monitor-export field aliases when requested names are missing.</li><li>Reconstructs pass structure from point geometry and heading continuity, then smooths yield using pass-aware neighborhood statistics.</li><li>Optionally applies distance-based lag correction along reconstructed passes to compensate harvest monitor delay.</li><li>Optionally converts raw yield to a target moisture basis using moisture_field_name and target_moisture_pct.</li><li>Optionally applies robust MAD-based clipping on filtered yield values before normalization.</li><li>Propagates a QA confidence score to final point outputs, then builds swath polygons for map-ready products.</li><li>Indicative formula: filtered_yield ~= weighted_neighborhood(yield) with outlier replacement when z = |y - mean_adjacent_pass| / sd_adjacent_pass exceeds threshold.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Provides a reproducible and transparent preprocessing chain with explicit QA outputs rather than opaque one-click cleaning.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>A team needs to standardize inconsistent yield data cleaning before zone generation, variable-rate planning, or year-over-year analytics.</p>
+<h3>Typical Presets</h3>
+<ul><li>fast: lighter cleanup with larger tolerances for rapid turnaround.</li><li>balanced: default production profile.</li><li>strict: stronger edge/outlier controls for high-confidence analytics.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>input (yield point vector)</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Raw yield telemetry points used as input to the conditioning and QA pipeline.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>yield_field_name, moisture_field_name, target_moisture_pct, header_field_name</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Field-name mappings for yield/moisture/header attributes used by cleaning stages.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>use_field_aliases</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Whether known attribute aliases should be resolved automatically.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>speed_field_name, heading_field_name</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Telemetry field mappings used for speed and heading quality checks.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>min_speed_kmh, max_speed_kmh, max_heading_change_deg</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Operating-speed and heading-change limits used for telemetry QC filtering.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>profile: fast | balanced | strict</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Operational profile controlling sensitivity and QA strictness for risk workflows.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>swath_width, edge_radius, reconcile_radius, normalization_radius</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Geometric parameters controlling swath-edge handling and neighborhood reconciliation.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>lag_correction_mode: none | distance</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Lag correction mode controlling whether and how harvest lag compensation is applied.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>lag_distance_m</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Distance offset used when distance-based lag correction is enabled.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>filtering_mode: standard | robust</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Outlier-filtering method selection for yield cleaning.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>robust_mad_threshold, z_score_threshold, min_yield, max_yield</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Statistical thresholds and hard limits used for yield outlier rejection.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional mean_tonnage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional mean tonnage override used during normalization/reconciliation steps.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>qa_flags</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>QA flag layer identifying records that failed yield telemetry checks.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>telemetry_qc_points</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional point layer of telemetry QC diagnostics by record.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>clean_points</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Cleaned yield points after telemetry and statistical filtering.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>clean_map</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Cartography-ready cleaned yield layer for rapid map production.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>confidence_points</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Point-level confidence diagnostics for cleaned yield records.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>pass_lines</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Harvest pass line features inferred from telemetry trajectories.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>pass_points</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Harvest pass points used in overlap and reconciliation analyses.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>lag_corrected_points</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional points after lag-correction adjustment.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>moisture_adjusted_points</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional points after moisture normalization adjustments.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>filtered_points</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Points retained after standard filtering criteria are applied.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>robust_filtered_points</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional points retained by robust filtering mode diagnostics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>normalized_points</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Yield points after normalization to common analytical basis.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>reconciled_points</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional reconciled points after overlap and pass harmonization.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+result = wbe.yield_data_conditioning_and_qa(
+    input=&quot;data/yield_points.gpkg&quot;,
+    yield_field_name=&quot;YIELD&quot;,
+    header_field_name=&quot;HEADER&quot;,
+    profile=&quot;balanced&quot;,
+    swath_width=6.096,
+    output_prefix=&quot;output/yield_pipeline&quot;,
+)
+
+print(result)</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

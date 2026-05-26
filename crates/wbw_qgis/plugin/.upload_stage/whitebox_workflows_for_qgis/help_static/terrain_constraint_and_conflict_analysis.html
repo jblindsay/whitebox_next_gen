@@ -1,0 +1,55 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Terrain Constraint and Conflict Analysis</strong></p>
+<h3>Problem It Solves</h3>
+<p>Where are terrain constraints likely to create permitting, access, or design conflicts before field mobilization?</p>
+<h3>Who It Is For</h3>
+<ul><li>Infrastructure siting teams and engineering predesign analysts.</li></ul>
+<h3>Primary User</h3>
+<p>Renewable developers, utilities, and civil engineering consultancies.</p>
+<h3>What It Does</h3>
+<ul><li>Builds a harmonized terrain conflict score from slope and optional risk overlays.</li><li>Produces conflict classes for early-stage siting and routing screening.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Uses DEM-derived slope as the primary terrain constraint signal.</li><li>Harmonizes optional wetness, flood-risk, and landcover-penalty rasters to the DEM grid.</li><li>Blends constraints into a normalized conflict score and class map.</li><li>QA acceptance guidance:</li><li>`status=pass` indicates the conflict fraction remained below review threshold.</li><li>`diagnostics.acceptance_thresholds.high_conflict_fraction_review` is the baseline threshold for escalation.</li><li>Elevated `summary.high_conflict_fraction` should trigger engineering review before downstream routing/siting commitments.</li><li>MVP hardening assets:</li><li>Benchmark scaffold: `tests/fixtures/terrain_siting_benchmark/`</li><li>Promotion guide: `docs/internal/development/TERRAIN_PRECISION_AG_BENCHMARK_PROMOTION_GUIDE_2026_04_14.md`</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>dem</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Reference DEM raster for terrain conflict analysis.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>wetness</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional wetness raster normalized to [0,1].</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>flood_risk</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional flood-risk raster normalized to [0,1].</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>landcover_penalty</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional landcover penalty raster normalized to [0,1].</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>slope_limit_deg</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Slope threshold where terrain conflict accelerates.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>conflict_score</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Continuous terrain conflict score [0,1].</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>conflict_class</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Discrete conflict class raster for planning triage.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+conflict, classes, summary = wbe.terrain_constraint_and_conflict_analysis(
+    dem=&quot;data/dem.tif&quot;,
+    wetness=&quot;data/wetness.tif&quot;,
+    flood_risk=&quot;data/flood_risk.tif&quot;,
+    slope_limit_deg=15.0,
+    output_prefix=&quot;output/terrain_conflict&quot;,
+)
+
+print(conflict)
+print(classes)
+print(summary)</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

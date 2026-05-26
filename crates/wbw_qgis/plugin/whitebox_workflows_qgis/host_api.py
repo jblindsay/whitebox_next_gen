@@ -243,15 +243,17 @@ def register_dock_widget(iface, dock) -> bool:
     try:
         from qgis.PyQt.QtCore import Qt  # type: ignore[import]
 
-        area = getattr(Qt, "RightDockWidgetArea", None)
+        # Default to bottom docking so the panel does not compete with the
+        # commonly used right-side Processing Toolbox location.
+        area = getattr(Qt, "BottomDockWidgetArea", None)
+        if area is None:
+            dock_enum = getattr(Qt, "DockWidgetArea", None)
+            area = getattr(dock_enum, "BottomDockWidgetArea", None)
+        if area is None:
+            area = getattr(Qt, "RightDockWidgetArea", None)
         if area is None:
             dock_enum = getattr(Qt, "DockWidgetArea", None)
             area = getattr(dock_enum, "RightDockWidgetArea", None)
-        if area is None:
-            area = getattr(Qt, "LeftDockWidgetArea", None)
-        if area is None:
-            dock_enum = getattr(Qt, "DockWidgetArea", None)
-            area = getattr(dock_enum, "LeftDockWidgetArea", None)
     except Exception:
         area = None
 

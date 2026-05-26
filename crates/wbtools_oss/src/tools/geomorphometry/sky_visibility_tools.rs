@@ -1719,7 +1719,7 @@ impl SkyVisibilityCore {
             display_name: "Shadow Image",
             summary: "Generates a terrain shadow intensity raster for a specified date, time, and location.",
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec {
                     name: "dem",
@@ -1775,7 +1775,7 @@ impl SkyVisibilityCore {
             display_name: "Shadow Image".to_string(),
             summary: "Generates a terrain shadow intensity raster for a specified date, time, and location.".to_string(),
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![],
             defaults,
             examples: vec![],
@@ -2160,7 +2160,7 @@ impl SkyVisibilityCore {
             display_name: "Shadow Animation",
             summary: "Creates an interactive HTML viewer and animated GIF showing terrain shadows throughout a day.",
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec {
                     name: "dem",
@@ -2240,7 +2240,7 @@ impl SkyVisibilityCore {
             display_name: "Shadow Animation".to_string(),
             summary: "Creates an interactive HTML viewer and animated GIF showing terrain shadows throughout a day.".to_string(),
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![],
             defaults,
             examples: vec![ToolExample {
@@ -3236,7 +3236,7 @@ impl SkyVisibilityCore {
             display_name: "Topo Render",
             summary: "Creates a pseudo-3D topographic rendering using hypsometric tint, hillshade, horizon-based shadowing, and distance attenuation.",
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec {
                     name: "dem",
@@ -3401,7 +3401,7 @@ impl SkyVisibilityCore {
             display_name: "Topo Render".to_string(),
             summary: "Creates a pseudo-3D topographic rendering using palette tinting, hillshade, shadows, and attenuation.".to_string(),
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params,
             defaults,
             examples: vec![ToolExample {
@@ -4368,7 +4368,7 @@ impl SkyVisibilityCore {
             display_name: "Skyline Analysis",
             summary: "Performs skyline analysis for one or more observation points and writes a vector horizon trace plus HTML report.",
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec {
                     name: "dem",
@@ -4431,7 +4431,7 @@ impl SkyVisibilityCore {
             summary: "Performs skyline analysis for one or more observation points and writes a vector horizon trace plus HTML report."
                 .to_string(),
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![],
             defaults,
             examples: vec![],

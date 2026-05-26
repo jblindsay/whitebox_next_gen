@@ -47,3 +47,15 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added "recommended vs advanced" guidance notes beside raster/vector/lidar option-dense sections to make default-vs-expert paths explicit.
 - Activated a docs/examples canonical-path gate through the internal style-guide acceptance checklist and tracked it as complete in the Phase 1 checklist.
 - Phase 1 WbW-R parallelization milestone: implemented WbW-Py aligned vector attribute API on `wbw_vector` wrapper (schema(), attributes(), attribute(), update_attributes(), update_attribute(), add_field()) in WbW-R commit 8dae1d5; completed naming conventions `parallel now` priority.
+
+### Fixed
+- Corrected tool tier metadata for OSS tools that were incorrectly classified as Pro in runtime/catalog metadata. The following tools are now correctly marked as Open tier: `assess_route`, `breakline_mapping`, `local_hypsometric_analysis`, `low_points_on_headwater_divides`, `shadow_animation`, `shadow_image`, `skyline_analysis`, `smooth_vegetation_residual`, `topo_render`, `topographic_hachures`, and `topographic_position_animation`.
+- Re-synced resolved taxonomy exports after tier corrections so frontend catalog/license state is consistent across Python, R, and QGIS plugin consumers.
+
+### Release Checklist (WbW-Py)
+- [ ] Document user-visible API changes (new methods, removed aliases, signature changes).
+- [ ] Document tool-catalog changes (added/removed tools, category moves, tier changes).
+- [ ] Document typing/stub updates (`whitebox_workflows.pyi`) when signatures or options changed.
+- [ ] Document frontend alignment work when taxonomy/runtime exports were regenerated (Python/R/QGIS).
+- [ ] Document compatibility/migration notes for renamed behavior or default changes.
+- [ ] Record validation performed (for example `cargo check -p wbtools_oss`, taxonomy sync run, smoke tests).

@@ -1,0 +1,7 @@
+<p>This tool can be used to map off-terrain objects in a digital surface model (DSM) based on cell-to-cell differences in elevations and local slopes. The algorithm works by using a region-growing operation to connect neighbouring grid cells outwards from seed cells. Two neighbouring cells are considered connected if the slope between the two cells is less than the user-specified maximum slope value (<code>max_slope</code>). Mapped segments that are less than the minimum feature size (<code>min_size</code>), in grid cells, are assigned a common background value. Note that this method of mapping off-terrain objects, and thereby separating ground cells from non-ground objects in DSMs, works best with fine-resolution DSMs that have been interpolated using a non-smoothing method, such as triangulation (TINing) or nearest-neighbour interpolation.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#remove_off_terrain_objects">remove_off_terrain_objects</a></p> <h2>Function Signature</h2> <p><code>def map_off_terrain_objects(self, dem: Raster, max_slope: float = float('inf'), min_feature_size: int = 0) -&gt; Raster: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

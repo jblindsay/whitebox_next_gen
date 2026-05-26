@@ -2006,7 +2006,7 @@ impl TerrainWindowCore {
             display_name: "Smooth Vegetation Residual",
             summary: "Reduces canopy residual roughness by masking high local DEV responses at small scales and re-interpolating masked elevations.",
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "input", description: "Input DEM raster path or typed raster object.", required: true },
                 ToolParamSpec { name: "max_scale", description: "Maximum DEV half-window radius in cells (default 30).", required: false },
@@ -2036,7 +2036,7 @@ impl TerrainWindowCore {
             display_name: "Smooth Vegetation Residual".to_string(),
             summary: "Reduces canopy residual roughness by masking high local DEV responses at small scales and re-interpolating masked elevations.".to_string(),
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Input DEM raster path or typed raster object.".to_string(), required: true },
                 ToolParamDescriptor { name: "max_scale".to_string(), description: "Maximum DEV half-window radius in cells (default 30).".to_string(), required: false },
@@ -2990,7 +2990,7 @@ impl TerrainWindowCore {
             display_name: "Local Hypsometric Analysis",
             summary: "Computes the minimum local hypsometric integral across a nonlinearly sampled range of neighbourhood scales.",
             category: ToolCategory::Raster,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec {
                     name: "input",
@@ -3056,7 +3056,7 @@ impl TerrainWindowCore {
             display_name: "Local Hypsometric Analysis".to_string(),
             summary: "Computes the minimum local hypsometric integral across a nonlinearly sampled range of neighbourhood scales.".to_string(),
             category: ToolCategory::Raster,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor {
                     name: "input".to_string(),
@@ -3460,7 +3460,7 @@ impl TerrainWindowCore {
             display_name: "Topographic Position Animation",
             summary: "Creates an interactive HTML viewer and animated GIF of DEV or DEVmax across nonlinearly sampled scales.",
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "input", description: "Input DEM raster path or typed raster object.", required: true },
                 ToolParamSpec { name: "output", description: "Output HTML path.", required: false },
@@ -3500,7 +3500,7 @@ impl TerrainWindowCore {
             display_name: "Topographic Position Animation".to_string(),
             summary: "Creates an interactive HTML viewer and animated GIF of DEV or DEVmax across nonlinearly sampled scales.".to_string(),
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![],
             defaults,
             examples: vec![ToolExample {

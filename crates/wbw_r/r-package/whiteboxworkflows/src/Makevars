@@ -16,7 +16,7 @@ ifeq ($(BUILD_PROFILE),release)
 CARGO_PROFILE_FLAG = --release
 endif
 
-PKG_LIBS = -L$(LIBDIR) -lwbw_r
+PKG_LIBS = $(STATLIB)
 
 all: $(SHLIB)
 

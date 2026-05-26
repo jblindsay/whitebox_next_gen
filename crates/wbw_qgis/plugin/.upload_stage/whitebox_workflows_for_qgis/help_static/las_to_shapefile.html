@@ -1,0 +1,7 @@
+<p>This tool converts one or more LAS files into a POINT vector. When the input parameter is not specified, the tool grids all LAS files contained within the working directory. The attribute table of the output Shapefile will contain fields for the z-value, intensity, point class, return number, and number of return.</p> <p>This tool can be used in place of the <code>LasToMultipointShapefile</code> tool when the number of points are relatively low and when the desire is to represent more than simply the x,y,z position of points. Notice however that because each point in the input LAS file will be represented as a separate record in the output Shapefile, the output file will be many time larger than the equivalent output of the <code>LasToMultipointShapefile</code> tool. There is also a practical limit on the total number of records that can be held in a single Shapefile and large LAS files approach this limit. In these cases, the <code>LasToMultipointShapefile</code> tool should be preferred instead.</p> <h2>See Also</h2> <p><code>LasToMultipointShapefile</code></p> <h2>Function Signature</h2> <p><code>def las_to_shapefile(self, input_lidar: Optional[Lidar], output_multipoint: bool = False) -&gt; Vector: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

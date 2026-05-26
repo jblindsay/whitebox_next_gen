@@ -1,0 +1,7 @@
+<p>single LAS file. The user must specify the parameter of the tile grid, including its origin (<code>origin_x</code> and <code>origin_y</code>) and the tile width and height (<code>width</code> and <code>height</code>). Tiles containing fewer points than specified in the <code>min_points</code> parameter will not be output. This can be useful when tiling terrestrial LiDAR datasets because the low point density at the edges of the point cloud (i.e. most distant from the scan station) can result in poorly populated tiles containing relatively few points.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#lidar_join">lidar_join</a>, <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#lidar_tile_footprint">lidar_tile_footprint</a></p> <h2>Function Signature</h2> <p><code>def lidar_tile(self, input_lidar: Lidar, tile_width: float = 1000.0, tile_height: float = 1000.0, origin_x: float = 0.0, origin_y: float = 0.0, min_points_in_tile: int = 2, output_laz_format: bool = True) -&gt; None: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

@@ -1,0 +1,7 @@
+<p>This tool can be used to find cells with undefined flow, i.e. no valid flow direction, based on the D8 flow direction algorithm (<a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#d8_pointer">d8_pointer</a>). These cells are therefore either at the bottom of a topographic depression or in the interior of a flat area. In a digital elevation model (DEM) that has been pre-processed to remove all depressions and flat areas (<a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#breach_depressions_least_cost">breach_depressions_least_cost</a>), this condition will only occur along the edges of the grid, otherwise no-flow grid cells can be situation in the interior. The user must specify the name (<code>dem</code>) of the DEM.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#d8_pointer">d8_pointer</a>, <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#breach_depressions_least_cost">breach_depressions_least_cost</a></p> <h2>Function Signature</h2> <p><code>def find_noflow_cells(self, dem: Raster) -&gt; Raster: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

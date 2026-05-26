@@ -52,6 +52,16 @@ fi
 
 cd "$CRATE_DIR"
 
+# Clean stale extension artifacts so Python cannot import an older
+# version-specific module (e.g., cpython-313) ahead of a newly built abi3 module.
+shopt -s nullglob
+stale_ext=(whitebox_workflows/whitebox_workflows*.so)
+if (( ${#stale_ext[@]} > 0 )); then
+  rm -f "${stale_ext[@]}"
+  echo "Removed stale extension artifacts: ${#stale_ext[@]} file(s)"
+fi
+shopt -u nullglob
+
 if [[ "$ENABLE_PRO" == "1" ]]; then
   echo "Installing whitebox_workflows with Pro support enabled"
   maturin develop --release --features pro

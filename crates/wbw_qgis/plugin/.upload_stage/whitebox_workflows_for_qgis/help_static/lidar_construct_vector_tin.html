@@ -1,0 +1,7 @@
+<p>This tool creates a vector triangular irregular network (TIN) for a set of LiDAR points (<code>input</code>) using a 2D <a href="https://en.wikipedia.org/wiki/Delaunay_triangulation">Delaunay triangulation</a> algorithm. LiDAR points may be excluded from the triangulation operation based on a number of criteria, include the point return number (<code>returns</code>), point classification value (<code>exclude_cls</code>), or a minimum (<code>minz</code>) or maximum (<code>maxz</code>) elevation.</p> <p>For vector points, use the <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#construct_vector_tin">construct_vector_tin</a> tool instead.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#construct_vector_tin">construct_vector_tin</a></p> <h2>Function Signature</h2> <p><code>def lidar_construct_vector_tin(self, input_lidar: Optional[Lidar], returns_included: str = "all", excluded_classes: List[int] = None, min_elev: float = float('-inf'), max_elev: float = float('inf'), max_triangle_edge_length: float = float('inf')) -&gt; Vector: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

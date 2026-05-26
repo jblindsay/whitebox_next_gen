@@ -1116,7 +1116,7 @@
       "source_crate": "wbtools_oss"
     },
     "assess_route": {
-      "license_tier": "pro",
+      "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
     "assign_projection_lidar": {
@@ -1224,7 +1224,7 @@
       "source_crate": "wbtools_oss"
     },
     "breakline_mapping": {
-      "license_tier": "pro",
+      "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
     "buffer_raster": {
@@ -2464,7 +2464,7 @@
       "source_crate": "unknown"
     },
     "local_hypsometric_analysis": {
-      "license_tier": "pro",
+      "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
     "locate_points_along_routes": {
@@ -2500,7 +2500,7 @@
       "source_crate": "wbtools_oss"
     },
     "low_points_on_headwater_divides": {
-      "license_tier": "pro",
+      "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
     "lowest_position": {
@@ -3500,11 +3500,11 @@
       "source_crate": "wbtools_oss"
     },
     "shadow_animation": {
-      "license_tier": "pro",
+      "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
     "shadow_image": {
-      "license_tier": "pro",
+      "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
     "shape_complexity_index_raster": {
@@ -3564,7 +3564,7 @@
       "source_crate": "wbtools_oss"
     },
     "skyline_analysis": {
-      "license_tier": "pro",
+      "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
     "slope": {
@@ -3584,7 +3584,7 @@
       "source_crate": "wbtools_oss"
     },
     "smooth_vegetation_residual": {
-      "license_tier": "pro",
+      "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
     "snap_endnodes": {
@@ -3792,15 +3792,15 @@
       "source_crate": "unknown"
     },
     "topo_render": {
-      "license_tier": "pro",
+      "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
     "topographic_hachures": {
-      "license_tier": "pro",
+      "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
     "topographic_position_animation": {
-      "license_tier": "pro",
+      "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
     "topological_breach_burn": {

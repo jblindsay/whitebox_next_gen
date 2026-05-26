@@ -1,0 +1,7 @@
+<p>points or a fixed neighbourhood size. This tool is currently configured to perform the later only, using a FixedRadiusSearch structure. Using a fixed number of neighbours will require use of a KD-tree structure. I've been testing one Rust KD-tree library but its performance does not appear to be satisfactory compared to the FixedRadiusSearch. I will need to explore other options here.</p> <p>Another change that will need to be implemented is the use of a nodal function. The original Whitebox GAT tool allows for use of a constant or a quadratic. This tool only allows the former.</p> <h2>Function Signature</h2> <p><code>def idw_interpolation(self, points: Vector, field_name: str = "FID", use_z: bool = False, weight: float = 2.0, radius: float = 0.0, min_points: int = 0, cell_size: float = 0.0, base_raster: Raster = None) -&gt; Raster: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

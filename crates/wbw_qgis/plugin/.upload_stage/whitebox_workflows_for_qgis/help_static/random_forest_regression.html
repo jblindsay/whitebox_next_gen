@@ -1,0 +1,24 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#e67e22;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Experimental</span></p>
+<p>Random Forest regression for continuous targets (e.g., biomass, moisture, temperature) from raster predictors.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">remote_sensing</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">regression</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">random_forest</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">legacy-port</span></p>
+<h2>Parameters</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Name</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Required</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Default</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>inputs</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Array of single-band input rasters.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>['band1.tif', 'band2.tif', 'band3.tif']</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>training_data</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Point vector training data path.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>training_points.shp</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>field</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Numeric target field in training_data attributes.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>value</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>scaling</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Feature scaling mode: none (default), normalize, standardize.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>none</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>n_trees</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Number of trees in the forest (default 200).</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>200</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>min_samples_leaf</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Minimum number of samples required at a leaf node (default 1).</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>1</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>min_samples_split</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Minimum number of samples required to split an internal node (default 2).</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>2</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>output</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional output raster path.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>—</td></tr>
+</tbody></table>
+<h2>Examples</h2>
+<p><em>Run random forest regression on multiband predictors.</em></p>
+<pre><code>wbe.random_forest_regression(field='target', inputs=['band1.tif', 'band2.tif', 'band3.tif'], n_trees=300, output='rf_regression.tif', scaling='standardize', training_data='training_points.shp')</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

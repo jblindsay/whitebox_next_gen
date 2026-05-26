@@ -227,7 +227,7 @@ def _extract_enum_options(name: str, description: str, default_value: Any) -> li
 
     raw_opts: list[str] = []
     if marker_index >= 0:
-        tail = d[marker_index + marker_len :]
+        tail = d[marker_index + marker_len:]
         stop_tokens = (".", ";", "(", "[")
         for tok in stop_tokens:
             pos = tail.find(tok)
@@ -683,42 +683,34 @@ def _infer_kind(name: str, description: str, default_value: Any = None) -> str:
 
     # Treat raster/vector/lidar as file/layer inputs only when the parameter
     # name itself looks like an input/path key.
-    if (
-        any(tok in n for tok in ("input", "raster", "dem", "grid", "source", "path"))
-        and any(tok in n or tok in d for tok in ("raster", "dem", "grid", "geotiff", "tif"))
-    ):
+    raster_name_like = any(tok in n for tok in ("input", "raster", "dem", "grid", "source", "path"))
+    raster_desc_like = any(tok in n or tok in d for tok in ("raster", "dem", "grid", "geotiff", "tif"))
+    if raster_name_like and raster_desc_like:
         return "raster_in"
 
-    if (
-        any(tok in n for tok in vector_input_name_tokens)
-        and (
-            any(tok in n or tok in d for tok in ("shp", "geojson", "topojson", "geopackage"))
-            or any(
-                tok in d
-                for tok in (
-                    "vector",
-                    "features",
-                    "layer",
-                    "network layer",
-                    "point layer",
-                    "line layer",
-                    "polygon layer",
-                )
-            )
+    vector_name_like = any(tok in n for tok in vector_input_name_tokens)
+    vector_format_like = any(tok in n or tok in d for tok in ("shp", "geojson", "topojson", "geopackage"))
+    vector_desc_like = any(
+        tok in d
+        for tok in (
+            "vector",
+            "features",
+            "layer",
+            "network layer",
+            "point layer",
+            "line layer",
+            "polygon layer",
         )
-    ):
+    )
+    if vector_name_like and (vector_format_like or vector_desc_like):
         return "vector_in"
 
-    if (
-        any(tok in n for tok in vector_input_name_tokens)
-        and any(tok in d for tok in vector_input_desc_tokens)
-    ):
+    if vector_name_like and any(tok in d for tok in vector_input_desc_tokens):
         return "vector_in"
 
-    if (
-        any(tok in n for tok in ("input", "lidar", "source", "path"))
-        and any(tok in n or tok in d for tok in ("lidar", "las", "laz", "zlidar"))
-    ):
+    lidar_name_like = any(tok in n for tok in ("input", "lidar", "source", "path"))
+    lidar_desc_like = any(tok in n or tok in d for tok in ("lidar", "las", "laz", "zlidar"))
+    if lidar_name_like and lidar_desc_like:
         return "file_in"
 
     if n.startswith(("is_", "has_", "use_", "enable_", "auto_")) or "true/false" in d:
@@ -1187,9 +1179,10 @@ def _remove_existing_output_artifacts(path: str) -> None:
                 except Exception as exc:
                     failed.append(f"{f} ({exc})")
         if failed:
+            detail = "; ".join(failed)
             raise RuntimeError(
                 "Cannot overwrite existing shapefile output because one or more sidecar files are locked or not writable: "
-                + "; ".join(failed)
+                f"{detail}"
             )
         return
 
@@ -1225,7 +1218,7 @@ def _looks_like_vector_file_path(path: str) -> bool:
 def _check_for_malformed_gpkg(gpkg_path: str) -> dict[str, Any]:
     """
     Detect and diagnose malformed GeoPackage schema issues.
-    
+
     Returns a dict with keys:
       - is_gpkg: whether the file is a GeoPackage
       - is_readable: whether the file can be opened by SQLite
@@ -1249,19 +1242,19 @@ def _check_for_malformed_gpkg(gpkg_path: str) -> dict[str, Any]:
         conn = sqlite3.connect(gpkg_path, timeout=2.0)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
+
         # Query gpkg_contents to list all layers
         cursor.execute("SELECT table_name FROM gpkg_contents WHERE data_type IN ('features', 'tiles')")
         layers = [row[0] for row in cursor.fetchall()]
-        
+
         result["is_readable"] = True
-        
+
         # For each layer, check if schema has duplicate fid column
         for layer_name in layers:
             try:
                 cursor.execute(f"PRAGMA table_info({layer_name})")
                 columns = [row[1].lower() for row in cursor.fetchall()]
-                
+
                 # Count how many columns are named 'fid'
                 fid_count = sum(1 for c in columns if c == "fid")
                 if fid_count > 1:
@@ -1276,7 +1269,7 @@ def _check_for_malformed_gpkg(gpkg_path: str) -> dict[str, Any]:
             except sqlite3.OperationalError:
                 # Layer table might not exist or be readable; skip
                 pass
-        
+
         conn.close()
     except sqlite3.DatabaseError as e:
         result["error_details"] = f"Cannot read GeoPackage schema: {str(e)}"
@@ -1321,22 +1314,24 @@ def _actionable_runtime_error_message(raw_message: str) -> str:
     if "include_pro=true requested" in lower and "does not include pro support" in lower:
         _add("Rebuild/install whitebox_workflows with Pro support (for example: ./scripts/dev_python_install.sh --pro) or disable Include Pro in plugin settings.")
 
-    if (
-        "legacy whitebox_workflows runtime" in lower
-        or "requires whitebox_workflows next gen" in lower
-        or "unexpected keyword argument 'include_pro'" in lower
-        or "unexpected keyword argument 'tier'" in lower
-        or "has no attribute 'runtimesession'" in lower
-    ):
+    legacy_runtime_markers = (
+        "legacy whitebox_workflows runtime",
+        "requires whitebox_workflows next gen",
+        "unexpected keyword argument 'include_pro'",
+        "unexpected keyword argument 'tier'",
+        "has no attribute 'runtimesession'",
+    )
+    if any(marker in lower for marker in legacy_runtime_markers):
         _add("Activate a whitebox_workflows Next Gen (v2.x) runtime and refresh the catalog.")
 
     if "no external python interpreter was found" in lower:
         _add("Set WBW_EXTERNAL_PYTHON to a valid interpreter that can import whitebox_workflows.")
 
-    if (
-        "no module named 'whitebox_workflows'" in lower
-        or "package is not available in this python environment" in lower
-    ):
+    missing_module_markers = (
+        "no module named 'whitebox_workflows'",
+        "package is not available in this python environment",
+    )
+    if any(marker in lower for marker in missing_module_markers):
         _add("Install/activate whitebox_workflows in the runtime interpreter used by QGIS, then refresh catalog.")
 
     if "permission denied" in lower or "read-only file system" in lower:
@@ -1616,11 +1611,13 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
         # UIs (it invokes dlg.exec()). For Field Calculator, provide a launcher
         # dialog that opens the assistant and then hands off to the standard
         # processing dialog with prefilled parameters.
-        if self.name() != "field_calculator":
+        tool_id = str(self.name() or "").strip().lower()
+        if tool_id not in {"field_calculator", "raster_calculator"}:
             return None
 
-        if bool(getattr(self._provider, "_skip_next_field_calculator_autolaunch", False)):
-            setattr(self._provider, "_skip_next_field_calculator_autolaunch", False)
+        skip_attr = f"_skip_next_{tool_id}_autolaunch"
+        if bool(getattr(self._provider, skip_attr, False)):
+            setattr(self._provider, skip_attr, False)
             return None
 
         try:
@@ -1659,14 +1656,17 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     return
 
                 try:
-                    from .field_calculator_dialog import run_field_calculator_assistant
+                    if tool_id == "field_calculator":
+                        from .field_calculator_dialog import run_field_calculator_assistant as run_assistant
+                    else:
+                        from .raster_calculator_dialog import run_raster_calculator_assistant as run_assistant
                     from .host_api import open_processing_algorithm_dialog
                 except Exception:
                     self.reject()
                     return
 
                 try:
-                    params = run_field_calculator_assistant(
+                    params = run_assistant(
                         iface,
                         include_pro=bool(getattr(algorithm._provider, "include_pro", True)),
                         tier=str(getattr(algorithm._provider, "tier", "open")),
@@ -1679,15 +1679,15 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     self.reject()
                     return
 
-                setattr(algorithm._provider, "_skip_next_field_calculator_autolaunch", True)
+                setattr(algorithm._provider, skip_attr, True)
                 opened = open_processing_algorithm_dialog(
                     iface,
                     str(algorithm._provider.id()),
-                    "field_calculator",
+                    tool_id,
                     params=params,
                 )
                 if not opened:
-                    setattr(algorithm._provider, "_skip_next_field_calculator_autolaunch", False)
+                    setattr(algorithm._provider, skip_attr, False)
                 self.reject()
 
         return _FieldCalculatorAssistantLauncher(parent)
@@ -1717,11 +1717,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                 default_value = p.get("default")
             kind = _infer_kind(name, description, default_value)
             field_parent = None
-            if (
-                kind == "string"
-                and vector_param_names
-                and _looks_like_attribute_field(name, description)
-            ):
+            if kind == "string" and vector_param_names and _looks_like_attribute_field(name, description):
                 kind = "field"
                 field_parent = _pick_field_parent(name, description, vector_param_names)
             enum_options = _extract_enum_options(name, description, default_value)
@@ -1941,7 +1937,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             descriptions_provider = get_descriptions_provider()
             help_provider = get_help_provider()
             tool_id = self._manifest.get("id", "")
-            
+
             # Try curated label first
             curated_label = descriptions_provider.get_parameter_label(tool_id, name)
             if curated_label:
@@ -1951,7 +1947,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                 # because QGIS doesn't allow changing description after creation
                 old_desc = description
                 description = curated_label
-                
+
                 # Recreate parameter with updated description
                 if kind == "raster_in":
                     qgs_param = QgsProcessingParameterRasterLayer(
@@ -2096,7 +2092,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                         defaultValue=_coerce_string_default(default_value, ""),
                         optional=not required,
                     )
-            
+
             # Apply tooltip if available (from either source)
             curated_tooltip = descriptions_provider.get_parameter_tooltip(tool_id, name)
             if curated_tooltip:

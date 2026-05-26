@@ -17,7 +17,7 @@ ifeq ($(BUILD_PROFILE),release)
 CARGO_PROFILE_FLAG = --release
 endif
 
-PKG_LIBS = -L$(LIBDIR) -lwbw_r -lws2_32 -ladvapi32 -luserenv -lbcrypt -lntdll
+PKG_LIBS = $(STATLIB) -lws2_32 -ladvapi32 -luserenv -lbcrypt -lntdll
 
 all: $(SHLIB)
 

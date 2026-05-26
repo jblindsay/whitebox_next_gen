@@ -1,0 +1,18 @@
+[general]
+name=Whitebox Workflows
+qgisMinimumVersion=3.28
+qgisMaximumVersion=4.99
+description=Dynamic Whitebox Workflows Processing provider and local execution plugin.
+version=2.0.3
+author=John Lindsay, Whitebox Geospatial Inc.
+email=support@whiteboxgeo.com
+about=QGIS frontend for Whitebox Workflows Next Gen with dynamic tool discovery, licensing awareness, and local execution.
+category=Analysis
+icon=icon.png
+experimental=False
+deprecated=False
+hasProcessingProvider=True
+homepage=https://www.whiteboxgeo.com
+tracker=https://github.com/jblindsay/whitebox_next_gen
+repository=https://github.com/jblindsay/whitebox_next_gen
+tags=gis,geospatial,whitebox,processing,terrain,hydrology,remote-sensing

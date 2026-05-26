@@ -1,0 +1,6 @@
+You must remember to delete all of the pycache folders and the whitebox and dist folders as well. 
+Then zip the plugin folder. Depending on the state of this repo, you also may need to rename the 
+the folder to whitebox_workflows_for_qgis. You can't upload it with any MacOSX hidden files and 
+so you must use the following command at the prompt:
+
+zip -d whitebox_workflows_for_qgis.zip __MACOSX/\*

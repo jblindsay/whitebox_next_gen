@@ -1,0 +1,7 @@
+<p>This tool reclassifies the values in an input raster (<code>input</code>) file based on an equal-interval scheme, where the user must specify the reclass interval value (<code>interval</code>), the starting value (<code>start_val</code>), and optionally, the ending value (<code>end_val</code>). Grid cells containing values that fall outside of the range defined by the starting and ending values, will be assigned their original values in the output grid. If the user does not specify an ending value, the tool will assign a very large positive value.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#reclass">reclass</a></p> <h2>Function Signature</h2> <p><code>def reclass_equal_interval(self, raster: Raster, interval_size: float, start_value: float = float('-inf'), end_value: float = float('inf')) -&gt; Raster: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

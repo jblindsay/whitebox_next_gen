@@ -3,10 +3,14 @@ TARGET_DIR = ./rust-target
 BUILD_PROFILE = $(if $(filter true,$(WBW_R_PACKAGE_RELEASE)),release,debug)
 LIBDIR = $(TARGET_DIR)/$(TARGET)/$(BUILD_PROFILE)
 STATLIB = $(LIBDIR)/libwbw_r.a
-CARGO_MANIFEST = ../../../Cargo.toml
+CARGO_MANIFEST = $(firstword $(wildcard ../../Cargo.toml ../../../Cargo.toml))
 CARGO_FEATURES =
 WRAPPER_TIER = open
 CARGO_PROFILE_FLAG =
+
+ifeq ($(CARGO_MANIFEST),)
+$(error Could not find wbw_r Cargo.toml. Tried ../../Cargo.toml and ../../../Cargo.toml from $(CURDIR))
+endif
 
 ifeq ($(WBW_R_PACKAGE_PRO),true)
 CARGO_FEATURES += --features pro

@@ -320,7 +320,7 @@ Based on measured performance and quality benchmarks (Section 14), the following
 **Recommended parameters:**
 ```python
 # Speed-optimized: grid_accel with no refinement
-env.individual_tree_segmentation(
+wbe.lidar.filtering_classification.individual_tree_segmentation(
     input=cloud,
     only_use_veg=True,
     adaptive_bandwidth=True,
@@ -357,7 +357,7 @@ env.individual_tree_segmentation(
 **Recommended parameters:**
 ```python
 # Precision-optimized: grid_accel + exact refinement
-env.individual_tree_segmentation(
+wbe.lidar.filtering_classification.individual_tree_segmentation(
     input=cloud,
     only_use_veg=True,
     adaptive_bandwidth=True,
@@ -396,7 +396,7 @@ env.individual_tree_segmentation(
 **Recommended parameters:**
 ```python
 # Balanced: exact method (best all-rounder for typical clouds < 1M points)
-env.individual_tree_segmentation(
+wbe.lidar.filtering_classification.individual_tree_segmentation(
     input=cloud,
     only_use_veg=True,
     adaptive_bandwidth=True,
@@ -432,7 +432,7 @@ env.individual_tree_segmentation(
 **Recommended parameters:**
 ```python
 # Tiling-optimized: partition large scenes and process tiles in parallel
-env.individual_tree_segmentation(
+wbe.lidar.filtering_classification.individual_tree_segmentation(
     input=cloud,
     only_use_veg=True,
     adaptive_bandwidth=True,

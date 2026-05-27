@@ -29,4 +29,5 @@
 - [API Reference](./api-reference.md)
 - [Non-Tool Session And Facade API](./api-non-tool-session.md)
 - [Tool API Reference (All Tools)](./api-tools-reference.md)
+- [Tool Call Paths (R)](./api-tool-call-paths-r.md)
 - [Script Index](./script-index.md)

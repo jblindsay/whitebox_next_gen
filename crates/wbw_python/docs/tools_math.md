@@ -52,13 +52,15 @@ Calculates the absolute value of each non-nodata raster cell.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.abs(input_raster, output_path="abs_dem.tif")
+result = wbe.raster.abs(input_raster, output_path="abs_dem.tif")
 ```
-
----
 
 ### `arccos`
 
@@ -71,13 +73,15 @@ Computes the inverse cosine (in radians) of each non-nodata raster cell. Input v
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.arccos(input_raster, output_path="arccos_dem.tif")
+result = wbe.raster.arccos(input_raster, output_path="arccos_dem.tif")
 ```
-
----
 
 ### `arcosh`
 
@@ -90,13 +94,15 @@ Computes the inverse hyperbolic cosine of each non-nodata raster cell. Input val
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.arcosh(input_raster, output_path="arcosh_dem.tif")
+result = wbe.raster.arcosh(input_raster, output_path="arcosh_dem.tif")
 ```
-
----
 
 ### `arcsin`
 
@@ -109,13 +115,15 @@ Computes the inverse sine (in radians) of each non-nodata raster cell. Input val
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.arcsin(input_raster, output_path="arcsin_dem.tif")
+result = wbe.raster.arcsin(input_raster, output_path="arcsin_dem.tif")
 ```
-
----
 
 ### `arctan`
 
@@ -128,13 +136,15 @@ Computes the inverse tangent (in radians) of each non-nodata raster cell.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.arctan(input_raster, output_path="arctan_dem.tif")
+result = wbe.raster.arctan(input_raster, output_path="arctan_dem.tif")
 ```
-
----
 
 ### `arsinh`
 
@@ -147,13 +157,15 @@ Computes the inverse hyperbolic sine of each non-nodata raster cell.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.arsinh(input_raster, output_path="arsinh_dem.tif")
+result = wbe.raster.arsinh(input_raster, output_path="arsinh_dem.tif")
 ```
-
----
 
 ### `artanh`
 
@@ -166,13 +178,15 @@ Computes the inverse hyperbolic tangent of each non-nodata raster cell. Input va
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.artanh(input_raster, output_path="artanh_dem.tif")
+result = wbe.raster.artanh(input_raster, output_path="artanh_dem.tif")
 ```
-
----
 
 ### `ceil`
 
@@ -185,13 +199,15 @@ Rounds each non-nodata raster cell upward to the nearest integer.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.ceil(input_raster, output_path="ceil_dem.tif")
+result = wbe.raster.ceil(input_raster, output_path="ceil_dem.tif")
 ```
-
----
 
 ### `cos`
 
@@ -204,13 +220,15 @@ Computes the cosine (input in radians) of each non-nodata raster cell.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.cos(input_raster, output_path="cos_dem.tif")
+result = wbe.raster.cos(input_raster, output_path="cos_dem.tif")
 ```
-
----
 
 ### `cosh`
 
@@ -223,13 +241,15 @@ Computes the hyperbolic cosine of each non-nodata raster cell.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.cosh(input_raster, output_path="cosh_dem.tif")
+result = wbe.raster.cosh(input_raster, output_path="cosh_dem.tif")
 ```
-
----
 
 ### `decrement`
 
@@ -242,15 +262,17 @@ Subtracts 1 from each non-nodata raster cell value.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.decrement_raster(input_raster, output_path="dem_minus1.tif")
+result = wbe.decrement_raster(input_raster, output_path="dem_minus1.tif")
 ```
 
 Note: The WbEnvironment method is named `decrement_raster` to avoid a name clash with the cell-level `decrement` helper method.
-
----
 
 ### `exp`
 
@@ -263,13 +285,15 @@ Computes *e* raised to the power of each non-nodata raster cell value.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.exp(input_raster, output_path="exp_dem.tif")
+result = wbe.raster.exp(input_raster, output_path="exp_dem.tif")
 ```
-
----
 
 ### `exp2`
 
@@ -282,13 +306,15 @@ Computes 2 raised to the power of each non-nodata raster cell value.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.exp2(input_raster, output_path="exp2_dem.tif")
+result = wbe.raster.exp2(input_raster, output_path="exp2_dem.tif")
 ```
-
----
 
 ### `floor`
 
@@ -301,13 +327,15 @@ Rounds each non-nodata raster cell downward to the nearest integer.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.floor(input_raster, output_path="floor_dem.tif")
+result = wbe.raster.floor(input_raster, output_path="floor_dem.tif")
 ```
-
----
 
 ### `increment`
 
@@ -320,15 +348,17 @@ Adds 1 to each non-nodata raster cell value.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.increment_raster(input_raster, output_path="dem_plus1.tif")
+result = wbe.increment_raster(input_raster, output_path="dem_plus1.tif")
 ```
 
 Note: The WbEnvironment method is named `increment_raster` to avoid a name clash with the cell-level `increment` helper method.
-
----
 
 ### `is_nodata`
 
@@ -341,15 +371,17 @@ Outputs 1.0 for every nodata cell and 0.0 for every valid cell. Useful for creat
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-mask = env.is_nodata_raster(input_raster, output_path="dem_nodata_mask.tif")
+mask = wbe.is_nodata_raster(input_raster, output_path="dem_nodata_mask.tif")
 ```
 
 Note: The WbEnvironment method is named `is_nodata_raster` to avoid a name clash with the Raster-class `is_nodata` predicate.
-
----
 
 ### `ln`
 
@@ -362,13 +394,15 @@ Computes the natural logarithm of each non-nodata raster cell.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.ln(input_raster, output_path="ln_dem.tif")
+result = wbe.raster.ln(input_raster, output_path="ln_dem.tif")
 ```
-
----
 
 ### `log10`
 
@@ -381,13 +415,15 @@ Computes the base-10 logarithm of each non-nodata raster cell.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.log10(input_raster, output_path="log10_dem.tif")
+result = wbe.raster.log10(input_raster, output_path="log10_dem.tif")
 ```
-
----
 
 ### `log2`
 
@@ -400,13 +436,15 @@ Computes the base-2 logarithm of each non-nodata raster cell.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.log2(input_raster, output_path="log2_dem.tif")
+result = wbe.raster.log2(input_raster, output_path="log2_dem.tif")
 ```
-
----
 
 ### `negate`
 
@@ -419,13 +457,15 @@ Negates each non-nodata raster cell value (multiplies by -1).
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.negate(input_raster, output_path="neg_dem.tif")
+result = wbe.raster.negate(input_raster, output_path="neg_dem.tif")
 ```
-
----
 
 ### `reciprocal`
 
@@ -438,13 +478,15 @@ Computes the reciprocal (1/x) of each non-nodata raster cell.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.reciprocal(input_raster, output_path="recip_dem.tif")
+result = wbe.raster.reciprocal(input_raster, output_path="recip_dem.tif")
 ```
-
----
 
 ### `round`
 
@@ -457,13 +499,15 @@ Rounds each non-nodata raster cell to the nearest integer.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.round(input_raster, output_path="round_dem.tif")
+result = wbe.raster.round(input_raster, output_path="round_dem.tif")
 ```
-
----
 
 ### `sin`
 
@@ -476,13 +520,15 @@ Computes the sine (input in radians) of each non-nodata raster cell.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.sin(input_raster, output_path="sin_dem.tif")
+result = wbe.raster.sin(input_raster, output_path="sin_dem.tif")
 ```
-
----
 
 ### `sinh`
 
@@ -495,13 +541,15 @@ Computes the hyperbolic sine of each non-nodata raster cell.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.sinh(input_raster, output_path="sinh_dem.tif")
+result = wbe.raster.sinh(input_raster, output_path="sinh_dem.tif")
 ```
-
----
 
 ### `sqrt`
 
@@ -514,13 +562,15 @@ Computes the square root of each non-nodata raster cell.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.sqrt(input_raster, output_path="sqrt_dem.tif")
+result = wbe.raster.sqrt(input_raster, output_path="sqrt_dem.tif")
 ```
-
----
 
 ### `square`
 
@@ -533,13 +583,15 @@ Squares each non-nodata raster cell value (x²).
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.square(input_raster, output_path="square_dem.tif")
+result = wbe.raster.square(input_raster, output_path="square_dem.tif")
 ```
-
----
 
 ### `tan`
 
@@ -552,13 +604,15 @@ Computes the tangent (input in radians) of each non-nodata raster cell.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.tan(input_raster, output_path="tan_dem.tif")
+result = wbe.raster.tan(input_raster, output_path="tan_dem.tif")
 ```
-
----
 
 ### `tanh`
 
@@ -571,13 +625,15 @@ Computes the hyperbolic tangent of each non-nodata raster cell.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.tanh(input_raster, output_path="tanh_dem.tif")
+result = wbe.raster.tanh(input_raster, output_path="tanh_dem.tif")
 ```
-
----
 
 ### `to_degrees`
 
@@ -590,13 +646,15 @@ Converts each non-nodata raster cell from radians to degrees.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.to_degrees(input_raster, output_path="deg_dem.tif")
+result = wbe.raster.to_degrees(input_raster, output_path="deg_dem.tif")
 ```
-
----
 
 ### `to_radians`
 
@@ -609,13 +667,15 @@ Converts each non-nodata raster cell from degrees to radians.
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.to_radians(input_raster, output_path="rad_dem.tif")
+result = wbe.raster.to_radians(input_raster, output_path="rad_dem.tif")
 ```
-
----
 
 ### `truncate`
 
@@ -628,13 +688,15 @@ Truncates each non-nodata raster cell to its integer part (rounds toward zero).
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.truncate(input_raster, output_path="trunc_dem.tif")
+result = wbe.raster.truncate(input_raster, output_path="trunc_dem.tif")
 ```
-
----
 
 ### `bool_not`
 
@@ -647,10 +709,14 @@ Computes a logical NOT of each non-nodata raster cell, outputting 1 where the in
 | `input` | string | yes | Input raster file path. |
 | `output` | string | yes | Output raster file path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.bool_not(input_raster, output_path="bool_not_dem.tif")
+result = wbe.raster.overlay_math.bool_not(input_raster, output_path="bool_not_dem.tif")
 ```
 
 ---
@@ -682,10 +748,10 @@ All binary raster math tools share the same core parameter shape: `input1`, `inp
 **WbEnvironment usage examples**
 
 ```python
-sum_raster = env.add(raster_a, raster_b, output_path="sum.tif")
-pow_raster = env.power(raster_a, raster_b, output_path="power.tif")
-mask = env.greater_than(raster_a, raster_b, output_path="gt_mask.tif")
-logic = env.bool_and(raster_a, raster_b, output_path="and_mask.tif")
+sum_raster = wbe.raster.overlay_math.add(raster_a, raster_b, output_path="sum.tif")
+pow_raster = wbe.raster.overlay_math.power(raster_a, raster_b, output_path="power.tif")
+mask = wbe.raster.greater_than(raster_a, raster_b, output_path="gt_mask.tif")
+logic = wbe.raster.overlay_math.bool_and(raster_a, raster_b, output_path="and_mask.tif")
 ```
 
 Tool semantics:
@@ -746,13 +812,15 @@ Computes summary statistics for valid raster cells and returns a JSON report str
 |---|---|---|---|
 | `input` | Raster | yes | Input raster object. |
 
+**Outputs**
+
+- `return`: `str`
+
 **WbEnvironment usage**
 
 ```python
-report_json = env.raster_summary_stats(input_raster)
+report_json = wbe.raster.raster_summary_stats(input_raster)
 ```
-
----
 
 ### `raster_histogram`
 
@@ -765,13 +833,15 @@ Builds a fixed-bin histogram for valid raster cells and returns a JSON report st
 | `input` | Raster | yes | Input raster object. |
 | `bins` | int | no | Number of bins (default 256). |
 
+**Outputs**
+
+- `return`: `str`
+
 **WbEnvironment usage**
 
 ```python
-hist_json = env.raster_histogram(input_raster, bins=256)
+hist_json = wbe.raster.raster_histogram(input_raster, bins=256)
 ```
-
----
 
 ### `list_unique_values_raster`
 
@@ -785,17 +855,19 @@ Lists unique raster values (integers) up to a maximum count and returns a JSON r
 | `max_values` | int | no | Maximum values to return (default 10000). |
 | `output_path` | string | no | Optional output CSV path. |
 
+**Outputs**
+
+- `return`: `str`
+
 **WbEnvironment usage**
 
 ```python
-unique_json = env.list_unique_values_raster(
+unique_json = wbe.raster.list_unique_values_raster(
     classified_raster,
     max_values=5000,
     output_path="classified_unique_values.csv",
 )
 ```
-
----
 
 ### `z_scores`
 
@@ -808,13 +880,15 @@ Standardizes raster values to z-scores using global mean and standard deviation.
 | `input` | Raster | yes | Input raster object. |
 | `output_path` | string | no | Optional output raster path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-z = env.z_scores(input_raster, output_path="z_scores.tif")
+z = wbe.raster.z_scores(input_raster, output_path="z_scores.tif")
 ```
-
----
 
 ### `rescale_value_range`
 
@@ -831,13 +905,15 @@ Linearly rescales raster values into a target output range.
 | `clip_max` | float | no | Optional input clip maximum. |
 | `output_path` | string | no | Optional output raster path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-rescaled = env.rescale_value_range(input_raster, 0.0, 255.0, output_path="rescaled.tif")
+rescaled = wbe.raster.rescale_value_range(input_raster, 0.0, 255.0, output_path="rescaled.tif")
 ```
-
----
 
 ### `max`
 
@@ -847,18 +923,20 @@ Computes cellwise maximum using raster/raster or raster/constant operands.
 
 | Name | Type | Required | Description |
 |---|---|---|---|
-| `input1` | Raster or float | yes | First operand. |
-| `input2` | Raster or float | yes | Second operand. |
+| `input1` | Raster | yes | First operand. |
+| `input2` | Raster | yes | Second operand. |
 | `output_path` | string | no | Optional output raster path. |
+
+**Outputs**
+
+- `return`: `Raster`
 
 **WbEnvironment usage**
 
 ```python
-maxed = env.max(dem_a, dem_b, output_path="max_ab.tif")
-maxed_const = env.max(dem_a, 100.0, output_path="max_const.tif")
+maxed = wbe.raster.max(dem_a, dem_b, output_path="max_ab.tif")
+maxed_const = wbe.raster.max(dem_a, 100.0, output_path="max_const.tif")
 ```
-
----
 
 ### `min`
 
@@ -868,18 +946,20 @@ Computes cellwise minimum using raster/raster or raster/constant operands.
 
 | Name | Type | Required | Description |
 |---|---|---|---|
-| `input1` | Raster or float | yes | First operand. |
-| `input2` | Raster or float | yes | Second operand. |
+| `input1` | Raster | yes | First operand. |
+| `input2` | Raster | yes | Second operand. |
 | `output_path` | string | no | Optional output raster path. |
+
+**Outputs**
+
+- `return`: `Raster`
 
 **WbEnvironment usage**
 
 ```python
-mined = env.min(dem_a, dem_b, output_path="min_ab.tif")
-mined_const = env.min(dem_a, 0.0, output_path="min_const.tif")
+mined = wbe.raster.min(dem_a, dem_b, output_path="min_ab.tif")
+mined_const = wbe.raster.min(dem_a, 0.0, output_path="min_const.tif")
 ```
-
----
 
 ### `quantiles`
 
@@ -893,13 +973,15 @@ Assigns each valid raster cell to a quantile class from `1..num_quantiles`.
 | `num_quantiles` | int | no | Number of classes (default 5). |
 | `output_path` | string | no | Optional output raster path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-q = env.quantiles(input_raster, num_quantiles=5, output_path="quantiles.tif")
+q = wbe.raster.quantiles(input_raster, num_quantiles=5, output_path="quantiles.tif")
 ```
-
----
 
 ### `list_unique_values`
 
@@ -913,17 +995,19 @@ Reports unique value counts for a vector attribute field and returns a JSON repo
 | `field_name` | string | yes | Attribute field name to summarize. |
 | `output_path` | string | no | Optional output CSV path. |
 
+**Outputs**
+
+- `return`: `str`
+
 **WbEnvironment usage**
 
 ```python
-report_json = env.list_unique_values(
+report_json = wbe.vector.attribute_analysis.list_unique_values(
     parcels,
     "landuse",
     output_path="parcels_landuse_unique_values.csv",
 )
 ```
-
----
 
 ### `root_mean_square_error`
 
@@ -936,13 +1020,15 @@ Computes RMSE and related vertical-accuracy metrics between comparison and base 
 | `input` | Raster | yes | Comparison raster. |
 | `base` | Raster | yes | Base/reference raster. |
 
+**Outputs**
+
+- `return`: `str`
+
 **WbEnvironment usage**
 
 ```python
-report_json = env.root_mean_square_error(dem_test, dem_reference)
+report_json = wbe.raster.root_mean_square_error(dem_test, dem_reference)
 ```
-
----
 
 ### `random_field`
 
@@ -955,13 +1041,15 @@ Creates a raster filled with standard normal random values using a base raster f
 | `base` | Raster | yes | Base raster defining output geometry. |
 | `output_path` | string | no | Optional output raster path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-rand_img = env.random_field(base_raster, output_path="random_field.tif")
+rand_img = wbe.raster.random_field(base_raster, output_path="random_field.tif")
 ```
-
----
 
 ### `random_sample`
 
@@ -975,13 +1063,15 @@ Creates a raster with randomly located valid sample cells labelled with unique I
 | `num_samples` | int | no | Number of sample cells to generate (default 1000). |
 | `output_path` | string | no | Optional output raster path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-sample = env.random_sample(base_raster, num_samples=500, output_path="sample.tif")
+sample = wbe.raster.random_sample(base_raster, num_samples=500, output_path="sample.tif")
 ```
-
----
 
 ### `cumulative_distribution`
 
@@ -994,13 +1084,15 @@ Transforms raster values into cumulative distribution probabilities in the range
 | `input` | Raster | yes | Input raster object. |
 | `output_path` | string | no | Optional output raster path. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-cdf = env.cumulative_distribution(input_raster, output_path="cdf.tif")
+cdf = wbe.raster.cumulative_distribution(input_raster, output_path="cdf.tif")
 ```
-
----
 
 ### `crispness_index`
 
@@ -1012,13 +1104,15 @@ Calculates the crispness index for a membership-probability raster and returns a
 |---|---|---|---|
 | `input` | Raster | yes | Membership-probability raster. |
 
+**Outputs**
+
+- `return`: `str`
+
 **WbEnvironment usage**
 
 ```python
-report_json = env.crispness_index(probability_raster)
+report_json = wbe.raster.crispness_index(probability_raster)
 ```
-
----
 
 ### `ks_normality_test`
 
@@ -1031,13 +1125,15 @@ Runs a Kolmogorov-Smirnov normality test on raster values and returns a JSON rep
 | `input` | Raster | yes | Input raster object. |
 | `num_samples` | int | no | Optional random sample size; omit to use all valid cells. |
 
+**Outputs**
+
+- `return`: `str`
+
 **WbEnvironment usage**
 
 ```python
-report_json = env.ks_normality_test(input_raster, num_samples=1000)
+report_json = wbe.raster.ks_normality_test(input_raster, num_samples=1000)
 ```
-
----
 
 ### `kappa_index`
 
@@ -1050,13 +1146,15 @@ Computes Cohen's kappa, overall agreement, and per-class agreement metrics for t
 | `input1` | Raster | yes | Classification raster. |
 | `input2` | Raster | yes | Reference raster. |
 
+**Outputs**
+
+- `return`: `str`
+
 **WbEnvironment usage**
 
 ```python
-report_json = env.kappa_index(classified_raster, reference_raster)
+report_json = wbe.raster.kappa_index(classified_raster, reference_raster)
 ```
-
----
 
 ### `paired_sample_t_test`
 
@@ -1070,13 +1168,15 @@ Runs a paired-sample t-test on two rasters using valid paired cells and returns 
 | `input2` | Raster | yes | Second raster in the pair. |
 | `num_samples` | int | no | Optional random sample size; omit to use all valid pairs. |
 
+**Outputs**
+
+- `return`: `str`
+
 **WbEnvironment usage**
 
 ```python
-report_json = env.paired_sample_t_test(before_raster, after_raster, num_samples=2000)
+report_json = wbe.raster.paired_sample_t_test(before_raster, after_raster, num_samples=2000)
 ```
-
----
 
 ### `phi_coefficient`
 
@@ -1089,13 +1189,15 @@ Performs a binary-class agreement assessment between two rasters and returns a J
 | `input1` | Raster | yes | First binary raster. Non-zero cells are treated as class presence. |
 | `input2` | Raster | yes | Second binary raster. Non-zero cells are treated as class presence. |
 
+**Outputs**
+
+- `return`: `str`
+
 **WbEnvironment usage**
 
 ```python
-report_json = env.phi_coefficient(predicted_binary, reference_binary)
+report_json = wbe.raster.phi_coefficient(predicted_binary, reference_binary)
 ```
-
----
 
 ### `image_correlation`
 
@@ -1105,15 +1207,17 @@ Computes a Pearson correlation matrix among two or more input rasters and return
 
 | Name | Type | Required | Description |
 |---|---|---|---|
-| `input_rasters` | list[Raster or str] | yes | Input raster handles or file paths (at least two). |
+| `input_rasters` | Raster | yes | Input raster handles or file paths (at least two). |
+
+**Outputs**
+
+- `return`: `str`
 
 **WbEnvironment usage**
 
 ```python
-report_json = env.image_correlation([band1, band2, band3])
+report_json = wbe.raster.image_correlation([band1, band2, band3])
 ```
-
----
 
 ### `image_autocorrelation`
 
@@ -1123,16 +1227,18 @@ Computes global Moran's $I$ for one or more rasters and returns a JSON report st
 
 | Name | Type | Required | Description |
 |---|---|---|---|
-| `input_rasters` | list[Raster or str] | yes | Input raster handles or file paths (at least one). |
+| `input_rasters` | Raster | yes | Input raster handles or file paths (at least one). |
 | `contiguity` | string | no | Neighborhood rule: `rook`, `king`/`queen`, or `bishop` (default `rook`). |
+
+**Outputs**
+
+- `return`: `str`
 
 **WbEnvironment usage**
 
 ```python
-report_json = env.image_autocorrelation([elevation, slope], contiguity="king")
+report_json = wbe.raster.image_autocorrelation([elevation, slope], contiguity="king")
 ```
-
----
 
 ### `image_correlation_neighbourhood_analysis`
 
@@ -1149,18 +1255,23 @@ Computes moving-window local correlation between two rasters and returns two ras
 | `output1_path` | string | no | Optional path for the local-correlation raster. |
 | `output2_path` | string | no | Optional path for the local-significance raster. |
 
+**Outputs**
+
+Returned as `tuple[Raster, Raster]` in this order:
+
+- `output1`: `Raster`
+- `output2`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-local_r, local_p = env.image_correlation_neighbourhood_analysis(
+local_r, local_p = wbe.raster.local_neighborhood.image_correlation_neighbourhood_analysis(
 	band1,
 	band2,
 	filter_size=11,
 	correlation_stat="spearman",
 )
 ```
-
----
 
 ### `image_regression`
 
@@ -1175,17 +1286,22 @@ Performs bivariate linear regression using two rasters and returns a residual ra
 | `standardize_residuals` | bool | no | Standardize residuals by model standard error (default `False`). |
 | `output_path` | string | no | Optional output path for residual raster. |
 
+**Outputs**
+
+Returned as `tuple[Raster, str]` in this order:
+
+- `result`: `Raster`
+- `string_2`: `str`
+
 **WbEnvironment usage**
 
 ```python
-residuals, report_json = env.image_regression(
+residuals, report_json = wbe.raster.image_regression(
     independent_raster,
     dependent_raster,
     standardize_residuals=True,
 )
 ```
-
----
 
 ### `dbscan`
 
@@ -1195,16 +1311,23 @@ Performs unsupervised DBSCAN (Density-Based Spatial Clustering of Applications w
 
 | Name | Type | Required | Description |
 |---|---|---|---|
-| `input_rasters` | List[Raster] | yes | Feature-band rasters forming the multi-dimensional feature space. |
-| `scaling_method` | str | no | Feature scaling: `"none"` (default), `"normalize"` (0–1), or `"standardize"` (z-scores). |
+| `input_rasters` | Raster | yes | Feature-band rasters forming the multi-dimensional feature space. |
+| `scaling_method` | string | no | Feature scaling: `"none"` (default), `"normalize"` (0–1), or `"standardize"` (z-scores). |
 | `search_distance` | float | no | Epsilon neighbourhood radius in feature space (default `1.0`). |
 | `min_points` | int | no | Minimum number of neighbours within epsilon for a core point (default `5`). |
-| `output_path` | str | no | Optional output raster path. |
+| `output_path` | string | no | Optional output raster path. |
+
+**Outputs**
+
+Returned as `tuple[Raster, str]` in this order:
+
+- `result`: `Raster`
+- `string_2`: `str`
 
 **WbEnvironment usage**
 
 ```python
-clusters, report_json = env.dbscan(
+clusters, report_json = wbe.raster.dbscan(
     [band1, band2, band3],
     scaling_method="normalize",
     search_distance=0.1,
@@ -1219,10 +1342,8 @@ clusters, report_json = env.dbscan(
 **WbEnvironment usage**
 
 ```python
-report_json = env.two_sample_ks_test(raster_a, raster_b, num_samples=3000)
+report_json = wbe.two_sample_ks_test(raster_a, raster_b, num_samples=3000)
 ```
-
----
 
 ### `wilcoxon_signed_rank_test`
 
@@ -1236,13 +1357,15 @@ Runs a Wilcoxon signed-rank test on paired raster differences and returns a JSON
 | `input2` | Raster | yes | Second raster in the pair. |
 | `num_samples` | int | no | Optional random sample size; omit to use all valid pairs. |
 
+**Outputs**
+
+- `return`: `str`
+
 **WbEnvironment usage**
 
 ```python
-report_json = env.wilcoxon_signed_rank_test(before_raster, after_raster, num_samples=2000)
+report_json = wbe.raster.wilcoxon_signed_rank_test(before_raster, after_raster, num_samples=2000)
 ```
-
----
 
 ### `conditional_evaluation`
 
@@ -1254,14 +1377,18 @@ Evaluates a per-cell boolean statement and assigns TRUE/FALSE outputs from const
 |---|---|---|---|
 | `input` | Raster | yes | Input raster used for `value` and raster geometry variables. |
 | `statement` | string | yes | Conditional expression evaluated per cell. |
-| `true_value` | Raster, float, or string | no | Value/expression used when condition is true (defaults to NoData). |
-| `false_value` | Raster, float, or string | no | Value/expression used when condition is false (defaults to NoData). |
+| `true_value` | Raster | no | Value/expression used when condition is true (defaults to NoData). |
+| `false_value` | Raster | no | Value/expression used when condition is false (defaults to NoData). |
 | `output_path` | string | no | Optional output raster path. |
+
+**Outputs**
+
+- `return`: `Raster`
 
 **WbEnvironment usage**
 
 ```python
-out = env.conditional_evaluation(
+out = wbe.raster.reclass_mask.conditional_evaluation(
 	input_raster,
 	"(value >= 25.0) && (value <= 75.0)",
 	true_value=1.0,
@@ -1269,8 +1396,6 @@ out = env.conditional_evaluation(
 	output_path="conditional.tif",
 )
 ```
-
----
 
 ### `anova`
 
@@ -1283,13 +1408,15 @@ Performs one-way ANOVA of raster values grouped by a class raster and returns a 
 | `input` | Raster | yes | Measurement raster. |
 | `features` | Raster | yes | Class/category raster defining groups. |
 
+**Outputs**
+
+- `return`: `str`
+
 **WbEnvironment usage**
 
 ```python
-report_json = env.anova(measurement_raster, class_raster)
+report_json = wbe.raster.anova(measurement_raster, class_raster)
 ```
-
----
 
 ### `inplace_add`
 
@@ -1300,15 +1427,17 @@ Performs the legacy in-place add operation `input1 += input2` and returns the up
 | Name | Type | Required | Description |
 |---|---|---|---|
 | `input1` | Raster | yes | Raster to modify. |
-| `input2` | Raster or float | yes | Raster or constant addend. |
+| `input2` | Raster | yes | Raster or constant addend. |
+
+**Outputs**
+
+- `return`: `Raster`
 
 **WbEnvironment usage**
 
 ```python
-updated = env.inplace_add(input_raster, 10.0)
+updated = wbe.raster.inplace_add(input_raster, 10.0)
 ```
-
----
 
 ### `inplace_subtract`
 
@@ -1319,15 +1448,17 @@ Performs the legacy in-place subtract operation `input1 -= input2` and returns t
 | Name | Type | Required | Description |
 |---|---|---|---|
 | `input1` | Raster | yes | Raster to modify. |
-| `input2` | Raster or float | yes | Raster or constant subtrahend. |
+| `input2` | Raster | yes | Raster or constant subtrahend. |
+
+**Outputs**
+
+- `return`: `Raster`
 
 **WbEnvironment usage**
 
 ```python
-updated = env.inplace_subtract(input_raster, other_raster)
+updated = wbe.raster.inplace_subtract(input_raster, other_raster)
 ```
-
----
 
 ### `inplace_multiply`
 
@@ -1338,15 +1469,17 @@ Performs the legacy in-place multiply operation `input1 *= input2` and returns t
 | Name | Type | Required | Description |
 |---|---|---|---|
 | `input1` | Raster | yes | Raster to modify. |
-| `input2` | Raster or float | yes | Raster or constant multiplier. |
+| `input2` | Raster | yes | Raster or constant multiplier. |
+
+**Outputs**
+
+- `return`: `Raster`
 
 **WbEnvironment usage**
 
 ```python
-updated = env.inplace_multiply(input_raster, 1.25)
+updated = wbe.raster.inplace_multiply(input_raster, 1.25)
 ```
-
----
 
 ### `inplace_divide`
 
@@ -1357,15 +1490,17 @@ Performs the legacy in-place divide operation `input1 /= input2` and returns the
 | Name | Type | Required | Description |
 |---|---|---|---|
 | `input1` | Raster | yes | Raster to modify. |
-| `input2` | Raster or float | yes | Raster or non-zero constant divisor. |
+| `input2` | Raster | yes | Raster or non-zero constant divisor. |
+
+**Outputs**
+
+- `return`: `Raster`
 
 **WbEnvironment usage**
 
 ```python
-updated = env.inplace_divide(input_raster, 2.0)
+updated = wbe.raster.inplace_divide(input_raster, 2.0)
 ```
-
----
 
 ### `attribute_histogram`
 
@@ -1378,13 +1513,15 @@ Builds histogram summary counts for a numeric vector attribute field and returns
 | `input` | Vector | yes | Input vector object. |
 | `field_name` | string | yes | Numeric attribute field name. |
 
+**Outputs**
+
+- `return`: `str`
+
 **WbEnvironment usage**
 
 ```python
-report_json = env.attribute_histogram(parcels, "area")
+report_json = wbe.vector.attribute_analysis.attribute_histogram(parcels, "area")
 ```
-
----
 
 ### `attribute_scattergram`
 
@@ -1399,13 +1536,15 @@ Computes scattergram summary statistics for two numeric vector fields and return
 | `field_name_y` | string | yes | Numeric y-axis field name. |
 | `trendline` | bool | no | Include linear trendline metrics (default `False`). |
 
+**Outputs**
+
+- `return`: `str`
+
 **WbEnvironment usage**
 
 ```python
-report_json = env.attribute_scattergram(parcels, "area", "perimeter", trendline=True)
+report_json = wbe.vector.attribute_analysis.attribute_scattergram(parcels, "area", "perimeter", trendline=True)
 ```
-
----
 
 ### `attribute_correlation`
 
@@ -1417,13 +1556,15 @@ Computes the Pearson correlation matrix among numeric vector attribute fields an
 |---|---|---|---|
 | `input` | Vector | yes | Input vector object. |
 
+**Outputs**
+
+- `return`: `str`
+
 **WbEnvironment usage**
 
 ```python
-report_json = env.attribute_correlation(parcels)
+report_json = wbe.vector.attribute_analysis.attribute_correlation(parcels)
 ```
-
----
 
 ### `cross_tabulation`
 
@@ -1436,13 +1577,15 @@ Creates a categorical contingency table between two rasters and returns a JSON r
 | `input1` | Raster | yes | First categorical raster. |
 | `input2` | Raster | yes | Second categorical raster. |
 
+**Outputs**
+
+- `return`: `str`
+
 **WbEnvironment usage**
 
 ```python
-report_json = env.cross_tabulation(classes_2000, classes_2020)
+report_json = wbe.raster.cross_tabulation(classes_2000, classes_2020)
 ```
-
----
 
 ### `zonal_statistics`
 
@@ -1459,18 +1602,20 @@ Computes statistics (mean, median, min, max, range, standard deviation, diversit
 | `output_path` | string | no | Output raster file path. |
 | `callback` | function | no | Progress callback function. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-result = env.zonal_statistics(
+result = wbe.raster.zonal_statistics(
     dem, 
     zone_raster, 
     stat_type="mean", 
     output_path="dem_zones_mean.tif"
 )
 ```
-
----
 
 ### `turning_bands_simulation`
 
@@ -1486,18 +1631,20 @@ Simulates a spatially-autocorrelated random field using Carr's turning bands alg
 | `output_path` | string | no | Output raster file path. |
 | `callback` | function | no | Progress callback function. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-simulated = env.turning_bands_simulation(
+simulated = wbe.raster.turning_bands_simulation(
     template_raster,
     range=100.0,
     iterations=500,
     output_path="simulated_field.tif"
 )
 ```
-
----
 
 ### `trend_surface`
 
@@ -1512,17 +1659,19 @@ Fits a polynomial trend surface to raster data via least-squares regression. Sup
 | `output_path` | string | no | Output raster file path. |
 | `callback` | function | no | Progress callback function. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-trend = env.trend_surface(
+trend = wbe.raster.trend_surface(
     dem,
     polynomial_order=2,
     output_path="dem_trend_quadratic.tif"
 )
 ```
-
----
 
 ### `trend_surface_vector_points`
 
@@ -1539,10 +1688,14 @@ Fits a polynomial trend surface to vector point data (with attribute values) and
 | `output_path` | string | no | Output raster file path. |
 | `callback` | function | no | Progress callback function. |
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
-trend = env.trend_surface_vector_points(
+trend = wbe.raster.trend_surface_vector_points(
     sample_points,
     cell_size=10.0,
     field_name="elevation",
@@ -1550,8 +1703,6 @@ trend = env.trend_surface_vector_points(
     output_path="points_trend_surface.tif"
 )
 ```
-
----
 
 ### `raster_calculator`
 
@@ -1562,7 +1713,7 @@ Evaluates arbitrary mathematical expressions cell-by-cell over one or more input
 | Name | Type | Required | Description |
 |---|---|---|---|
 | `expression` | string | yes | Mathematical expression (e.g., `"'nir' - 'red'"` for NDVI). |
-| `input_rasters` | list[Raster] | yes | List of input rasters in expression order. |
+| `input_rasters` | Raster | yes | List of input rasters in expression order. |
 | `output_path` | string | no | Output raster file path. |
 | `callback` | function | no | Progress callback function. |
 
@@ -1570,18 +1721,20 @@ Evaluates arbitrary mathematical expressions cell-by-cell over one or more input
 
 Expression can reference: `rows`, `columns`, `north`, `south`, `east`, `west`, `cellsizex`, `cellsizey`, `cellsize`, `nodata`, `null`, `minvalue`, `maxvalue`, `pi`, `e`, `row`, `column`, `rowy`, `columnx`, and inputs as value1, value2, etc.
 
+**Outputs**
+
+- `return`: `Raster`
+
 **WbEnvironment usage**
 
 ```python
 # NDVI example with named rasters
-ndvi = env.raster_calculator(
+ndvi = wbe.raster.raster_calculator(
     "'nir' - 'red' / ('nir' + 'red')",
     [nir_band, red_band],
     output_path="ndvi.tif"
 )
 ```
-
----
 
 ### `principal_component_analysis`
 
@@ -1591,17 +1744,21 @@ Performs PCA (dimensionality reduction) on 3 or more raster bands. Outputs compo
 
 | Name | Type | Required | Description |
 |---|---|---|---|
-| `input_rasters` | list[Raster] | yes | Input raster bands (3 or more). |
+| `input_rasters` | Raster | yes | Input raster bands (3 or more). |
 | `num_components` | int | no | Number of PCA components to output (default: all input bands). |
 | `standardized` | bool | no | Use correlation matrix (standardized) vs covariance (default `True`). |
 | `output_path` | string | no | Output directory for component rasters. |
 | `callback` | function | no | Progress callback function. |
 
+**Outputs**
+
+- `return`: `list[Raster]`
+
 **WbEnvironment usage**
 
 ```python
 # Perform PCA on multispectral bands
-components = env.principal_component_analysis(
+components = wbe.raster.principal_component_analysis(
     [band1, band2, band3, band4],
     num_components=3,
     standardized=True,
@@ -1613,8 +1770,6 @@ components = env.principal_component_analysis(
 
 Component rasters: `{stem}_comp1.tif`, `{stem}_comp2.tif`, etc. JSON report includes eigenvalues, eigenvectors, and factor loadings.
 
----
-
 ### `inverse_pca`
 
 Reconstructs original band images from PCA components, with optional noise reduction by excluding high-order components.
@@ -1623,16 +1778,20 @@ Reconstructs original band images from PCA components, with optional noise reduc
 
 | Name | Type | Required | Description |
 |---|---|---|---|
-| `component_rasters` | list[Raster] | yes | PCA component rasters (in order). |
+| `component_rasters` | Raster | yes | PCA component rasters (in order). |
 | `pca_report` | string | yes | JSON report string from `principal_component_analysis()`. |
 | `output_path` | string | no | Output directory for reconstructed bands. |
 | `callback` | function | no | Progress callback function. |
+
+**Outputs**
+
+- `return`: `list[Raster]`
 
 **WbEnvironment usage**
 
 ```python
 # Reconstruct with denoising (exclude last 2 components)
-reconstructed = env.inverse_pca(
+reconstructed = wbe.raster.inverse_pca(
     [comp1, comp2, comp3],
     pca_report=report_json,
     output_path="reconstructed_bands/"
@@ -1643,4 +1802,3 @@ reconstructed = env.inverse_pca(
 
 Reconstructed rasters: `{stem}_img1.tif`, `{stem}_img2.tif`, etc.
 
----

@@ -10,6 +10,18 @@ For R usage, invoke tools either with:
 Argument names and contracts in the shared tool docs map directly to R `args`
 keys and wrapper parameters.
 
+Important call-style note:
+
+- Names shown in included lists are canonical tool identifiers.
+- For generic execution, call by identifier through wbw_run_tool.
+- For wrapper execution, use generated session methods on the session object.
+- The nested category/subcategory convention is the canonical shape for Python
+	WbEnvironment tool namespaces; in R, generated session wrappers and
+	wbw_run_tool are the practical call surfaces.
+
+For an exhaustive tool_id-to-R-call lookup, see
+[Tool Call Paths (R)](./api-tool-call-paths-r.md).
+
 ## Math And Statistics
 
 {{#include ../../../wbw_python/docs/tools_math.md}}

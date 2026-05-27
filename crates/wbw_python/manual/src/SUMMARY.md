@@ -29,4 +29,5 @@
 - [API Reference](./api-reference.md)
 - [Non-Tool WbEnvironment API](./api-non-tool-wbenvironment.md)
 - [Tool API Reference (All Tools)](./api-tools-reference.md)
+- [Tool Call Paths (Python)](./api-tool-call-paths.md)
 - [Script Index](./script-index.md)

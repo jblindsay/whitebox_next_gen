@@ -26,4 +26,7 @@
 - [Online Data Downloads](./online-data-downloads.md)
 - [Network Analysis](./network-analysis.md)
 - [Linear Referencing](./linear-referencing.md)
+- [API Reference](./api-reference.md)
+- [Non-Tool Session And Facade API](./api-non-tool-session.md)
+- [Tool API Reference (All Tools)](./api-tools-reference.md)
 - [Script Index](./script-index.md)

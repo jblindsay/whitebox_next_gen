@@ -261,6 +261,16 @@ def _infer_params_from_help_static(tool_id: str) -> list[dict]:
     return params
 
 
+def _infer_missing_output_param_from_help_static(tool_id: str) -> dict | None:
+    """Recover a missing output destination from the static help signature."""
+    params = _infer_params_from_help_static(tool_id)
+    for param in params:
+        name = str(param.get("name", "")).strip().lower()
+        if name.startswith(("output", "out", "destination")):
+            return dict(param)
+    return None
+
+
 def _infer_params_from_runtime_callable(tool_id: str) -> list[dict]:
     env = _get_runtime_env()
     if env is None:
@@ -376,6 +386,16 @@ def _hydrate_missing_params(catalog: list[dict]) -> list[dict]:
         fixed = dict(item)
         params = fixed.get("params")
         if isinstance(params, list) and len(params) > 0:
+            has_output = any(
+                str(p.get("name", "")).strip().lower().startswith(("output", "out", "destination"))
+                for p in params
+                if isinstance(p, dict)
+            )
+            if not has_output:
+                tool_id = str(fixed.get("id", "")).strip()
+                inferred_output = _infer_missing_output_param_from_help_static(tool_id)
+                if inferred_output is not None:
+                    fixed["params"] = list(params) + [inferred_output]
             out.append(fixed)
             continue
 

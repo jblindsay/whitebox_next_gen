@@ -17,6 +17,31 @@ _RUNTIME_LOCAL_PYTHON = ""
 _NEXT_GEN_MIN_VERSION = "2.0.0"
 
 
+def _subprocess_window_kwargs() -> dict:
+    """Return platform-safe subprocess kwargs that avoid transient console windows."""
+    if os.name != "nt":
+        return {}
+
+    kwargs: dict[str, object] = {}
+    creationflags = 0
+    create_no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    if create_no_window:
+        creationflags |= create_no_window
+    if creationflags:
+        kwargs["creationflags"] = creationflags
+
+    startupinfo_cls = getattr(subprocess, "STARTUPINFO", None)
+    use_show_window = getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
+    sw_hide = getattr(subprocess, "SW_HIDE", 0)
+    if startupinfo_cls is not None and use_show_window:
+        startupinfo = startupinfo_cls()
+        startupinfo.dwFlags |= use_show_window
+        startupinfo.wShowWindow = sw_hide
+        kwargs["startupinfo"] = startupinfo
+
+    return kwargs
+
+
 def set_runtime_preferences(mode: str = "auto", local_python: str = "") -> None:
     """Set runtime interpreter selection preferences for this plugin process.
 
@@ -182,6 +207,7 @@ class ExternalRuntimeSession:
             text=True,
             env=self._build_clean_env(),
             bufsize=1,
+            **_subprocess_window_kwargs(),
         )
 
     def _stop_stream_worker(self) -> None:
@@ -306,6 +332,7 @@ class ExternalRuntimeSession:
             capture_output=True,
             text=True,
             env=self._build_clean_env(),
+            **_subprocess_window_kwargs(),
         )
         if completed.returncode != 0:
             stderr = completed.stderr.strip() or completed.stdout.strip() or "unknown external runtime error"
@@ -451,6 +478,7 @@ class ExternalRuntimeSession:
             text=True,
             env=self._build_clean_env(),
             bufsize=1,
+            **_subprocess_window_kwargs(),
         ) as process:
             assert process.stdout is not None
             for raw_line in process.stdout:
@@ -705,6 +733,7 @@ def _get_installed_whitebox_workflows_version_for_interpreter(interpreter: str) 
         capture_output=True,
         text=True,
         env=_build_clean_env(),
+        **_subprocess_window_kwargs(),
     )
     if completed.returncode != 0:
         stderr = completed.stderr.strip() or completed.stdout.strip() or "unknown version query error"
@@ -738,6 +767,7 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
         capture_output=True,
         text=True,
         env=_build_clean_env(),
+        **_subprocess_window_kwargs(),
     )
     stdout = completed.stdout.strip()
     stderr = completed.stderr.strip()
@@ -965,6 +995,7 @@ def invoke_license_function(
         capture_output=True,
         text=True,
         env=_build_clean_env(),
+        **_subprocess_window_kwargs(),
     )
 
     if completed.returncode != 0:

@@ -1854,6 +1854,9 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
         self._param_specs = []
         params_list = list(self._manifest.get("params", []))
         vector_param_names: list[str] = []
+        raster_input_count = 0
+        vector_input_count = 0
+        lidar_input_count = 0
         for vp in params_list:
             vp_name = str(vp.get("name", "") or "")
             if not vp_name:
@@ -1862,8 +1865,26 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             vp_default = self._manifest.get("defaults", {}).get(vp_name)
             if vp_default is None and "default" in vp:
                 vp_default = vp.get("default")
-            if _infer_kind(vp_name, vp_desc, vp_default) == "vector_in":
+            inferred_input_kind = _infer_kind(vp_name, vp_desc, vp_default)
+            if inferred_input_kind == "vector_in":
                 vector_param_names.append(vp_name)
+                vector_input_count += 1
+            elif inferred_input_kind in ("raster_in", "raster_layers_in"):
+                raster_input_count += 1
+            elif inferred_input_kind == "file_in":
+                n = vp_name.lower()
+                d = vp_desc.lower()
+                if any(tok in (n + " " + d) for tok in ("lidar", "las", "laz", "zlidar", "copc", "e57", "ply")):
+                    lidar_input_count += 1
+
+        dominant_input_family = ""
+        if raster_input_count >= vector_input_count and raster_input_count >= lidar_input_count and raster_input_count > 0:
+            dominant_input_family = "raster"
+        elif vector_input_count >= raster_input_count and vector_input_count >= lidar_input_count and vector_input_count > 0:
+            dominant_input_family = "vector"
+        elif lidar_input_count > 0:
+            dominant_input_family = "lidar"
+
         for p in params_list:
             name = p.get("name", "")
             if not name:
@@ -1899,7 +1920,15 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                 )
                 cat = str(self._manifest.get("category", "")).lower()
                 if not non_layer_output_hint:
-                    if "vector" in cat:
+                    # Prefer dominant input family first when output metadata is
+                    # generic (e.g., "Output destination path").
+                    if dominant_input_family == "vector":
+                        kind = "vector_out"
+                    elif dominant_input_family == "lidar":
+                        kind = "lidar_out"
+                    elif dominant_input_family == "raster":
+                        kind = "raster_out"
+                    elif "vector" in cat:
                         kind = "vector_out"
                     elif "lidar" in cat:
                         kind = "lidar_out"

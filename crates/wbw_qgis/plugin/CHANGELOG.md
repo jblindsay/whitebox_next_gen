@@ -4,9 +4,15 @@ This changelog tracks user-visible changes to the Whitebox Workflows QGIS plugin
 
 ## Unreleased
 
+- Fixed output destination type inference for tools with generic destination labels so raster/vector/LiDAR outputs are exposed to QGIS as layer destinations and auto-added to the layer tree.
+
+## 2.0.8 - 2026-05-27
+
+- Restored missing output destination parameters for raster/vector/LiDAR tools when runtime metadata omits the destination but the static help signature still returns a loadable layer type.
+- Suppressed transient external Python console windows where the host platform supports hidden subprocess launches.
 - Ran flake8 cleanup against the QGIS validator rule classes (`W503`, `W504`, `F841`, `F401`, `W293`, `E303`, `E305`) across plugin source files and the packaged plugin ZIP payload.
 - Fixed multiline boolean formatting (`W503`/`W504`) in `algorithm.py`, `bootstrap.py`, `discovery.py`, `plugin.py`, and `help_provider.py`; fixed spacing (`E303`/`E305`) in `discovery.py`; fixed assigned-but-unused local (`F841`) in `help.py`; and fixed unused import/trailing-whitespace (`F401`/`W293`) in `help_provider.py`.
-- Rebuilt the plugin package through preflight and validated that the same lint classes are clean in both source and `whitebox_workflows_for_qgis-2.0.7.zip`.
+- Rebuilt the plugin package through preflight and validated that the same lint classes are clean in both source and `whitebox_workflows_for_qgis-2.0.8.zip`.
 
 ## 2.0.7 - 2026-05-27
 

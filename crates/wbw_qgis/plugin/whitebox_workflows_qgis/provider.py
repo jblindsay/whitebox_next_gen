@@ -81,7 +81,13 @@ class WhiteboxProcessingProvider(QgsProcessingProvider):
         try:
             from .help import generate_help_files
             wbw = load_whitebox_workflows()
-            self._help_index = generate_help_files(wbw, self._catalog, force=force)
+            self._help_index = generate_help_files(
+                wbw,
+                self._catalog,
+                force=force,
+                include_pro=self._include_pro,
+                tier=self._tier,
+            )
         except Exception:  # never block the provider from loading
             pass
 

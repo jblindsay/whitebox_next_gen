@@ -15,6 +15,7 @@ or by calling generate_help_files(force=True).
 from __future__ import annotations
 
 import inspect
+import json
 import os
 import re
 
@@ -335,11 +336,59 @@ def _help_html_from_manifest(
 """
 
 
+def _enrich_catalog_with_runtime_metadata(
+    catalog: list[dict],
+    *,
+    include_pro: bool = True,
+    tier: str = "open",
+) -> list[dict]:
+    """Best-effort enrichment of catalog manifests with runtime per-tool metadata.
+
+    Some catalog entries (for example injected wrappers) may not have dedicated
+    per-tool metadata endpoints; those entries are returned unchanged.
+    """
+    try:
+        from .bootstrap import create_runtime_session
+        session = create_runtime_session(include_pro=include_pro, tier=tier)
+    except Exception:
+        return list(catalog)
+
+    out: list[dict] = []
+    for item in catalog:
+        base = dict(item)
+        tool_id = str(base.get("id", "") or "").strip()
+        if not tool_id:
+            out.append(base)
+            continue
+        try:
+            metadata_raw = session.get_tool_metadata_json(tool_id)
+            metadata = json.loads(str(metadata_raw or ""))
+            if isinstance(metadata, dict):
+                merged = dict(base)
+                merged.update(metadata)
+                merged.setdefault("id", tool_id)
+                merged.setdefault("display_name", base.get("display_name", tool_id))
+                out.append(merged)
+                continue
+        except Exception:
+            pass
+        out.append(base)
+
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Public API — generate + cache
 # ---------------------------------------------------------------------------
 
-def generate_help_files(wbw_module, catalog: list[dict], *, force: bool = False) -> dict[str, str]:
+def generate_help_files(
+    wbw_module,
+    catalog: list[dict],
+    *,
+    force: bool = False,
+    include_pro: bool = True,
+    tier: str = "open",
+) -> dict[str, str]:
     """Generate help HTML files for all tools in the catalog.
 
     Bundled static files (help_static/) are always preferred and are never
@@ -351,6 +400,8 @@ def generate_help_files(wbw_module, catalog: list[dict], *, force: bool = False)
         catalog: Tool-catalog list from `list_tool_catalog_json()`.
         force: Re-generate cached files even if they already exist.
             Bundled files are never overwritten regardless of this flag.
+        include_pro: Runtime include_pro value used when fetching per-tool metadata.
+        tier: Runtime tier value used when fetching per-tool metadata.
 
     Returns:
         Mapping of tool_id → absolute path of the best available HTML file
@@ -370,8 +421,26 @@ def generate_help_files(wbw_module, catalog: list[dict], *, force: bool = False)
             if doc and len(doc.strip()) > 10:
                 docstrings[method_name] = doc
 
+    enriched_catalog = _enrich_catalog_with_runtime_metadata(
+        catalog,
+        include_pro=include_pro,
+        tier=tier,
+    )
+    enriched_by_id: dict[str, dict] = {
+        str(m.get("id", "") or "").strip(): m
+        for m in enriched_catalog
+        if isinstance(m, dict) and str(m.get("id", "") or "").strip()
+    }
+
     for item in catalog:
-        tool_id: str = item.get("id", "")
+        manifest = item
+        tool_id_lookup = str(item.get("id", "") or "").strip()
+        if tool_id_lookup:
+            enriched = enriched_by_id.get(tool_id_lookup)
+            if isinstance(enriched, dict):
+                manifest = enriched
+
+        tool_id: str = manifest.get("id", "")
         if not tool_id:
             continue
 
@@ -381,8 +450,8 @@ def generate_help_files(wbw_module, catalog: list[dict], *, force: bool = False)
             result[tool_id] = bundled
             continue
 
-        display_name: str = item.get("display_name", tool_id)
-        is_pro: bool = item.get("license_tier", "open") in ("pro", "enterprise")
+        display_name: str = manifest.get("display_name", tool_id)
+        is_pro: bool = manifest.get("license_tier", "open") in ("pro", "enterprise")
 
         out_path = os.path.join(cache_dir, f"{tool_id}.html")
         result[tool_id] = out_path
@@ -398,7 +467,7 @@ def generate_help_files(wbw_module, catalog: list[dict], *, force: bool = False)
                 is_pro,
             )
         else:
-            html = _help_html_from_manifest(item, is_pro)
+            html = _help_html_from_manifest(manifest, is_pro)
 
         with open(out_path, "w", encoding="utf-8") as fh:
             fh.write(html)
@@ -427,7 +496,7 @@ def get_help_html(tool_id: str, catalog: list[dict] | None = None) -> str:
             return fh.read()
 
     # Not cached — generate now
-    from .bootstrap import load_whitebox_workflows, get_tool_catalog
+    from .bootstrap import load_whitebox_workflows, get_tool_catalog, get_tool_metadata
 
     wbw = load_whitebox_workflows()
     if catalog is None:
@@ -436,6 +505,17 @@ def get_help_html(tool_id: str, catalog: list[dict] | None = None) -> str:
     manifest = next((item for item in catalog if item.get("id") == tool_id), None)
     if manifest is None:
         return f"<p>No help available for tool <code>{tool_id}</code>.</p>"
+
+    # Prefer per-tool runtime metadata when available, then fall back to the
+    # catalog item (important for injected pseudo-tools/wrappers).
+    try:
+        enriched = get_tool_metadata(tool_id)
+        if isinstance(enriched, dict):
+            merged = dict(manifest)
+            merged.update(enriched)
+            manifest = merged
+    except Exception:
+        pass
 
     is_pro = manifest.get("license_tier", "open") in ("pro", "enterprise")
 

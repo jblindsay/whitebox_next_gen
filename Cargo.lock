@@ -4316,7 +4316,7 @@ dependencies = [
 
 [[package]]
 name = "wbw_python"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "dirs",
  "pyo3",
@@ -4337,7 +4337,7 @@ dependencies = [
 
 [[package]]
 name = "wbw_r"
-version = "2.0.1"
+version = "2.0.3"
 dependencies = [
  "extendr-api",
  "parquet 54.3.1",

@@ -7,7 +7,7 @@ use std::env;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use wbcore::{
-    generate_wrapper_stub, BindingTarget, ExecuteRequest, LicenseTier, OwnedToolRuntime,
+    generate_wrapper_stub, manifest_with_io_schema_json, BindingTarget, ExecuteRequest, LicenseTier, OwnedToolRuntime,
     OwnedToolRuntimeWithCapabilities, RuntimeOptions,
     ProgressSink, ToolArgs, ToolError, ToolManifest, ToolRuntimeBuilder, ToolRuntimeRegistry,
 };
@@ -521,7 +521,7 @@ impl PythonToolRuntime {
     }
 
     fn catalog_entry_json(&self, manifest: &ToolManifest) -> Value {
-        let mut entry = json!(manifest);
+        let mut entry = manifest_with_io_schema_json(manifest);
         let effective = self.effective_tier();
         let (display_default_visible, display_default_favorite, display_default_rank) =
             manifest_display_defaults(manifest);
@@ -578,6 +578,10 @@ impl PythonToolRuntime {
             .find(|m| m.id == tool_id)
             .ok_or_else(|| ToolError::NotFound(tool_id.to_string()))?;
         Ok(self.catalog_entry_json(&manifest))
+    }
+
+    pub fn get_tool_info_json(&self, tool_id: &str) -> Result<Value, ToolError> {
+        self.get_tool_metadata_json(tool_id)
     }
 
     pub fn get_runtime_capabilities_json(&self) -> Value {
@@ -1454,6 +1458,15 @@ impl RuntimeSession {
             .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
     }
 
+    fn get_tool_info_json(&self, tool_id: &str) -> PyResult<String> {
+        let out = self
+            .runtime
+            .get_tool_info_json(tool_id)
+            .map_err(map_tool_error)?;
+        serde_json::to_string(&out)
+            .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+    }
+
     fn get_runtime_capabilities_json(&self) -> PyResult<String> {
         serde_json::to_string(&self.runtime.get_runtime_capabilities_json())
             .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
@@ -1553,6 +1566,14 @@ fn get_tool_metadata_json(tool_id: &str) -> PyResult<String> {
 }
 
 #[pyfunction]
+fn get_tool_info_json(tool_id: &str) -> PyResult<String> {
+    let rt = PythonToolRuntime::new();
+    let out = rt.get_tool_info_json(tool_id).map_err(map_tool_error)?;
+    serde_json::to_string(&out)
+        .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+#[pyfunction]
 fn get_runtime_capabilities_json() -> PyResult<String> {
     let rt = PythonToolRuntime::new();
     serde_json::to_string(&rt.get_runtime_capabilities_json())
@@ -1590,6 +1611,16 @@ fn get_tool_metadata_json_with_options(tool_id: &str, include_pro: bool, tier: &
     let rt = runtime_from_local_license_state(include_pro, parsed_tier)
         .map_err(map_tool_error)?;
     let out = rt.get_tool_metadata_json(tool_id).map_err(map_tool_error)?;
+    serde_json::to_string(&out)
+        .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+#[pyfunction]
+fn get_tool_info_json_with_options(tool_id: &str, include_pro: bool, tier: &str) -> PyResult<String> {
+    let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)
+        .map_err(map_tool_error)?;
+    let out = rt.get_tool_info_json(tool_id).map_err(map_tool_error)?;
     serde_json::to_string(&out)
         .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
 }
@@ -2392,11 +2423,13 @@ fn whitebox_workflows(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     m.add_function(wrap_pyfunction!(list_tools_json, m)?)?;
     m.add_function(wrap_pyfunction!(list_tool_catalog_json, m)?)?;
     m.add_function(wrap_pyfunction!(get_tool_metadata_json, m)?)?;
+    m.add_function(wrap_pyfunction!(get_tool_info_json, m)?)?;
     m.add_function(wrap_pyfunction!(get_runtime_capabilities_json, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools_json_with_options, m)?)?;
     m.add_function(wrap_pyfunction!(list_tool_catalog_json_with_options, m)?)?;
     m.add_function(wrap_pyfunction!(get_tool_metadata_json_with_options, m)?)?;
+    m.add_function(wrap_pyfunction!(get_tool_info_json_with_options, m)?)?;
     m.add_function(wrap_pyfunction!(get_runtime_capabilities_json_with_options, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools_with_options, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools_json_with_entitlement_options, m)?)?;

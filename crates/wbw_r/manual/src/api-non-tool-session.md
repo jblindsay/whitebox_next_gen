@@ -20,6 +20,8 @@ License-aware startup modes are supported by constructor arguments for:
 - `wbw_has_tool(tool_id, session = ...)`
 - `wbw_search_tools(query, session = ...)`
 - `wbw_describe_tool(tool_id, session = ...)`
+- `get_tool_metadata_json(tool_id)`
+- `get_tool_info_json(tool_id)`
 - `wbw_run_tool(tool_id, args = list(), session = ...)`
 - `wbw_run_tool_with_progress(tool_id, args = list(), session = ...)`
 
@@ -42,6 +44,7 @@ License-aware startup modes are supported by constructor arguments for:
 `wbw_build_session(...)` provides session-bound helper methods, including:
 
 - read/write helpers (`session$read_*`, `session$write_*`)
+- metadata discovery helpers (`session$get_tool_metadata_json`, `session$get_tool_info_json`)
 - memory management (`session$clear_memory`, object-store clear/remove/count)
 - projection helpers (`session$projection_*`)
 - topology helpers (`session$topology_*`)

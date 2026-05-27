@@ -70,6 +70,15 @@ wbw_build_session <- function(floating_license_id = NULL,
 
       wbw_progress_result_fallback(tool_id, session$run_tool(tool_id, args))
     }
+
+    session$get_tool_metadata_json <- function(tool_id) {
+      tool <- wbw_describe_tool(tool_id, session = session)
+      jsonlite::toJSON(tool, auto_unbox = TRUE, null = "null")
+    }
+
+    session$get_tool_info_json <- function(tool_id) {
+      session$get_tool_metadata_json(tool_id)
+    }
   }
 
   session$write_raster <- function(raster,
@@ -3254,6 +3263,65 @@ wbw_describe_tool <- function(tool_id,
     stop(sprintf("Tool not found: %s", tool_id), call. = FALSE)
   }
   matches[[1]]
+}
+
+#' @export
+get_tool_metadata_json <- function(tool_id,
+                                   session = NULL,
+                                   floating_license_id = NULL,
+                                   include_pro = NULL,
+                                   tier = "open",
+                                   signed_entitlement_json = NULL,
+                                   entitlement_file = NULL,
+                                   public_key_kid = NULL,
+                                   public_key_b64url = NULL,
+                                   provider_url = NULL,
+                                   machine_id = NULL,
+                                   customer_id = NULL) {
+  tool <- wbw_describe_tool(
+    tool_id = tool_id,
+    session = session,
+    floating_license_id = floating_license_id,
+    include_pro = include_pro,
+    tier = tier,
+    signed_entitlement_json = signed_entitlement_json,
+    entitlement_file = entitlement_file,
+    public_key_kid = public_key_kid,
+    public_key_b64url = public_key_b64url,
+    provider_url = provider_url,
+    machine_id = machine_id,
+    customer_id = customer_id
+  )
+  jsonlite::toJSON(tool, auto_unbox = TRUE, null = "null")
+}
+
+#' @export
+get_tool_info_json <- function(tool_id,
+                               session = NULL,
+                               floating_license_id = NULL,
+                               include_pro = NULL,
+                               tier = "open",
+                               signed_entitlement_json = NULL,
+                               entitlement_file = NULL,
+                               public_key_kid = NULL,
+                               public_key_b64url = NULL,
+                               provider_url = NULL,
+                               machine_id = NULL,
+                               customer_id = NULL) {
+  get_tool_metadata_json(
+    tool_id = tool_id,
+    session = session,
+    floating_license_id = floating_license_id,
+    include_pro = include_pro,
+    tier = tier,
+    signed_entitlement_json = signed_entitlement_json,
+    entitlement_file = entitlement_file,
+    public_key_kid = public_key_kid,
+    public_key_b64url = public_key_b64url,
+    provider_url = provider_url,
+    machine_id = machine_id,
+    customer_id = customer_id
+  )
 }
 
 #' @export

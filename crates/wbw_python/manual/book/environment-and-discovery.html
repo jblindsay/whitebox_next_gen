@@ -254,6 +254,30 @@ triangulation_thin_cell_size: type=float, default='0.0'
 </code></pre>
 <p>This is especially useful for building dynamic UIs, generating documentation,
 or writing validation helpers that do not hard-code allowed values.</p>
+<h2 id="schema-aware-tool-metadata-json"><a class="header" href="#schema-aware-tool-metadata-json">Schema-Aware Tool Metadata JSON</a></h2>
+<p>For canonical parameter I/O typing, prefer <code>get_tool_info_json</code> (or
+<code>get_tool_metadata_json</code>) over name/description heuristics. The JSON payload
+includes <code>io_role</code> and <code>data_kind</code> per parameter.</p>
+<pre><code class="language-python">import json
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+tool = json.loads(wbe.get_tool_info_json('slope'))
+
+for p in tool.get('params', []):
+    print(
+        p['name'],
+        'role=', p.get('io_role', 'unknown'),
+        'kind=', p.get('data_kind', 'unknown')
+    )
+</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>Field</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>io_role</code></td><td>Parameter role: <code>input</code>, <code>output</code>, or non-I/O <code>argument</code>.</td></tr>
+<tr><td><code>data_kind</code></td><td>Canonical family such as <code>raster</code>, <code>vector</code>, <code>lidar</code>, <code>table</code>, <code>json</code>, <code>text</code>, <code>file</code>, <code>bool</code>, <code>number</code>, or <code>string</code>.</td></tr>
+</tbody></table>
+</div>
+<p>Use these fields for integration logic such as destination widget selection,
+layer-output handling, and catalog validation.</p>
 <h2 id="validate-tool-availability"><a class="header" href="#validate-tool-availability">Validate Tool Availability</a></h2>
 <p>Use hard checks like this in batch scripts so failures occur immediately, before
 expensive processing begins.</p>
@@ -316,6 +340,8 @@ Special Python dunder methods are intentionally omitted.</p>
 <tr><td><code>domain_namespaces</code></td><td>Return available domain namespace names.</td></tr>
 <tr><td><code>domain</code></td><td>Return a domain namespace object by name.</td></tr>
 <tr><td><code>describe_tool</code></td><td>Return metadata and parameter details for a specific tool ID.</td></tr>
+<tr><td><code>get_tool_metadata_json</code></td><td>Return canonical metadata JSON for one tool ID, including <code>io_role</code>/<code>data_kind</code>.</td></tr>
+<tr><td><code>get_tool_info_json</code></td><td>Alias of <code>get_tool_metadata_json</code> for cross-binding API parity.</td></tr>
 <tr><td><code>search_tools</code></td><td>Search tools by keyword or phrase.</td></tr>
 <tr><td><code>list_tools_detailed</code></td><td>Return expanded metadata for all visible tools.</td></tr>
 </tbody></table>

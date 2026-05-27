@@ -195,6 +195,8 @@ are documented in <a href="./api-tools-reference.html">Tool API Reference (All T
 <li><code>wbw_has_tool(tool_id, session = ...)</code></li>
 <li><code>wbw_search_tools(query, session = ...)</code></li>
 <li><code>wbw_describe_tool(tool_id, session = ...)</code></li>
+<li><code>get_tool_metadata_json(tool_id)</code></li>
+<li><code>get_tool_info_json(tool_id)</code></li>
 <li><code>wbw_run_tool(tool_id, args = list(), session = ...)</code></li>
 <li><code>wbw_run_tool_with_progress(tool_id, args = list(), session = ...)</code></li>
 </ul>
@@ -216,6 +218,7 @@ are documented in <a href="./api-tools-reference.html">Tool API Reference (All T
 <p><code>wbw_build_session(...)</code> provides session-bound helper methods, including:</p>
 <ul>
 <li>read/write helpers (<code>session$read_*</code>, <code>session$write_*</code>)</li>
+<li>metadata discovery helpers (<code>session$get_tool_metadata_json</code>, <code>session$get_tool_info_json</code>)</li>
 <li>memory management (<code>session$clear_memory</code>, object-store clear/remove/count)</li>
 <li>projection helpers (<code>session$projection_*</code>)</li>
 <li>topology helpers (<code>session$topology_*</code>)</li>

@@ -228,6 +228,29 @@ impl CapabilityProvider for MaxTierCapabilities {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolIoRole {
+    Input,
+    Output,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolDataKind {
+    Raster,
+    Vector,
+    Lidar,
+    Table,
+    Json,
+    Text,
+    File,
+    Bool,
+    Number,
+    String,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolParamDescriptor {
     pub name: String,
     pub description: String,
@@ -272,6 +295,135 @@ impl From<&ToolParamSpec> for ToolParamDescriptor {
             required: p.required,
         }
     }
+}
+
+fn looks_like_output_param(name: &str, description: &str) -> bool {
+    let n = name.trim().to_ascii_lowercase();
+    let d = description.trim().to_ascii_lowercase();
+
+    if matches!(
+        n.as_str(),
+        "output" | "out" | "output_file" | "output_path" | "destination" | "dst"
+    ) {
+        return true;
+    }
+    if n.starts_with("output_") || n.starts_with("out_") || n.starts_with("destination_") {
+        return true;
+    }
+
+    let persist_markers = [
+        "output file",
+        "output path",
+        "destination file",
+        "destination path",
+        "save to",
+        "write to",
+        "report file",
+    ];
+    persist_markers.iter().any(|m| d.contains(m))
+}
+
+fn infer_data_kind(name: &str, description: &str, role: &ToolIoRole) -> ToolDataKind {
+    let text = format!("{} {}", name.to_ascii_lowercase(), description.to_ascii_lowercase());
+
+    if text.contains("raster")
+        || text.contains("dem")
+        || text.contains("geotiff")
+        || text.contains(".tif")
+        || text.contains(".tiff")
+        || text.contains("grid")
+    {
+        return ToolDataKind::Raster;
+    }
+    if text.contains("vector")
+        || text.contains("feature")
+        || text.contains("geopackage")
+        || text.contains("gpkg")
+        || text.contains("geojson")
+        || text.contains("topojson")
+        || text.contains(".shp")
+    {
+        return ToolDataKind::Vector;
+    }
+    if text.contains("lidar")
+        || text.contains("las")
+        || text.contains("laz")
+        || text.contains("copc")
+        || text.contains("e57")
+        || text.contains("ply")
+        || text.contains("zlidar")
+    {
+        return ToolDataKind::Lidar;
+    }
+    if text.contains("csv") || text.contains("table") {
+        return ToolDataKind::Table;
+    }
+    if text.contains("json") {
+        return ToolDataKind::Json;
+    }
+    if text.contains("txt") || text.contains("text") || text.contains("html") || text.contains("xml") {
+        return ToolDataKind::Text;
+    }
+
+    if matches!(role, ToolIoRole::Output) {
+        return ToolDataKind::File;
+    }
+    ToolDataKind::String
+}
+
+pub fn manifest_with_io_schema_json(manifest: &ToolManifest) -> Value {
+    let mut entry = serde_json::to_value(manifest).unwrap_or_else(|_| Value::Null);
+    let Value::Object(obj) = &mut entry else {
+        return serde_json::to_value(manifest).unwrap_or(Value::Null);
+    };
+
+    let params_val = obj
+        .get("params")
+        .cloned()
+        .unwrap_or_else(|| Value::Array(Vec::new()));
+
+    let mut params_out = Vec::new();
+    if let Value::Array(params) = params_val {
+        for p in params {
+            let mut po = match p {
+                Value::Object(v) => v,
+                _ => continue,
+            };
+
+            let name = po
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            let description = po
+                .get("description")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+
+            let role = if looks_like_output_param(&name, &description) {
+                ToolIoRole::Output
+            } else {
+                ToolIoRole::Input
+            };
+            let data_kind = infer_data_kind(&name, &description, &role);
+
+            po.insert(
+                "io_role".to_string(),
+                serde_json::to_value(role).unwrap_or_else(|_| Value::String("input".to_string())),
+            );
+            po.insert(
+                "data_kind".to_string(),
+                serde_json::to_value(data_kind)
+                    .unwrap_or_else(|_| Value::String("unknown".to_string())),
+            );
+
+            params_out.push(Value::Object(po));
+        }
+    }
+
+    obj.insert("params".to_string(), Value::Array(params_out));
+    entry
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

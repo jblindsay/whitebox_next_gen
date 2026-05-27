@@ -17,8 +17,12 @@ utility namespaces. Tool wrappers are documented in
 - `license_type()`
 - `license_info()`
 - `list_tools()`
+- `list_tools_json()`
+- `list_tool_catalog_json()`
 - `list_tools_detailed(include_locked=False)`
 - `describe_tool(tool_id, include_locked=False)`
+- `get_tool_metadata_json(tool_id)`
+- `get_tool_info_json(tool_id)`
 - `search_tools(query, include_locked=False)`
 - `categories()`
 - `category(name)`

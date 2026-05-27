@@ -213,6 +213,32 @@ print(matches[1:min(5, length(matches))])
 desc &lt;- wbw_describe_tool('slope')
 print(desc)
 </code></pre>
+<h2 id="schema-aware-tool-metadata-json"><a class="header" href="#schema-aware-tool-metadata-json">Schema-Aware Tool Metadata JSON</a></h2>
+<p>For canonical parameter I/O typing, use <code>get_tool_info_json</code> (or
+<code>get_tool_metadata_json</code>) rather than inferring type from parameter names or
+descriptions. These JSON payloads include <code>io_role</code> and <code>data_kind</code> fields for
+each parameter.</p>
+<pre><code class="language-r">library(whiteboxworkflows)
+library(jsonlite)
+
+info &lt;- fromJSON(get_tool_info_json('slope'))
+params &lt;- info$params
+has_role &lt;- 'io_role' %in% names(params)
+has_kind &lt;- 'data_kind' %in% names(params)
+
+for (i in seq_len(nrow(params))) {
+	role &lt;- if (has_role) params$io_role[[i]] else 'unknown'
+	kind &lt;- if (has_kind) params$data_kind[[i]] else 'unknown'
+	cat(params$name[[i]], ' role=', role, ' kind=', kind, '\n', sep = '')
+}
+</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>Field</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>io_role</code></td><td>Parameter role: <code>input</code>, <code>output</code>, or non-I/O <code>argument</code>.</td></tr>
+<tr><td><code>data_kind</code></td><td>Canonical family such as <code>raster</code>, <code>vector</code>, <code>lidar</code>, <code>table</code>, <code>json</code>, <code>text</code>, <code>file</code>, <code>bool</code>, <code>number</code>, or <code>string</code>.</td></tr>
+</tbody></table>
+</div>
+<p>Use these fields for integration logic such as destination/output typing,
+layer handling, and parameter validation.</p>
 <h2 id="category-based-discovery"><a class="header" href="#category-based-discovery">Category-Based Discovery</a></h2>
 <p>Category discovery is useful for UI generation, guided workflows, and policy
 checks in larger automation systems.</p>
@@ -239,6 +265,8 @@ and typed I/O helpers.</p>
 <tr><td><code>run_tool</code></td><td>Execute a tool with a named argument list.</td></tr>
 <tr><td><code>run_tool_with_progress</code></td><td>Execute a tool and return structured progress/result output.</td></tr>
 <tr><td><code>list_tools</code></td><td>Return visible tool IDs for the session/license context.</td></tr>
+<tr><td><code>get_tool_metadata_json</code></td><td>Return canonical metadata JSON for one tool ID, including <code>io_role</code>/<code>data_kind</code>.</td></tr>
+<tr><td><code>get_tool_info_json</code></td><td>Alias of <code>get_tool_metadata_json</code> for cross-binding API parity.</td></tr>
 </tbody></table>
 </div>
 <h3 id="typed-io-helpers"><a class="header" href="#typed-io-helpers">Typed I/O Helpers</a></h3>
@@ -274,6 +302,7 @@ and typed I/O helpers.</p>
 <li>Build session explicitly.</li>
 <li>Check required tools with <code>wbw_has_tool(...)</code>.</li>
 <li>Use <code>wbw_describe_tool(...)</code> for parameter verification.</li>
+<li>Use <code>get_tool_info_json(...)</code> when you need canonical I/O typing for integration logic.</li>
 <li>Use category functions to drive guided UX or script validation.</li>
 </ol>
 

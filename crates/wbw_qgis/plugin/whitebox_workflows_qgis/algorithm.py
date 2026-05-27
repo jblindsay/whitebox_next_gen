@@ -574,6 +574,42 @@ def _derive_group_name(manifest: dict[str, Any]) -> str:
     return "General"
 
 
+def _kind_from_io_schema(param: dict[str, Any]) -> str | None:
+    role = str(param.get("io_role", "") or "").strip().lower()
+    data_kind = str(param.get("data_kind", "") or "").strip().lower()
+
+    if role not in {"input", "output"}:
+        return None
+
+    if role == "output":
+        if data_kind == "raster":
+            return "raster_out"
+        if data_kind == "vector":
+            return "vector_out"
+        if data_kind == "lidar":
+            return "lidar_out"
+        if data_kind in {"table", "json", "text", "file", "unknown"}:
+            return "file_out"
+        return "file_out"
+
+    # input role
+    if data_kind == "raster":
+        return "raster_in"
+    if data_kind == "vector":
+        return "vector_in"
+    if data_kind == "lidar":
+        return "file_in"
+    if data_kind == "bool":
+        return "bool"
+    if data_kind == "number":
+        return "double"
+    if data_kind == "string":
+        return "string"
+    if data_kind in {"table", "json", "text", "file", "unknown"}:
+        return "file_in"
+    return None
+
+
 def _infer_kind(name: str, description: str, default_value: Any = None) -> str:
     n = name.lower()
     d = description.lower()
@@ -1894,7 +1930,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             default_value = self._manifest.get("defaults", {}).get(name)
             if default_value is None and "default" in p:
                 default_value = p.get("default")
-            kind = _infer_kind(name, description, default_value)
+            kind = _kind_from_io_schema(p) or _infer_kind(name, description, default_value)
             field_parent = None
             if kind == "string" and vector_param_names and _looks_like_attribute_field(name, description):
                 kind = "field"

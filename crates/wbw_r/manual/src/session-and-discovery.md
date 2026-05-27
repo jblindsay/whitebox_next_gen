@@ -51,6 +51,37 @@ desc <- wbw_describe_tool('slope')
 print(desc)
 ```
 
+## Schema-Aware Tool Metadata JSON
+
+For canonical parameter I/O typing, use `get_tool_info_json` (or
+`get_tool_metadata_json`) rather than inferring type from parameter names or
+descriptions. These JSON payloads include `io_role` and `data_kind` fields for
+each parameter.
+
+```r
+library(whiteboxworkflows)
+library(jsonlite)
+
+info <- fromJSON(get_tool_info_json('slope'))
+params <- info$params
+has_role <- 'io_role' %in% names(params)
+has_kind <- 'data_kind' %in% names(params)
+
+for (i in seq_len(nrow(params))) {
+	role <- if (has_role) params$io_role[[i]] else 'unknown'
+	kind <- if (has_kind) params$data_kind[[i]] else 'unknown'
+	cat(params$name[[i]], ' role=', role, ' kind=', kind, '\n', sep = '')
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `io_role` | Parameter role: `input`, `output`, or non-I/O `argument`. |
+| `data_kind` | Canonical family such as `raster`, `vector`, `lidar`, `table`, `json`, `text`, `file`, `bool`, `number`, or `string`. |
+
+Use these fields for integration logic such as destination/output typing,
+layer handling, and parameter validation.
+
 ## Category-Based Discovery
 
 Category discovery is useful for UI generation, guided workflows, and policy
@@ -85,6 +116,8 @@ and typed I/O helpers.
 | `run_tool` | Execute a tool with a named argument list. |
 | `run_tool_with_progress` | Execute a tool and return structured progress/result output. |
 | `list_tools` | Return visible tool IDs for the session/license context. |
+| `get_tool_metadata_json` | Return canonical metadata JSON for one tool ID, including `io_role`/`data_kind`. |
+| `get_tool_info_json` | Alias of `get_tool_metadata_json` for cross-binding API parity. |
 
 ### Typed I/O Helpers
 
@@ -122,4 +155,5 @@ and typed I/O helpers.
 1. Build session explicitly.
 2. Check required tools with `wbw_has_tool(...)`.
 3. Use `wbw_describe_tool(...)` for parameter verification.
-4. Use category functions to drive guided UX or script validation.
+4. Use `get_tool_info_json(...)` when you need canonical I/O typing for integration logic.
+5. Use category functions to drive guided UX or script validation.

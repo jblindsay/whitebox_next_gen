@@ -101,6 +101,35 @@ triangulation_thin_cell_size: type=float, default='0.0'
 This is especially useful for building dynamic UIs, generating documentation,
 or writing validation helpers that do not hard-code allowed values.
 
+## Schema-Aware Tool Metadata JSON
+
+For canonical parameter I/O typing, prefer `get_tool_info_json` (or
+`get_tool_metadata_json`) over name/description heuristics. The JSON payload
+includes `io_role` and `data_kind` per parameter.
+
+```python
+import json
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+tool = json.loads(wbe.get_tool_info_json('slope'))
+
+for p in tool.get('params', []):
+    print(
+        p['name'],
+        'role=', p.get('io_role', 'unknown'),
+        'kind=', p.get('data_kind', 'unknown')
+    )
+```
+
+| Field | Meaning |
+|---|---|
+| `io_role` | Parameter role: `input`, `output`, or non-I/O `argument`. |
+| `data_kind` | Canonical family such as `raster`, `vector`, `lidar`, `table`, `json`, `text`, `file`, `bool`, `number`, or `string`. |
+
+Use these fields for integration logic such as destination widget selection,
+layer-output handling, and catalog validation.
+
 ## Validate Tool Availability
 
 Use hard checks like this in batch scripts so failures occur immediately, before
@@ -175,6 +204,8 @@ Special Python dunder methods are intentionally omitted.
 | `domain_namespaces` | Return available domain namespace names. |
 | `domain` | Return a domain namespace object by name. |
 | `describe_tool` | Return metadata and parameter details for a specific tool ID. |
+| `get_tool_metadata_json` | Return canonical metadata JSON for one tool ID, including `io_role`/`data_kind`. |
+| `get_tool_info_json` | Alias of `get_tool_metadata_json` for cross-binding API parity. |
 | `search_tools` | Search tools by keyword or phrase. |
 | `list_tools_detailed` | Return expanded metadata for all visible tools. |
 

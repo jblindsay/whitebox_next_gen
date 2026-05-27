@@ -8,7 +8,7 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use wbcore::{
-    generate_wrapper_stub, BindingTarget, ExecuteRequest, LicenseTier, OwnedToolRuntime,
+    generate_wrapper_stub, manifest_with_io_schema_json, BindingTarget, ExecuteRequest, LicenseTier, OwnedToolRuntime,
     OwnedToolRuntimeWithCapabilities, RuntimeOptions,
     ProgressSink, ToolArgs, ToolError, ToolManifest, ToolRuntimeBuilder, ToolRuntimeRegistry,
 };
@@ -2413,9 +2413,26 @@ impl RToolRuntime {
         let tools: Vec<Value> = self
             .list_visible_manifests()
             .into_iter()
-            .map(|m| json!(m))
+            .map(|m| manifest_with_io_schema_json(&m))
             .collect();
         Value::Array(tools)
+    }
+
+    pub fn list_tool_catalog_json(&self) -> Value {
+        self.list_tools_json()
+    }
+
+    pub fn get_tool_metadata_json(&self, tool_id: &str) -> Result<Value, ToolError> {
+        let manifest = self
+            .list_visible_manifests()
+            .into_iter()
+            .find(|m| m.id == tool_id)
+            .ok_or_else(|| ToolError::NotFound(tool_id.to_string()))?;
+        Ok(manifest_with_io_schema_json(&manifest))
+    }
+
+    pub fn get_tool_info_json(&self, tool_id: &str) -> Result<Value, ToolError> {
+        self.get_tool_metadata_json(tool_id)
     }
 
     pub fn run_tool_json(&self, tool_id: &str, args_json: &str) -> Result<Value, ToolError> {
@@ -2832,6 +2849,37 @@ pub fn list_tools_json_with_options(include_pro: bool, tier: &str) -> Result<Str
     let rt = runtime_from_local_license_state(include_pro, parsed_tier)?;
     serde_json::to_string(&rt.list_tools_json())
         .map_err(|e| ToolError::Execution(format!("serialization error: {e}")))
+}
+
+pub fn get_tool_metadata_json(tool_id: &str) -> Result<String, ToolError> {
+    let rt = RToolRuntime::new();
+    let out = rt.get_tool_metadata_json(tool_id)?;
+    serde_json::to_string(&out)
+        .map_err(|e| ToolError::Execution(format!("serialization error: {e}")))
+}
+
+pub fn get_tool_info_json(tool_id: &str) -> Result<String, ToolError> {
+    get_tool_metadata_json(tool_id)
+}
+
+pub fn get_tool_metadata_json_with_options(
+    tool_id: &str,
+    include_pro: bool,
+    tier: &str,
+) -> Result<String, ToolError> {
+    let parsed_tier = parse_tier(tier)?;
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)?;
+    let out = rt.get_tool_metadata_json(tool_id)?;
+    serde_json::to_string(&out)
+        .map_err(|e| ToolError::Execution(format!("serialization error: {e}")))
+}
+
+pub fn get_tool_info_json_with_options(
+    tool_id: &str,
+    include_pro: bool,
+    tier: &str,
+) -> Result<String, ToolError> {
+    get_tool_metadata_json_with_options(tool_id, include_pro, tier)
 }
 
 pub fn list_tools_json_with_entitlement_options(
@@ -3547,6 +3595,36 @@ mod native_exports {
     }
 
     #[extendr]
+    fn get_tool_metadata_json(tool_id: &str) -> extendr_api::Result<String> {
+        super::get_tool_metadata_json(tool_id).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn get_tool_info_json(tool_id: &str) -> extendr_api::Result<String> {
+        super::get_tool_info_json(tool_id).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn get_tool_metadata_json_with_options(
+        tool_id: &str,
+        include_pro: bool,
+        tier: &str,
+    ) -> extendr_api::Result<String> {
+        super::get_tool_metadata_json_with_options(tool_id, include_pro, tier)
+            .map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn get_tool_info_json_with_options(
+        tool_id: &str,
+        include_pro: bool,
+        tier: &str,
+    ) -> extendr_api::Result<String> {
+        super::get_tool_info_json_with_options(tool_id, include_pro, tier)
+            .map_err(map_extendr_err)
+    }
+
+    #[extendr]
     fn list_tools_json_with_entitlement_options(
         signed_entitlement_json: &str,
         public_key_kid: &str,
@@ -4168,6 +4246,10 @@ mod native_exports {
         mod wbw_r;
         fn list_tools_json;
         fn list_tools_json_with_options;
+        fn get_tool_metadata_json;
+        fn get_tool_info_json;
+        fn get_tool_metadata_json_with_options;
+        fn get_tool_info_json_with_options;
         fn list_tools_json_with_entitlement_options;
         fn list_tools_json_with_entitlement_file_options;
         fn list_tools_json_with_floating_license_id_options;

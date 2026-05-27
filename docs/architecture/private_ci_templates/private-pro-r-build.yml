@@ -1,0 +1,52 @@
+name: private pro r build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-pro-r:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout private repo (workflow host)
+        uses: actions/checkout@v4
+        with:
+          path: wbtools_pro
+
+      - name: Checkout public monorepo
+        uses: actions/checkout@v4
+        with:
+          repository: jblindsay/whitebox_next_gen
+          path: whitebox_next_gen
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+
+      - name: Apply private Pro overlay
+        env:
+          ALLOW_PRIVATE_OVERLAY: "true"
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          chmod +x wbtools_pro/ci/apply_pro_overlay.sh
+          wbtools_pro/ci/apply_pro_overlay.sh
+
+      - name: Build pro-enabled R source package
+        env:
+          WBW_R_PACKAGE_PRO: "true"
+          WBW_R_PACKAGE_RELEASE: "true"
+          WBW_R_CARGO_MANIFEST: ${{ github.workspace }}/whitebox_next_gen/crates/wbw_r/Cargo.toml
+        run: |
+          cd whitebox_next_gen/crates/wbw_r/r-package/whiteboxworkflows
+          R CMD build .
+
+      - name: Upload R package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wbw-r-pro-srcpkg
+          path: whitebox_next_gen/crates/wbw_r/r-package/whiteboxworkflows/*.tar.gz

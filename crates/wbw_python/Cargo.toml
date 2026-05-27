@@ -17,7 +17,7 @@ pro = ["dep:wbtools_pro"]
 wbcore = { path = "../wbcore" }
 wblicense_core = { path = "../wblicense_core" }
 wbtools_oss = { path = "../wbtools_oss" }
-wbtools_pro = { path = "../../../wbtools_pro", optional = true }
+wbtools_pro = { path = "../wbtools_pro_shim", optional = true }
 wbraster = { path = "../wbraster" }
 wbprojection = { path = "../wbprojection" }
 wbvector = { path = "../wbvector", features = ["geoparquet", "kmz", "osmpbf"] }

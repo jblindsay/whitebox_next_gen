@@ -1,0 +1,80 @@
+name: public oss buildability
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "Cargo.toml"
+      - "crates/wbw_python/**"
+      - "crates/wbw_r/**"
+      - "crates/wbtools_pro_shim/**"
+      - ".github/workflows/public-oss-buildability.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "Cargo.toml"
+      - "crates/wbw_python/**"
+      - "crates/wbw_r/**"
+      - "crates/wbtools_pro_shim/**"
+      - ".github/workflows/public-oss-buildability.yml"
+
+jobs:
+  check-manifest-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enforce no private wbtools_pro path deps
+        run: |
+          hits="$(git ls-files '*Cargo.toml' | xargs grep -nE 'path\s*=\s*"\.\./\.\./\.\./wbtools_pro"|path\s*=\s*"\.\./\.\./wbtools_pro"|path\s*=\s*"\.\./wbtools_pro"' || true)"
+          if [ -n "$hits" ]; then
+            echo "Forbidden private path dependency found:"
+            echo "$hits"
+            exit 1
+          fi
+
+  cargo-check-bindings:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - crate: wbw_python
+            features: ""
+          - crate: wbw_python
+            features: "pro"
+          - crate: wbw_r
+            features: ""
+          - crate: wbw_r
+            features: "pro"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo check (${{ matrix.crate }} / ${{ matrix.features || 'default' }})
+        run: |
+          if [ -n "${{ matrix.features }}" ]; then
+            cargo check -p "${{ matrix.crate }}" --features "${{ matrix.features }}"
+          else
+            cargo check -p "${{ matrix.crate }}"
+          fi
+
+  shim-contract-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run shim contract tests
+        run: |
+          cargo test -p wbtools_pro --test contract

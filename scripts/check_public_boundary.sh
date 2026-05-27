@@ -4,6 +4,15 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
+echo "Checking Cargo manifests for forbidden private wbtools_pro path dependencies..."
+forbidden_path_hits="$(git ls-files '*Cargo.toml' | xargs grep -nE 'path\s*=\s*"\.\./\.\./\.\./wbtools_pro"|path\s*=\s*"\.\./\.\./wbtools_pro"|path\s*=\s*"\.\./wbtools_pro"' || true)"
+if [[ -n "$forbidden_path_hits" ]]; then
+  echo "Forbidden private path dependency detected in Cargo manifests:"
+  echo "$forbidden_path_hits"
+  echo "Use crates/wbtools_pro_shim in public manifests; private overlay belongs only in private CI."
+  exit 1
+fi
+
 # Sensitive paths that must not be pushed to public mainline by default.
 restricted_paths=(
   "crates/wbcore/"

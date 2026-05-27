@@ -1,0 +1,55 @@
+name: private pro python build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-pro-python:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout private repo (workflow host)
+        uses: actions/checkout@v4
+        with:
+          path: wbtools_pro
+
+      - name: Checkout public monorepo
+        uses: actions/checkout@v4
+        with:
+          repository: jblindsay/whitebox_next_gen
+          path: whitebox_next_gen
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python build tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install maturin
+
+      - name: Apply private Pro overlay
+        env:
+          ALLOW_PRIVATE_OVERLAY: "true"
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          chmod +x wbtools_pro/ci/apply_pro_overlay.sh
+          wbtools_pro/ci/apply_pro_overlay.sh
+
+      - name: Build pro-enabled wheel
+        run: |
+          cd whitebox_next_gen/crates/wbw_python
+          maturin build --release --features pro --out dist
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wbw-python-pro-wheels
+          path: whitebox_next_gen/crates/wbw_python/dist/*

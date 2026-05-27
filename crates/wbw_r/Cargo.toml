@@ -21,7 +21,7 @@ wbprojection = { path = "../wbprojection", features = ["parallel"] }
 wbtopology = { path = "../wbtopology" }
 wbtools_oss = { path = "../wbtools_oss" }
 wblidar = { path = "../wblidar" }
-wbtools_pro = { path = "../../../wbtools_pro", optional = true }
+wbtools_pro = { path = "../wbtools_pro_shim", optional = true }
 serde_json.workspace = true
 parquet = "54"
 extendr-api = "0.8.1"

@@ -1,6 +1,6 @@
 Package: whiteboxworkflows
 Title: Whitebox Workflows for R
-Version: 0.1.0
+Version: 0.1.1
 Authors@R: c(
     person("TODO", "Maintainer", email = "todo@example.com", role = c("aut", "cre"))
     )

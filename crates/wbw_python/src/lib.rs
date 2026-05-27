@@ -993,7 +993,7 @@ fn runtime_from_local_license_state(
 
     let state = match read_license_state_json() {
         Ok(v) => v,
-        Err(_) => return PythonToolRuntime::new_with_options(include_pro, fallback_tier),
+        Err(_) => return PythonToolRuntime::new_with_options(false, LicenseTier::Open),
     };
 
     let signed_entitlement_json = read_license_state_string_field(&state, "signed_entitlement_json")?;
@@ -1008,7 +1008,7 @@ fn runtime_from_local_license_state(
         &public_key_b64url,
     ) {
         Ok(runtime) => Ok(runtime),
-        Err(_) => PythonToolRuntime::new_with_options(include_pro, fallback_tier),
+        Err(_) => PythonToolRuntime::new_with_options(false, LicenseTier::Open),
     }
 }
 
@@ -1569,7 +1569,7 @@ fn list_tools() -> PyResult<Vec<String>> {
 #[pyo3(signature = (include_pro=false, tier="open"))]
 fn list_tools_json_with_options(include_pro: bool, tier: &str) -> PyResult<String> {
     let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
-    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)
         .map_err(map_tool_error)?;
     serde_json::to_string(&rt.list_tools_json())
         .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
@@ -1578,7 +1578,7 @@ fn list_tools_json_with_options(include_pro: bool, tier: &str) -> PyResult<Strin
 #[pyfunction]
 fn list_tool_catalog_json_with_options(include_pro: bool, tier: &str) -> PyResult<String> {
     let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
-    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)
         .map_err(map_tool_error)?;
     serde_json::to_string(&rt.list_tool_catalog_json())
         .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
@@ -1587,7 +1587,7 @@ fn list_tool_catalog_json_with_options(include_pro: bool, tier: &str) -> PyResul
 #[pyfunction]
 fn get_tool_metadata_json_with_options(tool_id: &str, include_pro: bool, tier: &str) -> PyResult<String> {
     let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
-    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)
         .map_err(map_tool_error)?;
     let out = rt.get_tool_metadata_json(tool_id).map_err(map_tool_error)?;
     serde_json::to_string(&out)
@@ -1597,7 +1597,7 @@ fn get_tool_metadata_json_with_options(tool_id: &str, include_pro: bool, tier: &
 #[pyfunction]
 fn get_runtime_capabilities_json_with_options(include_pro: bool, tier: &str) -> PyResult<String> {
     let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
-    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)
         .map_err(map_tool_error)?;
     serde_json::to_string(&rt.get_runtime_capabilities_json())
         .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
@@ -1607,7 +1607,7 @@ fn get_runtime_capabilities_json_with_options(include_pro: bool, tier: &str) -> 
 #[pyo3(signature = (include_pro=false, tier="open"))]
 fn list_tools_with_options(include_pro: bool, tier: &str) -> PyResult<Vec<String>> {
     let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
-    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)
         .map_err(map_tool_error)?;
     extract_tool_ids(&rt.list_tools_json())
 }
@@ -1723,7 +1723,7 @@ fn run_tool_stream(
 #[pyo3(signature = (tool_id, args_json, include_pro=false, tier="open"))]
 fn run_tool_json_with_options(tool_id: &str, args_json: &str, include_pro: bool, tier: &str) -> PyResult<String> {
     let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
-    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)
         .map_err(map_tool_error)?;
     let out = rt.run_tool_json(tool_id, args_json).map_err(map_tool_error)?;
     serde_json::to_string(&out)
@@ -1791,7 +1791,7 @@ fn run_tool_with_options(
     let args_json = serde_json::to_string(&args_map)
         .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))?;
     let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
-    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)
         .map_err(map_tool_error)?;
     let out = rt.run_tool_json(tool_id, &args_json).map_err(map_tool_error)?;
     json_value_to_python_object(py, &out)
@@ -1806,7 +1806,7 @@ fn run_tool_json_with_progress_options(
     tier: &str,
 ) -> PyResult<String> {
     let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
-    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)
         .map_err(map_tool_error)?;
     let out = rt
         .run_tool_json_with_progress(tool_id, args_json)
@@ -1825,7 +1825,7 @@ fn run_tool_json_stream_options(
     tier: &str,
 ) -> PyResult<String> {
     let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
-    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)
         .map_err(map_tool_error)?;
     let sink = PyCallbackSink::new(callback);
     let out = rt
@@ -1852,7 +1852,7 @@ fn run_tool_stream_options(
     let args_json = serde_json::to_string(&args_map)
         .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))?;
     let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
-    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)
         .map_err(map_tool_error)?;
     let sink = PyCallbackSink::new(callback);
     let out = rt
@@ -1878,7 +1878,7 @@ fn _run_tool_convenient(
     tier: &str,
 ) -> PyResult<String> {
     let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
-    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)
         .map_err(map_tool_error)?;
 
     let out_path = wb_environment::resolve_unary_output_path(&input.file_path, tool_id, output, None);
@@ -1976,7 +1976,7 @@ fn cos(input: &Raster, output: Option<&str>, callback: Option<Py<PyAny>>, includ
 #[pyo3(signature = (include_pro=false, tier="open", target="python"))]
 fn generate_wrapper_stubs_json(include_pro: bool, tier: &str, target: &str) -> PyResult<String> {
     let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
-    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)
         .map_err(map_tool_error)?;
     let target = match target.to_ascii_lowercase().as_str() {
         "python" => BindingTarget::Python,

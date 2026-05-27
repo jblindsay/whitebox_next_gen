@@ -277,6 +277,10 @@ class WhiteboxWorkflowsPlugin:
         if not self._ensure_backend_available(interactive=False):
             self._ensure_backend_available(interactive=True)
 
+        # On first run, derive runtime tier defaults from discovered
+        # capabilities instead of hard-coding Pro defaults.
+        self._initialize_entitlement_runtime_defaults()
+
         # Ensure backend install/activation checks run before provider
         # registration, because addProvider() may eagerly call provider.load().
         if not register_provider(self.iface, self.provider):
@@ -989,21 +993,29 @@ class WhiteboxWorkflowsPlugin:
     def _load_runtime_preferences(self):
         try:
             settings = QSettings()
-            self.provider.include_pro = self._coerce_bool(
-                settings.value(self._settings_key_include_pro, self.provider.include_pro),
-                self.provider.include_pro,
-            )
-            default_requested_tier = "pro"
-            if self._settings_contains(settings, self._settings_key_requested_tier):
+            include_exists = self._settings_contains(settings, self._settings_key_include_pro)
+            tier_exists = self._settings_contains(settings, self._settings_key_requested_tier)
+
+            if include_exists:
+                self.provider.include_pro = self._coerce_bool(
+                    settings.value(self._settings_key_include_pro, self.provider.include_pro),
+                    self.provider.include_pro,
+                )
+            else:
+                # Open-safe first-run default. Entitlement-based upgrade is
+                # applied later once runtime capabilities are known.
+                self.provider.include_pro = False
+
+            default_requested_tier = "open"
+            if tier_exists:
                 tier_value = settings.value(self._settings_key_requested_tier, self.provider.tier)
             else:
                 tier_value = default_requested_tier
-                settings.setValue(self._settings_key_requested_tier, default_requested_tier)
 
             self.provider.tier = str(tier_value).strip().lower() or default_requested_tier
         except Exception:
-            self.provider.include_pro = True
-            self.provider.tier = self.provider.tier or "pro"
+            self.provider.include_pro = False
+            self.provider.tier = self.provider.tier or "open"
 
     def _load_backend_preferences(self):
         try:
@@ -1037,6 +1049,39 @@ class WhiteboxWorkflowsPlugin:
             self._skip_auto_update_checks_in_local_mode = True
             self._last_update_check_unix = 0
             self._skipped_update_version = ""
+
+    def _initialize_entitlement_runtime_defaults(self) -> None:
+        """Set first-run runtime prefs from discovered runtime capabilities.
+
+        This method only runs when no runtime preferences are persisted yet.
+        It upgrades to Pro/Enterprise only when capabilities explicitly report
+        that entitlement; otherwise defaults remain open-safe.
+        """
+        try:
+            settings = QSettings()
+            has_include = self._settings_contains(settings, self._settings_key_include_pro)
+            has_tier = self._settings_contains(settings, self._settings_key_requested_tier)
+            if has_include or has_tier:
+                return
+        except Exception:
+            return
+
+        try:
+            payload = gather_runtime_diagnostics(include_pro=True, tier="pro")
+            capabilities = payload.get("capabilities", {}) if isinstance(payload, dict) else {}
+            effective_tier = str(capabilities.get("effective_tier", "")).strip().lower()
+
+            if payload.get("status") == "ok" and effective_tier in {"pro", "enterprise"}:
+                self.provider.include_pro = True
+                self.provider.tier = effective_tier
+            else:
+                self.provider.include_pro = False
+                self.provider.tier = "open"
+        except Exception:
+            self.provider.include_pro = False
+            self.provider.tier = "open"
+
+        self._save_runtime_preferences()
 
     def _save_backend_preferences(self):
         try:

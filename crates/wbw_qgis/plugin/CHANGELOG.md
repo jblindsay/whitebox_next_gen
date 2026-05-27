@@ -4,8 +4,11 @@ This changelog tracks user-visible changes to the Whitebox Workflows QGIS plugin
 
 ## Unreleased
 
-- Fixed packaged plugin validator/lint issues in staged sources (including whitespace/style/import/name checks reported by QGIS plugin validation).
-- Rebuilt the packaged plugin zip after lint cleanup.
+## 2.0.5 - 2026-05-26
+
+- Improved runtime initialization defaults and capability-based startup behavior for first-run reliability across environments.
+- Applied staged source cleanup updates from plugin validation and lint passes.
+- Refreshed packaged plugin metadata and rebuilt the distribution zip for version 2.0.5.
 
 ## 2.0.4 - 2026-05-26
 

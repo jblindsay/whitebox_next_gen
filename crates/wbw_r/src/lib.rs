@@ -2772,7 +2772,7 @@ fn runtime_from_local_license_state(
 
     let state = match read_license_state_json() {
         Ok(v) => v,
-        Err(_) => return RToolRuntime::new_with_options(include_pro, fallback_tier),
+        Err(_) => return RToolRuntime::new_with_options(false, LicenseTier::Open),
     };
 
     let signed_entitlement_json = read_license_state_string_field(&state, "signed_entitlement_json")?;
@@ -2787,7 +2787,7 @@ fn runtime_from_local_license_state(
         &public_key_b64url,
     ) {
         Ok(runtime) => Ok(runtime),
-        Err(_) => RToolRuntime::new_with_options(include_pro, fallback_tier),
+        Err(_) => RToolRuntime::new_with_options(false, LicenseTier::Open),
     }
 }
 
@@ -2829,7 +2829,7 @@ pub fn list_tools_json() -> Result<String, ToolError> {
 
 pub fn list_tools_json_with_options(include_pro: bool, tier: &str) -> Result<String, ToolError> {
     let parsed_tier = parse_tier(tier)?;
-    let rt = RToolRuntime::new_with_options(include_pro, parsed_tier)?;
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)?;
     serde_json::to_string(&rt.list_tools_json())
         .map_err(|e| ToolError::Execution(format!("serialization error: {e}")))
 }
@@ -2921,7 +2921,7 @@ pub fn run_tool_json_with_options(
     tier: &str,
 ) -> Result<String, ToolError> {
     let parsed_tier = parse_tier(tier)?;
-    let out = RToolRuntime::new_with_options(include_pro, parsed_tier)?.run_tool_json(tool_id, args_json)?;
+    let out = runtime_from_local_license_state(include_pro, parsed_tier)?.run_tool_json(tool_id, args_json)?;
     serde_json::to_string(&out).map_err(|e| ToolError::Execution(format!("serialization error: {e}")))
 }
 
@@ -3092,7 +3092,7 @@ pub fn run_tool_json_with_progress_options(
     tier: &str,
 ) -> Result<String, ToolError> {
     let parsed_tier = parse_tier(tier)?;
-    let out = RToolRuntime::new_with_options(include_pro, parsed_tier)?
+    let out = runtime_from_local_license_state(include_pro, parsed_tier)?
         .run_tool_json_with_progress(tool_id, args_json)?;
     serde_json::to_string(&out).map_err(|e| ToolError::Execution(format!("serialization error: {e}")))
 }
@@ -3103,7 +3103,7 @@ pub fn generate_wrapper_stubs_json_with_options(
     target: &str,
 ) -> Result<String, ToolError> {
     let parsed_tier = parse_tier(tier)?;
-    let rt = RToolRuntime::new_with_options(include_pro, parsed_tier)?;
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)?;
     let target = match target.to_ascii_lowercase().as_str() {
         "python" => BindingTarget::Python,
         "r" => BindingTarget::R,
@@ -3127,7 +3127,7 @@ pub fn generate_r_wrapper_module_with_options(
     tier: &str,
 ) -> Result<String, ToolError> {
     let parsed_tier = parse_tier(tier)?;
-    let rt = RToolRuntime::new_with_options(include_pro, parsed_tier)?;
+    let rt = runtime_from_local_license_state(include_pro, parsed_tier)?;
 
     let mut manifests = rt.list_visible_manifests();
     manifests.sort_by(|a, b| a.id.cmp(&b.id));

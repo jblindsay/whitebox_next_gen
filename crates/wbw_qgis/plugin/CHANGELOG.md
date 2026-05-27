@@ -4,6 +4,10 @@ This changelog tracks user-visible changes to the Whitebox Workflows QGIS plugin
 
 ## Unreleased
 
+- None yet.
+
+## 2.0.9 - 2026-05-27
+
 - Fixed output destination type inference for tools with generic destination labels so raster/vector/LiDAR outputs are exposed to QGIS as layer destinations and auto-added to the layer tree.
 - Updated parameter kind mapping to prefer canonical runtime metadata fields (`io_role`, `data_kind`) before heuristic fallback, reducing incorrect destination/widget typing for tools with generic parameter labels.
 - Updated help-generation and tool-description rendering to prefer per-tool runtime metadata (`get_tool_metadata_json`) and fall back to catalog manifests when metadata is unavailable (for example injected wrapper/pseudo-tool entries).

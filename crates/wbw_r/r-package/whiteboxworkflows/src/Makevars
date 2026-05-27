@@ -7,7 +7,9 @@ CARGO_MANIFEST_CANDIDATES = \
 	$(WBW_R_CARGO_MANIFEST) \
 	../../Cargo.toml \
 	../../../Cargo.toml \
+	$(GITHUB_WORKSPACE)/crates/wbw_r/Cargo.toml \
 	$(GITHUB_WORKSPACE)/whitebox_next_gen/crates/wbw_r/Cargo.toml \
+	/github/workspace/crates/wbw_r/Cargo.toml \
 	/github/workspace/whitebox_next_gen/crates/wbw_r/Cargo.toml
 CARGO_MANIFEST = $(firstword $(strip $(foreach f,$(CARGO_MANIFEST_CANDIDATES),$(if $(wildcard $(f)),$(f)))))
 CARGO_FEATURES =
@@ -15,7 +17,7 @@ WRAPPER_TIER = open
 CARGO_PROFILE_FLAG =
 
 ifeq ($(CARGO_MANIFEST),)
-$(error Could not find wbw_r Cargo.toml. Set WBW_R_CARGO_MANIFEST=/abs/path/to/Cargo.toml or ensure one of these exists: ../../Cargo.toml, ../../../Cargo.toml, $(GITHUB_WORKSPACE)/whitebox_next_gen/crates/wbw_r/Cargo.toml, /github/workspace/whitebox_next_gen/crates/wbw_r/Cargo.toml. CWD=$(CURDIR))
+$(error Could not find wbw_r Cargo.toml. Set WBW_R_CARGO_MANIFEST=/abs/path/to/Cargo.toml or ensure one of these exists: ../../Cargo.toml, ../../../Cargo.toml, $(GITHUB_WORKSPACE)/crates/wbw_r/Cargo.toml, $(GITHUB_WORKSPACE)/whitebox_next_gen/crates/wbw_r/Cargo.toml, /github/workspace/crates/wbw_r/Cargo.toml, /github/workspace/whitebox_next_gen/crates/wbw_r/Cargo.toml. CWD=$(CURDIR))
 endif
 
 ifeq ($(WBW_R_PACKAGE_PRO),true)

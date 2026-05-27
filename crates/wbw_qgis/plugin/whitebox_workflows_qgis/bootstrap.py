@@ -54,9 +54,12 @@ def _next_gen_required_message(detail: str = "") -> str:
 
 def _is_pro_unavailable_error(message: str) -> bool:
     text = str(message or "").lower()
-    return (
-        "include_pro=true requested" in text
-        and "does not include pro support" in text
+    return all(
+        marker in text
+        for marker in (
+            "include_pro=true requested",
+            "does not include pro support",
+        )
     )
 
 
@@ -350,7 +353,7 @@ class ExternalRuntimeSession:
                 break
             line = raw_line.rstrip("\r\n")
             if line.startswith("__WBW_WORKER_EVENT__"):
-                enc = line[len("__WBW_WORKER_EVENT__") :]
+                enc = line[len("__WBW_WORKER_EVENT__"):]
                 try:
                     evt = base64.b64decode(enc).decode("utf-8", errors="replace")
                 except Exception:
@@ -362,13 +365,13 @@ class ExternalRuntimeSession:
                         pass
                 continue
             if line.startswith("__WBW_WORKER_RESULT__"):
-                enc = line[len("__WBW_WORKER_RESULT__") :]
+                enc = line[len("__WBW_WORKER_RESULT__"):]
                 try:
                     return base64.b64decode(enc).decode("utf-8", errors="replace")
                 except Exception:
                     return "{}"
             if line.startswith("__WBW_WORKER_ERROR__"):
-                enc = line[len("__WBW_WORKER_ERROR__") :]
+                enc = line[len("__WBW_WORKER_ERROR__"):]
                 try:
                     message = base64.b64decode(enc).decode("utf-8", errors="replace")
                 except Exception:
@@ -453,7 +456,7 @@ class ExternalRuntimeSession:
             for raw_line in process.stdout:
                 line = raw_line.rstrip("\r\n")
                 if line.startswith("__WBW_EVENT__"):
-                    enc = line[len("__WBW_EVENT__") :]
+                    enc = line[len("__WBW_EVENT__"):]
                     try:
                         evt = base64.b64decode(enc).decode("utf-8", errors="replace")
                     except Exception:
@@ -465,7 +468,7 @@ class ExternalRuntimeSession:
                             pass
                     continue
                 if line.startswith("__WBW_RESULT__"):
-                    enc = line[len("__WBW_RESULT__") :]
+                    enc = line[len("__WBW_RESULT__"):]
                     try:
                         completed_result = base64.b64decode(enc).decode("utf-8", errors="replace")
                     except Exception:
@@ -886,18 +889,18 @@ def invoke_license_function(
     """
     Invoke a license function (activate_license, deactivate_license, transfer_license)
     via the discovered external Python interpreter.
-    
+
     This ensures license operations use the same Python environment as tool execution,
     avoiding split-brain where the in-process QGIS Python might be stale/different.
-    
+
     Args:
         function_name: 'activate_license', 'deactivate_license', or 'transfer_license'
         key, firstname, lastname, email, provider_url: parameters for activate_license
         from_transfer: parameter for deactivate_license
-        
+
     Returns:
         String result from the license function.
-        
+
     Raises:
         RuntimeBootstrapError on execution or availability failure.
     """

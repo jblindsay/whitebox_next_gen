@@ -42,6 +42,7 @@ def host_capabilities(iface) -> dict:
     has_add_to_menu = callable(getattr(iface, "addPluginToMenu", None))
     has_plugin_menu = callable(getattr(iface, "pluginMenu", None))
     has_main_window = callable(getattr(iface, "mainWindow", None))
+    has_add_toolbar_icon = callable(getattr(iface, "addToolBarIcon", None))
     has_remove_from_menu = callable(getattr(iface, "removePluginMenu", None))
     has_remove_toolbar_icon = callable(getattr(iface, "removeToolBarIcon", None))
     has_add_dock_widget = callable(getattr(iface, "addDockWidget", None))
@@ -242,15 +243,17 @@ def register_dock_widget(iface, dock) -> bool:
     try:
         from qgis.PyQt.QtCore import Qt  # type: ignore[import]
 
-        area = getattr(Qt, "RightDockWidgetArea", None)
+        # Default to bottom docking so the panel does not compete with the
+        # commonly used right-side Processing Toolbox location.
+        area = getattr(Qt, "BottomDockWidgetArea", None)
+        if area is None:
+            dock_enum = getattr(Qt, "DockWidgetArea", None)
+            area = getattr(dock_enum, "BottomDockWidgetArea", None)
+        if area is None:
+            area = getattr(Qt, "RightDockWidgetArea", None)
         if area is None:
             dock_enum = getattr(Qt, "DockWidgetArea", None)
             area = getattr(dock_enum, "RightDockWidgetArea", None)
-        if area is None:
-            area = getattr(Qt, "LeftDockWidgetArea", None)
-        if area is None:
-            dock_enum = getattr(Qt, "DockWidgetArea", None)
-            area = getattr(dock_enum, "LeftDockWidgetArea", None)
     except Exception:
         area = None
 

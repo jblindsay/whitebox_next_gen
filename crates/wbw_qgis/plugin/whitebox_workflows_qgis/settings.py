@@ -90,18 +90,18 @@ except Exception:  # pragma: no cover
 # Semantic style tokens (shared with panel styling, Phase 4).
 # ---------------------------------------------------------------------------
 STATUS_STYLES: dict[str, str] = {
-    "ok":              "color: #1B5E20; font-weight: bold;",
-    "warning":         "color: #E65100; font-weight: bold;",
+    "ok": "color: #1B5E20; font-weight: bold;",
+    "warning": "color: #E65100; font-weight: bold;",
     "bootstrap_error": "color: #B71C1C; font-weight: bold;",
-    "error":           "color: #B71C1C; font-weight: bold;",
-    "unknown":         "color: #616161;",
+    "error": "color: #B71C1C; font-weight: bold;",
+    "unknown": "color: #616161;",
 }
 
 TIER_STYLES: dict[str, str] = {
-    "pro":        "color: #1A237E; font-weight: bold;",
+    "pro": "color: #1A237E; font-weight: bold;",
     "enterprise": "color: #4A148C; font-weight: bold;",
-    "open":       "color: #1B5E20;",
-    "unknown":    "color: #616161;",
+    "open": "color: #1B5E20;",
+    "unknown": "color: #616161;",
 }
 
 LOCKED_LABEL_STYLE = "color: #F57F17;"   # amber – tool visible but locked

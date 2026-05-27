@@ -85,7 +85,7 @@ def _split_signature_args(args_text: str) -> list[str]:
                 parts.append(part)
             current = []
             continue
-        if ch in "([{" :
+        if ch in "([{":
             depth += 1
         elif ch in ")]}":
             depth = max(0, depth - 1)
@@ -629,11 +629,7 @@ def _derive_remote_sensing_category(item: dict) -> str:
 
     # Keep OBIA as a coherent toolbox group, but avoid broad token matching
     # (e.g., "line segments") that can incorrectly classify non-OBIA tools.
-    if (
-        tool_id == "image_segmentation"
-        or tool_id.startswith(obia_id_prefixes)
-        or "obia" in tags
-    ):
+    if tool_id == "image_segmentation" or tool_id.startswith(obia_id_prefixes) or "obia" in tags:
         return "Remote Sensing - OBIA"
 
     if _has_any(sar_tokens):
@@ -645,8 +641,6 @@ def _derive_remote_sensing_category(item: dict) -> str:
     if _has_any(spectral_tokens):
         return "Remote Sensing - Spectral"
     return "Remote Sensing"
-
-
 
 
 # ---------------------------------------------------------------------------

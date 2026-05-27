@@ -741,11 +741,13 @@ class WhiteboxDockPanel(QDockWidget):
             self._recent_list.addItem(QListWidgetItem(tool_id))
 
     def set_recipes(self, recipes: list[dict[str, Any]]) -> None:
-        self._recipes = [dict(r) for r in recipes]
+        # Keep backing recipe rows aligned exactly with visible list items.
+        # This avoids preview/selection mismatches when malformed entries are skipped.
+        self._recipes = []
         self._recipe_ids = []
         self._recipes_list.clear()
 
-        for recipe in self._recipes:
+        for recipe in [dict(r) for r in recipes]:
             recipe_id = str(recipe.get("id", "")).strip()
             if not recipe_id:
                 continue
@@ -771,6 +773,7 @@ class WhiteboxDockPanel(QDockWidget):
                 except Exception:
                     pass
             self._recipes_list.addItem(item)
+            self._recipes.append(recipe)
             self._recipe_ids.append(recipe_id)
 
         if self._recipe_ids:

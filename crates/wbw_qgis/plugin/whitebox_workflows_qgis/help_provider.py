@@ -5,7 +5,6 @@ Parses HTML help files from the legacy plugin to extract tool descriptions
 and parameter documentation for enriching the QGIS parameter dialogs.
 """
 
-import os
 import re
 import html
 from pathlib import Path
@@ -72,8 +71,7 @@ class ToolHelpProvider:
         if help_dir is None:
             # Try standard locations
             candidates = [
-                Path.home()
-                / "Documents/programming/Rust/whitebox_workflows/wbw_qgis/help",
+                Path.home().joinpath("Documents/programming/Rust/whitebox_workflows/wbw_qgis/help"),
                 Path(__file__).parent / "help",
             ]
             for cand in candidates:
@@ -146,17 +144,17 @@ class ToolHelpProvider:
             return None
 
         params_text = sections["Parameters"]
-        
+
         # Parameters are typically formatted as:
         #   <p>param_name (type):     description</p>
         # Extract each <p>...</p> block and parse
-        
+
         # Normalize param_name for matching (handle underscores, camelCase variants)
         param_pattern = re.escape(param_name)
-        
+
         # Extract all <p> tags from parameters section
         p_blocks = re.findall(r"<p>(.*?)</p>", params_text, re.DOTALL)
-        
+
         for block in p_blocks:
             # Look for "param_name (type):  description" pattern
             if re.search(rf"\b{param_pattern}\s*\(", block, re.IGNORECASE):
@@ -175,10 +173,10 @@ class ToolHelpProvider:
                         return desc
 
         return None
-    
+
     def _clean_html_to_text(self, html_text: str) -> str:
         """Convert HTML text to plain text suitable for tooltips.
-        
+
         Removes:
         - All HTML tags
         - Image references
@@ -187,16 +185,16 @@ class ToolHelpProvider:
         """
         # Remove image tags entirely (they display as nothing in QGIS)
         text = re.sub(r'<img[^>]*>', '', html_text, flags=re.IGNORECASE)
-        
+
         # Remove HTML tags
         text = re.sub(r'<[^>]+>', '', text)
-        
+
         # Decode HTML entities
         text = html.unescape(text)
-        
+
         # Clean up excessive whitespace
         text = re.sub(r'\s+', ' ', text).strip()
-        
+
         return text
 
     def _parse_help(self, tool_id: str) -> dict:

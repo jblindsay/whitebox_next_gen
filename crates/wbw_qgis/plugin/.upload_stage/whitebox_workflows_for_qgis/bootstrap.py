@@ -54,7 +54,13 @@ def _next_gen_required_message(detail: str = "") -> str:
 
 def _is_pro_unavailable_error(message: str) -> bool:
     text = str(message or "").lower()
-    return "include_pro=true requested" in text and "does not include pro support" in text
+    return all(
+        marker in text
+        for marker in (
+            "include_pro=true requested",
+            "does not include pro support",
+        )
+    )
 
 
 def _is_legacy_runtime_error(message: str) -> bool:
@@ -119,7 +125,6 @@ class ExternalRuntimeSession:
             "import whitebox_workflows as wbw\n"
             "include_pro = bool(json.loads(sys.argv[1]))\n"
             "tier = str(sys.argv[2])\n"
-            "session = wbw.RuntimeSession(include_pro=include_pro, tier=tier)\n"
             "def _emit(prefix, text):\n"
             "    enc = base64.b64encode(text.encode('utf-8')).decode('ascii')\n"
             "    sys.stdout.write(prefix + enc + '\\n')\n"
@@ -153,11 +158,11 @@ class ExternalRuntimeSession:
             "    args_json = str(cmd.get('args_json', '{}'))\n"
             "    try:\n"
             "        try:\n"
-            "            out = session.run_tool_json_stream(tool_id, args_json, _emit_event)\n"
+            "            out = wbw.run_tool_json_stream_options(tool_id, args_json, _emit_event, include_pro, tier)\n"
             "        except TypeError:\n"
-            "            out = session.run_tool_json_stream(tool_id, args_json)\n"
+            "            out = wbw.run_tool_json_with_progress_options(tool_id, args_json, include_pro, tier)\n"
             "        except Exception:\n"
-            "            out = session.run_tool_json(tool_id, args_json)\n"
+            "            out = wbw.run_tool_json_with_options(tool_id, args_json, include_pro, tier)\n"
             "        out_text = out if isinstance(out, str) else json.dumps(out)\n"
             "        _emit('__WBW_WORKER_RESULT__', out_text)\n"
             "    except Exception as exc:\n"
@@ -201,6 +206,22 @@ class ExternalRuntimeSession:
                 process.kill()
             except Exception:
                 pass
+        finally:
+            try:
+                if process.stdin is not None:
+                    process.stdin.close()
+            except Exception:
+                pass
+            try:
+                if process.stdout is not None:
+                    process.stdout.close()
+            except Exception:
+                pass
+            try:
+                if process.stderr is not None:
+                    process.stderr.close()
+            except Exception:
+                pass
 
     def __del__(self):
         self._stop_stream_worker()
@@ -216,21 +237,24 @@ class ExternalRuntimeSession:
             "import json, sys\n"
             "import whitebox_workflows as wbw\n"
             "p = json.loads(sys.argv[1])\n"
-            "s = wbw.RuntimeSession(include_pro=bool(p.get('include_pro', True)), tier=str(p.get('tier', 'open')))\n"
+            "include_pro = bool(p.get('include_pro', True))\n"
+            "tier = str(p.get('tier', 'open'))\n"
             "m = p.get('method')\n"
             "if m == 'get_runtime_capabilities_json':\n"
-            "    out = s.get_runtime_capabilities_json()\n"
+            "    out = wbw.get_runtime_capabilities_json_with_options(include_pro, tier)\n"
             "elif m == 'list_tool_catalog_json':\n"
-            "    out = s.list_tool_catalog_json()\n"
+            "    out = wbw.list_tool_catalog_json_with_options(include_pro, tier)\n"
             "elif m == 'get_tool_metadata_json':\n"
-            "    out = s.get_tool_metadata_json(str(p.get('tool_id', '')))\n"
+            "    out = wbw.get_tool_metadata_json_with_options(str(p.get('tool_id', '')), include_pro, tier)\n"
             "elif m == 'run_tool_json_stream':\n"
             "    tool_id = str(p.get('tool_id', ''))\n"
             "    args_json = str(p.get('args_json', '{}'))\n"
             "    try:\n"
-            "        out = s.run_tool_json_stream(tool_id, args_json, lambda _evt: None)\n"
+            "        out = wbw.run_tool_json_stream_options(tool_id, args_json, lambda _evt: None, include_pro, tier)\n"
             "    except TypeError:\n"
-            "        out = s.run_tool_json_stream(tool_id, args_json)\n"
+            "        out = wbw.run_tool_json_with_progress_options(tool_id, args_json, include_pro, tier)\n"
+            "    except Exception:\n"
+            "        out = wbw.run_tool_json_with_options(tool_id, args_json, include_pro, tier)\n"
             "elif m == 'run_projection_wrapper_json':\n"
             "    tool_id = str(p.get('tool_id', ''))\n"
             "    args = json.loads(str(p.get('args_json', '{}')))\n"
@@ -387,7 +411,8 @@ class ExternalRuntimeSession:
             "import base64, json, sys\n"
             "import whitebox_workflows as wbw\n"
             "p = json.loads(sys.argv[1])\n"
-            "s = wbw.RuntimeSession(include_pro=bool(p.get('include_pro', True)), tier=str(p.get('tier', 'open')))\n"
+            "include_pro = bool(p.get('include_pro', True))\n"
+            "tier = str(p.get('tier', 'open'))\n"
             "tool_id = str(p.get('tool_id', ''))\n"
             "args_json = str(p.get('args_json', '{}'))\n"
             "def _emit_event(evt):\n"
@@ -402,11 +427,11 @@ class ExternalRuntimeSession:
             "    sys.stdout.write('__WBW_EVENT__' + enc + '\\n')\n"
             "    sys.stdout.flush()\n"
             "try:\n"
-            "    out = s.run_tool_json_stream(tool_id, args_json, _emit_event)\n"
+            "    out = wbw.run_tool_json_stream_options(tool_id, args_json, _emit_event, include_pro, tier)\n"
             "except TypeError:\n"
-            "    out = s.run_tool_json_stream(tool_id, args_json)\n"
+            "    out = wbw.run_tool_json_with_progress_options(tool_id, args_json, include_pro, tier)\n"
             "except Exception:\n"
-            "    out = s.run_tool_json(tool_id, args_json)\n"
+            "    out = wbw.run_tool_json_with_options(tool_id, args_json, include_pro, tier)\n"
             "if isinstance(out, str):\n"
             "    out_text = out\n"
             "else:\n"
@@ -419,51 +444,50 @@ class ExternalRuntimeSession:
         completed_result: str | None = None
         loose_stdout_lines: list[str] = []
 
-        process = subprocess.Popen(
+        with subprocess.Popen(
             [self._python_executable, "-c", runner, json.dumps(payload)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             env=self._build_clean_env(),
             bufsize=1,
-        )
-
-        assert process.stdout is not None
-        for raw_line in process.stdout:
-            line = raw_line.rstrip("\r\n")
-            if line.startswith("__WBW_EVENT__"):
-                enc = line[len("__WBW_EVENT__"):]
-                try:
-                    evt = base64.b64decode(enc).decode("utf-8", errors="replace")
-                except Exception:
-                    continue
-                if callable(_callback):
+        ) as process:
+            assert process.stdout is not None
+            for raw_line in process.stdout:
+                line = raw_line.rstrip("\r\n")
+                if line.startswith("__WBW_EVENT__"):
+                    enc = line[len("__WBW_EVENT__"):]
                     try:
-                        _callback(evt)
+                        evt = base64.b64decode(enc).decode("utf-8", errors="replace")
                     except Exception:
-                        pass
-                continue
-            if line.startswith("__WBW_RESULT__"):
-                enc = line[len("__WBW_RESULT__"):]
-                try:
-                    completed_result = base64.b64decode(enc).decode("utf-8", errors="replace")
-                except Exception:
-                    completed_result = "{}"
-                continue
-            if line.strip():
-                loose_stdout_lines.append(line)
+                        continue
+                    if callable(_callback):
+                        try:
+                            _callback(evt)
+                        except Exception:
+                            pass
+                    continue
+                if line.startswith("__WBW_RESULT__"):
+                    enc = line[len("__WBW_RESULT__"):]
+                    try:
+                        completed_result = base64.b64decode(enc).decode("utf-8", errors="replace")
+                    except Exception:
+                        completed_result = "{}"
+                    continue
+                if line.strip():
+                    loose_stdout_lines.append(line)
 
-        stderr_text = ""
-        if process.stderr is not None:
-            stderr_text = process.stderr.read().strip()
+            stderr_text = ""
+            if process.stderr is not None:
+                stderr_text = process.stderr.read().strip()
 
-        returncode = process.wait()
-        if returncode != 0:
-            detail = stderr_text or "\n".join(loose_stdout_lines).strip() or "unknown external runtime error"
-            raise RuntimeBootstrapError(
-                "External whitebox_workflows runtime failed via "
-                f"{self._python_executable}: {detail}"
-            )
+            returncode = process.wait()
+            if returncode != 0:
+                detail = stderr_text or "\n".join(loose_stdout_lines).strip() or "unknown external runtime error"
+                raise RuntimeBootstrapError(
+                    "External whitebox_workflows runtime failed via "
+                    f"{self._python_executable}: {detail}"
+                )
 
         if completed_result is not None:
             return completed_result

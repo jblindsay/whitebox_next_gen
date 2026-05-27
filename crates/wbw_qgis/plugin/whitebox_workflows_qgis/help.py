@@ -232,14 +232,12 @@ def _help_html_from_manifest(
     descriptions JSON files (keys: ``params``, ``description``, etc.).
     """
     tool_id: str = manifest.get("id", "")
-    display_name: str = manifest.get("display_name", tool_id)
     summary: str = manifest.get("summary", "No description available.")
     params: list[dict] = manifest.get("params", [])
     defaults: dict = manifest.get("defaults", {})
     examples: list[dict] = manifest.get("examples", [])
     tags: list[str] = manifest.get("tags", [])
     stability: str = manifest.get("stability", "")
-    category: str = manifest.get("category", "")
 
     # Curated descriptions lookup helpers
     curated_params: dict = {}
@@ -305,7 +303,6 @@ def _help_html_from_manifest(
     if examples:
         examples_html = "<h2>Examples</h2>\n"
         for ex in examples:
-            ex_name = ex.get("name", "")
             ex_desc = ex.get("description", "")
             ex_args = ex.get("args", {})
             if ex_desc:

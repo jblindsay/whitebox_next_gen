@@ -117,6 +117,7 @@ Optional build environment variables:
 
 - `WBW_R_PACKAGE_PRO=true` to build against the Pro runtime.
 - `WBW_R_PACKAGE_RELEASE=true` to build Rust in release mode.
+- `WBW_R_CARGO_MANIFEST=/absolute/path/to/crates/wbw_r/Cargo.toml` to override Cargo manifest discovery when building outside the monorepo parent layout (for example, temporary install directories used by CI services).
 
 ## Quick smoke test
 

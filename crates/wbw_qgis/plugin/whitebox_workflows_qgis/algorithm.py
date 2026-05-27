@@ -1432,6 +1432,164 @@ def _materialize_raster_input_source(
     return tmp_path
 
 
+def _materialize_raster_output_destination(value: Any, feedback=None) -> str:
+    """Return a concrete raster output path suitable for backend execution.
+
+    QGIS temporary raster outputs can arrive as a placeholder such as
+    TEMPORARY_OUTPUT or a sentinel path ending in .file. Whitebox expects a
+    real raster filename with a supported extension, so convert those cases to
+    a temporary GeoTIFF path.
+    """
+    target = str(value or "").strip()
+    if not target:
+        return target
+
+    lower = target.lower()
+    if lower in {"temporary_output", "memory"} or lower.endswith(".file"):
+        fd, tmp_path = tempfile.mkstemp(prefix="wbw_raster_out_", suffix=".tif")
+        os.close(fd)
+        if feedback is not None:
+            push_info = getattr(feedback, "pushInfo", None)
+            if callable(push_info):
+                push_info(f"Using temporary GeoTIFF output: {tmp_path}")
+        return tmp_path
+
+    return target
+
+
+def _materialize_vector_output_destination(value: Any, feedback=None) -> str:
+    """Return a concrete vector output path suitable for backend execution.
+
+    QGIS temporary vector destinations can arrive as a placeholder such as
+    TEMPORARY_OUTPUT or a sentinel path ending in .file. Convert those cases to
+    a temporary GeoPackage so the backend receives a real writable file.
+    """
+    target = str(value or "").strip()
+    if not target:
+        return target
+
+    lower = target.lower()
+    if lower in {"temporary_output", "memory"} or lower.endswith(".file"):
+        fd, tmp_path = tempfile.mkstemp(prefix="wbw_vector_out_", suffix=".gpkg")
+        os.close(fd)
+        if feedback is not None:
+            push_info = getattr(feedback, "pushInfo", None)
+            if callable(push_info):
+                push_info(f"Using temporary GeoPackage output: {tmp_path}")
+        return tmp_path
+
+    return target
+
+
+def _materialize_file_output_destination(
+    value: Any,
+    feedback=None,
+    *,
+    name: str = "",
+    description: str = "",
+    category: str = "",
+    param_specs: list[dict[str, Any]] | None = None,
+) -> str:
+    """Return a concrete destination for generic file_out parameters.
+
+    Some tools surface output destinations as generic file paths even when the
+    output is actually a raster or vector layer. If QGIS provides a temporary
+    placeholder (e.g. TEMPORARY_OUTPUT or a .file sentinel), infer a practical
+    extension and materialize a concrete path for backend execution.
+    """
+    target = str(value or "").strip()
+    if not target:
+        return target
+
+    lower = target.lower()
+    if lower not in {"temporary_output", "memory"} and not lower.endswith(".file"):
+        return target
+
+    n = str(name or "").lower()
+    d = str(description or "").lower()
+    c = str(category or "").lower()
+    text = f"{n} {d}"
+
+    non_layer_hint = any(
+        tok in text
+        for tok in ("csv", "json", "html", "txt", "xml", "report", "table", "log")
+    )
+    vector_hint = any(tok in text for tok in ("vector", "shp", "geojson", "topojson", "geopackage", "features"))
+    lidar_hint = any(tok in text for tok in ("lidar", "las", "laz", "zlidar", "copc", "e57", "ply"))
+    raster_hint = any(tok in text for tok in ("raster", "dem", "grid", "geotiff", "tif", "image"))
+
+    # Fall back to manifest context when parameter text is ambiguous.
+    if not (non_layer_hint or vector_hint or lidar_hint or raster_hint):
+        if "vector" in c:
+            vector_hint = True
+        elif "lidar" in c:
+            lidar_hint = True
+        elif any(tok in c for tok in ("raster", "terrain", "hydrology")):
+            raster_hint = True
+
+    # Last fallback: infer dominant data family from input params.
+    if not (non_layer_hint or vector_hint or lidar_hint or raster_hint) and param_specs:
+        raster_count = 0
+        vector_count = 0
+        lidar_count = 0
+        for spec in param_specs:
+            sk = str(spec.get("kind", ""))
+            if sk in {"raster_in", "raster_layers_in"}:
+                raster_count += 1
+            elif sk == "vector_in":
+                vector_count += 1
+            elif sk == "file_in":
+                sn = str(spec.get("name", "")).lower()
+                sd = str(spec.get("description", "")).lower()
+                if any(tok in (sn + " " + sd) for tok in ("lidar", "las", "laz", "zlidar", "copc", "e57", "ply")):
+                    lidar_count += 1
+
+        if raster_count >= vector_count and raster_count >= lidar_count and raster_count > 0:
+            raster_hint = True
+        elif vector_count >= raster_count and vector_count >= lidar_count and vector_count > 0:
+            vector_hint = True
+        elif lidar_count > 0:
+            lidar_hint = True
+
+    suffix = ".tif"
+    prefix = "wbw_raster_out_"
+    label = "GeoTIFF"
+
+    if non_layer_hint:
+        if "csv" in text:
+            suffix = ".csv"
+            label = "CSV"
+        elif "json" in text:
+            suffix = ".json"
+            label = "JSON"
+        elif "html" in text or "htm" in text:
+            suffix = ".html"
+            label = "HTML"
+        elif "xml" in text:
+            suffix = ".xml"
+            label = "XML"
+        else:
+            suffix = ".txt"
+            label = "text"
+        prefix = "wbw_file_out_"
+    elif vector_hint:
+        suffix = ".gpkg"
+        prefix = "wbw_vector_out_"
+        label = "GeoPackage"
+    elif lidar_hint:
+        suffix = ".las"
+        prefix = "wbw_lidar_out_"
+        label = "LAS"
+
+    fd, tmp_path = tempfile.mkstemp(prefix=prefix, suffix=suffix)
+    os.close(fd)
+    if feedback is not None:
+        push_info = getattr(feedback, "pushInfo", None)
+        if callable(push_info):
+            push_info(f"Using temporary {label} output: {tmp_path}")
+    return tmp_path
+
+
 def _materialize_vector_input_source(layer, source: Any, feedback=None) -> str:
     """Return a backend-friendly vector path, exporting URI-backed layers when needed."""
     raw_source = str(source or "").strip()
@@ -1775,11 +1933,9 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             if kind in ("file_out", "raster_out", "vector_out"):
                 lower_desc = output_description.lower()
                 is_mstp = self.name() == "multiscale_topographic_position_class"
-                is_auxiliary_output = (
-                    "report" in name.lower()
-                    or "diagnostic" in name.lower()
-                    or "report" in lower_desc
-                    or "diagnostic" in lower_desc
+                is_auxiliary_output = any(
+                    token in f"{name.lower()} {lower_desc}"
+                    for token in ("report", "diagnostic")
                 )
                 if "optional" in lower_desc and not is_mstp and not is_auxiliary_output:
                     output_description = "Output destination path (required in QGIS plugin)."
@@ -1945,7 +2101,6 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                 # First, update the existing parameter's description
                 # Note: We need to recreate the parameter with new description
                 # because QGIS doesn't allow changing description after creation
-                old_desc = description
                 description = curated_label
 
                 # Recreate parameter with updated description
@@ -2297,6 +2452,19 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     if required:
                         raise QgsProcessingException(f"Missing required output destination: {name}")
                     continue
+                if kind == "raster_out":
+                    value = _materialize_raster_output_destination(value, feedback)
+                elif kind == "vector_out":
+                    value = _materialize_vector_output_destination(value, feedback)
+                elif kind == "file_out":
+                    value = _materialize_file_output_destination(
+                        value,
+                        feedback,
+                        name=name,
+                        description=str(spec.get("description", name)),
+                        category=str(self._manifest.get("category", "")),
+                        param_specs=self._param_specs,
+                    )
                 args[name] = str(value)
             elif kind == "enum":
                 if not required and not is_set:
@@ -2459,10 +2627,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
         except Exception as exc:
             # Reliability retry: if runtime tools fail, re-sanitize against
             # schema and retry exactly once before surfacing the error.
-            if (
-                session is not None
-                and self.name() not in projection_wrapper_ids
-            ):
+            if session is not None and self.name() not in projection_wrapper_ids:
                 try:
                     retry_args = _sanitize_args_using_runtime_schema(
                         self.name(),
@@ -2587,11 +2752,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             if not isinstance(value, str) or not value:
                 continue
             hint = _resolve_render_hint_for_output(self._render_hints, key, value)
-            if (
-                not hint
-                and self.name() == "multiscale_topographic_position_class"
-                and key in {"path", "output", "output_path"}
-            ):
+            if not hint and self.name() == "multiscale_topographic_position_class" and key in {"path", "output", "output_path"}:
                 hint = "categorical_raster"
             if hint:
                 feedback.pushInfo(f"Render hint for {key}: {hint}")

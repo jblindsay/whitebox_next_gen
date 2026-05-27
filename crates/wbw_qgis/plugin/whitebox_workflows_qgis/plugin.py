@@ -365,7 +365,7 @@ class WhiteboxWorkflowsPlugin:
 
     def _activate_license(self, *_args):
         from .bootstrap import invoke_license_function
-        
+
         key, ok = self._prompt_text("Activate Whitebox License", "License key")
         if not ok or not key:
             return
@@ -400,7 +400,7 @@ class WhiteboxWorkflowsPlugin:
 
     def _deactivate_license(self, *_args):
         from .bootstrap import invoke_license_function
-        
+
         try:
             message = invoke_license_function("deactivate_license", from_transfer=False)
             self._notify_info(str(message))
@@ -410,7 +410,7 @@ class WhiteboxWorkflowsPlugin:
 
     def _transfer_license(self, *_args):
         from .bootstrap import invoke_license_function
-        
+
         try:
             payload_raw = invoke_license_function("transfer_license")
             payload = payload_raw
@@ -1282,16 +1282,20 @@ class WhiteboxWorkflowsPlugin:
         self._save_quick_open_preference()
         self._save_panel_ui_state()
         # Apply runtime discovery preferences; refresh catalog if they changed.
-        runtime_changed = (
-            updated.include_pro != self.provider.include_pro
-            or updated.tier != self.provider.tier
-            or updated.runtime_mode != self._runtime_mode
-            or updated.local_python_path != self._runtime_local_python
+        runtime_changed = any(
+            (
+                updated.include_pro != self.provider.include_pro,
+                updated.tier != self.provider.tier,
+                updated.runtime_mode != self._runtime_mode,
+                updated.local_python_path != self._runtime_local_python,
+            )
         )
-        backend_policy_changed = (
-            updated.auto_install_backend != self._auto_install_backend
-            or updated.auto_check_backend_updates != self._auto_check_backend_updates
-            or updated.skip_auto_update_checks_in_local_mode != self._skip_auto_update_checks_in_local_mode
+        backend_policy_changed = any(
+            (
+                updated.auto_install_backend != self._auto_install_backend,
+                updated.auto_check_backend_updates != self._auto_check_backend_updates,
+                updated.skip_auto_update_checks_in_local_mode != self._skip_auto_update_checks_in_local_mode,
+            )
         )
 
         self._runtime_mode = updated.runtime_mode

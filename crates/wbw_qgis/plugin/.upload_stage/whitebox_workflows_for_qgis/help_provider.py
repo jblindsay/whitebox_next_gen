@@ -71,7 +71,7 @@ class ToolHelpProvider:
         if help_dir is None:
             # Try standard locations
             candidates = [
-                Path.home() / "Documents/programming/Rust/whitebox_workflows/wbw_qgis/help",
+                Path.home().joinpath("Documents/programming/Rust/whitebox_workflows/wbw_qgis/help"),
                 Path(__file__).parent / "help",
             ]
             for cand in candidates:

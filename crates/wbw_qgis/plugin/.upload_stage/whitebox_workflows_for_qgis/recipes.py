@@ -51,11 +51,11 @@ RECIPE_CATALOG: list[dict[str, Any]] = [
     },
     {
         "id": "route_assessment_pro",
-        "title": "Route Assessment (Pro)",
+        "title": "Route Assessment (Open)",
         "summary": "Run network route assessment workflow.",
         "input_hint": "Ensure network topology is connected and cost fields are populated.",
         "output_hint": "Export route summaries and key constraints for stakeholder review.",
-        "tier": "pro",
+        "tier": "open",
         "launch_tool": "assess_route",
         "tools": ["assess_route"],
     },

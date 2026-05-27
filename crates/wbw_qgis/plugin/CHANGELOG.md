@@ -4,6 +4,20 @@ This changelog tracks user-visible changes to the Whitebox Workflows QGIS plugin
 
 ## Unreleased
 
+- Ran flake8 cleanup against the QGIS validator rule classes (`W503`, `W504`, `F841`, `F401`, `W293`, `E303`, `E305`) across plugin source files and the packaged plugin ZIP payload.
+- Fixed multiline boolean formatting (`W503`/`W504`) in `algorithm.py`, `bootstrap.py`, `discovery.py`, `plugin.py`, and `help_provider.py`; fixed spacing (`E303`/`E305`) in `discovery.py`; fixed assigned-but-unused local (`F841`) in `help.py`; and fixed unused import/trailing-whitespace (`F401`/`W293`) in `help_provider.py`.
+- Rebuilt the plugin package through preflight and validated that the same lint classes are clean in both source and `whitebox_workflows_for_qgis-2.0.7.zip`.
+
+## 2.0.7 - 2026-05-27
+
+- Improved temporary-output handling for generic output destinations so `TEMPORARY_OUTPUT` and `.file` placeholders are materialized to concrete writable paths, including tools that expose outputs as generic file parameters.
+- Resolved plugin source lint issues (W503, F841, W292, W293, E203) reported by the QGIS plugin repository validator.
+
+## 2.0.6 - 2026-05-27
+
+- Fixed raster temporary-output handling so QGIS placeholder destinations (e.g. `TEMPORARY_OUTPUT`) are materialized to a real temporary GeoTIFF before backend execution, resolving `unknown raster format: .file` errors.
+- Fixed vector temporary-output handling so QGIS temporary vector destinations are similarly materialized to a temporary GeoPackage before backend execution.
+
 ## 2.0.5 - 2026-05-26
 
 - Improved runtime initialization defaults and capability-based startup behavior for first-run reliability across environments.

@@ -80,15 +80,24 @@ do
     echo "[.prepare] Missing crate directory: $src" >&2
     exit 1
   fi
-  cp -R "$src" "$dst"
+  mkdir -p "$dst"
 
-  # Drop local build caches and VCS metadata from staged copies.
-  rm -rf "$dst/target" "$dst/rust-target" "$dst/.git" "$dst/.github"
-
-  # Avoid recursive self-copy: wbw_r contains this R package as a subdirectory.
-  if [ "$crate" = "wbw_r" ]; then
-    rm -rf "$dst/r-package"
-  fi
+  # Stage crate content via tar stream with explicit exclusions.
+  # This avoids recursive self-copy when staging wbw_r, because STAGE_DIR is
+  # inside wbw_r/r-package/whiteboxworkflows.
+  (
+    cd "$src"
+    tar cf - \
+      --exclude='./target' \
+      --exclude='./rust-target' \
+      --exclude='./.git' \
+      --exclude='./.github' \
+      --exclude='./r-package' \
+      .
+  ) | (
+    cd "$dst"
+    tar xf -
+  )
 done
 
 echo "[.prepare] Staged Rust workspace ready."

@@ -388,6 +388,7 @@ def generate_help_files(
     force: bool = False,
     include_pro: bool = True,
     tier: str = "open",
+    enrich_runtime_metadata: bool = False,
 ) -> dict[str, str]:
     """Generate help HTML files for all tools in the catalog.
 
@@ -402,6 +403,9 @@ def generate_help_files(
             Bundled files are never overwritten regardless of this flag.
         include_pro: Runtime include_pro value used when fetching per-tool metadata.
         tier: Runtime tier value used when fetching per-tool metadata.
+        enrich_runtime_metadata: When True, query runtime metadata for each tool
+            while generating the cache. This can be expensive and should remain
+            disabled during normal provider startup.
 
     Returns:
         Mapping of tool_id → absolute path of the best available HTML file
@@ -421,16 +425,18 @@ def generate_help_files(
             if doc and len(doc.strip()) > 10:
                 docstrings[method_name] = doc
 
-    enriched_catalog = _enrich_catalog_with_runtime_metadata(
-        catalog,
-        include_pro=include_pro,
-        tier=tier,
-    )
-    enriched_by_id: dict[str, dict] = {
-        str(m.get("id", "") or "").strip(): m
-        for m in enriched_catalog
-        if isinstance(m, dict) and str(m.get("id", "") or "").strip()
-    }
+    enriched_by_id: dict[str, dict] = {}
+    if enrich_runtime_metadata:
+        enriched_catalog = _enrich_catalog_with_runtime_metadata(
+            catalog,
+            include_pro=include_pro,
+            tier=tier,
+        )
+        enriched_by_id = {
+            str(m.get("id", "") or "").strip(): m
+            for m in enriched_catalog
+            if isinstance(m, dict) and str(m.get("id", "") or "").strip()
+        }
 
     for item in catalog:
         manifest = item

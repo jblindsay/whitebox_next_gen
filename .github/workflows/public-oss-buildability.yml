@@ -1,6 +1,7 @@
 name: public oss buildability
 
 on:
+  workflow_dispatch:
   pull_request:
     branches:
       - main
@@ -37,6 +38,7 @@ jobs:
           fi
 
   cargo-check-bindings:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -67,6 +69,7 @@ jobs:
           fi
 
   shim-contract-test:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

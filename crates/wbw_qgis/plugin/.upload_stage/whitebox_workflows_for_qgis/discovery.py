@@ -1091,5 +1091,11 @@ def refresh_and_build_help(
 
     catalog = discover_tool_catalog(include_pro=include_pro, tier=tier)
     wbw = load_whitebox_workflows()
-    help_index = generate_help_files(wbw, catalog, force=force)
+    help_index = generate_help_files(
+        wbw,
+        catalog,
+        force=force,
+        include_pro=include_pro,
+        tier=tier,
+    )
     return catalog, help_index

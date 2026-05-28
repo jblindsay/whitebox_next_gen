@@ -4,6 +4,12 @@ This changelog tracks user-visible changes to the Whitebox Workflows QGIS plugin
 
 ## Unreleased
 
+- No pending changes.
+
+## 2.0.10 - 2026-05-28
+
+- Bumped plugin metadata version to 2.0.10 for local validation builds so test installs are distinguishable from repository-distributed 2.0.9 builds in QGIS Plugin Manager.
+- Fixed a startup/upgrade regression introduced in 2.0.9 where bulk help-cache generation could block the QGIS UI while requesting per-tool runtime metadata, causing QGIS to appear hung or not responding during plugin load.
 - Added a follow-up flake8 compatibility pass for QGIS plugin-repository validator rules (`W503`, `W504`, `F841`, `F401`, `W293`, `E303`, `E305`) after 2.0.7 packaging feedback.
 - Fixed additional multiline boolean formatting issues in `algorithm.py`, `bootstrap.py`, `discovery.py`, and `plugin.py` to eliminate `W504` findings from the validator environment.
 - Fixed remaining help-system lint findings by removing unused locals in `help.py`, removing an unused import and whitespace-only blank lines in `help_provider.py`, and normalizing spacing in `discovery.py`.

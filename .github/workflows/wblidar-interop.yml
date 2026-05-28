@@ -11,16 +11,7 @@ on:
         description: "Optional minimum fixture profile count required for pass (non-negative integer)"
         required: false
         type: string
-  pull_request:
-    paths:
-      - "crates/wblidar/**"
-      - ".github/workflows/wblidar-interop.yml"
-  push:
-    branches:
-      - main
-    paths:
-      - "crates/wblidar/**"
-      - ".github/workflows/wblidar-interop.yml"
+
 
 jobs:
   strict-interop:

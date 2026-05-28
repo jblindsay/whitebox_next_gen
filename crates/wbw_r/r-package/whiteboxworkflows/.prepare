@@ -1,0 +1,94 @@
+#!/usr/bin/env sh
+set -eu
+
+# Stage the Rust workspace crates needed by wbw_r into the package directory so
+# R CMD build/install can run from an isolated source tarball context.
+PKG_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$PKG_DIR/../../../.." && pwd)"
+STAGE_DIR="$PKG_DIR/rust-workspace"
+
+if [ ! -f "$REPO_ROOT/Cargo.toml" ]; then
+  echo "[.prepare] Could not locate repository root Cargo.toml at: $REPO_ROOT/Cargo.toml" >&2
+  exit 1
+fi
+
+echo "[.prepare] Preparing staged Rust workspace at: $STAGE_DIR"
+rm -rf "$STAGE_DIR"
+mkdir -p "$STAGE_DIR/crates"
+
+cat > "$STAGE_DIR/Cargo.toml" <<'EOF'
+[workspace]
+members = [
+  "crates/wbgeotiff",
+  "crates/wbprojection",
+  "crates/wbraster",
+  "crates/wbvector",
+  "crates/wblidar",
+  "crates/wbtopology",
+  "crates/wbcore",
+  "crates/wblicense_core",
+  "crates/wbtools_oss",
+  "crates/wbtools_pro_shim",
+  "crates/wbw_r",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+version = "0.1.0"
+
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+opt-level = 1
+
+[profile.release-dev]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = true
+debug = 1
+EOF
+
+for crate in \
+  wbgeotiff \
+  wbprojection \
+  wbraster \
+  wbvector \
+  wblidar \
+  wbtopology \
+  wbcore \
+  wblicense_core \
+  wbtools_oss \
+  wbtools_pro_shim \
+  wbw_r
+do
+  src="$REPO_ROOT/crates/$crate"
+  dst="$STAGE_DIR/crates/$crate"
+  if [ ! -d "$src" ]; then
+    echo "[.prepare] Missing crate directory: $src" >&2
+    exit 1
+  fi
+  cp -R "$src" "$dst"
+
+  # Drop local build caches and VCS metadata from staged copies.
+  rm -rf "$dst/target" "$dst/rust-target" "$dst/.git" "$dst/.github"
+
+  # Avoid recursive self-copy: wbw_r contains this R package as a subdirectory.
+  if [ "$crate" = "wbw_r" ]; then
+    rm -rf "$dst/r-package"
+  fi
+done
+
+echo "[.prepare] Staged Rust workspace ready."

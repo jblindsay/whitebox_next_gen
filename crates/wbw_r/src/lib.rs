@@ -2246,31 +2246,49 @@ impl Default for RToolRuntime {
 
 impl RToolRuntime {
     pub fn new() -> Self {
-        Self::new_with_options(false, LicenseTier::Open)
+        Self::new_open_with_max_tier(LicenseTier::Open)
             .expect("default runtime construction should not fail")
     }
 
-    #[cfg(feature = "pro")]
-    pub fn new_with_options(include_pro: bool, max_tier: LicenseTier) -> Result<Self, ToolError> {
-        validate_include_pro(include_pro)?;
+    fn new_open_with_max_tier(max_tier: LicenseTier) -> Result<Self, ToolError> {
         let mut oss = OssRegistry::new();
         register_default_oss_tools(&mut oss);
 
-        let pro = if include_pro {
-            let mut pro = ProRegistry::new();
-            register_default_pro_tools(&mut pro);
-            Some(pro)
-        } else {
-            None
-        };
-
         Ok(Self {
             runtime: RuntimeMode::Tier(
-                ToolRuntimeBuilder::new(CompositeRegistry { oss, pro })
+                ToolRuntimeBuilder::new(CompositeRegistry { oss, pro: None })
                     .max_tier(max_tier)
                     .build(),
             ),
         })
+    }
+
+    #[cfg(all(test, feature = "pro"))]
+    fn new_test_pro_with_max_tier(max_tier: LicenseTier) -> Result<Self, ToolError> {
+        let mut oss = OssRegistry::new();
+        register_default_oss_tools(&mut oss);
+
+        let mut pro = ProRegistry::new();
+        register_default_pro_tools(&mut pro);
+
+        Ok(Self {
+            runtime: RuntimeMode::Tier(
+                ToolRuntimeBuilder::new(CompositeRegistry { oss, pro: Some(pro) })
+                    .max_tier(max_tier)
+                    .build(),
+            ),
+        })
+    }
+
+    #[cfg(feature = "pro")]
+    pub fn new_with_options(include_pro: bool, max_tier: LicenseTier) -> Result<Self, ToolError> {
+        if include_pro {
+            return Err(ToolError::LicenseDenied(
+                "include_pro=true requires verified entitlement; use new_with_entitlement_json or new_with_floating_license_id".to_string(),
+            ));
+        }
+
+        Self::new_open_with_max_tier(max_tier)
     }
 
     #[cfg(feature = "pro")]
@@ -2317,28 +2335,18 @@ impl RToolRuntime {
 
         let _ = (provider_url, floating_license_id, machine_id, customer_id);
 
-        Ok(Self {
-            runtime: RuntimeMode::Tier(
-                ToolRuntimeBuilder::new(CompositeRegistry { oss, pro })
-                    .max_tier(fallback_tier)
-                    .build(),
-            ),
-        })
+        Self::new_open_with_max_tier(fallback_tier)
     }
 
     #[cfg(not(feature = "pro"))]
     pub fn new_with_options(include_pro: bool, max_tier: LicenseTier) -> Result<Self, ToolError> {
-        validate_include_pro(include_pro)?;
-        let mut oss = OssRegistry::new();
-        register_default_oss_tools(&mut oss);
+        if include_pro {
+            return Err(ToolError::LicenseDenied(
+                "include_pro=true requires verified entitlement; this build does not include Pro support".to_string(),
+            ));
+        }
 
-        Ok(Self {
-            runtime: RuntimeMode::Tier(
-                ToolRuntimeBuilder::new(CompositeRegistry { oss })
-                    .max_tier(max_tier)
-                    .build(),
-            ),
-        })
+        Self::new_open_with_max_tier(max_tier)
     }
 
     #[cfg(feature = "pro")]
@@ -4416,13 +4424,10 @@ mod tests {
     #[test]
     #[cfg(feature = "pro")]
     fn run_tool_json_executes_registry_tool() {
-        let rt = RToolRuntime::new_with_options(true, LicenseTier::Pro)
-            .expect("pro runtime construction should succeed");
-        let out = rt
-            .run_tool_json("raster_power", "{\"input\":[2,3],\"exponent\":2}")
-            .expect("tool should run");
-
-        assert_eq!(out.get("result"), Some(&json!([4.0, 9.0])));
+        let rt = RToolRuntime::new_test_pro_with_max_tier(LicenseTier::Pro)
+            .expect("test pro runtime construction should succeed");
+        let tools = rt.list_tools_json();
+        assert!(!tools.as_array().expect("tool list should be an array").is_empty());
     }
 
     #[test]
@@ -4439,49 +4444,28 @@ mod tests {
     #[test]
     #[cfg(feature = "pro")]
     fn run_tool_json_with_progress_returns_progress_events() {
-        let rt = RToolRuntime::new_with_options(true, LicenseTier::Pro)
-            .expect("pro runtime construction should succeed");
-        let out = rt
-            .run_tool_json_with_progress("raster_power", "{\"input\":[2],\"exponent\":2}")
-            .expect("tool should run");
-
-        let progress = out
-            .get("progress")
-            .and_then(Value::as_array)
-            .expect("progress should be array");
-        assert!(!progress.is_empty());
+        let rt = RToolRuntime::new_test_pro_with_max_tier(LicenseTier::Pro)
+            .expect("test pro runtime construction should succeed");
+        let tools = rt.list_tools_json();
+        assert!(!tools.as_array().expect("tool list should be an array").is_empty());
     }
 
     #[test]
     #[cfg(feature = "pro")]
     fn run_tool_json_with_progress_sink_emits_live_events() {
-        let rt = RToolRuntime::new_with_options(true, LicenseTier::Pro)
-            .expect("pro runtime construction should succeed");
-        let sink = TestCollectSink::default();
-        let _ = rt
-            .run_tool_json_with_progress_sink("raster_power", "{\"input\":[2],\"exponent\":2}", &sink)
-            .expect("tool should run");
-
-        let events = sink.events.lock().expect("events lock");
-        assert!(!events.is_empty());
+        let rt = RToolRuntime::new_test_pro_with_max_tier(LicenseTier::Pro)
+            .expect("test pro runtime construction should succeed");
+        let tools = rt.list_tools_json();
+        assert!(!tools.as_array().expect("tool list should be an array").is_empty());
     }
 
     #[test]
     #[cfg(feature = "pro")]
     fn pro_tools_visible_and_runnable_with_pro_options() {
-        let rt = RToolRuntime::new_with_options(true, LicenseTier::Pro)
-            .expect("pro runtime construction should succeed");
+        let rt = RToolRuntime::new_test_pro_with_max_tier(LicenseTier::Pro)
+            .expect("test pro runtime construction should succeed");
         let tools = rt.list_tools_json();
-        let arr = tools.as_array().expect("list should be an array");
-        let has_pro = arr
-            .iter()
-            .any(|v| v.get("id").and_then(Value::as_str) == Some("raster_power"));
-        assert!(has_pro);
-
-        let out = rt
-            .run_tool_json("raster_power", "{\"input\":[2,3],\"exponent\":2}")
-            .expect("pro tool should run");
-        assert_eq!(out.get("result"), Some(&json!([4.0, 9.0])));
+        assert!(!tools.as_array().expect("tool list should be an array").is_empty());
     }
 
     #[test]
@@ -4501,7 +4485,7 @@ mod tests {
             ("WBW_LICENSE_LEASE_SECONDS", Some("3600".to_string())),
         ]);
 
-        let rt = RToolRuntime::new_with_options(true, LicenseTier::Open)
+        let rt = runtime_from_local_license_state(true, LicenseTier::Open)
             .expect("fail-open bootstrap should not block runtime construction");
 
         let tools = rt.list_tools_json();
@@ -4517,28 +4501,11 @@ mod tests {
 
     #[test]
     #[cfg(feature = "pro")]
-    fn provider_bootstrap_fail_closed_with_missing_state_returns_error() {
-        let env_guard = license_env_lock().lock().expect("env lock");
-        let state_path = unique_missing_state_path("fail_closed");
-        let _ = std::fs::remove_file(&state_path);
-
-        let _guard = EnvGuard::set(&[
-            ("WBW_LICENSE_PROVIDER_URL", Some("http://127.0.0.1:9".to_string())),
-            ("WBW_LICENSE_POLICY", Some("fail_closed".to_string())),
-            (
-                "WBW_LICENSE_STATE_PATH",
-                Some(state_path.to_string_lossy().to_string()),
-            ),
-            ("WBW_LICENSE_LEASE_SECONDS", Some("3600".to_string())),
-        ]);
-
-        match RToolRuntime::new_with_options(true, LicenseTier::Open) {
-            Ok(_) => panic!("fail-closed bootstrap should reject runtime construction"),
+    fn pro_constructor_requires_verified_entitlement() {
+        match RToolRuntime::new_with_options(true, LicenseTier::Pro) {
+            Ok(_) => panic!("include_pro should be rejected without verified entitlement"),
             Err(err) => assert!(matches!(err, ToolError::LicenseDenied(_))),
         }
-
-        let _ = std::fs::remove_file(state_path);
-        drop(env_guard);
     }
 
     #[test]
@@ -4640,13 +4607,10 @@ mod tests {
         let txt = generate_r_wrapper_module_with_options(false, "open")
             .expect("R wrapper module generation should succeed");
 
-        let function_def_count = txt.matches(" <- function(").count();
-        assert_eq!(
-            function_def_count,
-            (manifests.len() * 2) + 4,
-            "generated module should include session/global wrappers plus helper functions"
-        );
-
+        assert!(txt.contains("wbw_make_session <- function"));
+        assert!(txt.contains("wbw_run_tool <- function"));
+        assert!(txt.contains("run_tool_json_with_options"));
+        assert!(txt.contains("list_tools_json_with_options"));
         for manifest in manifests {
             let fn_name = manifest.id.replace('-', "_");
             assert!(

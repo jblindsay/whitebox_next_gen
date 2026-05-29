@@ -1,0 +1,6 @@
+[flake8]
+# E501 (line too long) is not enforced by the QGIS plugin repository validator
+# and is impractical to enforce across complex GUI/plugin code. All other
+# validator-relevant rules (W503, W504, F841, F401, W293, E303, E305) are
+# kept active and must stay clean before each release.
+extend-ignore = E501

@@ -171,6 +171,19 @@ def _looks_like_output(name: str, description: str) -> bool:
     return any(m in d for m in persist_markers)
 
 
+# Tools with non-layer outputs in the LiDAR family should stay generic file_out
+# rather than being coerced to lidar_out destinations.
+_NON_LAYER_LIDAR_OUTPUT_TOOLS = {
+    "las_to_ascii",
+    "select_tiles_by_polygon",
+    "lidar_eigenvalue_features",
+    "lidar_histogram",
+    "lidar_info",
+    "lidar_point_return_analysis",
+    "lidar_point_stats",
+}
+
+
 def _looks_like_filepath_default(value: Any) -> bool:
     if value is None or isinstance(value, (list, dict, tuple, set)):
         return False
@@ -1521,6 +1534,7 @@ def _materialize_file_output_destination(
     value: Any,
     feedback=None,
     *,
+    tool_id: str = "",
     name: str = "",
     description: str = "",
     category: str = "",
@@ -1544,12 +1558,15 @@ def _materialize_file_output_destination(
     n = str(name or "").lower()
     d = str(description or "").lower()
     c = str(category or "").lower()
+    t = str(tool_id or "").lower()
     text = f"{n} {d}"
 
     non_layer_hint = any(
         tok in text
         for tok in ("csv", "json", "html", "txt", "xml", "report", "table", "log")
     )
+    if t in _NON_LAYER_LIDAR_OUTPUT_TOOLS:
+        non_layer_hint = True
     vector_hint = any(tok in text for tok in ("vector", "shp", "geojson", "topojson", "geopackage", "features"))
     lidar_hint = any(tok in text for tok in ("lidar", "las", "laz", "zlidar", "copc", "e57", "ply"))
     raster_hint = any(tok in text for tok in ("raster", "dem", "grid", "geotiff", "tif", "image"))
@@ -1592,7 +1609,10 @@ def _materialize_file_output_destination(
     label = "GeoTIFF"
 
     if non_layer_hint:
-        if "csv" in text:
+        if t == "lidar_eigenvalue_features" or "eigen" in text:
+            suffix = ".eigen"
+            label = "eigen"
+        elif "csv" in text:
             suffix = ".csv"
             label = "CSV"
         elif "json" in text:
@@ -1930,7 +1950,32 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             default_value = self._manifest.get("defaults", {}).get(name)
             if default_value is None and "default" in p:
                 default_value = p.get("default")
-            kind = _kind_from_io_schema(p) or _infer_kind(name, description, default_value)
+            schema_kind = _kind_from_io_schema(p)
+            inferred_kind = _infer_kind(name, description, default_value)
+            kind = schema_kind or inferred_kind
+
+            # Runtime schema may sometimes label unresolved params as generic
+            # string/file types. Prefer stronger inferred kinds (numeric, layer,
+            # and path-based) so selectors do not regress into plain strings.
+            if schema_kind in {"string", "file_in"} and inferred_kind in {
+                "int",
+                "double",
+                "bool",
+                "raster_in",
+                "raster_layers_in",
+                "vector_in",
+                "file_in",
+                "raster_out",
+                "vector_out",
+                "lidar_out",
+                "file_out",
+            }:
+                kind = inferred_kind
+
+            # If schema leaves an output destination generic, allow stronger
+            # inferred layer-output kinds to drive destination widget type.
+            if schema_kind == "file_out" and inferred_kind in {"raster_out", "vector_out", "lidar_out"}:
+                kind = inferred_kind
             field_parent = None
             if kind == "string" and vector_param_names and _looks_like_attribute_field(name, description):
                 kind = "field"
@@ -1952,8 +1997,11 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                         "xml",
                         "report",
                         "table",
+                        "eigen",
                     )
                 )
+                if self.name() in _NON_LAYER_LIDAR_OUTPUT_TOOLS:
+                    non_layer_output_hint = True
                 cat = str(self._manifest.get("category", "")).lower()
                 if not non_layer_output_hint:
                     # Prefer dominant input family first when output metadata is
@@ -2327,6 +2375,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                 {
                     "name": name,
                     "kind": kind,
+                    "description": str(output_description or description or name),
                     "required": required or kind in ("file_out", "raster_out", "vector_out", "lidar_out"),
                     "enum_options": enum_options,
                     "field_parent": field_parent,
@@ -2445,6 +2494,36 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             kind = str(spec.get("kind", "string"))
             required = bool(spec.get("required", False))
             is_set = _is_param_explicitly_set(parameters, name)
+
+            # conditional_evaluation accepts constants, expressions, or rasters for
+            # branch values. Preserve user-entered false/true branch values even when
+            # runtime schema inference classifies these params inconsistently.
+            if self.name() == "conditional_evaluation" and name in {
+                "true",
+                "false",
+                "true_value",
+                "false_value",
+            }:
+                lyr = self.parameterAsRasterLayer(parameters, name, context)
+                if lyr is not None:
+                    args[name] = _materialize_raster_input_source(
+                        lyr.source(),
+                        feedback,
+                        temp_raster_inputs,
+                    )
+                    continue
+
+                value = self.parameterAsString(parameters, name, context)
+                if value:
+                    args[name] = str(value)
+                    continue
+
+                if required:
+                    raise QgsProcessingException(
+                        f"Missing required conditional branch value: {name}"
+                    )
+                continue
+
             if kind == "raster_in":
                 lyr = self.parameterAsRasterLayer(parameters, name, context)
                 if lyr is not None:
@@ -2525,6 +2604,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     value = _materialize_file_output_destination(
                         value,
                         feedback,
+                        tool_id=self.name(),
                         name=name,
                         description=str(spec.get("description", name)),
                         category=str(self._manifest.get("category", "")),

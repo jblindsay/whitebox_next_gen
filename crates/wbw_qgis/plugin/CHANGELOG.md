@@ -6,6 +6,18 @@ This changelog tracks user-visible changes to the Whitebox Workflows QGIS plugin
 
 - No pending changes.
 
+## 2.0.12 - 2026-05-28
+
+- Fixed a `conditional_evaluation` parameter forwarding regression where optional branch values could be dropped from the QGIS payload, causing the FALSE branch to fall back to NoData in affected workflows.
+- Added tool-specific branch-value handling for `true`/`false` (and alias forms) so raster, constant, and expression inputs are preserved reliably at execution time.
+- Rebuilt and validated the packaged plugin ZIP for version 2.0.12.
+
+## 2.0.11 - 2026-05-28
+
+- Fixed a parameter-widget regression where some runtime-schema `string`/`file` inputs could override stronger inferred types, causing raster/vector/file selectors to render as plain text boxes for affected tools (including `raster_streams_to_vector`).
+- Updated kind arbitration to preserve stronger inferred input/output layer and destination types when runtime metadata is generic, restoring expected QGIS processing widget behavior.
+- Rebuilt and validated the packaged plugin ZIP for version 2.0.11.
+
 ## 2.0.10 - 2026-05-28
 
 - Bumped plugin metadata version to 2.0.10 for local validation builds so test installs are distinguishable from repository-distributed 2.0.9 builds in QGIS Plugin Manager.

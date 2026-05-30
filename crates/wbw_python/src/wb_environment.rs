@@ -2736,6 +2736,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("segments_to_polygons", "remote_sensing", "obia"),
     ("select_by_location", "vector", "overlay_analysis"),
     ("select_tiles_by_polygon", "lidar", "io_management"),
+    ("baseline_matching_and_diagnostics_assessment", "terrain", "workflow_products"),
     ("service_area_planning_and_coverage_optimization", "vector", "network_analysis"),
     ("set_nodata_value", "conversion", "raster_vector_conversion"),
     ("shadow_animation", "terrain", "visibility"),

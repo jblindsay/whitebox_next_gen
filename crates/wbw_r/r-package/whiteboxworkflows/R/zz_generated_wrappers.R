@@ -247,6 +247,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Produces NDVI delta, carbon proxy change, confidence scoring, verification zone polygons, and audit-ready JSON contract for MRV and ESG reporting.
     run_tool("carbon_sequestration_verification_audit", list(...))
   }
+  session$baseline_matching_and_diagnostics_assessment <- function(...) {
+    # Builds SEMDB baseline donor-pool, matching diagnostics, and trajectory/uncertainty artifacts for carbon baseline workflows.
+    run_tool("baseline_matching_and_diagnostics_assessment", list(...))
+  }
   session$casorati_curvature <- function(...) {
     # Calculates Casorati curvature from a DEM.
     run_tool("casorati_curvature", list(...))
@@ -11470,6 +11474,18 @@ wbw_carbon_sequestration_verification_audit <- function(...) {
   # Produces NDVI delta, carbon proxy change, confidence scoring, verification zone polygons, and audit-ready JSON contract for MRV and ESG reporting.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$carbon_sequestration_verification_audit(...)
+}
+
+baseline_matching_and_diagnostics_assessment <- function(...) {
+  # Builds SEMDB baseline donor-pool, matching diagnostics, and trajectory/uncertainty artifacts for carbon baseline workflows.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$baseline_matching_and_diagnostics_assessment(...)
+}
+
+wbw_baseline_matching_and_diagnostics_assessment <- function(...) {
+  # Builds SEMDB baseline donor-pool, matching diagnostics, and trajectory/uncertainty artifacts for carbon baseline workflows.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$baseline_matching_and_diagnostics_assessment(...)
 }
 
 corridor_mapping_intelligence <- function(...) {

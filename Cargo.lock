@@ -4337,7 +4337,7 @@ dependencies = [
 
 [[package]]
 name = "wbw_r"
-version = "2.0.4"
+version = "2.0.5"
 dependencies = [
  "extendr-api",
  "parquet 54.3.1",

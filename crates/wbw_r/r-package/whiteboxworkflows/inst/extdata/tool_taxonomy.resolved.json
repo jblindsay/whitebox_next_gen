@@ -1020,6 +1020,7 @@
         "corridor_mapping_intelligence",
         "landslide_susceptibility_assessment",
         "river_corridor_health_assessment",
+        "baseline_matching_and_diagnostics_assessment",
         "carbon_sequestration_verification_audit",
         "wildfire_fuel_loading_and_risk_matrix",
         "mine_site_reclamation_compliance_tracker",
@@ -1717,7 +1718,7 @@
     },
     "extract_streams": {
       "license_tier": "open",
-      "source_crate": "unknown"
+      "source_crate": "wbtools_oss"
     },
     "extract_valleys": {
       "license_tier": "open",
@@ -3491,6 +3492,10 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
+    "baseline_matching_and_diagnostics_assessment": {
+      "license_tier": "pro",
+      "source_crate": "wbtools_pro"
+    },
     "service_area_planning_and_coverage_optimization": {
       "license_tier": "pro",
       "source_crate": "wbtools_pro"
@@ -3933,7 +3938,7 @@
     },
     "vector_stream_network_analysis": {
       "license_tier": "open",
-      "source_crate": "unknown"
+      "source_crate": "wbtools_oss"
     },
     "vector_summary_statistics": {
       "license_tier": "open",

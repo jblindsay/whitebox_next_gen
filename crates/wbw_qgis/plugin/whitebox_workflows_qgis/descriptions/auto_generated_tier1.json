@@ -243,6 +243,80 @@
       }
     }
   },
+  "baseline_matching_and_diagnostics_assessment": {
+    "description": "",
+    "parameters": {
+      "project_boundary": {
+        "label": "Project activity boundary polygon vector."
+      },
+      "ecoregion_layer": {
+        "label": "Level-3 ecoregion polygons for donor-pool filtering."
+      },
+      "year0_landcover": {
+        "label": "Year-0 land-cover raster used for non-forest donor eligibility."
+      },
+      "pre_period_ndvi_stack": {
+        "label": "Multi-band pre-period NDVI stack (recommended years -5 to -1)."
+      },
+      "elevation": {
+        "label": "Elevation raster covariate."
+      },
+      "precipitation": {
+        "label": "Precipitation raster covariate."
+      },
+      "soil_organic_carbon": {
+        "label": "Soil organic carbon raster covariate."
+      },
+      "soil_texture_class": {
+        "label": "Soil texture class raster covariate."
+      },
+      "roads": {
+        "label": "Roads vector for accessibility covariates."
+      },
+      "tenure_status": {
+        "label": "Optional tenure/legal-status vector for exact-match constraints. [optional]"
+      },
+      "donor_pool_exclusion_distance_km": {
+        "label": "Exclusion distance from project boundary in km. (default 5). [optional]"
+      },
+      "matching_mode": {
+        "label": "Matching mode: mahalanobis or propensity_score. (default mahalanobis). [optional]"
+      },
+      "neighbors": {
+        "label": "Nearest-neighbor count. (default 1). [optional]"
+      },
+      "with_replacement": {
+        "label": "Whether matching is with replacement. (default true). [optional]"
+      },
+      "calliper_elevation_std": {
+        "label": "Optional elevation calliper in standard-deviation units. [optional]"
+      },
+      "calliper_precipitation_std": {
+        "label": "Optional precipitation calliper in standard-deviation units. [optional]"
+      },
+      "calliper_soc_std": {
+        "label": "Optional SOC calliper in standard-deviation units. [optional]"
+      },
+      "exact_match_soil_texture_class": {
+        "label": "Require exact donor/treated soil texture class match. (default true). [optional]"
+      },
+      "random_seed": {
+        "label": "Deterministic seed used for bounded preview sampling. (default 0). [optional]"
+      },
+      "smd_threshold": {
+        "label": "SMD pass threshold (default 0.1). [optional]"
+      },
+      "parallel_trend_tolerance": {
+        "label": "Absolute treated-donor slope tolerance for pre-period trends (default 0.01). [optional]"
+      },
+      "pre_period_min_years": {
+        "label": "Minimum NDVI pre-period band count. (default 5). [optional]"
+      },
+      "output_prefix": {
+        "label": "Output prefix for generated artifacts. (default semdb_baseline). [optional]"
+      }
+    }
+  },
   "casorati_curvature": {
     "description": "",
     "parameters": {

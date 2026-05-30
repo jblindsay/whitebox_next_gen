@@ -60,6 +60,245 @@ impl Default for ToolParamSpec {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolValueCardinality {
+    Single,
+    Multiple,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolVectorGeometry {
+    Point,
+    Line,
+    Polygon,
+    LineOrPolygon,
+    Any,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolScalarKind {
+    Integer,
+    Float,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ToolDatasetSchema {
+    Raster,
+    Vector { geometry: ToolVectorGeometry },
+    Lidar,
+    Table,
+    Json,
+    Text,
+    File,
+    Mixed { members: Vec<ToolDatasetSchema> },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolInputMode {
+    Existing,
+    ExistingOrNumber,
+    ExistingOrString,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolOutputMode {
+    New,
+    Report,
+    Sidecar,
+    InPlace,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolInputSchema {
+    pub mode: ToolInputMode,
+    pub dataset: ToolDatasetSchema,
+    pub cardinality: ToolValueCardinality,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolOutputSchema {
+    pub mode: ToolOutputMode,
+    pub dataset: ToolDatasetSchema,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolEnumOption {
+    pub value: String,
+    pub label: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolEnumSchema {
+    pub options: Vec<ToolEnumOption>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolFieldSchema {
+    pub parent: String,
+    pub geometry: Option<ToolVectorGeometry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ToolParamSchema {
+    Input(ToolInputSchema),
+    Output(ToolOutputSchema),
+    Scalar { scalar: ToolScalarKind },
+    Enum(ToolEnumSchema),
+    Bool,
+    String,
+    Field(ToolFieldSchema),
+}
+
+impl ToolParamSchema {
+    pub fn input(dataset: ToolDatasetSchema) -> Self {
+        Self::Input(ToolInputSchema {
+            mode: ToolInputMode::Existing,
+            dataset,
+            cardinality: ToolValueCardinality::Single,
+        })
+    }
+
+    pub fn input_multiple(dataset: ToolDatasetSchema) -> Self {
+        Self::Input(ToolInputSchema {
+            mode: ToolInputMode::Existing,
+            dataset,
+            cardinality: ToolValueCardinality::Multiple,
+        })
+    }
+
+    pub fn input_raster() -> Self {
+        Self::input(ToolDatasetSchema::Raster)
+    }
+
+    pub fn input_vector_any() -> Self {
+        Self::input(ToolDatasetSchema::Vector {
+            geometry: ToolVectorGeometry::Any,
+        })
+    }
+
+    pub fn input_vector(geometry: ToolVectorGeometry) -> Self {
+        Self::input(ToolDatasetSchema::Vector { geometry })
+    }
+
+    pub fn input_lidar() -> Self {
+        Self::input(ToolDatasetSchema::Lidar)
+    }
+
+    pub fn input_existing_or_number(dataset: ToolDatasetSchema) -> Self {
+        Self::Input(ToolInputSchema {
+            mode: ToolInputMode::ExistingOrNumber,
+            dataset,
+            cardinality: ToolValueCardinality::Single,
+        })
+    }
+
+    pub fn output(dataset: ToolDatasetSchema) -> Self {
+        Self::Output(ToolOutputSchema {
+            mode: ToolOutputMode::New,
+            dataset,
+        })
+    }
+
+    pub fn output_raster() -> Self {
+        Self::output(ToolDatasetSchema::Raster)
+    }
+
+    pub fn output_vector_any() -> Self {
+        Self::output(ToolDatasetSchema::Vector {
+            geometry: ToolVectorGeometry::Any,
+        })
+    }
+
+    pub fn bool() -> Self {
+        Self::Bool
+    }
+
+    pub fn string() -> Self {
+        Self::String
+    }
+
+    pub fn scalar_integer() -> Self {
+        Self::Scalar {
+            scalar: ToolScalarKind::Integer,
+        }
+    }
+
+    pub fn scalar_float() -> Self {
+        Self::Scalar {
+            scalar: ToolScalarKind::Float,
+        }
+    }
+
+    pub fn field(parent: &str, geometry: Option<ToolVectorGeometry>) -> Self {
+        Self::Field(ToolFieldSchema {
+            parent: parent.to_string(),
+            geometry,
+        })
+    }
+
+    pub fn enum_values(options: &[&str]) -> Self {
+        Self::Enum(ToolEnumSchema {
+            options: options
+                .iter()
+                .map(|value| ToolEnumOption {
+                    value: (*value).to_string(),
+                    label: None,
+                })
+                .collect(),
+        })
+    }
+
+    pub fn io_role(&self) -> Option<ToolIoRole> {
+        match self {
+            Self::Input(_) => Some(ToolIoRole::Input),
+            Self::Output(_) => Some(ToolIoRole::Output),
+            Self::Scalar { .. } | Self::Enum(_) | Self::Bool | Self::String | Self::Field(_) => None,
+        }
+    }
+
+    pub fn coarse_data_kind(&self) -> ToolDataKind {
+        match self {
+            Self::Input(schema) => schema.dataset.coarse_data_kind(),
+            Self::Output(schema) => schema.dataset.coarse_data_kind(),
+            Self::Scalar { .. } => ToolDataKind::Number,
+            Self::Enum(_) | Self::String | Self::Field(_) => ToolDataKind::String,
+            Self::Bool => ToolDataKind::Bool,
+        }
+    }
+}
+
+impl ToolDatasetSchema {
+    pub fn coarse_data_kind(&self) -> ToolDataKind {
+        match self {
+            Self::Raster => ToolDataKind::Raster,
+            Self::Vector { .. } => ToolDataKind::Vector,
+            Self::Lidar => ToolDataKind::Lidar,
+            Self::Table => ToolDataKind::Table,
+            Self::Json => ToolDataKind::Json,
+            Self::Text => ToolDataKind::Text,
+            Self::File => ToolDataKind::File,
+            Self::Mixed { members } => members
+                .first()
+                .map(ToolDatasetSchema::coarse_data_kind)
+                .unwrap_or(ToolDataKind::Unknown),
+        }
+    }
+}
+
+pub fn param_schema_map(entries: &[(&str, ToolParamSchema)]) -> BTreeMap<String, ToolParamSchema> {
+    entries
+        .iter()
+        .map(|(name, schema)| ((*name).to_string(), schema.clone()))
+        .collect()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolMetadata {
     pub id: ToolId,
@@ -371,7 +610,93 @@ fn infer_data_kind(name: &str, description: &str, role: &ToolIoRole) -> ToolData
     ToolDataKind::String
 }
 
-pub fn manifest_with_io_schema_json(manifest: &ToolManifest) -> Value {
+fn role_and_kind_from_schema(schema: &ToolParamSchema) -> (Option<ToolIoRole>, ToolDataKind) {
+    (schema.io_role(), schema.coarse_data_kind())
+}
+
+fn schema_from_role_and_kind(role: Option<ToolIoRole>, kind: ToolDataKind) -> Option<ToolParamSchema> {
+    let dataset_from_kind = |k: ToolDataKind| -> Option<ToolDatasetSchema> {
+        match k {
+            ToolDataKind::Raster => Some(ToolDatasetSchema::Raster),
+            ToolDataKind::Vector => Some(ToolDatasetSchema::Vector {
+                geometry: ToolVectorGeometry::Any,
+            }),
+            ToolDataKind::Lidar => Some(ToolDatasetSchema::Lidar),
+            ToolDataKind::Table => Some(ToolDatasetSchema::Table),
+            ToolDataKind::Json => Some(ToolDatasetSchema::Json),
+            ToolDataKind::Text => Some(ToolDatasetSchema::Text),
+            ToolDataKind::File => Some(ToolDatasetSchema::File),
+            _ => None,
+        }
+    };
+
+    match (role, kind) {
+        (Some(ToolIoRole::Input), k) => {
+            if let Some(ds) = dataset_from_kind(k.clone()) {
+                Some(ToolParamSchema::input(ds))
+            } else {
+                match k {
+                    ToolDataKind::Bool => Some(ToolParamSchema::bool()),
+                    ToolDataKind::Number => Some(ToolParamSchema::scalar_float()),
+                    ToolDataKind::String | ToolDataKind::Unknown => Some(ToolParamSchema::string()),
+                    _ => None,
+                }
+            }
+        }
+        (Some(ToolIoRole::Output), k) => {
+            if let Some(ds) = dataset_from_kind(k.clone()) {
+                Some(ToolParamSchema::output(ds))
+            } else {
+                match k {
+                    ToolDataKind::Bool => Some(ToolParamSchema::bool()),
+                    ToolDataKind::Number => Some(ToolParamSchema::scalar_float()),
+                    ToolDataKind::String | ToolDataKind::Unknown => Some(ToolParamSchema::string()),
+                    _ => None,
+                }
+            }
+        }
+        (None, ToolDataKind::Bool) => Some(ToolParamSchema::bool()),
+        (None, ToolDataKind::Number) => Some(ToolParamSchema::scalar_float()),
+        (None, ToolDataKind::String)
+        | (None, ToolDataKind::File)
+        | (None, ToolDataKind::Text)
+        | (None, ToolDataKind::Json)
+        | (None, ToolDataKind::Unknown) => Some(ToolParamSchema::string()),
+        (None, k) => dataset_from_kind(k).map(ToolParamSchema::input),
+    }
+}
+
+fn fallback_param_description(name: &str) -> String {
+    if name.trim().is_empty() {
+        return String::new();
+    }
+
+    let mut out = String::new();
+    let mut capitalize_next = true;
+    for ch in name.chars() {
+        if ch == '_' || ch == '-' {
+            if !out.ends_with(' ') {
+                out.push(' ');
+            }
+            capitalize_next = true;
+            continue;
+        }
+
+        if capitalize_next {
+            out.extend(ch.to_uppercase());
+            capitalize_next = false;
+        } else {
+            out.push(ch);
+        }
+    }
+
+    out.trim().to_string()
+}
+
+pub fn manifest_with_param_schema_json(
+    manifest: &ToolManifest,
+    param_schemas: &BTreeMap<String, ToolParamSchema>,
+) -> Value {
     let mut entry = serde_json::to_value(manifest).unwrap_or_else(|_| Value::Null);
     let Value::Object(obj) = &mut entry else {
         return serde_json::to_value(manifest).unwrap_or(Value::Null);
@@ -382,48 +707,90 @@ pub fn manifest_with_io_schema_json(manifest: &ToolManifest) -> Value {
         .cloned()
         .unwrap_or_else(|| Value::Array(Vec::new()));
 
+    let mut params_in: Vec<Value> = match params_val {
+        Value::Array(params) => params,
+        _ => Vec::new(),
+    };
+
+    if params_in.is_empty() && !param_schemas.is_empty() {
+        for name in param_schemas.keys() {
+            params_in.push(serde_json::json!({
+                "name": name,
+                "description": fallback_param_description(name),
+                "required": false
+            }));
+        }
+    }
+
     let mut params_out = Vec::new();
-    if let Value::Array(params) = params_val {
-        for p in params {
-            let mut po = match p {
-                Value::Object(v) => v,
-                _ => continue,
-            };
+    for p in params_in {
+        let mut po = match p {
+            Value::Object(v) => v,
+            _ => continue,
+        };
 
-            let name = po
-                .get("name")
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_string();
-            let description = po
-                .get("description")
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_string();
+        let name = po
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let description = po
+            .get("description")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
 
-            let role = if looks_like_output_param(&name, &description) {
+        if description.trim().is_empty() {
+            po.insert(
+                "description".to_string(),
+                Value::String(fallback_param_description(&name)),
+            );
+        }
+
+        let explicit_schema = param_schemas.get(&name);
+        let (role, data_kind) = if let Some(schema) = explicit_schema {
+            role_and_kind_from_schema(schema)
+        } else {
+            let inferred_role = if looks_like_output_param(&name, &description) {
                 ToolIoRole::Output
             } else {
                 ToolIoRole::Input
             };
-            let data_kind = infer_data_kind(&name, &description, &role);
+            let inferred_kind = infer_data_kind(&name, &description, &inferred_role);
+            (Some(inferred_role), inferred_kind)
+        };
 
+        let synthesized_schema = schema_from_role_and_kind(role.clone(), data_kind.clone());
+        if let Some(schema) = explicit_schema.or(synthesized_schema.as_ref()) {
+            po.insert(
+                "schema".to_string(),
+                serde_json::to_value(schema).unwrap_or(Value::Null),
+            );
+        }
+
+        if let Some(role) = role {
             po.insert(
                 "io_role".to_string(),
-                serde_json::to_value(role).unwrap_or_else(|_| Value::String("input".to_string())),
+                serde_json::to_value(role)
+                    .unwrap_or_else(|_| Value::String("input".to_string())),
             );
-            po.insert(
-                "data_kind".to_string(),
-                serde_json::to_value(data_kind)
-                    .unwrap_or_else(|_| Value::String("unknown".to_string())),
-            );
-
-            params_out.push(Value::Object(po));
         }
+
+        po.insert(
+            "data_kind".to_string(),
+            serde_json::to_value(data_kind)
+                .unwrap_or_else(|_| Value::String("unknown".to_string())),
+        );
+
+        params_out.push(Value::Object(po));
     }
 
     obj.insert("params".to_string(), Value::Array(params_out));
     entry
+}
+
+pub fn manifest_with_io_schema_json(manifest: &ToolManifest) -> Value {
+    manifest_with_param_schema_json(manifest, &BTreeMap::new())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

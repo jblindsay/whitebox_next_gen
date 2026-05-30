@@ -1,6 +1,281 @@
+use std::collections::BTreeMap;
+use wbcore::ToolParamSchema;
+
 mod raster_add;
 mod raster_unary_math;
 mod raster_stats;
+
+fn param_schema_map(entries: &[(&str, ToolParamSchema)]) -> BTreeMap<String, ToolParamSchema> {
+        let mut map = BTreeMap::new();
+        for (name, schema) in entries {
+                map.insert((*name).to_string(), schema.clone());
+        }
+        map
+}
+
+pub fn raster_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolParamSchema>> {
+        match tool_id {
+                "abs" | "arccos" | "arcosh" | "arcsin" | "arctan" | "arsinh" | "artanh"
+                | "bool_not" | "ceil" | "cos" | "cosh" | "exp" | "exp2" | "floor"
+                | "is_nodata" | "ln" | "log10" | "log2" | "negate"
+                | "reciprocal" | "round" | "sin" | "sinh" | "sqrt" | "square" | "tan"
+                | "tanh" | "to_degrees" | "to_radians" | "truncate" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "decrement" | "increment" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("value", ToolParamSchema::scalar_float()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "add" | "atan2" | "bool_and" | "bool_or" | "bool_xor" | "divide"
+                | "equal_to" | "greater_than" | "greater_than_or_equal_to" | "integer_division"
+                | "less_than" | "less_than_or_equal_to" | "modulo" | "multiply" | "not_equal_to"
+                | "power" | "subtract" => Some(param_schema_map(&[
+                        ("input1", ToolParamSchema::input_raster()),
+                        ("input2", ToolParamSchema::input_raster()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "inplace_add" | "inplace_subtract" | "inplace_multiply" | "inplace_divide" => {
+                        Some(param_schema_map(&[
+                                ("input1", ToolParamSchema::input_raster()),
+                                (
+                                        "input2",
+                                        ToolParamSchema::input_existing_or_number(
+                                                wbcore::ToolDatasetSchema::Raster,
+                                        ),
+                                ),
+                        ]))
+                },
+                "raster_summary_stats" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+                ])),
+                "raster_histogram" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+                        ("bins", ToolParamSchema::scalar_integer()),
+                ])),
+                "list_unique_values_raster" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+                        ("strict_parity", ToolParamSchema::bool()),
+                        ("max_values", ToolParamSchema::scalar_integer()),
+                ])),
+                "z_scores" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "rescale_value_range" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("out_min", ToolParamSchema::scalar_float()),
+                        ("out_max", ToolParamSchema::scalar_float()),
+                        ("clip_min", ToolParamSchema::scalar_float()),
+                        ("clip_max", ToolParamSchema::scalar_float()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "ks_normality_test" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("num_samples", ToolParamSchema::scalar_integer()),
+                        ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+                ])),
+                "cumulative_distribution" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "random_field" => Some(param_schema_map(&[
+                        ("base", ToolParamSchema::input_raster()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "fft_random_field" => Some(param_schema_map(&[
+                        ("base_raster", ToolParamSchema::input_raster()),
+                        ("range", ToolParamSchema::scalar_float()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "random_sample" => Some(param_schema_map(&[
+                        ("base", ToolParamSchema::input_raster()),
+                        ("num_samples", ToolParamSchema::scalar_integer()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "attribute_histogram" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_vector_any()),
+                        ("field", ToolParamSchema::string()),
+                        ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+                ])),
+                "attribute_scattergram" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_vector_any()),
+                        ("fieldx", ToolParamSchema::string()),
+                        ("fieldy", ToolParamSchema::string()),
+                        ("trendline", ToolParamSchema::bool()),
+                        ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+                ])),
+                "attribute_correlation" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_vector_any()),
+                        ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+                ])),
+                "cross_tabulation" => Some(param_schema_map(&[
+                        ("input1", ToolParamSchema::input_raster()),
+                        ("input2", ToolParamSchema::input_raster()),
+                        ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+                ])),
+                "anova" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("features", ToolParamSchema::input_raster()),
+                        ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+                ])),
+                "crispness_index" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+                ])),
+                "phi_coefficient" => Some(param_schema_map(&[
+                        ("input1", ToolParamSchema::input_raster()),
+                        ("input2", ToolParamSchema::input_raster()),
+                        ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+                ])),
+                "max" | "min" => Some(param_schema_map(&[
+                        (
+                                "input1",
+                                ToolParamSchema::input_existing_or_number(wbcore::ToolDatasetSchema::Raster),
+                        ),
+                        (
+                                "input2",
+                                ToolParamSchema::input_existing_or_number(wbcore::ToolDatasetSchema::Raster),
+                        ),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "quantiles" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("num_quantiles", ToolParamSchema::scalar_integer()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "list_unique_values" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_vector_any()),
+                        ("field", ToolParamSchema::string()),
+                        ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+                ])),
+                "root_mean_square_error" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("base", ToolParamSchema::input_raster()),
+                ])),
+                "zonal_statistics" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("features", ToolParamSchema::input_raster()),
+                        ("stat_type", ToolParamSchema::string()),
+                        ("zero_is_background", ToolParamSchema::bool()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "conditional_evaluation" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("statement", ToolParamSchema::string()),
+                        ("true", ToolParamSchema::string()),
+                        ("false", ToolParamSchema::string()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "image_correlation" => Some(param_schema_map(&[
+                        (
+                                "inputs",
+                                ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::Raster),
+                        ),
+                ])),
+                "image_autocorrelation" => Some(param_schema_map(&[
+                        (
+                                "inputs",
+                                ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::Raster),
+                        ),
+                        ("contiguity", ToolParamSchema::string()),
+                ])),
+                "image_correlation_neighbourhood_analysis" => Some(param_schema_map(&[
+                        ("input1", ToolParamSchema::input_raster()),
+                        ("input2", ToolParamSchema::input_raster()),
+                        ("filter_size", ToolParamSchema::scalar_integer()),
+                        ("correlation_stat", ToolParamSchema::string()),
+                        ("output1", ToolParamSchema::output_raster()),
+                        ("output2", ToolParamSchema::output_raster()),
+                ])),
+                "image_regression" => Some(param_schema_map(&[
+                        ("input1", ToolParamSchema::input_raster()),
+                        ("input2", ToolParamSchema::input_raster()),
+                        ("standardize_residuals", ToolParamSchema::bool()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "dbscan" => Some(param_schema_map(&[
+                        (
+                                "inputs",
+                                ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::Raster),
+                        ),
+                        ("scaling_method", ToolParamSchema::string()),
+                        ("search_distance", ToolParamSchema::scalar_float()),
+                        ("min_points", ToolParamSchema::scalar_integer()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "kappa_index" => Some(param_schema_map(&[
+                        ("input1", ToolParamSchema::input_raster()),
+                        ("input2", ToolParamSchema::input_raster()),
+                        ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+                ])),
+                "paired_sample_t_test" => Some(param_schema_map(&[
+                        ("input1", ToolParamSchema::input_raster()),
+                        ("input2", ToolParamSchema::input_raster()),
+                        ("num_samples", ToolParamSchema::scalar_integer()),
+                        ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+                ])),
+                "two_sample_ks_test" | "wilcoxon_signed_rank_test" => Some(param_schema_map(&[
+                        ("input1", ToolParamSchema::input_raster()),
+                        ("input2", ToolParamSchema::input_raster()),
+                        ("num_samples", ToolParamSchema::scalar_integer()),
+                ])),
+                "turning_bands_simulation" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("range", ToolParamSchema::scalar_float()),
+                        ("iterations", ToolParamSchema::scalar_integer()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "trend_surface" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_raster()),
+                        ("polynomial_order", ToolParamSchema::scalar_integer()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "trend_surface_vector_points" => Some(param_schema_map(&[
+                        ("input", ToolParamSchema::input_vector_any()),
+                        ("cell_size", ToolParamSchema::scalar_float()),
+                        ("field_name", ToolParamSchema::string()),
+                        ("polynomial_order", ToolParamSchema::scalar_integer()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "raster_calculator" => Some(param_schema_map(&[
+                        ("expression", ToolParamSchema::string()),
+                        (
+                                "inputs",
+                                ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::Raster),
+                        ),
+                        ("auto_reproject", ToolParamSchema::bool()),
+                        ("auto_reproject_method", ToolParamSchema::string()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "principal_component_analysis" => Some(param_schema_map(&[
+                        (
+                                "inputs",
+                                ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::Raster),
+                        ),
+                        ("auto_reproject", ToolParamSchema::bool()),
+                        ("auto_reproject_method", ToolParamSchema::string()),
+                        ("num_components", ToolParamSchema::scalar_integer()),
+                        ("standardized", ToolParamSchema::bool()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                "inverse_pca" => Some(param_schema_map(&[
+                        (
+                                "inputs",
+                                ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::Raster),
+                        ),
+                        ("auto_reproject", ToolParamSchema::bool()),
+                        ("auto_reproject_method", ToolParamSchema::string()),
+                        ("pca_report", ToolParamSchema::string()),
+                        ("output", ToolParamSchema::output_raster()),
+                ])),
+                _ => None,
+        }
+}
 
 pub use raster_add::RasterAddTool;
 pub use raster_add::RasterAtan2Tool;

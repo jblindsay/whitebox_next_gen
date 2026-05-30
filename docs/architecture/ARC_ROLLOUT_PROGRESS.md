@@ -4,6 +4,10 @@ This document tracks the migration of wbtools_oss tool files from the
 `get_raster_by_id` (clone path) to `get_raster_arc_by_id` (zero-copy Arc path).
 See `RASTER_ZERO_COPY_PATTERN.md` for the technical pattern.
 
+## Related Architecture Docs
+
+- `ARCHITECTURAL_COMPLEXITY_ASSESSMENT_AND_BURNDOWN_2026-05-30.md` — complexity ratings (legacy vs Next Gen), essential vs accidental split, and burn-down plan.
+
 ## Why This Matters
 
 When `read_raster()` is called in Python, the raster is eagerly loaded into the

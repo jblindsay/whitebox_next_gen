@@ -15,8 +15,8 @@ use rayon::prelude::*;
 use serde_json::json;
 use wbcore::{PercentCoalescer, 
     parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
-    ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata,
-    ToolParamSpec, ToolRunResult, ToolStability,
+    ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor,
+    param_schema_map, ToolParamSchema, ToolParamSpec, ToolRunResult, ToolStability, ToolVectorGeometry,
 };
 use wbraster::{DataType, Raster, RasterConfig, RasterFormat};
 use wbvector::{Coord, Crs, FieldDef, FieldType, FieldValue, Geometry, GeometryType, Layer, VectorFormat};
@@ -57,6 +57,192 @@ pub struct LongProfileTool;
 pub struct LongProfileFromPointsTool;
 pub struct RepairStreamVectorTopologyTool;
 pub struct VectorStreamNetworkAnalysisTool;
+
+pub fn stream_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolParamSchema>> {
+    match tool_id {
+        "strahler_stream_order" | "horton_stream_order" | "hack_stream_order"
+        | "shreve_stream_magnitude" => Some(param_schema_map(&[
+            ("d8_pntr", ToolParamSchema::input_raster()),
+            ("streams", ToolParamSchema::input_raster()),
+            ("esri_pntr", ToolParamSchema::bool()),
+            ("zero_background", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "burn_streams" => Some(param_schema_map(&[
+            ("dem", ToolParamSchema::input_raster()),
+            ("streams", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("decrement_value", ToolParamSchema::scalar_float()),
+            ("gradient_distance", ToolParamSchema::scalar_integer()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "horton_ratios" => Some(param_schema_map(&[
+            ("dem", ToolParamSchema::input_raster()),
+            ("streams_raster", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+        ])),
+        "prune_vector_streams" => Some(param_schema_map(&[
+            ("streams", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("dem", ToolParamSchema::input_raster()),
+            ("threshold", ToolParamSchema::scalar_float()),
+            ("snap_distance", ToolParamSchema::scalar_float()),
+            ("max_ridge_cutting_height", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "river_centerlines" => Some(param_schema_map(&[
+            ("raster", ToolParamSchema::input_raster()),
+            ("min_length", ToolParamSchema::scalar_integer()),
+            ("search_radius", ToolParamSchema::scalar_integer()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "ridge_and_valley_vectors" => Some(param_schema_map(&[
+            ("dem", ToolParamSchema::input_raster()),
+            ("filter_size", ToolParamSchema::scalar_integer()),
+            ("ep_threshold", ToolParamSchema::scalar_float()),
+            ("slope_threshold", ToolParamSchema::scalar_float()),
+            ("min_length", ToolParamSchema::scalar_integer()),
+            (
+                "output_ridges",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+            (
+                "output_valleys",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "extract_streams" => Some(param_schema_map(&[
+            ("flow_accumulation", ToolParamSchema::input_raster()),
+            ("threshold", ToolParamSchema::scalar_float()),
+            ("zero_background", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "stream_link_identifier" | "stream_link_class" | "distance_to_outlet"
+        | "length_of_upstream_channels" | "farthest_channel_head"
+        | "find_main_stem" | "tributary_identifier" | "topological_stream_order" => {
+            Some(param_schema_map(&[
+                ("d8_pntr", ToolParamSchema::input_raster()),
+                ("streams", ToolParamSchema::input_raster()),
+                ("esri_pntr", ToolParamSchema::bool()),
+                ("zero_background", ToolParamSchema::bool()),
+                ("output", ToolParamSchema::output_raster()),
+            ]))
+        }
+        "remove_short_streams" => Some(param_schema_map(&[
+            ("d8_pntr", ToolParamSchema::input_raster()),
+            ("streams", ToolParamSchema::input_raster()),
+            ("esri_pntr", ToolParamSchema::bool()),
+            ("zero_background", ToolParamSchema::bool()),
+            ("min_length", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "stream_link_length" => Some(param_schema_map(&[
+            ("d8_pntr", ToolParamSchema::input_raster()),
+            ("streams", ToolParamSchema::input_raster()),
+            ("linkid", ToolParamSchema::input_raster()),
+            ("esri_pntr", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "stream_link_slope" => Some(param_schema_map(&[
+            ("d8_pntr", ToolParamSchema::input_raster()),
+            ("streams", ToolParamSchema::input_raster()),
+            ("linkid", ToolParamSchema::input_raster()),
+            ("dem", ToolParamSchema::input_raster()),
+            ("esri_pntr", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "stream_slope_continuous" => Some(param_schema_map(&[
+            ("d8_pntr", ToolParamSchema::input_raster()),
+            ("streams", ToolParamSchema::input_raster()),
+            ("dem", ToolParamSchema::input_raster()),
+            ("esri_pntr", ToolParamSchema::bool()),
+            ("zero_background", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "extract_valleys" => Some(param_schema_map(&[
+            ("dem", ToolParamSchema::input_raster()),
+            ("line_thin", ToolParamSchema::bool()),
+            (
+                "variant",
+                ToolParamSchema::enum_values(&["lq", "jandr", "pandd"]),
+            ),
+            ("filter_size", ToolParamSchema::scalar_integer()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "raster_streams_to_vector" => Some(param_schema_map(&[
+            ("streams_raster", ToolParamSchema::input_raster()),
+            ("d8_pntr", ToolParamSchema::input_raster()),
+            ("esri_pntr", ToolParamSchema::bool()),
+            ("all_vertices", ToolParamSchema::bool()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "rasterize_streams" => Some(param_schema_map(&[
+            (
+                "input_vector",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Line),
+            ),
+            ("reference_raster", ToolParamSchema::input_raster()),
+            ("zero_background", ToolParamSchema::bool()),
+            ("use_feature_id", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "long_profile" => Some(param_schema_map(&[
+            ("d8_pntr", ToolParamSchema::input_raster()),
+            ("streams_raster", ToolParamSchema::input_raster()),
+            ("dem", ToolParamSchema::input_raster()),
+            ("esri_pntr", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+        ])),
+        "long_profile_from_points" => Some(param_schema_map(&[
+            ("d8_pntr", ToolParamSchema::input_raster()),
+            (
+                "points",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+            ),
+            ("dem", ToolParamSchema::input_raster()),
+            ("esri_pntr", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+        ])),
+        "repair_stream_vector_topology" => Some(param_schema_map(&[
+            (
+                "input_vector",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Line),
+            ),
+            ("snap", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "vector_stream_network_analysis" => Some(param_schema_map(&[
+            ("streams", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("dem", ToolParamSchema::input_raster()),
+            ("max_ridge_cutting_height", ToolParamSchema::scalar_float()),
+            ("snap_distance", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        _ => None,
+    }
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Core D8 Utilities
@@ -3251,14 +3437,207 @@ create_stream_tool_impl!(FindMainStemTool, "find_main_stem", "Find Main Stem", "
 create_stream_tool_impl!(FarthestChannelHeadTool, "farthest_channel_head", "Farthest Channel Head", "Calculates distance to most distant channel head.");
 create_stream_tool_impl!(TributaryIdentifierTool, "tributary_identifier", "Tributary Identifier", "Assigns unique ID to each tributary.");
 create_stream_tool_impl!(RemoveShortStreamsTool, "remove_short_streams", "Remove Short Streams", "Removes stream links shorter than minimum length.");
-create_stream_tool_impl!(ExtractStreamsTool, "extract_streams", "Extract Streams", "Extracts streams based on flow accumulation threshold.");
 create_stream_tool_impl!(ExtractValleysTool, "extract_valleys", "Extract Valleys", "Extracts valleys from DEM.");
 create_stream_tool_impl!(RasterStreamsToVectorTool, "raster_streams_to_vector", "Raster Streams to Vector", "Converts raster stream network to vector.");
 create_stream_tool_impl!(RasterizeStreamsTool, "rasterize_streams", "Rasterize Streams", "Rasterizes vector stream network.");
 create_stream_tool_impl!(LongProfileTool, "long_profile", "Long Profile", "Creates longitudinal stream profile.");
 create_stream_tool_impl!(LongProfileFromPointsTool, "long_profile_from_points", "Long Profile from Points", "Creates long profile from vector points.");
 create_stream_tool_impl!(RepairStreamVectorTopologyTool, "repair_stream_vector_topology", "Repair Stream Vector Topology", "Repairs topology of vector stream network.");
-create_stream_tool_impl!(VectorStreamNetworkAnalysisTool, "vector_stream_network_analysis", "Vector Stream Network Analysis", "Comprehensive vector stream network analysis.");
+
+impl Tool for ExtractStreamsTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "extract_streams",
+            display_name: "Extract Streams",
+            summary: "Extracts streams based on flow accumulation threshold.",
+            category: ToolCategory::Hydrology,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec {
+                    name: "flow_accumulation",
+                    description: "Input flow accumulation raster.",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "threshold",
+                    description: "Minimum accumulation value required to be part of a stream channel.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "zero_background",
+                    description: "If true, non-stream background is 0 instead of NoData.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "output",
+                    description: "Optional output stream raster path.",
+                    required: false,
+                },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("threshold".to_string(), json!(0.0));
+        defaults.insert("zero_background".to_string(), json!(false));
+        ToolManifest {
+            id: "extract_streams".to_string(),
+            display_name: "Extract Streams".to_string(),
+            summary: "Extracts streams based on flow accumulation threshold.".to_string(),
+            category: ToolCategory::Hydrology,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor {
+                    name: "flow_accumulation".to_string(),
+                    description: "Input flow accumulation raster.".to_string(),
+                    required: true,
+                },
+                ToolParamDescriptor {
+                    name: "threshold".to_string(),
+                    description: "Minimum accumulation value required to be part of a stream channel.".to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
+                    name: "zero_background".to_string(),
+                    description: "If true, non-stream background is 0 instead of NoData.".to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
+                    name: "output".to_string(),
+                    description: "Optional output stream raster path.".to_string(),
+                    required: false,
+                },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "extract_streams_basic".to_string(),
+                description: "Extract streams from a flow accumulation raster.".to_string(),
+                args: {
+                    let mut args = ToolArgs::new();
+                    args.insert("flow_accumulation".to_string(), json!("flow_accum.tif"));
+                    args.insert("threshold".to_string(), json!(1000.0));
+                    args.insert("zero_background".to_string(), json!(false));
+                    args.insert("output".to_string(), json!("streams.tif"));
+                    args
+                },
+            }],
+            tags: vec!["stream_network".to_string(), "hydrology".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, _args: &ToolArgs) -> Result<(), ToolError> {
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        run_stream_tool_fallback("extract_streams", args, ctx)
+    }
+}
+
+impl Tool for VectorStreamNetworkAnalysisTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "vector_stream_network_analysis",
+            display_name: "Vector Stream Network Analysis",
+            summary: "Comprehensive vector stream network analysis.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec {
+                    name: "streams",
+                    description: "Input stream network vector layer.",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "dem",
+                    description: "Input elevation raster (DEM).",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "max_ridge_cutting_height",
+                    description: "Maximum allowable ridge-cutting height.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "snap_distance",
+                    description: "Snapping distance tolerance for network cleanup.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "output",
+                    description: "Optional output vector path.",
+                    required: false,
+                },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("max_ridge_cutting_height".to_string(), json!(10.0));
+        defaults.insert("snap_distance".to_string(), json!(0.001));
+        ToolManifest {
+            id: "vector_stream_network_analysis".to_string(),
+            display_name: "Vector Stream Network Analysis".to_string(),
+            summary: "Comprehensive vector stream network analysis.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor {
+                    name: "streams".to_string(),
+                    description: "Input stream network vector layer.".to_string(),
+                    required: true,
+                },
+                ToolParamDescriptor {
+                    name: "dem".to_string(),
+                    description: "Input elevation raster (DEM).".to_string(),
+                    required: true,
+                },
+                ToolParamDescriptor {
+                    name: "max_ridge_cutting_height".to_string(),
+                    description: "Maximum allowable ridge-cutting height.".to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
+                    name: "snap_distance".to_string(),
+                    description: "Snapping distance tolerance for network cleanup.".to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
+                    name: "output".to_string(),
+                    description: "Optional output vector path.".to_string(),
+                    required: false,
+                },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "vector_stream_network_analysis_basic".to_string(),
+                description: "Run stream-network analysis from vector streams and DEM.".to_string(),
+                args: {
+                    let mut args = ToolArgs::new();
+                    args.insert("streams".to_string(), json!("streams.gpkg"));
+                    args.insert("dem".to_string(), json!("dem.tif"));
+                    args.insert("max_ridge_cutting_height".to_string(), json!(10.0));
+                    args.insert("snap_distance".to_string(), json!(0.001));
+                    args.insert("output".to_string(), json!("stream_network_analysis.gpkg"));
+                    args
+                },
+            }],
+            tags: vec!["stream_network".to_string(), "vector".to_string(), "hydrology".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, _args: &ToolArgs) -> Result<(), ToolError> {
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        run_stream_tool_fallback("vector_stream_network_analysis", args, ctx)
+    }
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Burn Streams Tool

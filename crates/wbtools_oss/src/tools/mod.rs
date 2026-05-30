@@ -1,3 +1,7 @@
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use wbcore::ToolParamSchema;
+
 mod raster;
 mod data_tools;
 mod gis;
@@ -7,7 +11,48 @@ mod stream_network_analysis;
 mod hydrology;
 mod flow_algorithms;
 mod lidar_processing;
+mod param_docs;
 pub mod raster_stack_validator;
+
+pub use param_docs::{doc_tool_param_descriptions, doc_tool_param_required, doc_tool_param_schemas};
+pub use data_tools::data_tools_param_schemas;
+pub use flow_algorithms::flow_tool_param_schemas;
+pub use gis::gis_tool_param_schemas;
+pub use geomorphometry::geomorphometry_tool_param_schemas;
+pub use hydrology::hydrology_tool_param_schemas;
+pub use lidar_processing::lidar_tool_param_schemas;
+pub use raster::raster_tool_param_schemas;
+pub use remote_sensing::remote_sensing_tool_param_schemas;
+pub use stream_network_analysis::stream_tool_param_schemas;
+
+pub fn tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolParamSchema>> {
+	stream_tool_param_schemas(tool_id)
+		.or_else(|| flow_tool_param_schemas(tool_id))
+		.or_else(|| gis_tool_param_schemas(tool_id))
+		.or_else(|| geomorphometry_tool_param_schemas(tool_id))
+		.or_else(|| hydrology_tool_param_schemas(tool_id))
+		.or_else(|| data_tools_param_schemas(tool_id))
+		.or_else(|| lidar_tool_param_schemas(tool_id))
+		.or_else(|| raster_tool_param_schemas(tool_id))
+		.or_else(|| remote_sensing_tool_param_schemas(tool_id))
+		.or_else(|| doc_tool_param_schemas(tool_id))
+}
+
+pub fn tool_param_descriptions(tool_id: &str) -> Option<BTreeMap<String, String>> {
+	let known_keys: BTreeSet<String> = tool_param_schemas(tool_id)
+		.unwrap_or_default()
+		.into_keys()
+		.collect();
+	doc_tool_param_descriptions(tool_id, &known_keys)
+}
+
+pub fn tool_param_required(tool_id: &str) -> Option<BTreeMap<String, bool>> {
+	let known_keys: BTreeSet<String> = tool_param_schemas(tool_id)
+		.unwrap_or_default()
+		.into_keys()
+		.collect();
+	doc_tool_param_required(tool_id, &known_keys)
+}
 
 pub use remote_sensing::TerrainCorrectedOpticalTool;
 pub use remote_sensing::BrdfNormalizationTool;

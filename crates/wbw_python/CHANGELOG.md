@@ -6,14 +6,20 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [2.0.4] - 2026-05-30
+
 ### Added
-- None yet.
+- Added schema-aware metadata emission path that can include canonical per-parameter `schema` objects in tool catalog and metadata payloads.
 
 ### Changed
-- None yet.
+- Updated tool catalog metadata serialization to consume explicit schema maps for migrated tools before falling back to coarse compatibility fields.
+- Updated manifest-parameter reconstruction for empty manifests to preserve backend metadata ordering across the full OSS/PRO catalog, with explicit legacy ordering overrides for flow-family tools.
+- Updated metadata enrichment to backfill missing parameter descriptions/required flags from tool metadata when doc-derived maps are absent or incomplete.
 
 ### Fixed
-- None yet.
+- Fixed stream-tool metadata typing drift for pilot tools (`extract_streams`, `vector_stream_network_analysis`) by consuming backend-authored typed schemas.
+- Fixed `d8_flow_accum` metadata parameter ordering regression so frontend and binding consumers receive legacy-logical ordering (`input`, `output`, then processing options).
+- Fixed generic parameter-description fallback regressions (for example ambiguous `input`) by ensuring exported metadata includes domain-specific descriptions where available.
 
 ## [2.0.2] - 2026-05-27
 

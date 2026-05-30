@@ -4,7 +4,12 @@ This changelog tracks user-visible changes to the Whitebox Workflows QGIS plugin
 
 ## Unreleased
 
-- No pending changes.
+## 2.0.13 - 2026-05-30
+
+- Fixed QGIS parameter inference for stream-network tools so `streams` and `flow_accumulation` inputs are recognized as vector/raster selectors instead of plain string fields.
+- Updated parameter-kind resolution to consume canonical backend `schema` metadata first, with `io_role`/`data_kind` and heuristic inference retained only as compatibility fallbacks.
+- Fixed enum dropdown option population to prefer backend schema-enumerated `options` values/labels before legacy parsing fallbacks.
+- Improved parameter-panel consistency by consuming backend-provided parameter ordering from manifest metadata for tool forms.
 
 ## 2.0.12 - 2026-05-28
 

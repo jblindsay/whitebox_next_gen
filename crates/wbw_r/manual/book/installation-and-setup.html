@@ -186,6 +186,18 @@ new machines and CI environments.</p>
 <p>Use this to install the current local package build for development and testing.</p>
 <pre><code class="language-bash">R CMD INSTALL crates/wbw_r/r-package/whiteboxworkflows
 </code></pre>
+<p>To install the published binary package from WhiteboxGeo, use the WhiteboxGeo
+repository together with CRAN:</p>
+<pre><code class="language-r">install.packages(
+	"whiteboxworkflows",
+	repos = c(
+		WhiteboxGeo = "https://www.whiteboxgeo.com/r",
+		CRAN = "https://cloud.r-project.org"
+	)
+)
+</code></pre>
+<p>The WhiteboxGeo repository currently serves binary builds for R 4.5 and R 4.6
+on the supported platforms.</p>
 <h2 id="smoke-test"><a class="header" href="#smoke-test">Smoke Test</a></h2>
 <p>This verifies that startup succeeds and tool enumeration is available in your
 current runtime.</p>

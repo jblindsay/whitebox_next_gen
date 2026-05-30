@@ -35,8 +35,10 @@ use wbcore::{
     ToolContext,
     ToolError,
     ToolMetadata,
+    ToolParamSchema,
     ToolParamSpec,
     ToolRunResult,
+    ToolVectorGeometry,
 };
 use wblidar::las::LasReader;
 use wblidar::las::vlr::{find_epsg, find_ogc_wkt, GEOKEY_DIRECTORY_RECORD_ID};
@@ -111,6 +113,616 @@ pub struct LidarKappaTool;
 pub struct LidarEigenvalueFeaturesTool;
 pub struct LidarRansacPlanesTool;
 pub struct LidarRooftopAnalysisTool;
+
+fn param_schema_map(entries: &[(&str, ToolParamSchema)]) -> BTreeMap<String, ToolParamSchema> {
+    let mut map = BTreeMap::new();
+    for (name, schema) in entries {
+        map.insert((*name).to_string(), schema.clone());
+    }
+    map
+}
+
+pub fn lidar_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolParamSchema>> {
+    match tool_id {
+        "ascii_to_las" => Some(param_schema_map(&[
+            (
+                "inputs",
+                ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::File),
+            ),
+            ("pattern", ToolParamSchema::string()),
+            ("epsg_code", ToolParamSchema::scalar_integer()),
+            ("output_directory", ToolParamSchema::string()),
+        ])),
+        "las_to_ascii" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Table),
+            ),
+        ])),
+        "las_to_shapefile" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+            ("output_multipoint", ToolParamSchema::bool()),
+        ])),
+        "lidar_info" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+            ("show_point_density", ToolParamSchema::bool()),
+            ("show_vlrs", ToolParamSchema::bool()),
+            ("show_geokeys", ToolParamSchema::bool()),
+        ])),
+        "lidar_histogram" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+            (
+                "parameter",
+                ToolParamSchema::enum_values(&["elevation", "intensity", "scan_angle", "class", "time"]),
+            ),
+            ("clip_percent", ToolParamSchema::scalar_float()),
+        ])),
+        "lidar_point_stats" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("resolution", ToolParamSchema::scalar_float()),
+            ("num_points", ToolParamSchema::bool()),
+            ("num_pulses", ToolParamSchema::bool()),
+            ("avg_points_per_pulse", ToolParamSchema::bool()),
+            ("z_range", ToolParamSchema::bool()),
+            ("intensity_range", ToolParamSchema::bool()),
+            ("predominant_class", ToolParamSchema::bool()),
+            ("output_directory", ToolParamSchema::string()),
+        ])),
+        "lidar_point_return_analysis" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("create_output", ToolParamSchema::bool()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+            ("report", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+        ])),
+        "lidar_hex_bin" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("width", ToolParamSchema::scalar_float()),
+            ("orientation", ToolParamSchema::enum_values(&["h", "v"])),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "lidar_tile_footprint" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+            ("output_hulls", ToolParamSchema::bool()),
+        ])),
+        "lidar_contour" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+            ("interval", ToolParamSchema::scalar_float()),
+            ("base_contour", ToolParamSchema::scalar_float()),
+            ("smooth", ToolParamSchema::scalar_float()),
+            (
+                "interpolation_parameter",
+                ToolParamSchema::enum_values(&["elevation", "intensity", "scan_angle", "time", "user_data"]),
+            ),
+            ("returns", ToolParamSchema::enum_values(&["all", "first", "last"])),
+            ("excluded_classes", ToolParamSchema::string()),
+            ("min_elev", ToolParamSchema::scalar_float()),
+            ("max_elev", ToolParamSchema::scalar_float()),
+            ("max_triangle_edge_length", ToolParamSchema::scalar_float()),
+        ])),
+        "lidar_construct_vector_tin" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+            ("returns", ToolParamSchema::enum_values(&["all", "first", "last"])),
+            ("excluded_classes", ToolParamSchema::string()),
+            ("min_elev", ToolParamSchema::scalar_float()),
+            ("max_elev", ToolParamSchema::scalar_float()),
+            ("max_triangle_edge_length", ToolParamSchema::scalar_float()),
+        ])),
+        "lidar_colourize" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("image", ToolParamSchema::input_raster()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "colourize_based_on_class" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("intensity_blending_amount", ToolParamSchema::scalar_float()),
+            ("clr_str", ToolParamSchema::string()),
+            ("use_unique_clrs_for_buildings", ToolParamSchema::bool()),
+            ("search_radius", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "colourize_based_on_point_returns" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("intensity_blending_amount", ToolParamSchema::scalar_float()),
+            ("only_ret_colour", ToolParamSchema::string()),
+            ("first_ret_colour", ToolParamSchema::string()),
+            ("intermediate_ret_colour", ToolParamSchema::string()),
+            ("last_ret_colour", ToolParamSchema::string()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "lidar_join" => Some(param_schema_map(&[
+            (
+                "inputs",
+                ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::Lidar),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "lidar_shift" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("x_shift", ToolParamSchema::scalar_float()),
+            ("y_shift", ToolParamSchema::scalar_float()),
+            ("z_shift", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "lidar_tile" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("tile_width", ToolParamSchema::scalar_float()),
+            ("tile_height", ToolParamSchema::scalar_float()),
+            ("origin_x", ToolParamSchema::scalar_float()),
+            ("origin_y", ToolParamSchema::scalar_float()),
+            ("min_points_in_tile", ToolParamSchema::scalar_integer()),
+            ("output_laz_format", ToolParamSchema::bool()),
+            ("output_directory", ToolParamSchema::string()),
+        ])),
+        "split_lidar" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            (
+                "split_criterion",
+                ToolParamSchema::enum_values(&[
+                    "num_pts",
+                    "x",
+                    "y",
+                    "z",
+                    "intensity",
+                    "class",
+                    "user_data",
+                    "point_source_id",
+                    "scan_angle",
+                    "time",
+                ]),
+            ),
+            ("interval", ToolParamSchema::scalar_float()),
+            ("min_pts", ToolParamSchema::scalar_integer()),
+            ("output_directory", ToolParamSchema::string()),
+        ])),
+        "lidar_thin" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("resolution", ToolParamSchema::scalar_float()),
+            (
+                "method",
+                ToolParamSchema::enum_values(&["first", "last", "lowest", "highest", "nearest"]),
+            ),
+            ("save_filtered", ToolParamSchema::bool()),
+            (
+                "filtered_output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "lidar_thin_high_density" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("density", ToolParamSchema::scalar_float()),
+            ("resolution", ToolParamSchema::scalar_float()),
+            ("save_filtered", ToolParamSchema::bool()),
+            (
+                "filtered_output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "sort_lidar" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("sort_criteria", ToolParamSchema::string()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "remove_duplicates" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("include_z", ToolParamSchema::bool()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "recover_flightline_info" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("max_time_diff", ToolParamSchema::scalar_float()),
+            ("pt_src_id", ToolParamSchema::bool()),
+            ("user_data", ToolParamSchema::bool()),
+            ("rgb", ToolParamSchema::bool()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "find_flightline_edge_points" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "classify_buildings_in_lidar" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            (
+                "buildings",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Polygon),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "classify_lidar" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("search_radius", ToolParamSchema::scalar_float()),
+            ("grd_threshold", ToolParamSchema::scalar_float()),
+            ("oto_threshold", ToolParamSchema::scalar_float()),
+            ("linearity_threshold", ToolParamSchema::scalar_float()),
+            ("planarity_threshold", ToolParamSchema::scalar_float()),
+            ("num_iter", ToolParamSchema::scalar_integer()),
+            ("facade_threshold", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "classify_overlap_points" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("resolution", ToolParamSchema::scalar_float()),
+            ("overlap_criterion", ToolParamSchema::string()),
+            ("filter", ToolParamSchema::bool()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "clip_lidar_to_polygon" | "erase_polygon_from_lidar" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            (
+                "polygons",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Polygon),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "filter_lidar" | "modify_lidar" => Some(param_schema_map(&[
+            ("statement", ToolParamSchema::string()),
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "filter_lidar_by_percentile" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("percentile", ToolParamSchema::scalar_float()),
+            ("block_size", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "filter_lidar_by_reference_surface" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("ref_surface", ToolParamSchema::input_raster()),
+            ("query", ToolParamSchema::enum_values(&["within", "<", "<=", ">", ">="])),
+            ("threshold", ToolParamSchema::scalar_float()),
+            ("classify", ToolParamSchema::bool()),
+            ("true_class_value", ToolParamSchema::scalar_integer()),
+            ("false_class_value", ToolParamSchema::scalar_integer()),
+            ("preserve_classes", ToolParamSchema::bool()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "filter_lidar_classes" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("excluded_classes", ToolParamSchema::string()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "filter_lidar_noise" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "filter_lidar_scan_angles" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("threshold", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "flightline_overlap" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("resolution", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "height_above_ground" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "individual_tree_detection" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("min_search_radius", ToolParamSchema::scalar_float()),
+            ("min_height", ToolParamSchema::scalar_float()),
+            ("max_search_radius", ToolParamSchema::scalar_float()),
+            ("max_height", ToolParamSchema::scalar_float()),
+            ("only_use_veg", ToolParamSchema::bool()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "individual_tree_segmentation" | "lidar_segmentation" | "lidar_segmentation_based_filter" => {
+            Some(param_schema_map(&[
+                ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+                ("only_use_veg", ToolParamSchema::bool()),
+                ("veg_classes", ToolParamSchema::string()),
+                ("min_height", ToolParamSchema::scalar_float()),
+                ("max_height", ToolParamSchema::scalar_float()),
+                ("bandwidth_min", ToolParamSchema::scalar_float()),
+                ("bandwidth_max", ToolParamSchema::scalar_float()),
+                ("adaptive_bandwidth", ToolParamSchema::bool()),
+                ("adaptive_neighbors", ToolParamSchema::scalar_integer()),
+                ("adaptive_sector_count", ToolParamSchema::scalar_integer()),
+                ("grid_acceleration", ToolParamSchema::bool()),
+                ("grid_cell_size", ToolParamSchema::scalar_float()),
+                ("grid_refine_exact", ToolParamSchema::bool()),
+                ("grid_refine_iterations", ToolParamSchema::scalar_integer()),
+                ("tile_size", ToolParamSchema::scalar_float()),
+                ("tile_overlap", ToolParamSchema::scalar_float()),
+                ("vertical_bandwidth", ToolParamSchema::scalar_float()),
+                ("max_iterations", ToolParamSchema::scalar_integer()),
+                ("convergence_tol", ToolParamSchema::scalar_float()),
+                ("min_cluster_points", ToolParamSchema::scalar_integer()),
+                ("mode_merge_dist", ToolParamSchema::scalar_float()),
+                ("threads", ToolParamSchema::scalar_integer()),
+                ("simd", ToolParamSchema::bool()),
+                ("output_id_mode", ToolParamSchema::string()),
+                ("output_sidecar_csv", ToolParamSchema::bool()),
+                ("seed", ToolParamSchema::scalar_integer()),
+                ("search_radius", ToolParamSchema::scalar_float()),
+                ("num_iterations", ToolParamSchema::scalar_integer()),
+                ("num_samples", ToolParamSchema::scalar_integer()),
+                ("inlier_threshold", ToolParamSchema::scalar_float()),
+                ("acceptable_model_size", ToolParamSchema::scalar_integer()),
+                ("max_planar_slope", ToolParamSchema::scalar_float()),
+                ("norm_diff_threshold", ToolParamSchema::scalar_float()),
+                ("max_z_diff", ToolParamSchema::scalar_float()),
+                ("classes", ToolParamSchema::bool()),
+                ("ground", ToolParamSchema::bool()),
+                ("classify_points", ToolParamSchema::bool()),
+                (
+                    "output",
+                    ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+                ),
+            ]))
+        },
+        "lidar_block_maximum" | "lidar_block_minimum" | "lidar_digital_surface_model"
+        | "lidar_nearest_neighbour_gridding" | "lidar_idw_interpolation"
+        | "lidar_point_density" | "lidar_radial_basis_function_interpolation"
+        | "lidar_sibson_interpolation" | "lidar_tin_gridding" => {
+            Some(param_schema_map(&[
+                ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+                ("resolution", ToolParamSchema::scalar_float()),
+                ("search_radius", ToolParamSchema::scalar_float()),
+                ("weight", ToolParamSchema::scalar_float()),
+                ("num_points", ToolParamSchema::scalar_integer()),
+                ("interpolation_parameter", ToolParamSchema::string()),
+                ("returns_included", ToolParamSchema::enum_values(&["all", "first", "last"])),
+                ("excluded_classes", ToolParamSchema::string()),
+                ("min_elev", ToolParamSchema::scalar_float()),
+                ("max_elev", ToolParamSchema::scalar_float()),
+                ("min_points", ToolParamSchema::scalar_integer()),
+                (
+                    "func_type",
+                    ToolParamSchema::enum_values(&[
+                        "thinplatespline",
+                        "polyharmonic",
+                        "gaussian",
+                        "multiquadric",
+                        "inversemultiquadric",
+                    ]),
+                ),
+                (
+                    "poly_order",
+                    ToolParamSchema::enum_values(&["none", "constant", "quadratic"]),
+                ),
+                ("max_triangle_edge_length", ToolParamSchema::scalar_float()),
+                ("triangulation_backend", ToolParamSchema::enum_values(&["auto", "delaunator", "wbtopology"])),
+                ("triangulation_auto_threshold", ToolParamSchema::scalar_integer()),
+                ("triangulation_epsilon", ToolParamSchema::scalar_float()),
+                ("triangulation_thin_cell_size", ToolParamSchema::scalar_float()),
+                (
+                    "triangulation_thin_method",
+                    ToolParamSchema::enum_values(&["nearest_center", "min_value", "max_value"]),
+                ),
+                ("output", ToolParamSchema::output_raster()),
+            ]))
+        },
+        "lidar_classify_subset" => Some(param_schema_map(&[
+            ("base", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("subset", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("subset_class_value", ToolParamSchema::scalar_integer()),
+            ("nonsubset_class_value", ToolParamSchema::scalar_integer()),
+            ("tolerance", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "lidar_eigenvalue_features" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("num_neighbours", ToolParamSchema::scalar_integer()),
+            ("search_radius", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+        ])),
+        "lidar_elevation_slice" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("minz", ToolParamSchema::scalar_float()),
+            ("maxz", ToolParamSchema::scalar_float()),
+            ("classify", ToolParamSchema::bool()),
+            ("in_class_value", ToolParamSchema::scalar_integer()),
+            ("out_class_value", ToolParamSchema::scalar_integer()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "lidar_ground_point_filter" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("search_radius", ToolParamSchema::scalar_float()),
+            ("min_neighbours", ToolParamSchema::scalar_integer()),
+            ("slope_threshold", ToolParamSchema::scalar_float()),
+            ("height_threshold", ToolParamSchema::scalar_float()),
+            ("classify", ToolParamSchema::bool()),
+            ("slope_norm", ToolParamSchema::bool()),
+            ("height_above_ground", ToolParamSchema::bool()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "lidar_hillshade" | "lidar_tophat_transform" | "normal_vectors" | "normalize_lidar"
+        | "lidar_remove_outliers" | "lidar_ransac_planes" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("dtm", ToolParamSchema::input_raster()),
+            ("no_negatives", ToolParamSchema::bool()),
+            ("search_radius", ToolParamSchema::scalar_float()),
+            ("azimuth", ToolParamSchema::scalar_float()),
+            ("altitude", ToolParamSchema::scalar_float()),
+            ("elev_diff", ToolParamSchema::scalar_float()),
+            ("use_median", ToolParamSchema::bool()),
+            ("classify", ToolParamSchema::bool()),
+            ("num_iterations", ToolParamSchema::scalar_integer()),
+            ("num_samples", ToolParamSchema::scalar_integer()),
+            ("inlier_threshold", ToolParamSchema::scalar_float()),
+            ("acceptable_model_size", ToolParamSchema::scalar_integer()),
+            ("max_planar_slope", ToolParamSchema::scalar_float()),
+            ("only_last_returns", ToolParamSchema::bool()),
+            ("search_radius", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        "lidar_kappa" => Some(param_schema_map(&[
+            ("input1", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("input2", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("report", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+            ("resolution", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_raster()),
+            ("output_class_accuracy", ToolParamSchema::bool()),
+        ])),
+        "lidar_rooftop_analysis" => Some(param_schema_map(&[
+            (
+                "inputs",
+                ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::Lidar),
+            ),
+            (
+                "building_footprints",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Polygon),
+            ),
+            ("search_radius", ToolParamSchema::scalar_float()),
+            ("inlier_threshold", ToolParamSchema::scalar_float()),
+            ("acceptable_model_size", ToolParamSchema::scalar_integer()),
+            ("max_planar_slope", ToolParamSchema::scalar_float()),
+            ("norm_diff_threshold", ToolParamSchema::scalar_float()),
+            ("azimuth", ToolParamSchema::scalar_float()),
+            ("altitude", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "select_tiles_by_polygon" => Some(param_schema_map(&[
+            ("input_directory", ToolParamSchema::string()),
+            ("output_directory", ToolParamSchema::string()),
+            (
+                "polygons",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Polygon),
+            ),
+        ])),
+        "improved_ground_point_filter" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input(wbcore::ToolDatasetSchema::Lidar)),
+            ("block_size", ToolParamSchema::scalar_float()),
+            ("max_building_size", ToolParamSchema::scalar_float()),
+            ("slope_threshold", ToolParamSchema::scalar_float()),
+            ("elev_threshold", ToolParamSchema::scalar_float()),
+            ("classify", ToolParamSchema::bool()),
+            ("preserve_classes", ToolParamSchema::bool()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Lidar),
+            ),
+        ])),
+        _ => None,
+    }
+}
 
 #[derive(Clone, Copy)]
 enum ReturnsMode {

@@ -11,7 +11,8 @@ use serde_json::json;
 use rayon::prelude::*;
 use wbcore::{
 	parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH, LicenseTier, Tool, ToolArgs, ToolCategory,
-	ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamSpec, ToolRunResult, ToolStability,
+	ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamSchema, ToolParamSpec, ToolRunResult, ToolStability,
+	ToolVectorGeometry, param_schema_map,
 };
 use wbprojection::{identify_epsg_from_wkt_with_policy, Crs, EpsgIdentifyPolicy};
 
@@ -73,6 +74,266 @@ pub struct UpslopeDepressionStorageTool;
 pub struct FlattenLakesTool;
 pub struct HydrologicConnectivityTool;
 pub struct ImpoundmentSizeIndexTool;
+
+pub fn hydrology_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolParamSchema>> {
+	match tool_id {
+		"breach_depressions_least_cost" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("max_cost", ToolParamSchema::scalar_float()),
+			("max_dist", ToolParamSchema::scalar_integer()),
+			("flat_increment", ToolParamSchema::scalar_float()),
+			("fill_deps", ToolParamSchema::bool()),
+			("minimize_dist", ToolParamSchema::bool()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"fill_depressions" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("fix_flats", ToolParamSchema::bool()),
+			("flat_increment", ToolParamSchema::scalar_float()),
+			(
+				"flat_resolution",
+				ToolParamSchema::enum_values(&["garbrecht_martz", "natural"]),
+			),
+			("max_depth", ToolParamSchema::scalar_float()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"flow_accum_full_workflow" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("out_type", ToolParamSchema::enum_values(&["cells", "ca", "sca"])),
+			("log_transform", ToolParamSchema::bool()),
+			("clip", ToolParamSchema::bool()),
+			("esri_pntr", ToolParamSchema::bool()),
+			("breached_dem_output", ToolParamSchema::output_raster()),
+			("flow_dir_output", ToolParamSchema::output_raster()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"watershed" => Some(param_schema_map(&[
+			("d8_pntr", ToolParamSchema::input_raster()),
+			(
+				"pour_pts",
+				ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+			),
+			("esri_pntr", ToolParamSchema::bool()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"jenson_snap_pour_points" => Some(param_schema_map(&[
+			(
+				"pour_pts",
+				ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+			),
+			("streams", ToolParamSchema::input_raster()),
+			("snap_dist", ToolParamSchema::scalar_float()),
+			("output", ToolParamSchema::output_vector_any()),
+		])),
+		"snap_pour_points" => Some(param_schema_map(&[
+			(
+				"pour_pts",
+				ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+			),
+			("flow_accum", ToolParamSchema::input_raster()),
+			("snap_dist", ToolParamSchema::scalar_float()),
+			("output", ToolParamSchema::output_vector_any()),
+		])),
+		"watershed_from_raster_pour_points" => Some(param_schema_map(&[
+			("d8_pntr", ToolParamSchema::input_raster()),
+			("pour_points", ToolParamSchema::input_raster()),
+			("esri_pntr", ToolParamSchema::bool()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"breach_single_cell_pits" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"fill_depressions_planchon_and_darboux" | "fill_depressions_wang_and_liu" => {
+			Some(param_schema_map(&[
+				("dem", ToolParamSchema::input_raster()),
+				("fix_flats", ToolParamSchema::bool()),
+				("flat_increment", ToolParamSchema::scalar_float()),
+				("output", ToolParamSchema::output_raster()),
+			]))
+		}
+		"fill_pits" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"depth_in_sink" | "sink" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("zero_background", ToolParamSchema::bool()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"basins" => Some(param_schema_map(&[
+			("d8_pntr", ToolParamSchema::input_raster()),
+			("esri_pntr", ToolParamSchema::bool()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"subbasins" | "hillslopes" | "strahler_order_basins" => Some(param_schema_map(&[
+			("d8_pntr", ToolParamSchema::input_raster()),
+			("streams", ToolParamSchema::input_raster()),
+			("esri_pntr", ToolParamSchema::bool()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"isobasins" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("target_size", ToolParamSchema::scalar_integer()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"num_inflowing_neighbours" | "find_parallel_flow" => Some(param_schema_map(&[
+			("d8_pntr", ToolParamSchema::input_raster()),
+			("esri_pntr", ToolParamSchema::bool()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"d8_mass_flux" | "dinf_mass_flux" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("loading", ToolParamSchema::input_raster()),
+			("efficiency", ToolParamSchema::input_raster()),
+			("absorption", ToolParamSchema::input_raster()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"edge_contamination" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			(
+				"flow_type",
+				ToolParamSchema::enum_values(&["d8", "mfd", "fd8", "dinf"]),
+			),
+			("z_factor", ToolParamSchema::scalar_float()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"flow_length_diff" => Some(param_schema_map(&[
+			("d8_pntr", ToolParamSchema::input_raster()),
+			("weights", ToolParamSchema::input_raster()),
+			("esri_pntr", ToolParamSchema::bool()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"downslope_flowpath_length" | "max_upslope_flowpath_length"
+		| "average_upslope_flowpath_length" | "average_flowpath_slope" | "max_upslope_value"
+		| "longest_flowpath" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"elevation_above_stream" | "elevation_above_stream_euclidean" => {
+			Some(param_schema_map(&[
+				("dem", ToolParamSchema::input_raster()),
+				("streams", ToolParamSchema::input_raster()),
+				("output", ToolParamSchema::output_raster()),
+			]))
+		}
+		"downslope_distance_to_stream" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("streams", ToolParamSchema::input_raster()),
+			("dinf", ToolParamSchema::bool()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"depth_to_water" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("stream_raster", ToolParamSchema::input_raster()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"fill_burn" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("streams", ToolParamSchema::input_raster()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"burn_streams_at_roads" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("streams", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+			("roads", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+			("road_width", ToolParamSchema::scalar_float()),
+			("method", ToolParamSchema::enum_values(&["fast", "legacy"])),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"trace_downslope_flowpaths" => Some(param_schema_map(&[
+			(
+				"seed_points",
+				ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+			),
+			("d8_pntr", ToolParamSchema::input_raster()),
+			("esri_pntr", ToolParamSchema::bool()),
+			("zero_background", ToolParamSchema::bool()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"flood_order" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"insert_dams" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			(
+				"dam_points",
+				ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+			),
+			("dam_length", ToolParamSchema::scalar_float()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"raise_walls" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("walls", ToolParamSchema::input_vector(ToolVectorGeometry::LineOrPolygon)),
+			(
+				"breach_lines",
+				ToolParamSchema::input_vector(ToolVectorGeometry::LineOrPolygon),
+			),
+			("wall_height", ToolParamSchema::scalar_float()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"topological_breach_burn" => Some(param_schema_map(&[
+			("streams", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+			("dem", ToolParamSchema::input_raster()),
+			("snap_distance", ToolParamSchema::scalar_float()),
+			("out_streams", ToolParamSchema::output_raster()),
+			("out_dem", ToolParamSchema::output_raster()),
+			("out_dir", ToolParamSchema::output_raster()),
+			("out_fa", ToolParamSchema::output_raster()),
+		])),
+		"stochastic_depression_analysis" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("rmse", ToolParamSchema::scalar_float()),
+			("range", ToolParamSchema::scalar_float()),
+			("iterations", ToolParamSchema::scalar_integer()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"unnest_basins" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("seed_points", ToolParamSchema::input_raster()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"upslope_depression_storage" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"flatten_lakes" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("lakes", ToolParamSchema::input_vector(ToolVectorGeometry::Polygon)),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"hydrologic_connectivity" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("exponent", ToolParamSchema::scalar_float()),
+			("convergence_threshold", ToolParamSchema::scalar_float()),
+			("z_factor", ToolParamSchema::scalar_float()),
+			("output1", ToolParamSchema::output_raster()),
+			("output2", ToolParamSchema::output_raster()),
+		])),
+		"find_noflow_cells" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("interior_only", ToolParamSchema::bool()),
+			("output", ToolParamSchema::output_raster()),
+		])),
+		"impoundment_size_index" => Some(param_schema_map(&[
+			("dem", ToolParamSchema::input_raster()),
+			("max_dam_length", ToolParamSchema::scalar_float()),
+			("output_mean", ToolParamSchema::bool()),
+			("output_max", ToolParamSchema::bool()),
+			("output_volume", ToolParamSchema::bool()),
+			("output_area", ToolParamSchema::bool()),
+			("output_height", ToolParamSchema::bool()),
+			("out_mean", ToolParamSchema::output_raster()),
+			("out_max", ToolParamSchema::output_raster()),
+			("out_volume", ToolParamSchema::output_raster()),
+			("out_area", ToolParamSchema::output_raster()),
+			("out_dam_height", ToolParamSchema::output_raster()),
+		])),
+		_ => None,
+	}
+}
 
 const DX: [isize; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
 const DY: [isize; 8] = [-1, 0, 1, 1, 1, 0, -1, -1];

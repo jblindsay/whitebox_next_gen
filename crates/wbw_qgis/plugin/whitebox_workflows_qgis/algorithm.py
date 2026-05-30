@@ -308,6 +308,45 @@ def _extract_enum_options(name: str, description: str, default_value: Any) -> li
     return out
 
 
+def _extract_schema_enum_options(param: dict[str, Any]) -> list[str]:
+    schema = param.get("schema")
+    if not isinstance(schema, dict):
+        return []
+    if str(schema.get("kind", "") or "").strip().lower() != "enum":
+        return []
+
+    raw_options = schema.get("options")
+    if not isinstance(raw_options, list):
+        return []
+
+    out: list[str] = []
+    seen = set()
+    for opt in raw_options:
+        value_text = ""
+        if isinstance(opt, dict):
+            # Prefer canonical machine value so processAlgorithm forwards
+            # backend-accepted strings rather than display labels.
+            value = opt.get("value")
+            label = opt.get("label")
+            if isinstance(value, str) and value.strip():
+                value_text = value.strip()
+            elif isinstance(label, str) and label.strip():
+                value_text = label.strip()
+        elif isinstance(opt, str) and opt.strip():
+            value_text = opt.strip()
+
+        if not value_text:
+            continue
+
+        key = value_text.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(value_text)
+
+    return out
+
+
 def _coerce_bool_default(value: Any, fallback: bool = False) -> bool:
     if value is None:
         return fallback
@@ -588,6 +627,56 @@ def _derive_group_name(manifest: dict[str, Any]) -> str:
 
 
 def _kind_from_io_schema(param: dict[str, Any]) -> str | None:
+    explicit_schema = param.get("schema")
+    if isinstance(explicit_schema, dict):
+        schema_kind = str(explicit_schema.get("kind", "") or "").strip().lower()
+
+        if schema_kind == "input":
+            cardinality = str(explicit_schema.get("cardinality", "single") or "single").strip().lower()
+            dataset = explicit_schema.get("dataset")
+            if not isinstance(dataset, dict):
+                return None
+            dataset_kind = str(dataset.get("kind", "") or "").strip().lower()
+            if dataset_kind == "raster":
+                return "raster_layers_in" if cardinality == "multiple" else "raster_in"
+            if dataset_kind == "vector":
+                return "vector_in"
+            if dataset_kind in {"lidar", "table", "json", "text", "file", "mixed"}:
+                return "file_in"
+            return None
+
+        if schema_kind == "output":
+            dataset = explicit_schema.get("dataset")
+            if not isinstance(dataset, dict):
+                return None
+            dataset_kind = str(dataset.get("kind", "") or "").strip().lower()
+            if dataset_kind == "raster":
+                return "raster_out"
+            if dataset_kind == "vector":
+                return "vector_out"
+            if dataset_kind == "lidar":
+                return "lidar_out"
+            if dataset_kind in {"table", "json", "text", "file", "mixed"}:
+                return "file_out"
+            return "file_out"
+
+        if schema_kind == "scalar":
+            scalar = str(explicit_schema.get("scalar", "") or "").strip().lower()
+            if scalar == "integer":
+                return "int"
+            if scalar == "float":
+                return "double"
+            return None
+
+        if schema_kind == "enum":
+            return "enum"
+        if schema_kind == "bool":
+            return "bool"
+        if schema_kind == "string":
+            return "string"
+        if schema_kind == "field":
+            return "field"
+
     role = str(param.get("io_role", "") or "").strip().lower()
     data_kind = str(param.get("data_kind", "") or "").strip().lower()
 
@@ -658,6 +747,8 @@ def _infer_kind(name: str, description: str, default_value: Any = None) -> str:
         "barrier",
         "barriers",
         "network",
+        "stream",
+        "streams",
         "route",
         "routes",
         "line",
@@ -732,7 +823,7 @@ def _infer_kind(name: str, description: str, default_value: Any = None) -> str:
 
     # Treat raster/vector/lidar as file/layer inputs only when the parameter
     # name itself looks like an input/path key.
-    raster_name_like = any(tok in n for tok in ("input", "raster", "dem", "grid", "source", "path"))
+    raster_name_like = any(tok in n for tok in ("input", "raster", "dem", "grid", "source", "path", "flow_accumulation", "accumulation"))
     raster_desc_like = any(tok in n or tok in d for tok in ("raster", "dem", "grid", "geotiff", "tif"))
     if raster_name_like and raster_desc_like:
         return "raster_in"
@@ -1980,7 +2071,9 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             if kind == "string" and vector_param_names and _looks_like_attribute_field(name, description):
                 kind = "field"
                 field_parent = _pick_field_parent(name, description, vector_param_names)
-            enum_options = _extract_enum_options(name, description, default_value)
+            enum_options = _extract_schema_enum_options(p)
+            if len(enum_options) < 2:
+                enum_options = _extract_enum_options(name, description, default_value)
 
             # If an output destination is ambiguous, bias to the tool family so
             # QGIS can treat it as a loadable layer destination.

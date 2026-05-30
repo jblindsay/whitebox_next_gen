@@ -10,7 +10,7 @@ use kdtree::KdTree;
 use wbcore::{PercentCoalescer, 
     parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH, LicenseTier, Tool,
     ToolArgs, ToolCategory, ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata,
-    ToolParamDescriptor, ToolParamSpec, ToolRunResult, ToolStability,
+    ToolParamDescriptor, ToolParamSchema, ToolParamSpec, ToolRunResult, ToolStability, ToolVectorGeometry,
 };
 use wbgeotiff::{ifd::{IfdValue, TiffReader}, tags::tag, GeoTiff};
 use wbraster::{CrsInfo, DataType, Raster, RasterConfig, RasterFormat};
@@ -24,6 +24,260 @@ use wbtopology::{
 };
 
 use crate::memory_store;
+
+fn param_schema_map(entries: &[(&str, ToolParamSchema)]) -> BTreeMap<String, ToolParamSchema> {
+    let mut map = BTreeMap::new();
+    for (name, schema) in entries {
+        map.insert((*name).to_string(), schema.clone());
+    }
+    map
+}
+
+pub fn data_tools_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolParamSchema>> {
+    match tool_id {
+        "convert_nodata_to_zero" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "modify_nodata_value" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("new_value", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "set_nodata_value" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("back_value", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "remove_raster_polygon_holes" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("threshold", ToolParamSchema::scalar_float()),
+            ("use_diagonals", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "raster_to_vector_points" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "raster_to_vector_lines" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "raster_to_vector_polygons" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "vector_points_to_raster" => Some(param_schema_map(&[
+            (
+                "input",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+            ),
+            ("field", ToolParamSchema::string()),
+            ("assign", ToolParamSchema::string()),
+            ("zero_background", ToolParamSchema::bool()),
+            ("cell_size", ToolParamSchema::scalar_float()),
+            ("base", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "vector_lines_to_raster" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("field", ToolParamSchema::string()),
+            ("zero_background", ToolParamSchema::bool()),
+            ("cell_size", ToolParamSchema::scalar_float()),
+            ("base", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "vector_polygons_to_raster" => Some(param_schema_map(&[
+            (
+                "input",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Polygon),
+            ),
+            ("field", ToolParamSchema::string()),
+            ("zero_background", ToolParamSchema::bool()),
+            ("cell_size", ToolParamSchema::scalar_float()),
+            ("base", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "fix_dangling_arcs" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("snap", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "lines_to_polygons" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "polygons_to_lines" => Some(param_schema_map(&[
+            (
+                "input",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Polygon),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "remove_polygon_holes" => Some(param_schema_map(&[
+            (
+                "input",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Polygon),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "merge_vectors" => Some(param_schema_map(&[
+            (
+                "inputs",
+                ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Any,
+                }),
+            ),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "multipart_to_singlepart" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("exclude_holes", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "singlepart_to_multipart" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("field", ToolParamSchema::string()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "reinitialize_attribute_table" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "add_point_coordinates_to_table" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "clean_vector" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "csv_points_to_vector" => Some(param_schema_map(&[
+            ("input_file", ToolParamSchema::string()),
+            ("x_field_num", ToolParamSchema::scalar_integer()),
+            ("y_field_num", ToolParamSchema::scalar_integer()),
+            ("epsg", ToolParamSchema::scalar_integer()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "join_tables" => Some(param_schema_map(&[
+            ("primary_vector", ToolParamSchema::input_vector_any()),
+            ("primary_key_field", ToolParamSchema::string()),
+            ("foreign_vector", ToolParamSchema::input_vector_any()),
+            ("foreign_key_field", ToolParamSchema::string()),
+            ("import_field", ToolParamSchema::string()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "merge_table_with_csv" => Some(param_schema_map(&[
+            ("primary_vector", ToolParamSchema::input_vector_any()),
+            ("primary_key_field", ToolParamSchema::string()),
+            ("foreign_csv_filename", ToolParamSchema::string()),
+            ("foreign_key_field", ToolParamSchema::string()),
+            ("import_field", ToolParamSchema::string()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "new_raster_from_base_raster" => Some(param_schema_map(&[
+            ("base", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output_raster()),
+            ("out_val", ToolParamSchema::scalar_float()),
+            ("data_type", ToolParamSchema::string()),
+        ])),
+        "new_raster_from_base_vector" => Some(param_schema_map(&[
+            ("base", ToolParamSchema::input_vector_any()),
+            ("cell_size", ToolParamSchema::scalar_float()),
+            ("out_val", ToolParamSchema::scalar_float()),
+            ("data_type", ToolParamSchema::string()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "topology_rule_validate" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("rule_set", ToolParamSchema::string()),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+            ("report", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+        ])),
+        "topology_rule_autofix" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("rule_set", ToolParamSchema::string()),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            ("dry_run", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_vector_any()),
+            (
+                "change_report",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::File),
+            ),
+        ])),
+        "export_table_to_csv" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            (
+                "output_csv_file",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Table),
+            ),
+            ("headers", ToolParamSchema::bool()),
+        ])),
+        "print_geotiff_tags" => Some(param_schema_map(&[(
+            "input",
+            ToolParamSchema::input_raster(),
+        )])),
+        "topology_validation_report" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Table),
+            ),
+        ])),
+        _ => None,
+    }
+}
 
 pub struct AddPointCoordinatesToTableTool;
 pub struct CleanVectorTool;

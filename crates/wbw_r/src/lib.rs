@@ -2,13 +2,13 @@ use serde_json::{json, Value};
 use parquet::basic::Compression as ParquetCompression;
 #[cfg(feature = "pro")]
 use std::env;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use wbcore::{
-    generate_wrapper_stub, manifest_with_io_schema_json, BindingTarget, ExecuteRequest, LicenseTier, OwnedToolRuntime,
+    generate_wrapper_stub, manifest_with_param_schema_json, BindingTarget, ExecuteRequest, LicenseTier, OwnedToolRuntime,
     OwnedToolRuntimeWithCapabilities, RuntimeOptions,
     ProgressSink, ToolArgs, ToolError, ToolManifest, ToolRuntimeBuilder, ToolRuntimeRegistry,
 };
@@ -50,6 +50,7 @@ use wbprojection::{
     Crs,
 };
 use wbraster::{open_sensor_bundle_path, OpenedSensorBundle, SafeBundle, SensorBundle};
+use wbtools_oss::tools::{tool_param_descriptions, tool_param_required, tool_param_schemas};
 use wbraster::memory_store::{
     clear_rasters,
     get_raster_arc_by_path,
@@ -2229,6 +2230,273 @@ fn validate_include_pro(include_pro: bool) -> Result<(), ToolError> {
     Ok(())
 }
 
+fn legacy_param_order_override(tool_id: &str) -> Option<&'static [&'static str]> {
+    match tool_id {
+        "d8_pointer" => Some(&[
+            "dem",
+            "output",
+            "esri_pntr",
+        ]),
+        "d8_flow_accum" => Some(&[
+            "input",
+            "output",
+            "out_type",
+            "log_transform",
+            "clip",
+            "input_is_pointer",
+            "esri_pntr",
+        ]),
+        "dinf_pointer" => Some(&[
+            "dem",
+            "output",
+        ]),
+        "dinf_flow_accum" => Some(&[
+            "input",
+            "output",
+            "out_type",
+            "convergence_threshold",
+            "log_transform",
+            "clip",
+            "input_is_pointer",
+        ]),
+        "fd8_pointer" => Some(&[
+            "dem",
+            "output",
+        ]),
+        "fd8_flow_accum" => Some(&[
+            "dem",
+            "output",
+            "out_type",
+            "exponent",
+            "convergence_threshold",
+            "threshold",
+            "log_transform",
+            "clip",
+        ]),
+        "rho8_pointer" => Some(&[
+            "dem",
+            "output",
+            "esri_pntr",
+        ]),
+        "rho8_flow_accum" => Some(&[
+            "input",
+            "output",
+            "out_type",
+            "log_transform",
+            "clip",
+            "input_is_pointer",
+            "esri_pntr",
+        ]),
+        "mdinf_flow_accum" => Some(&[
+            "dem",
+            "output",
+            "out_type",
+            "exponent",
+            "convergence_threshold",
+            "log_transform",
+            "clip",
+        ]),
+        "qin_flow_accumulation" => Some(&[
+            "dem",
+            "output",
+            "out_type",
+            "exponent",
+            "max_slope",
+            "convergence_threshold",
+            "log_transform",
+            "clip",
+        ]),
+        "quinn_flow_accumulation" => Some(&[
+            "dem",
+            "output",
+            "out_type",
+            "exponent",
+            "convergence_threshold",
+            "log_transform",
+            "clip",
+        ]),
+        "minimal_dispersion_flow_algorithm" => Some(&[
+            "dem",
+            "output",
+            "flow_dir_output",
+            "out_type",
+            "path_corrected_direction_preference",
+            "log_transform",
+            "clip",
+            "esri_pntr",
+            "debug_stats",
+        ]),
+        _ => None,
+    }
+}
+
+fn reorder_param_names_logical(tool_id: &str, names: &[String]) -> Vec<String> {
+    if let Some(preferred) = legacy_param_order_override(tool_id) {
+        let mut out: Vec<String> = Vec::new();
+        let mut seen: BTreeSet<String> = BTreeSet::new();
+        for wanted in preferred {
+            if let Some(existing) = names.iter().find(|n| n.eq_ignore_ascii_case(wanted)) {
+                if seen.insert(existing.to_ascii_lowercase()) {
+                    out.push(existing.clone());
+                }
+            }
+        }
+        for name in names {
+            let key = name.to_ascii_lowercase();
+            if seen.insert(key) {
+                out.push(name.clone());
+            }
+        }
+        return out;
+    }
+
+    names.to_vec()
+}
+
+#[derive(Default)]
+struct CatalogParamMetadata {
+    order: BTreeMap<String, Vec<String>>,
+    descriptions: BTreeMap<String, BTreeMap<String, String>>,
+    required: BTreeMap<String, BTreeMap<String, bool>>,
+}
+
+fn build_catalog_param_metadata() -> CatalogParamMetadata {
+    let mut oss = OssRegistry::new();
+    register_default_oss_tools(&mut oss);
+
+    #[cfg(feature = "pro")]
+    let mut tools = oss.list();
+    #[cfg(not(feature = "pro"))]
+    let tools = oss.list();
+
+    #[cfg(feature = "pro")]
+    {
+        let mut pro = ProRegistry::new();
+        register_default_pro_tools(&mut pro);
+        tools.extend(pro.list());
+    }
+
+    let mut out = CatalogParamMetadata::default();
+    for tool in tools {
+        let mut names: Vec<String> = Vec::new();
+        let mut seen: BTreeSet<String> = BTreeSet::new();
+        let mut param_descs: BTreeMap<String, String> = BTreeMap::new();
+        let mut param_required: BTreeMap<String, bool> = BTreeMap::new();
+        for param in tool.params {
+            let name = param.name.to_string();
+            if seen.insert(name.clone()) {
+                names.push(name.clone());
+            }
+            let desc = param.description.trim();
+            if !desc.is_empty() {
+                param_descs.insert(name.clone(), desc.to_string());
+            }
+            param_required.insert(name, param.required);
+        }
+        let ordered = reorder_param_names_logical(tool.id, &names);
+        out.order.insert(tool.id.to_string(), ordered);
+        out.descriptions.insert(tool.id.to_string(), param_descs);
+        out.required.insert(tool.id.to_string(), param_required);
+    }
+    out
+}
+
+fn merge_param_docs_with_metadata(
+    tool_id: &str,
+    param_descriptions: &mut BTreeMap<String, String>,
+    param_required: &mut BTreeMap<String, bool>,
+    metadata: &CatalogParamMetadata,
+) {
+    if let Some(meta_descs) = metadata.descriptions.get(tool_id) {
+        for (name, desc) in meta_descs {
+            let missing = param_descriptions
+                .get(name)
+                .map(|existing| existing.trim().is_empty())
+                .unwrap_or(true);
+            if missing {
+                param_descriptions.insert(name.clone(), desc.clone());
+            }
+        }
+    }
+
+    if let Some(meta_required) = metadata.required.get(tool_id) {
+        for (name, required) in meta_required {
+            param_required.entry(name.clone()).or_insert(*required);
+        }
+    }
+}
+
+fn enrich_manifest_params(
+    manifest: &ToolManifest,
+    param_schemas: &BTreeMap<String, wbcore::ToolParamSchema>,
+    param_descriptions: &BTreeMap<String, String>,
+    param_required: &BTreeMap<String, bool>,
+    ordered_param_names: Option<&[String]>,
+) -> ToolManifest {
+    let mut enriched = manifest.clone();
+
+    if enriched.params.is_empty() {
+        let mut ordered_names: Vec<String> = Vec::new();
+        let mut seen: BTreeSet<String> = BTreeSet::new();
+
+        if let Some(names) = ordered_param_names {
+            for name in names {
+                let key = name.trim();
+                if key.is_empty() {
+                    continue;
+                }
+                if seen.insert(key.to_string()) {
+                    ordered_names.push(key.to_string());
+                }
+            }
+        }
+
+        let mut extras = BTreeSet::new();
+        for name in param_schemas.keys() {
+            if !seen.contains(name) {
+                extras.insert(name.clone());
+            }
+        }
+        for name in param_descriptions.keys() {
+            if !seen.contains(name) {
+                extras.insert(name.clone());
+            }
+        }
+        for name in param_required.keys() {
+            if !seen.contains(name) {
+                extras.insert(name.clone());
+            }
+        }
+
+        ordered_names.extend(extras);
+
+        enriched.params = ordered_names
+            .into_iter()
+            .map(|name| wbcore::ToolParamDescriptor {
+                description: param_descriptions
+                    .get(&name)
+                    .cloned()
+                    .unwrap_or_default(),
+                required: param_required.get(&name).copied().unwrap_or(false),
+                name,
+            })
+            .collect();
+    } else {
+        for p in &mut enriched.params {
+            if p.description.trim().is_empty() {
+                if let Some(desc) = param_descriptions.get(&p.name) {
+                    p.description = desc.clone();
+                }
+            }
+            if let Some(required) = param_required.get(&p.name) {
+                p.required = *required;
+            }
+        }
+    }
+
+    enriched
+}
+
 pub struct RToolRuntime {
     runtime: RuntimeMode,
 }
@@ -2254,9 +2522,14 @@ impl RToolRuntime {
         let mut oss = OssRegistry::new();
         register_default_oss_tools(&mut oss);
 
+        #[cfg(feature = "pro")]
+        let registry = CompositeRegistry { oss, pro: None };
+        #[cfg(not(feature = "pro"))]
+        let registry = CompositeRegistry { oss };
+
         Ok(Self {
             runtime: RuntimeMode::Tier(
-                ToolRuntimeBuilder::new(CompositeRegistry { oss, pro: None })
+                ToolRuntimeBuilder::new(registry)
                     .max_tier(max_tier)
                     .build(),
             ),
@@ -2418,10 +2691,29 @@ impl RToolRuntime {
     }
 
     pub fn list_tools_json(&self) -> Value {
+        let catalog_param_metadata = build_catalog_param_metadata();
         let tools: Vec<Value> = self
             .list_visible_manifests()
             .into_iter()
-            .map(|m| manifest_with_io_schema_json(&m))
+            .map(|m| {
+                let param_schemas = tool_param_schemas(&m.id).unwrap_or_default();
+                let mut param_descriptions = tool_param_descriptions(&m.id).unwrap_or_default();
+                let mut param_required = tool_param_required(&m.id).unwrap_or_default();
+                merge_param_docs_with_metadata(
+                    &m.id,
+                    &mut param_descriptions,
+                    &mut param_required,
+                    &catalog_param_metadata,
+                );
+                let enriched_manifest = enrich_manifest_params(
+                    &m,
+                    &param_schemas,
+                    &param_descriptions,
+                    &param_required,
+                    catalog_param_metadata.order.get(&m.id).map(Vec::as_slice),
+                );
+                manifest_with_param_schema_json(&enriched_manifest, &param_schemas)
+            })
             .collect();
         Value::Array(tools)
     }
@@ -2436,7 +2728,24 @@ impl RToolRuntime {
             .into_iter()
             .find(|m| m.id == tool_id)
             .ok_or_else(|| ToolError::NotFound(tool_id.to_string()))?;
-        Ok(manifest_with_io_schema_json(&manifest))
+        let catalog_param_metadata = build_catalog_param_metadata();
+        let param_schemas = tool_param_schemas(tool_id).unwrap_or_default();
+        let mut param_descriptions = tool_param_descriptions(tool_id).unwrap_or_default();
+        let mut param_required = tool_param_required(tool_id).unwrap_or_default();
+        merge_param_docs_with_metadata(
+            tool_id,
+            &mut param_descriptions,
+            &mut param_required,
+            &catalog_param_metadata,
+        );
+        let enriched_manifest = enrich_manifest_params(
+            &manifest,
+            &param_schemas,
+            &param_descriptions,
+            &param_required,
+            catalog_param_metadata.order.get(tool_id).map(Vec::as_slice),
+        );
+        Ok(manifest_with_param_schema_json(&enriched_manifest, &param_schemas))
     }
 
     pub fn get_tool_info_json(&self, tool_id: &str) -> Result<Value, ToolError> {
@@ -4419,6 +4728,59 @@ mod tests {
             .iter()
             .any(|v| v.get("id").and_then(Value::as_str) == Some("add"));
         assert!(has_add);
+    }
+
+    #[test]
+    fn d8_flow_accum_param_order_is_legacy_logical() {
+        let rt = RToolRuntime::new();
+        let manifest = rt
+            .get_tool_metadata_json("d8_flow_accum")
+            .expect("d8_flow_accum metadata should exist");
+
+        let params = manifest
+            .get("params")
+            .and_then(Value::as_array)
+            .expect("params should be an array");
+        let names: Vec<&str> = params
+            .iter()
+            .filter_map(|p| p.get("name").and_then(Value::as_str))
+            .collect();
+
+        assert_eq!(
+            names,
+            vec![
+                "input",
+                "output",
+                "out_type",
+                "log_transform",
+                "clip",
+                "input_is_pointer",
+                "esri_pntr",
+            ]
+        );
+    }
+
+    #[test]
+    fn d8_flow_accum_input_description_is_not_generic() {
+        let rt = RToolRuntime::new();
+        let manifest = rt
+            .get_tool_metadata_json("d8_flow_accum")
+            .expect("d8_flow_accum metadata should exist");
+
+        let params = manifest
+            .get("params")
+            .and_then(Value::as_array)
+            .expect("params should be an array");
+
+        let input_desc = params
+            .iter()
+            .find(|p| p.get("name").and_then(Value::as_str) == Some("input"))
+            .and_then(|p| p.get("description"))
+            .and_then(Value::as_str)
+            .expect("input description should be present");
+
+        assert!(input_desc.to_ascii_lowercase().contains("dem"));
+        assert!(input_desc.to_ascii_lowercase().contains("pointer"));
     }
 
     #[test]

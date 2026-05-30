@@ -32,8 +32,8 @@ use serde_json::json;
 use wbprojection::Crs;
 use wbcore::{PercentCoalescer,
     parse_optional_output_path, parse_vector_path_arg, IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH, LicenseTier, Tool, ToolArgs, ToolCategory, ToolContext,
-    ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor, ToolParamSpec,
-    ToolRunResult, ToolStability,
+    ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor, ToolParamSchema, ToolParamSpec,
+    ToolRunResult, ToolStability, ToolVectorGeometry, param_schema_map,
 };
 use wbraster::{CrsInfo, DataType, Raster, RasterConfig, RasterFormat};
 use wbvector::memory_store as vector_memory_store;
@@ -229,6 +229,1722 @@ pub struct KShortestPathsNetworkTool;
 pub struct VehicleRoutingCvrpTool;
 pub struct VehicleRoutingVrptwTool;
 pub struct VehicleRoutingPickupDeliveryTool;
+
+pub fn gis_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolParamSchema>> {
+    match tool_id {
+        "buffer_vector" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("distance", ToolParamSchema::scalar_float()),
+            ("quadrant_segments", ToolParamSchema::scalar_integer()),
+            ("cap_style", ToolParamSchema::enum_values(&["round", "flat", "square"])),
+            ("join_style", ToolParamSchema::enum_values(&["round", "bevel", "mitre"])),
+            ("mitre_limit", ToolParamSchema::scalar_float()),
+            ("dissolve", ToolParamSchema::bool()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "clip" | "erase" | "intersect" | "union" | "dissolve" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Polygon)),
+            ("overlay", ToolParamSchema::input_vector(ToolVectorGeometry::Polygon)),
+            ("clip", ToolParamSchema::input_vector(ToolVectorGeometry::Polygon)),
+            ("dissolve_field", ToolParamSchema::string()),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "reproject_vector" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("epsg", ToolParamSchema::scalar_integer()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "near" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("near", ToolParamSchema::input_vector_any()),
+            ("max_distance", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "select_by_location" => Some(param_schema_map(&[
+            ("target", ToolParamSchema::input_vector_any()),
+            ("query", ToolParamSchema::input_vector_any()),
+            (
+                "predicate",
+                ToolParamSchema::enum_values(&[
+                    "intersects",
+                    "within",
+                    "contains",
+                    "touches",
+                    "crosses",
+                    "overlaps",
+                    "disjoint",
+                    "within_distance",
+                ]),
+            ),
+            ("distance", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "spatial_join" => Some(param_schema_map(&[
+            ("target", ToolParamSchema::input_vector_any()),
+            ("join", ToolParamSchema::input_vector_any()),
+            (
+                "predicate",
+                ToolParamSchema::enum_values(&[
+                    "intersects",
+                    "within",
+                    "contains",
+                    "touches",
+                    "crosses",
+                    "overlaps",
+                    "within_distance",
+                ]),
+            ),
+            ("distance", ToolParamSchema::scalar_float()),
+            (
+                "strategy",
+                ToolParamSchema::enum_values(&["first", "last", "count", "sum", "mean", "min", "max"]),
+            ),
+            ("prefix", ToolParamSchema::string()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "field_calculator" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("field", ToolParamSchema::string()),
+            ("field_type", ToolParamSchema::enum_values(&["float", "integer", "text"])),
+            ("expression", ToolParamSchema::string()),
+            ("overwrite", ToolParamSchema::bool()),
+            ("preview_rows", ToolParamSchema::scalar_integer()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "points_along_lines" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("spacing", ToolParamSchema::scalar_float()),
+            ("include_end", ToolParamSchema::bool()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "line_polygon_clip" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("clip", ToolParamSchema::input_vector(ToolVectorGeometry::Polygon)),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "update_nodata_cells" => Some(param_schema_map(&[
+            ("input1", ToolParamSchema::input_raster()),
+            ("input2", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "buffer_raster" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("buffer_size", ToolParamSchema::scalar_float()),
+            ("grid_cell_units", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "clump" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("diag", ToolParamSchema::bool()),
+            ("zero_background", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "euclidean_distance" | "euclidean_allocation" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "cost_distance" => Some(param_schema_map(&[
+            ("source", ToolParamSchema::input_raster()),
+            ("cost", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output_raster()),
+            ("backlink_output", ToolParamSchema::output_raster()),
+        ])),
+        "cost_allocation" => Some(param_schema_map(&[
+            ("source", ToolParamSchema::input_raster()),
+            ("backlink", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "cost_pathway" => Some(param_schema_map(&[
+            ("destination", ToolParamSchema::input_raster()),
+            ("backlink", ToolParamSchema::input_raster()),
+            ("zero_background", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "weighted_sum" => Some(param_schema_map(&[
+            ("input_rasters", ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::Raster)),
+            ("auto_reproject", ToolParamSchema::bool()),
+            (
+                "auto_reproject_method",
+                ToolParamSchema::enum_values(&[
+                    "nearest",
+                    "bilinear",
+                    "cubic",
+                    "lanczos",
+                    "average",
+                    "min",
+                    "max",
+                    "mode",
+                    "median",
+                    "stddev",
+                ]),
+            ),
+            ("weights", ToolParamSchema::string()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "weighted_overlay" => Some(param_schema_map(&[
+            ("factors", ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::Raster)),
+            ("weights", ToolParamSchema::string()),
+            ("cost", ToolParamSchema::string()),
+            (
+                "constraints",
+                ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::Raster),
+            ),
+            ("scale_max", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "aggregate_raster" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("aggregation_factor", ToolParamSchema::scalar_integer()),
+            (
+                "aggregation_type",
+                ToolParamSchema::enum_values(&["mean", "sum", "maximum", "minimum", "range"]),
+            ),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "reclass" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("reclass_values", ToolParamSchema::string()),
+            ("assign_mode", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "reclass_equal_interval" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("interval_size", ToolParamSchema::scalar_float()),
+            ("start_value", ToolParamSchema::scalar_float()),
+            ("end_value", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "difference" | "symmetrical_difference" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Polygon)),
+            (
+                "overlay",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Polygon),
+            ),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "identity" | "update" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            (
+                "overlay",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Polygon),
+            ),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "line_intersections" => Some(param_schema_map(&[
+            (
+                "input",
+                ToolParamSchema::input_vector(ToolVectorGeometry::LineOrPolygon),
+            ),
+            (
+                "overlay",
+                ToolParamSchema::input_vector(ToolVectorGeometry::LineOrPolygon),
+            ),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "merge_line_segments" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "split_with_lines" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("split", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "split_lines_at_intersections" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "extract_nodes" => Some(param_schema_map(&[
+            (
+                "input",
+                ToolParamSchema::input_vector(ToolVectorGeometry::LineOrPolygon),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "centroid_vector" | "representative_point_vector" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "filter_vector_features_by_area" => Some(param_schema_map(&[
+            (
+                "input",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Polygon),
+            ),
+            ("threshold", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "minimum_convex_hull" | "minimum_bounding_circle" | "minimum_bounding_envelope" => {
+            Some(param_schema_map(&[
+                ("input", ToolParamSchema::input_vector_any()),
+                ("individual_feature_hulls", ToolParamSchema::bool()),
+                (
+                    "output",
+                    ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                        geometry: ToolVectorGeometry::Polygon,
+                    }),
+                ),
+            ]))
+        }
+        "minimum_bounding_box" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            (
+                "min_criteria",
+                ToolParamSchema::enum_values(&["area", "perimeter", "length", "width"]),
+            ),
+            ("individual_feature_hulls", ToolParamSchema::bool()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "add_field" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("field", ToolParamSchema::string()),
+            (
+                "field_type",
+                ToolParamSchema::enum_values(&["integer", "float", "double", "text", "bool"]),
+            ),
+            ("default", ToolParamSchema::string()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "delete_field" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("fields", ToolParamSchema::string()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "add_geometry_attributes" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            (
+                "measurement_mode",
+                ToolParamSchema::enum_values(&["planar", "geodesic"]),
+            ),
+            ("area", ToolParamSchema::bool()),
+            ("length", ToolParamSchema::bool()),
+            ("perimeter", ToolParamSchema::bool()),
+            ("centroid", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "add_point_coordinates_to_table" | "clean_vector" | "compactness_ratio"
+        | "elongation_ratio" | "layer_footprint_vector" => {
+            Some(param_schema_map(&[
+                ("input", ToolParamSchema::input_vector_any()),
+                ("output", ToolParamSchema::output_vector_any()),
+            ]))
+        }
+        "extract_by_attribute" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("statement", ToolParamSchema::string()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "concave_hull" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("concavity", ToolParamSchema::scalar_float()),
+            ("max_edge_length", ToolParamSchema::scalar_float()),
+            ("epsilon", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "construct_vector_tin" => Some(param_schema_map(&[
+            (
+                "input_points",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+            ),
+            ("field_name", ToolParamSchema::string()),
+            ("use_z", ToolParamSchema::bool()),
+            ("max_triangle_edge_length", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "csv_points_to_vector" => Some(param_schema_map(&[
+            (
+                "input_file",
+                ToolParamSchema::input(wbcore::ToolDatasetSchema::Table),
+            ),
+            ("x_field_num", ToolParamSchema::scalar_integer()),
+            ("y_field_num", ToolParamSchema::scalar_integer()),
+            ("epsg", ToolParamSchema::scalar_integer()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "densify_features" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("spacing", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "deviation_from_regional_direction" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("elongation_threshold", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "eliminate_coincident_points" => Some(param_schema_map(&[
+            (
+                "input",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+            ),
+            ("tolerance_dist", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "extend_vector_lines" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("distance", ToolParamSchema::scalar_float()),
+            (
+                "extend_direction",
+                ToolParamSchema::enum_values(&["both_ends", "line_start", "line_end"]),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "extract_raster_values_at_points" => Some(param_schema_map(&[
+            (
+                "rasters",
+                ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::Raster),
+            ),
+            (
+                "points",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "build_network_topology" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+            (
+                "nodes_output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "generate_network_nodes" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "shortest_path_network" | "k_shortest_paths_network" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("start_x", ToolParamSchema::scalar_float()),
+            ("start_y", ToolParamSchema::scalar_float()),
+            ("end_x", ToolParamSchema::scalar_float()),
+            ("end_y", ToolParamSchema::scalar_float()),
+            ("k", ToolParamSchema::scalar_integer()),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            ("max_snap_distance", ToolParamSchema::scalar_float()),
+            ("edge_cost_field", ToolParamSchema::string()),
+            ("one_way_field", ToolParamSchema::string()),
+            ("blocked_field", ToolParamSchema::string()),
+            ("barriers", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("barrier_snap_distance", ToolParamSchema::scalar_float()),
+            ("node_cost_points", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("node_cost_field", ToolParamSchema::string()),
+            ("node_cost_snap_distance", ToolParamSchema::scalar_float()),
+            ("turn_penalty", ToolParamSchema::scalar_float()),
+            ("u_turn_penalty", ToolParamSchema::scalar_float()),
+            ("forbid_u_turns", ToolParamSchema::bool()),
+            ("forbid_left_turns", ToolParamSchema::bool()),
+            ("forbid_right_turns", ToolParamSchema::bool()),
+            (
+                "turn_restrictions_csv",
+                ToolParamSchema::input(wbcore::ToolDatasetSchema::Table),
+            ),
+            (
+                "temporal_cost_profile",
+                ToolParamSchema::input(wbcore::ToolDatasetSchema::Table),
+            ),
+            ("temporal_edge_id_field", ToolParamSchema::string()),
+            ("departure_time", ToolParamSchema::string()),
+            (
+                "temporal_mode",
+                ToolParamSchema::enum_values(&["multiplier", "absolute"]),
+            ),
+            (
+                "temporal_fallback",
+                ToolParamSchema::enum_values(&["static_cost", "error"]),
+            ),
+            (
+                "temporal_profile_report",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Json),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "closest_facility_network" | "location_allocation_network" => {
+            Some(param_schema_map(&[
+                ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+                ("incidents", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+                ("demand_points", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+                ("facilities", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+                ("facility_count", ToolParamSchema::scalar_integer()),
+                ("solver_mode", ToolParamSchema::enum_values(&["auto", "greedy", "exact"])),
+                ("demand_weight_field", ToolParamSchema::string()),
+                ("facility_capacity_field", ToolParamSchema::string()),
+                ("required_facility_field", ToolParamSchema::string()),
+                ("forbidden_facility_field", ToolParamSchema::string()),
+                ("snap_tolerance", ToolParamSchema::scalar_float()),
+                ("max_snap_distance", ToolParamSchema::scalar_float()),
+                ("edge_cost_field", ToolParamSchema::string()),
+                ("one_way_field", ToolParamSchema::string()),
+                ("blocked_field", ToolParamSchema::string()),
+                ("barriers", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+                ("barrier_snap_distance", ToolParamSchema::scalar_float()),
+                (
+                    "node_cost_points",
+                    ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+                ),
+                ("node_cost_field", ToolParamSchema::string()),
+                ("node_cost_snap_distance", ToolParamSchema::scalar_float()),
+                ("turn_penalty", ToolParamSchema::scalar_float()),
+                ("u_turn_penalty", ToolParamSchema::scalar_float()),
+                ("forbid_u_turns", ToolParamSchema::bool()),
+                ("forbid_left_turns", ToolParamSchema::bool()),
+                ("forbid_right_turns", ToolParamSchema::bool()),
+                (
+                    "turn_restrictions_csv",
+                    ToolParamSchema::input(wbcore::ToolDatasetSchema::Table),
+                ),
+                (
+                    "temporal_cost_profile",
+                    ToolParamSchema::input(wbcore::ToolDatasetSchema::Table),
+                ),
+                ("temporal_edge_id_field", ToolParamSchema::string()),
+                ("departure_time", ToolParamSchema::string()),
+                (
+                    "temporal_mode",
+                    ToolParamSchema::enum_values(&["multiplier", "absolute"]),
+                ),
+                (
+                    "temporal_fallback",
+                    ToolParamSchema::enum_values(&["static_cost", "error"]),
+                ),
+                (
+                    "temporal_profile_report",
+                    ToolParamSchema::output(wbcore::ToolDatasetSchema::Json),
+                ),
+                (
+                    "output",
+                    ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                        geometry: ToolVectorGeometry::Line,
+                    }),
+                ),
+            ]))
+        },
+        "network_od_cost_matrix" | "od_sensitivity_analysis" | "multimodal_od_cost_matrix" => {
+            Some(param_schema_map(&[
+                ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+                ("origins", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+                (
+                    "destinations",
+                    ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+                ),
+                ("mode_field", ToolParamSchema::string()),
+                ("default_mode_speed", ToolParamSchema::scalar_float()),
+                ("mode_speed_overrides", ToolParamSchema::string()),
+                ("allowed_modes", ToolParamSchema::string()),
+                ("transfer_penalty", ToolParamSchema::scalar_float()),
+                ("edge_cost_field", ToolParamSchema::string()),
+                ("impedance_disturbance_range", ToolParamSchema::string()),
+                ("monte_carlo_samples", ToolParamSchema::scalar_integer()),
+                ("snap_tolerance", ToolParamSchema::scalar_float()),
+                ("max_snap_distance", ToolParamSchema::scalar_float()),
+                ("one_way_field", ToolParamSchema::string()),
+                ("blocked_field", ToolParamSchema::string()),
+                ("barriers", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+                ("barrier_snap_distance", ToolParamSchema::scalar_float()),
+                (
+                    "node_cost_points",
+                    ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+                ),
+                ("node_cost_field", ToolParamSchema::string()),
+                ("node_cost_snap_distance", ToolParamSchema::scalar_float()),
+                ("turn_penalty", ToolParamSchema::scalar_float()),
+                ("u_turn_penalty", ToolParamSchema::scalar_float()),
+                ("forbid_u_turns", ToolParamSchema::bool()),
+                ("forbid_left_turns", ToolParamSchema::bool()),
+                ("forbid_right_turns", ToolParamSchema::bool()),
+                (
+                    "turn_restrictions_csv",
+                    ToolParamSchema::input(wbcore::ToolDatasetSchema::Table),
+                ),
+                (
+                    "temporal_cost_profile",
+                    ToolParamSchema::input(wbcore::ToolDatasetSchema::Table),
+                ),
+                ("temporal_edge_id_field", ToolParamSchema::string()),
+                ("departure_time", ToolParamSchema::string()),
+                (
+                    "temporal_mode",
+                    ToolParamSchema::enum_values(&["multiplier", "absolute"]),
+                ),
+                (
+                    "temporal_fallback",
+                    ToolParamSchema::enum_values(&["static_cost", "error"]),
+                ),
+                (
+                    "temporal_profile_report",
+                    ToolParamSchema::output(wbcore::ToolDatasetSchema::Json),
+                ),
+                (
+                    "scenario_bundle_csv",
+                    ToolParamSchema::input(wbcore::ToolDatasetSchema::Table),
+                ),
+                ("parallel_execution", ToolParamSchema::bool()),
+                ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
+            ]))
+        },
+        "network_routes_from_od" | "multimodal_routes_from_od" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("origins", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("destinations", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("mode_field", ToolParamSchema::string()),
+            ("default_mode_speed", ToolParamSchema::scalar_float()),
+            ("mode_speed_overrides", ToolParamSchema::string()),
+            ("allowed_modes", ToolParamSchema::string()),
+            ("transfer_penalty", ToolParamSchema::scalar_float()),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            ("max_snap_distance", ToolParamSchema::scalar_float()),
+            ("edge_cost_field", ToolParamSchema::string()),
+            ("one_way_field", ToolParamSchema::string()),
+            ("blocked_field", ToolParamSchema::string()),
+            ("barriers", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("barrier_snap_distance", ToolParamSchema::scalar_float()),
+            ("node_cost_points", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("node_cost_field", ToolParamSchema::string()),
+            ("node_cost_snap_distance", ToolParamSchema::scalar_float()),
+            ("turn_penalty", ToolParamSchema::scalar_float()),
+            ("u_turn_penalty", ToolParamSchema::scalar_float()),
+            ("forbid_u_turns", ToolParamSchema::bool()),
+            ("forbid_left_turns", ToolParamSchema::bool()),
+            ("forbid_right_turns", ToolParamSchema::bool()),
+            (
+                "turn_restrictions_csv",
+                ToolParamSchema::input(wbcore::ToolDatasetSchema::Table),
+            ),
+            (
+                "temporal_cost_profile",
+                ToolParamSchema::input(wbcore::ToolDatasetSchema::Table),
+            ),
+            ("temporal_edge_id_field", ToolParamSchema::string()),
+            ("departure_time", ToolParamSchema::string()),
+            (
+                "temporal_mode",
+                ToolParamSchema::enum_values(&["multiplier", "absolute"]),
+            ),
+            (
+                "temporal_fallback",
+                ToolParamSchema::enum_values(&["static_cost", "error"]),
+            ),
+            (
+                "temporal_profile_report",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Json),
+            ),
+            (
+                "scenario_bundle_csv",
+                ToolParamSchema::input(wbcore::ToolDatasetSchema::Table),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "network_service_area" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("origins", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("max_cost", ToolParamSchema::scalar_float()),
+            ("ring_costs", ToolParamSchema::string()),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            ("max_snap_distance", ToolParamSchema::scalar_float()),
+            (
+                "output_mode",
+                ToolParamSchema::enum_values(&["nodes", "edges", "polygons"]),
+            ),
+            ("polygon_merge_origins", ToolParamSchema::bool()),
+            ("mode_field", ToolParamSchema::string()),
+            ("default_mode_speed", ToolParamSchema::scalar_float()),
+            ("mode_speed_overrides", ToolParamSchema::string()),
+            ("allowed_modes", ToolParamSchema::string()),
+            ("edge_cost_field", ToolParamSchema::string()),
+            ("one_way_field", ToolParamSchema::string()),
+            ("blocked_field", ToolParamSchema::string()),
+            ("barriers", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("barrier_snap_distance", ToolParamSchema::scalar_float()),
+            (
+                "node_cost_points",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+            ),
+            ("node_cost_field", ToolParamSchema::string()),
+            ("node_cost_snap_distance", ToolParamSchema::scalar_float()),
+            ("turn_penalty", ToolParamSchema::scalar_float()),
+            ("u_turn_penalty", ToolParamSchema::scalar_float()),
+            ("forbid_u_turns", ToolParamSchema::bool()),
+            ("forbid_left_turns", ToolParamSchema::bool()),
+            ("forbid_right_turns", ToolParamSchema::bool()),
+            (
+                "turn_restrictions_csv",
+                ToolParamSchema::input(wbcore::ToolDatasetSchema::Table),
+            ),
+            (
+                "temporal_cost_profile",
+                ToolParamSchema::input(wbcore::ToolDatasetSchema::Table),
+            ),
+            ("temporal_edge_id_field", ToolParamSchema::string()),
+            ("departure_time", ToolParamSchema::string()),
+            (
+                "temporal_mode",
+                ToolParamSchema::enum_values(&["multiplier", "absolute"]),
+            ),
+            (
+                "temporal_fallback",
+                ToolParamSchema::enum_values(&["static_cost", "error"]),
+            ),
+            (
+                "temporal_profile_report",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Json),
+            ),
+            (
+                "snapped_origins_output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "network_centrality_metrics" | "network_node_degree" | "network_topology_audit" => {
+            Some(param_schema_map(&[
+                ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+                ("snap_tolerance", ToolParamSchema::scalar_float()),
+                ("edge_cost_field", ToolParamSchema::string()),
+                ("one_way_field", ToolParamSchema::string()),
+                ("blocked_field", ToolParamSchema::string()),
+                ("report", ToolParamSchema::output(wbcore::ToolDatasetSchema::Json)),
+                (
+                    "output",
+                    ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                        geometry: ToolVectorGeometry::Point,
+                    }),
+                ),
+            ]))
+        },
+        "network_accessibility_metrics" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("origins", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("destinations", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            ("max_snap_distance", ToolParamSchema::scalar_float()),
+            ("impedance_cutoff", ToolParamSchema::scalar_float()),
+            (
+                "decay_function",
+                ToolParamSchema::enum_values(&["none", "linear", "exponential"]),
+            ),
+            ("decay_parameter", ToolParamSchema::scalar_float()),
+            ("edge_cost_field", ToolParamSchema::string()),
+            ("one_way_field", ToolParamSchema::string()),
+            ("blocked_field", ToolParamSchema::string()),
+            ("node_cost_points", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("node_cost_field", ToolParamSchema::string()),
+            ("node_cost_snap_distance", ToolParamSchema::scalar_float()),
+            ("parallel_execution", ToolParamSchema::bool()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "network_connected_components" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "multimodal_shortest_path" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("start_x", ToolParamSchema::scalar_float()),
+            ("start_y", ToolParamSchema::scalar_float()),
+            ("end_x", ToolParamSchema::scalar_float()),
+            ("end_y", ToolParamSchema::scalar_float()),
+            ("mode_field", ToolParamSchema::string()),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            ("max_snap_distance", ToolParamSchema::scalar_float()),
+            ("default_mode_speed", ToolParamSchema::scalar_float()),
+            ("mode_speed_overrides", ToolParamSchema::string()),
+            ("allowed_modes", ToolParamSchema::string()),
+            ("transfer_penalty", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "snap_points_to_network" | "snap_events_to_routes" => Some(param_schema_map(&[
+            ("points", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("events", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("network", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("routes", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("max_snap_distance", ToolParamSchema::scalar_float()),
+            ("max_offset_distance", ToolParamSchema::scalar_float()),
+            ("keep_unsnapped", ToolParamSchema::bool()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "boundary_shape_complexity" | "edge_proportion" | "narrowness_index"
+        | "radius_of_gyration" | "shape_complexity_index_raster" => {
+            Some(param_schema_map(&[
+                ("input", ToolParamSchema::input_raster()),
+                ("output", ToolParamSchema::output_raster()),
+            ]))
+        },
+        "raster_area" | "raster_perimeter" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            (
+                "units",
+                ToolParamSchema::enum_values(&["map units", "grid cells"]),
+            ),
+            ("zero_background", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "map_features" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("min_feature_height", ToolParamSchema::scalar_float()),
+            ("min_feature_size", ToolParamSchema::scalar_integer()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "raster_cell_assignment" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            (
+                "what_to_assign",
+                ToolParamSchema::enum_values(&["column", "row", "x", "y"]),
+            ),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "hole_proportion" | "linearity_index" | "narrowness_index_vector"
+        | "patch_orientation" | "perimeter_area_ratio"
+        | "related_circumscribing_circle" | "shape_complexity_index_vector"
+        | "polygon_area" | "polygon_perimeter" => Some(param_schema_map(&[
+            (
+                "input",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Polygon),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "polygon_short_axis" | "polygon_long_axis" => Some(param_schema_map(&[
+            (
+                "input",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Polygon),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "centroid_raster" | "find_patch_edge_cells" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "clip_raster_to_polygon" | "erase_polygon_from_raster" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            (
+                "polygons",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Polygon),
+            ),
+            ("maintain_dimensions", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "create_plane" => Some(param_schema_map(&[
+            ("base", ToolParamSchema::input_raster()),
+            ("gradient", ToolParamSchema::scalar_float()),
+            ("aspect", ToolParamSchema::scalar_float()),
+            ("constant", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "filter_raster_features_by_area" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("threshold", ToolParamSchema::scalar_integer()),
+            ("zero_background", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "find_lowest_or_highest_points" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            (
+                "out_type",
+                ToolParamSchema::enum_values(&["lowest", "highest", "both"]),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "heat_map" => Some(param_schema_map(&[
+            ("points", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("field_name", ToolParamSchema::string()),
+            ("bandwidth", ToolParamSchema::scalar_float()),
+            ("cell_size", ToolParamSchema::scalar_float()),
+            ("base_raster", ToolParamSchema::input_raster()),
+            ("kernel_function", ToolParamSchema::string()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "hexagonal_grid_from_raster_base" => Some(param_schema_map(&[
+            ("base", ToolParamSchema::input_raster()),
+            ("width", ToolParamSchema::scalar_float()),
+            (
+                "orientation",
+                ToolParamSchema::enum_values(&["horizontal", "vertical"]),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "hexagonal_grid_from_vector_base" => Some(param_schema_map(&[
+            ("base", ToolParamSchema::input_vector_any()),
+            ("width", ToolParamSchema::scalar_float()),
+            (
+                "orientation",
+                ToolParamSchema::enum_values(&["horizontal", "vertical"]),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "idw_interpolation" | "modified_shepard_interpolation"
+        | "natural_neighbour_interpolation" | "nearest_neighbour_interpolation"
+        | "radial_basis_function_interpolation" | "tin_interpolation" => {
+            Some(param_schema_map(&[
+                ("points", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+                ("field_name", ToolParamSchema::string()),
+                ("use_z", ToolParamSchema::bool()),
+                ("weight", ToolParamSchema::scalar_float()),
+                ("radius", ToolParamSchema::scalar_float()),
+                ("min_points", ToolParamSchema::scalar_integer()),
+                ("cell_size", ToolParamSchema::scalar_float()),
+                ("base_raster", ToolParamSchema::input_raster()),
+                ("max_dist", ToolParamSchema::scalar_float()),
+                ("clip_to_hull", ToolParamSchema::bool()),
+                ("use_quadratic_basis", ToolParamSchema::bool()),
+                ("use_data_hull", ToolParamSchema::bool()),
+                ("approximate_mode", ToolParamSchema::bool()),
+                (
+                    "func_type",
+                    ToolParamSchema::enum_values(&[
+                        "thinplatespline",
+                        "polyharmonic",
+                        "gaussian",
+                        "multiquadric",
+                        "inversemultiquadric",
+                    ]),
+                ),
+                (
+                    "poly_order",
+                    ToolParamSchema::enum_values(&["none", "constant", "quadratic"]),
+                ),
+                ("max_triangle_edge_length", ToolParamSchema::scalar_float()),
+                ("output", ToolParamSchema::output_raster()),
+            ]))
+        },
+        "layer_footprint_raster" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "medoid" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "nibble" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("mask", ToolParamSchema::input_raster()),
+            ("use_nodata", ToolParamSchema::bool()),
+            ("nibble_nodata", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "pick_from_list" => Some(param_schema_map(&[
+            (
+                "input_rasters",
+                ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::Raster),
+            ),
+            ("auto_reproject", ToolParamSchema::bool()),
+            (
+                "auto_reproject_method",
+                ToolParamSchema::enum_values(&[
+                    "nearest",
+                    "bilinear",
+                    "cubic",
+                    "lanczos",
+                    "average",
+                    "min",
+                    "max",
+                    "mode",
+                    "median",
+                    "stddev",
+                ]),
+            ),
+            ("pos_input", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "polygonize" => Some(param_schema_map(&[
+            (
+                "inputs",
+                ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "rectangular_grid_from_raster_base" => Some(param_schema_map(&[
+            ("base", ToolParamSchema::input_raster()),
+            ("width", ToolParamSchema::scalar_float()),
+            ("height", ToolParamSchema::scalar_float()),
+            ("x_origin", ToolParamSchema::scalar_float()),
+            ("y_origin", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "rectangular_grid_from_vector_base" => Some(param_schema_map(&[
+            ("base", ToolParamSchema::input_vector_any()),
+            ("width", ToolParamSchema::scalar_float()),
+            ("height", ToolParamSchema::scalar_float()),
+            ("x_origin", ToolParamSchema::scalar_float()),
+            ("y_origin", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "voronoi_diagram" => Some(param_schema_map(&[
+            ("input_points", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "random_points_in_polygon" => Some(param_schema_map(&[
+            (
+                "input",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Polygon),
+            ),
+            ("num_points", ToolParamSchema::scalar_integer()),
+            ("seed", ToolParamSchema::scalar_integer()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "locate_points_along_routes" => Some(param_schema_map(&[
+            ("routes", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("points", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("max_offset_distance", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "map_matching_v1" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            (
+                "trajectory_points",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+            ),
+            ("timestamp_field", ToolParamSchema::string()),
+            ("search_radius", ToolParamSchema::scalar_float()),
+            ("candidate_k", ToolParamSchema::scalar_integer()),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            ("max_snap_distance", ToolParamSchema::scalar_float()),
+            ("edge_cost_field", ToolParamSchema::string()),
+            ("one_way_field", ToolParamSchema::string()),
+            ("blocked_field", ToolParamSchema::string()),
+            ("barriers", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("barrier_snap_distance", ToolParamSchema::scalar_float()),
+            (
+                "node_cost_points",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+            ),
+            ("node_cost_field", ToolParamSchema::string()),
+            ("node_cost_snap_distance", ToolParamSchema::scalar_float()),
+            ("turn_penalty", ToolParamSchema::scalar_float()),
+            ("u_turn_penalty", ToolParamSchema::scalar_float()),
+            ("forbid_u_turns", ToolParamSchema::bool()),
+            ("forbid_left_turns", ToolParamSchema::bool()),
+            ("forbid_right_turns", ToolParamSchema::bool()),
+            (
+                "turn_restrictions_csv",
+                ToolParamSchema::input(wbcore::ToolDatasetSchema::Table),
+            ),
+            (
+                "matched_points_output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+            (
+                "match_report",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Json),
+            ),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "rename_field" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("field", ToolParamSchema::string()),
+            ("new_field", ToolParamSchema::string()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "route_calibrate" => Some(param_schema_map(&[
+            ("routes", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            (
+                "control_points",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+            ),
+            ("control_measure_field", ToolParamSchema::string()),
+            ("route_id_field", ToolParamSchema::string()),
+            ("control_route_id_field", ToolParamSchema::string()),
+            ("from_measure_field", ToolParamSchema::string()),
+            ("to_measure_field", ToolParamSchema::string()),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "route_event_lines_from_layer" => {
+            Some(param_schema_map(&[
+                ("routes", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+                ("events", ToolParamSchema::input_vector_any()),
+                ("event_route_field", ToolParamSchema::string()),
+                ("from_measure_field", ToolParamSchema::string()),
+                ("to_measure_field", ToolParamSchema::string()),
+                ("route_id_field", ToolParamSchema::string()),
+                ("write_event_fid", ToolParamSchema::bool()),
+                ("write_event_xy", ToolParamSchema::bool()),
+                (
+                    "output",
+                    ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                        geometry: ToolVectorGeometry::Line,
+                    }),
+                ),
+            ]))
+        },
+        "route_event_lines_from_table" => {
+            Some(param_schema_map(&[
+                ("routes", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+                (
+                    "events",
+                    ToolParamSchema::input(wbcore::ToolDatasetSchema::Table),
+                ),
+                ("event_route_field", ToolParamSchema::string()),
+                ("from_measure_field", ToolParamSchema::string()),
+                ("to_measure_field", ToolParamSchema::string()),
+                ("route_id_field", ToolParamSchema::string()),
+                (
+                    "output",
+                    ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                        geometry: ToolVectorGeometry::Line,
+                    }),
+                ),
+            ]))
+        },
+        "route_event_points_from_layer" => {
+            Some(param_schema_map(&[
+                ("routes", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+                ("events", ToolParamSchema::input_vector_any()),
+                ("event_route_field", ToolParamSchema::string()),
+                ("measure_field", ToolParamSchema::string()),
+                ("route_id_field", ToolParamSchema::string()),
+                ("write_event_fid", ToolParamSchema::bool()),
+                ("write_event_xy", ToolParamSchema::bool()),
+                (
+                    "output",
+                    ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                        geometry: ToolVectorGeometry::Point,
+                    }),
+                ),
+            ]))
+        },
+        "route_event_points_from_table" => {
+            Some(param_schema_map(&[
+                ("routes", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+                (
+                    "events",
+                    ToolParamSchema::input(wbcore::ToolDatasetSchema::Table),
+                ),
+                ("event_route_field", ToolParamSchema::string()),
+                ("measure_field", ToolParamSchema::string()),
+                ("route_id_field", ToolParamSchema::string()),
+                (
+                    "output",
+                    ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                        geometry: ToolVectorGeometry::Point,
+                    }),
+                ),
+            ]))
+        },
+        "route_event_merge" => Some(param_schema_map(&[
+            ("events", ToolParamSchema::input_vector_any()),
+            ("event_route_field", ToolParamSchema::string()),
+            ("from_measure_field", ToolParamSchema::string()),
+            ("to_measure_field", ToolParamSchema::string()),
+            ("group_fields", ToolParamSchema::string()),
+            ("gap_tolerance", ToolParamSchema::scalar_float()),
+            (
+                "conflict_mode",
+                ToolParamSchema::enum_values(&["error", "skip"]),
+            ),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "route_event_overlay" => Some(param_schema_map(&[
+            ("primary_events", ToolParamSchema::input_vector_any()),
+            ("overlay_events", ToolParamSchema::input_vector_any()),
+            ("primary_route_field", ToolParamSchema::string()),
+            ("primary_from_measure_field", ToolParamSchema::string()),
+            ("primary_to_measure_field", ToolParamSchema::string()),
+            ("overlay_route_field", ToolParamSchema::string()),
+            ("overlay_from_measure_field", ToolParamSchema::string()),
+            ("overlay_to_measure_field", ToolParamSchema::string()),
+            ("min_overlap_length", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "route_event_split" => Some(param_schema_map(&[
+            ("events", ToolParamSchema::input_vector_any()),
+            ("boundaries", ToolParamSchema::input_vector_any()),
+            ("event_route_field", ToolParamSchema::string()),
+            ("from_measure_field", ToolParamSchema::string()),
+            ("to_measure_field", ToolParamSchema::string()),
+            ("boundary_route_field", ToolParamSchema::string()),
+            ("boundary_measure_field", ToolParamSchema::string()),
+            ("min_segment_length", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "route_measure_qa" => Some(param_schema_map(&[
+            ("events", ToolParamSchema::input_vector_any()),
+            ("route_field", ToolParamSchema::string()),
+            ("from_measure_field", ToolParamSchema::string()),
+            ("to_measure_field", ToolParamSchema::string()),
+            ("gap_tolerance", ToolParamSchema::scalar_float()),
+            ("overlap_tolerance", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "route_recalibrate" => Some(param_schema_map(&[
+            (
+                "original_routes",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Line),
+            ),
+            (
+                "edited_routes",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Line),
+            ),
+            ("route_id_field", ToolParamSchema::string()),
+            ("from_measure_field", ToolParamSchema::string()),
+            ("to_measure_field", ToolParamSchema::string()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "simplify_features" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("tolerance", ToolParamSchema::scalar_float()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "smooth_vectors" => Some(param_schema_map(&[
+            (
+                "input",
+                ToolParamSchema::input_vector(ToolVectorGeometry::LineOrPolygon),
+            ),
+            ("filter_size", ToolParamSchema::scalar_integer()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::LineOrPolygon,
+                }),
+            ),
+        ])),
+        "snap_endnodes" | "split_vector_lines" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            ("snap_tolerance", ToolParamSchema::scalar_float()),
+            ("segment_length", ToolParamSchema::scalar_float()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "transfer_attributes" => Some(param_schema_map(&[
+            ("target", ToolParamSchema::input_vector_any()),
+            ("source", ToolParamSchema::input_vector_any()),
+            (
+                "predicate",
+                ToolParamSchema::enum_values(&[
+                    "intersects",
+                    "within",
+                    "contains",
+                    "touches",
+                    "crosses",
+                    "overlaps",
+                    "within_distance",
+                ]),
+            ),
+            ("distance", ToolParamSchema::scalar_float()),
+            (
+                "strategy",
+                ToolParamSchema::enum_values(&["first", "last", "count", "sum", "mean", "min", "max"]),
+            ),
+            ("prefix", ToolParamSchema::string()),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "travelling_salesman_problem" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("duration", ToolParamSchema::scalar_integer()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+        ])),
+        "vector_hex_binning" => Some(param_schema_map(&[
+            (
+                "vector_points",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+            ),
+            ("width", ToolParamSchema::scalar_float()),
+            ("orientation", ToolParamSchema::enum_values(&["h", "v"])),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+        ])),
+        "vector_summary_statistics" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("group_field", ToolParamSchema::string()),
+            ("value_field", ToolParamSchema::string()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Table),
+            ),
+        ])),
+        "vehicle_routing_cvrp" => Some(param_schema_map(&[
+            ("network", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            (
+                "depot_points",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+            ),
+            (
+                "stop_points",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+            ),
+            ("demand_field", ToolParamSchema::string()),
+            ("priority_field", ToolParamSchema::string()),
+            ("allowed_vehicle_profiles_field", ToolParamSchema::string()),
+            ("allowed_route_classes_field", ToolParamSchema::string()),
+            ("tw_start_field", ToolParamSchema::string()),
+            ("tw_end_field", ToolParamSchema::string()),
+            ("service_time_field", ToolParamSchema::string()),
+            ("depot_id_field", ToolParamSchema::string()),
+            ("vehicle_count_field", ToolParamSchema::string()),
+            ("vehicle_capacity_field", ToolParamSchema::string()),
+            ("vehicle_fixed_cost_field", ToolParamSchema::string()),
+            ("travel_speed_field", ToolParamSchema::string()),
+            ("max_route_distance_field", ToolParamSchema::string()),
+            ("max_route_time_field", ToolParamSchema::string()),
+            ("vehicle_profile_field", ToolParamSchema::string()),
+            ("vehicle_route_class_field", ToolParamSchema::string()),
+            ("depot_close_time_field", ToolParamSchema::string()),
+            ("break_start_field", ToolParamSchema::string()),
+            ("break_end_field", ToolParamSchema::string()),
+            ("break_duration_field", ToolParamSchema::string()),
+            ("vehicle_capacity", ToolParamSchema::scalar_float()),
+            ("vehicle_fixed_cost", ToolParamSchema::scalar_float()),
+            ("start_time", ToolParamSchema::scalar_float()),
+            ("travel_speed", ToolParamSchema::scalar_float()),
+            ("enforce_time_windows", ToolParamSchema::bool()),
+            ("allowed_lateness", ToolParamSchema::scalar_float()),
+            ("depot_close_time", ToolParamSchema::scalar_float()),
+            ("break_start_time", ToolParamSchema::scalar_float()),
+            ("break_end_time", ToolParamSchema::scalar_float()),
+            ("break_duration", ToolParamSchema::scalar_float()),
+            ("max_vehicles", ToolParamSchema::scalar_integer()),
+            ("max_route_distance", ToolParamSchema::scalar_float()),
+            ("max_route_time", ToolParamSchema::scalar_float()),
+            ("max_stops_per_vehicle", ToolParamSchema::scalar_integer()),
+            (
+                "objective_mode",
+                ToolParamSchema::enum_values(&[
+                    "minimize_distance",
+                    "minimize_vehicles",
+                    "minimize_cost",
+                ]),
+            ),
+            ("use_priority_scoring", ToolParamSchema::bool()),
+            ("apply_local_optimization", ToolParamSchema::bool()),
+            ("apply_simulated_annealing", ToolParamSchema::bool()),
+            ("sa_iterations", ToolParamSchema::scalar_integer()),
+            ("sa_initial_temperature", ToolParamSchema::scalar_float()),
+            ("sa_cooling_rate", ToolParamSchema::scalar_float()),
+            ("sa_seed", ToolParamSchema::scalar_integer()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+            (
+                "assignment_output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "vehicle_routing_vrptw" => Some(param_schema_map(&[
+            ("network", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            (
+                "depot_points",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+            ),
+            (
+                "stop_points",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+            ),
+            ("demand_field", ToolParamSchema::string()),
+            ("priority_field", ToolParamSchema::string()),
+            ("allowed_vehicle_profiles_field", ToolParamSchema::string()),
+            ("allowed_route_classes_field", ToolParamSchema::string()),
+            ("tw_start_field", ToolParamSchema::string()),
+            ("tw_end_field", ToolParamSchema::string()),
+            ("service_time_field", ToolParamSchema::string()),
+            ("depot_id_field", ToolParamSchema::string()),
+            ("vehicle_count_field", ToolParamSchema::string()),
+            ("vehicle_capacity_field", ToolParamSchema::string()),
+            ("vehicle_fixed_cost_field", ToolParamSchema::string()),
+            ("travel_speed_field", ToolParamSchema::string()),
+            ("max_route_distance_field", ToolParamSchema::string()),
+            ("max_route_time_field", ToolParamSchema::string()),
+            ("vehicle_profile_field", ToolParamSchema::string()),
+            ("vehicle_route_class_field", ToolParamSchema::string()),
+            ("depot_close_time_field", ToolParamSchema::string()),
+            ("break_start_field", ToolParamSchema::string()),
+            ("break_end_field", ToolParamSchema::string()),
+            ("break_duration_field", ToolParamSchema::string()),
+            ("vehicle_capacity", ToolParamSchema::scalar_float()),
+            ("vehicle_fixed_cost", ToolParamSchema::scalar_float()),
+            ("start_time", ToolParamSchema::scalar_float()),
+            ("travel_speed", ToolParamSchema::scalar_float()),
+            ("enforce_time_windows", ToolParamSchema::bool()),
+            ("allowed_lateness", ToolParamSchema::scalar_float()),
+            ("depot_close_time", ToolParamSchema::scalar_float()),
+            ("break_start_time", ToolParamSchema::scalar_float()),
+            ("break_end_time", ToolParamSchema::scalar_float()),
+            ("break_duration", ToolParamSchema::scalar_float()),
+            ("max_vehicles", ToolParamSchema::scalar_integer()),
+            ("max_route_distance", ToolParamSchema::scalar_float()),
+            ("max_route_time", ToolParamSchema::scalar_float()),
+            ("max_stops_per_vehicle", ToolParamSchema::scalar_integer()),
+            (
+                "objective_mode",
+                ToolParamSchema::enum_values(&[
+                    "minimize_lateness",
+                    "minimize_distance",
+                    "minimize_vehicles",
+                    "minimize_cost",
+                ]),
+            ),
+            ("use_priority_scoring", ToolParamSchema::bool()),
+            ("apply_local_optimization", ToolParamSchema::bool()),
+            ("apply_simulated_annealing", ToolParamSchema::bool()),
+            ("sa_iterations", ToolParamSchema::scalar_integer()),
+            ("sa_initial_temperature", ToolParamSchema::scalar_float()),
+            ("sa_cooling_rate", ToolParamSchema::scalar_float()),
+            ("sa_seed", ToolParamSchema::scalar_integer()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+            (
+                "assignment_output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "vehicle_routing_pickup_delivery" => Some(param_schema_map(&[
+            ("network", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
+            (
+                "depot_points",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+            ),
+            (
+                "stop_points",
+                ToolParamSchema::input_vector(ToolVectorGeometry::Point),
+            ),
+            ("request_id_field", ToolParamSchema::string()),
+            ("stop_type_field", ToolParamSchema::string()),
+            ("demand_field", ToolParamSchema::string()),
+            ("vehicle_capacity", ToolParamSchema::scalar_float()),
+            ("max_vehicles", ToolParamSchema::scalar_integer()),
+            (
+                "output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Line,
+                }),
+            ),
+            (
+                "assignment_output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Point,
+                }),
+            ),
+        ])),
+        "average_overlay" | "count_if" | "highest_position" | "lowest_position"
+        | "max_absolute_overlay" | "max_overlay" | "min_absolute_overlay"
+        | "min_overlay" | "multiply_overlay" | "percent_equal_to"
+        | "percent_greater_than" | "percent_less_than"
+        | "standard_deviation_overlay" | "sum_overlay" => Some(param_schema_map(&[
+            (
+                "input_rasters",
+                ToolParamSchema::input_multiple(wbcore::ToolDatasetSchema::Raster),
+            ),
+            ("auto_reproject", ToolParamSchema::bool()),
+            (
+                "auto_reproject_method",
+                ToolParamSchema::enum_values(&[
+                    "nearest",
+                    "bilinear",
+                    "cubic",
+                    "lanczos",
+                    "average",
+                    "min",
+                    "max",
+                    "mode",
+                    "median",
+                    "stddev",
+                ]),
+            ),
+            ("comparison_value", ToolParamSchema::scalar_float()),
+            ("comparison_raster", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "block_maximum" | "block_minimum" => Some(param_schema_map(&[
+            ("points", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            ("field_name", ToolParamSchema::string()),
+            ("use_z", ToolParamSchema::bool()),
+            ("cell_size", ToolParamSchema::scalar_float()),
+            ("base_raster", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "sieve" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("threshold", ToolParamSchema::scalar_float()),
+            ("zero_background", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "download_osm_vector" => Some(param_schema_map(&[
+            ("west", ToolParamSchema::scalar_float()),
+            ("south", ToolParamSchema::scalar_float()),
+            ("east", ToolParamSchema::scalar_float()),
+            ("north", ToolParamSchema::scalar_float()),
+            ("input_extent_epsg", ToolParamSchema::scalar_integer()),
+            ("filter_preset", ToolParamSchema::string()),
+            ("include_tags", ToolParamSchema::string()),
+            ("include_key_values", ToolParamSchema::string()),
+            ("filter_key", ToolParamSchema::string()),
+            ("filter_key_value", ToolParamSchema::string()),
+            ("include_points", ToolParamSchema::bool()),
+            ("include_lines", ToolParamSchema::bool()),
+            ("include_polygons", ToolParamSchema::bool()),
+            ("clip_to_extent", ToolParamSchema::bool()),
+            ("split_output_by_geometry", ToolParamSchema::bool()),
+            ("output_epsg", ToolParamSchema::scalar_integer()),
+            ("overpass_profile", ToolParamSchema::string()),
+            ("overpass_url", ToolParamSchema::string()),
+            ("timeout_seconds", ToolParamSchema::scalar_integer()),
+            ("max_elements", ToolParamSchema::scalar_integer()),
+            ("chunk_large_aoi", ToolParamSchema::bool()),
+            ("chunk_max_area_deg2", ToolParamSchema::scalar_float()),
+            ("max_chunk_count", ToolParamSchema::scalar_integer()),
+            ("chunk_parallel_requests", ToolParamSchema::scalar_integer()),
+            ("cache_dir", ToolParamSchema::string()),
+            ("cache_ttl_hours", ToolParamSchema::scalar_float()),
+            (
+                "provenance_output",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Json),
+            ),
+            ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        _ => None,
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum GisOverlayOp {

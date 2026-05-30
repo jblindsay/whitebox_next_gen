@@ -8,7 +8,8 @@ use serde_json::json;
 use wbprojection::{identify_epsg_from_wkt_with_policy, Crs, EpsgIdentifyPolicy};
 use wbcore::{
     parse_optional_output_path, parse_raster_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory, ToolContext, ToolError,
-    ToolExample, ToolManifest, ToolMetadata, ToolParamSpec, ToolRunResult, ToolStability,
+    ToolExample, ToolManifest, ToolMetadata, ToolParamSchema, ToolParamSpec, ToolRunResult, ToolStability,
+    param_schema_map,
 };
 use rand::RngExt;
 use wbraster::{DataType, Raster, RasterFormat};
@@ -27,6 +28,105 @@ pub struct MDInfFlowAccumTool;
 pub struct QinFlowAccumulationTool;
 pub struct QuinnFlowAccumulationTool;
 pub struct MinimalDispersionFlowAlgorithmTool;
+
+pub fn flow_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolParamSchema>> {
+    match tool_id {
+        "d8_pointer" => Some(param_schema_map(&[
+            ("dem", ToolParamSchema::input_raster()),
+            ("esri_pntr", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "d8_flow_accum" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("out_type", ToolParamSchema::enum_values(&["cells", "ca", "sca"])),
+            ("log_transform", ToolParamSchema::bool()),
+            ("clip", ToolParamSchema::bool()),
+            ("input_is_pointer", ToolParamSchema::bool()),
+            ("esri_pntr", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "dinf_pointer" => Some(param_schema_map(&[
+            ("dem", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "dinf_flow_accum" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_raster()),
+            ("out_type", ToolParamSchema::enum_values(&["cells", "ca", "sca"])),
+            ("convergence_threshold", ToolParamSchema::scalar_float()),
+            ("log_transform", ToolParamSchema::bool()),
+            ("clip", ToolParamSchema::bool()),
+            ("input_is_pointer", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "fd8_pointer" => Some(param_schema_map(&[
+            ("dem", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "fd8_flow_accum" => Some(param_schema_map(&[
+            ("dem", ToolParamSchema::input_raster()),
+            ("out_type", ToolParamSchema::enum_values(&["cells", "ca", "sca"])),
+            ("exponent", ToolParamSchema::scalar_float()),
+            ("threshold", ToolParamSchema::scalar_float()),
+            ("log_transform", ToolParamSchema::bool()),
+            ("clip", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "rho8_pointer" => Some(param_schema_map(&[
+            ("dem", ToolParamSchema::input_raster()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "rho8_flow_accum" => Some(param_schema_map(&[
+            ("dem", ToolParamSchema::input_raster()),
+            ("out_type", ToolParamSchema::enum_values(&["cells", "ca", "sca"])),
+            ("log_transform", ToolParamSchema::bool()),
+            ("clip", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "mdinf_flow_accum" => Some(param_schema_map(&[
+            ("dem", ToolParamSchema::input_raster()),
+            ("out_type", ToolParamSchema::enum_values(&["cells", "ca", "sca"])),
+            ("exponent", ToolParamSchema::scalar_float()),
+            ("convergence_threshold", ToolParamSchema::scalar_float()),
+            ("log_transform", ToolParamSchema::bool()),
+            ("clip", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "qin_flow_accumulation" => Some(param_schema_map(&[
+            ("dem", ToolParamSchema::input_raster()),
+            ("out_type", ToolParamSchema::enum_values(&["cells", "ca", "sca"])),
+            ("exponent", ToolParamSchema::scalar_float()),
+            ("max_slope", ToolParamSchema::scalar_float()),
+            ("convergence_threshold", ToolParamSchema::scalar_float()),
+            ("log_transform", ToolParamSchema::bool()),
+            ("clip", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "quinn_flow_accumulation" => Some(param_schema_map(&[
+            ("dem", ToolParamSchema::input_raster()),
+            ("out_type", ToolParamSchema::enum_values(&["cells", "ca", "sca"])),
+            ("exponent", ToolParamSchema::scalar_float()),
+            ("convergence_threshold", ToolParamSchema::scalar_float()),
+            ("log_transform", ToolParamSchema::bool()),
+            ("clip", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+        ])),
+        "minimal_dispersion_flow_algorithm" => Some(param_schema_map(&[
+            ("dem", ToolParamSchema::input_raster()),
+            ("out_type", ToolParamSchema::enum_values(&["cells", "ca", "sca"])),
+            (
+                "path_corrected_direction_preference",
+                ToolParamSchema::scalar_float(),
+            ),
+            ("log_transform", ToolParamSchema::bool()),
+            ("clip", ToolParamSchema::bool()),
+            ("esri_pntr", ToolParamSchema::bool()),
+            ("debug_stats", ToolParamSchema::bool()),
+            ("output", ToolParamSchema::output_raster()),
+            ("flow_dir_output", ToolParamSchema::output_raster()),
+        ])),
+        _ => None,
+    }
+}
 
 const DX: [isize; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
 const DY: [isize; 8] = [-1, 0, 1, 1, 1, 0, -1, -1];

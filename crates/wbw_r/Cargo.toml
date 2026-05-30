@@ -1,6 +1,6 @@
 [package]
 name = "wbw_r"
-version = "2.0.3"
+version = "2.0.5"
 edition = "2021"
 authors = ["John Lindsay, Whitebox Geospatial Inc."]
 publish = false

@@ -6,7 +6,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
-## [2.0.4] - 2026-05-30
+## [2.0.3] - 2026-05-30
 
 ### Added
 - Added schema-aware metadata emission path that can include canonical per-parameter `schema` objects in tool catalog and metadata payloads.

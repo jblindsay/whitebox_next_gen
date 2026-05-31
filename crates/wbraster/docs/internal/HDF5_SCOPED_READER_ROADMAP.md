@@ -442,9 +442,12 @@ Process rule for implementation:
 - [x] Confirm `wbhdf` naming is applied consistently in docs, planning notes, and crate wiring.
 
 **Week 1 exit criteria**
-- [ ] `wbhdf` crate builds and tests pass (including synthetic B-tree tests).
+- [x] `wbhdf` crate builds and tests pass (including synthetic B-tree tests).
+  Evidence (2026-05-31): `cargo test -p wbhdf` -> 13 tests passed (9 unit + 4 integration).
 - [ ] At least one GEDI/ICESat-2 sample can be opened and traversed through metadata + chunk address lookup path.
-- [ ] A written non-breaking complex API plan is checked in and approved before touching `wbraster` public method signatures.
+  Pending: no local GEDI/ICESat-2 fixture discovered and `WBHDF_FIXTURE_DIR` is currently unset.
+- [x] A written non-breaking complex API plan is checked in and approved before touching `wbraster` public method signatures.
+  Evidence (2026-05-31): `WBRASTER_COMPLEX_DATATYPE_DAY5_DESIGN.md` and `WBRASTER_DATATYPE_MATCH_SITE_AUDIT_DAY5.md` checked in.
 
 ### Implementation Start Checklist (Week 2)
 

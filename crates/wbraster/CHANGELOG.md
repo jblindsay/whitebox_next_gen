@@ -16,6 +16,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Week 1 roadmap execution evidence update in
+  `docs/internal/HDF5_SCOPED_READER_ROADMAP.md`:
+  - marked `wbhdf` build/test exit criterion complete with test-run evidence,
+  - marked complex-design-plan exit criterion complete with committed Day 5 artifacts,
+  - kept real GEDI/ICESat-2 fixture traversal criterion open with explicit pending reason.
 - Day 5 complex-data enablement planning artifacts:
   - `docs/internal/WBRASTER_COMPLEX_DATATYPE_DAY5_DESIGN.md` (additive, non-breaking design stub),
   - `docs/internal/WBRASTER_DATATYPE_MATCH_SITE_AUDIT_DAY5.md` (file-level DataType match-site classification audit),

@@ -16,6 +16,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Day 5 complex-data enablement planning artifacts:
+  - `docs/internal/WBRASTER_COMPLEX_DATATYPE_DAY5_DESIGN.md` (additive, non-breaking design stub),
+  - `docs/internal/WBRASTER_DATATYPE_MATCH_SITE_AUDIT_DAY5.md` (file-level DataType match-site classification audit),
+  - `tests/scalar_api_contract.rs` (compile-oriented scalar API contract placeholder tests).
 - HDF roadmap planning updates in internal docs:
   - adopted single-crate `wbhdf` umbrella direction for HDF5-first + scoped HDF4/HDF-EOS2 modules,
   - defined canonical dataset URI contract (`container#dataset=/absolute/path`), and

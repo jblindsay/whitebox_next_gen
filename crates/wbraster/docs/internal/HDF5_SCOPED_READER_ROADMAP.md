@@ -410,36 +410,36 @@ Goal: introduce complex-valued storage and access without breaking existing scal
 Objective: start execution immediately with low-risk, test-first steps that preserve current APIs.
 
 Process rule for implementation:
-- [ ] Update crate changelogs whenever code changes land in affected crates (`wbhdf`, `wblidar`, `wbraster`).
+- [x] Update crate changelogs whenever code changes land in affected crates (`wbhdf`, `wblidar`, `wbraster`).
 
 **Day 1: Repository and crate scaffolding**
-- [ ] Create `wbhdf` crate skeleton (`src/lib.rs`, `src/error.rs`, `src/superblock.rs`, `src/object_header.rs`, `src/dataset.rs`, `src/btree.rs`, `src/filters.rs`, `src/datatypes.rs`, `src/attributes.rs`).
-- [ ] Add crate-level docs stating strict scope (targeted decoder, GZIP-first, no full HDF5 claim).
-- [ ] Add initial unit-test harness and placeholder integration test file.
+- [x] Create `wbhdf` crate skeleton (`src/lib.rs`, `src/error.rs`, `src/superblock.rs`, `src/object_header.rs`, `src/dataset.rs`, `src/btree.rs`, `src/filters.rs`, `src/datatypes.rs`, `src/attributes.rs`).
+- [x] Add crate-level docs stating strict scope (targeted decoder, GZIP-first, no full HDF5 claim).
+- [x] Add initial unit-test harness and placeholder integration test file.
 
 **Day 2: Real sample fixture strategy**
-- [ ] Add fixture manifest file documenting expected sample products and known dataset paths for GEDI/ICESat-2.
-- [ ] Extend fixture manifest planning to first VIIRS and MODIS target products.
-- [ ] Use fixture tiers: tiny committed fixtures (KB-MB), plus externally fetched integration fixtures (100MB+).
-- [ ] Use `HDF_FIXTURE_ACQUISITION_MATRIX.md` as the source-of-truth for source/auth/fallback fixture planning.
-- [ ] Add fixture-loading utilities that skip gracefully when large test assets are not present locally.
-- [ ] Add a minimal metadata smoke test target (open file, validate HDF5 signature, list top-level groups).
+- [x] Add fixture manifest file documenting expected sample products and known dataset paths for GEDI/ICESat-2.
+- [x] Extend fixture manifest planning to first VIIRS and MODIS target products.
+- [x] Use fixture tiers: tiny committed fixtures (KB-MB), plus externally fetched integration fixtures (100MB+).
+- [x] Use `HDF_FIXTURE_ACQUISITION_MATRIX.md` as the source-of-truth for source/auth/fallback fixture planning.
+- [x] Add fixture-loading utilities that skip gracefully when large test assets are not present locally.
+- [x] Add a minimal metadata smoke test target (open file, validate HDF5 signature, list top-level groups).
 
 **Day 3: B-tree v1 implementation kickoff (Phase 2)**
-- [ ] Implement B-tree v1 node header parsing and typed internal/leaf node structs.
-- [ ] Add synthetic B-tree tests for traversal order and key range routing.
-- [ ] Implement chunk-address lookup API with deterministic error reporting.
+- [x] Implement B-tree v1 node header parsing and typed internal/leaf node structs.
+- [x] Add synthetic B-tree tests for traversal order and key range routing.
+- [x] Implement chunk-address lookup API with deterministic error reporting.
 
 **Day 4: Chunk lookup validation path**
-- [ ] Wire B-tree lookup into dataset chunk locator flow (no full decode yet).
-- [ ] Add tests that validate located chunk addresses against known reference expectations.
-- [ ] Add `FORMAT_NOTES` entries for any key-layout variations discovered.
+- [x] Wire B-tree lookup into dataset chunk locator flow (no full decode yet).
+- [x] Add tests that validate located chunk addresses against known reference expectations.
+- [x] Add `FORMAT_NOTES` entries for any key-layout variations discovered.
 
 **Day 5: Non-breaking complex enablement design stub (Phase 2a prep)**
-- [ ] Draft `wbraster` design note for additive complex API plan (`DataType` expansion, `RasterData` expansion, additive complex accessors only).
-- [ ] Enumerate all `DataType` match sites in `wbraster` and classify as: compile-only update, behavior-sensitive update, or deferred update.
-- [ ] Add compile-only placeholder tests proving existing scalar API usage remains unchanged.
-- [ ] Confirm `wbhdf` naming is applied consistently in docs, planning notes, and crate wiring.
+- [x] Draft `wbraster` design note for additive complex API plan (`DataType` expansion, `RasterData` expansion, additive complex accessors only).
+- [x] Enumerate all `DataType` match sites in `wbraster` and classify as: compile-only update, behavior-sensitive update, or deferred update.
+- [x] Add compile-only placeholder tests proving existing scalar API usage remains unchanged.
+- [x] Confirm `wbhdf` naming is applied consistently in docs, planning notes, and crate wiring.
 
 **Week 1 exit criteria**
 - [ ] `wbhdf` crate builds and tests pass (including synthetic B-tree tests).

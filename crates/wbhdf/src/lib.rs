@@ -8,6 +8,7 @@ pub mod btree;
 pub mod dataset;
 pub mod datatypes;
 pub mod error;
+pub mod fixtures;
 pub mod filters;
 pub mod object_header;
 pub mod superblock;

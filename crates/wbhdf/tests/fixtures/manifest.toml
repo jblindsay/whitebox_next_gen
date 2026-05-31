@@ -1,0 +1,36 @@
+# Fixture manifest for targeted HDF validation.
+#
+# Tier A fixtures are intended to be small enough for repository inclusion.
+# Tier B fixtures are external and resolved via WBHDF_FIXTURE_DIR.
+
+[[fixtures]]
+id = "gedi_l2b_smoke"
+tier = "B"
+family = "GEDI"
+format = "HDF5"
+relative_path = "gedi/GEDI04_B_sample.h5"
+dataset_path = "/GEDI04_B/BEAM0000/geolocation/lat_lowestmode"
+
+[[fixtures]]
+id = "icesat2_atl08_smoke"
+tier = "B"
+family = "ICESat-2"
+format = "HDF5"
+relative_path = "icesat2/ATL08_sample.h5"
+dataset_path = "/gt1l/heights/h_canopy"
+
+[[fixtures]]
+id = "viirs_vnp09_smoke"
+tier = "B"
+family = "VIIRS"
+format = "HDF5/NetCDF4"
+relative_path = "viirs/VNP09_sample.nc"
+dataset_path = "/HDFEOS/GRIDS/VNP_Grid_1km_2D/Data Fields/SurfReflect_M1"
+
+[[fixtures]]
+id = "modis_mod09_smoke"
+tier = "B"
+family = "MODIS"
+format = "HDF4/HDF-EOS2"
+relative_path = "modis/MOD09_sample.hdf"
+dataset_path = "/MOD_Grid_500m_Surface_Reflectance/sur_refl_b01"

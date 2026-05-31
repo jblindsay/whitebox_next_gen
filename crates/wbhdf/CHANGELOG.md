@@ -22,3 +22,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 	- key-range child routing helper,
 	- deterministic chunk-address lookup API with explicit error reporting.
 - Synthetic B-tree unit tests and integration smoke test that gracefully skips when fixtures are unavailable.
+- Day 4 dataset chunk-lookup validation path:
+	- added `DatasetChunkLocator` in `src/dataset.rs` to wire B-tree lookup into dataset-level flow,
+	- added known-address validation tests for deterministic key->address expectations,
+	- documented initial chunk-key/routing assumptions in `docs/FORMAT_NOTES.md`.

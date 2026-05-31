@@ -16,6 +16,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- HDF roadmap planning updates in internal docs:
+  - adopted single-crate `wbhdf` umbrella direction for HDF5-first + scoped HDF4/HDF-EOS2 modules,
+  - defined canonical dataset URI contract (`container#dataset=/absolute/path`), and
+  - added fixture strategy expectations for tiered local/remote test assets.
+- New internal fixture planning document:
+  `docs/internal/HDF_FIXTURE_ACQUISITION_MATRIX.md` with source/auth/fallback guidance
+  for GEDI, ICESat-2, MODIS, VIIRS, Sentinel-5P, and ALOS-2 fixture acquisition.
 - Formal Landsat calibration contract API on `LandsatBundle`:
   - `reflectance_coefficients_for_band(band_number)` -> `LandsatReflectanceCoefficients`
   - `thermal_constants_for_band(band_number)` -> `LandsatThermalConstants`

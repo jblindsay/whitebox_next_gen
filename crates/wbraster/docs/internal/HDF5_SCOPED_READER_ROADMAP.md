@@ -1,26 +1,34 @@
-# HDF5 Scoped Reader Roadmap
+# HDF Scoped Reader Roadmap
 
-Date: 2026-05-12  
-Status: Planning (post-WNG launch priority)  
+Date: 2026-05-12 (updated 2026-05-31; MODIS/VIIRS scope update)  
+Status: Active planning (post-launch execution)  
 Owner: `wbraster` core  
-Scope: Targeted HDF5 ingestion for scientific satellite datasets (GEDI, ICESat-2, Sentinel-5P)
+Scope: Targeted HDF4/HDF5 ingestion for scientific satellite datasets (GEDI, ICESat-2, MODIS, VIIRS, Sentinel-5P)
 
 ---
 
 ## Executive Summary
 
-HDF5 read support is a recurring friction point across multiple WNG toolsets:
+HDF4/HDF5 read support is a recurring friction point across multiple WNG toolsets:
 - **Lidar tools** (`wblidar`, lidar QA/confidence pipelines): GEDI, ICESat-2
-- **Remote sensing tools** (`wbtools_oss`, thermal/spectral analytics): Sentinel-5P atmospheric products
+- **Remote sensing tools** (`wbtools_oss`, thermal/spectral analytics): MODIS, VIIRS, Sentinel-5P atmospheric products
 - **Teaching workflows**: Reproducible multi-source analyses without external format conversion
 
-Rather than implementing a full-spec HDF5 reader (intractable in pure Rust), this roadmap
-proposes a **scoped, targeted reader** covering only the product layouts and filter combinations
-actually encountered in practice. Feasibility estimate: **3–6 weeks**, post-WNG launch.
+Rather than implementing full-spec HDF4/HDF5 readers, this roadmap proposes a **scoped,
+targeted reader strategy** covering only the product layouts and filter combinations actually
+encountered in practice. The HDF5 path remains the primary implementation track; HDF4/HDF-EOS2
+support is added specifically to unlock high-value MODIS product families. Feasibility estimate:
+**3–6 weeks** for the HDF5 path, with additional targeted effort for MODIS/HDF4-EOS2 support.
 
-**Key decision:** Should this live in `wbraster/src/formats/hdf5.rs` or as a separate `wbhdf5` crate
-that can be leveraged by both `wbraster` and `wblidar` independently? Recommended: separate
-`wbhdf5` crate for modularity and reuse.
+**Key decisions (confirmed):**
+- `wbhdf` will be a separate crate and the canonical targeted HDF container decoder
+  (implemented HDF5-first, with scoped HDF4/HDF-EOS2 support where needed).
+- MODIS support is valuable enough to justify a targeted HDF4/HDF-EOS2 decode track within the
+  `wbhdf` umbrella, but not a full general-purpose HDF4 implementation.
+- Integration into `wbraster` and `wblidar` should be first-class once implementation is stable,
+  not hidden behind a long-term feature gate.
+- Tier 1 ingestion is operationally `wblidar`-first; `wbraster` integration focuses on datasets
+  that are naturally represented as raster products.
 
 ---
 
@@ -32,13 +40,15 @@ that can be leveraged by both `wbraster` and `wblidar` independently? Recommende
 |---|---|---|---|
 | GEDI L2A/L2B | HDF5 | wblidar | User must pre-convert via GDAL or rasterize separately |
 | ICESat-2 ATL03/ATL08 | HDF5 | wblidar | User must pre-convert via nsidc-convert or gedi4-subsetter scripts |
+| MODIS land products | HDF4 / HDF-EOS2 | wbtools_oss | User must pre-convert via GDAL, MRT, or external science-tool exports |
+| VIIRS land/environmental products | HDF5 / NetCDF4 | wbtools_oss | User must extract via GDAL, Python, or NASA/NOAA preprocessing tools |
 | Sentinel-5P L2 | NetCDF (HDF5-backed) | wbtools_oss | User must extract via `xarray` or `gdal_translate` |
 | ALOS-2 MLC (some distribution portals) | HDF5 | wbtools_oss (PolSAR) | User must pre-convert via SNAP or PolSARpro |
 
 Each conversion step introduces potential data loss, complicates reproducibility, and raises the
 barrier to entry for teaching users. Native HDF5 ingestion removes this friction entirely.
 
-### Why Not Full HDF5 Spec?
+### Why Not Full HDF4/HDF5 Spec?
 
 A complete HDF5 implementation in pure Rust would require:
 - 10,000+ lines to handle all filter types (SZIP, LZF, Scaleoffset, etc.)
@@ -53,7 +63,7 @@ product layouts actually in use is maintainable and practical.
 
 ## 2. Scope: Datasets Covered
 
-### Tier 1 (Core: WNG launch + 6 months)
+### Tier 1 (Core: post-launch + 6 months; wblidar-first)
 
 **GEDI L2A/L2B — Canopy Height, Biomass**
 
@@ -79,6 +89,33 @@ product layouts actually in use is maintainable and practical.
 - Filters needed: GZIP only
 - Why: Terrain modeling, waveform decomposition; supporting the lidar QA pipeline
 
+### Tier 1b (Core remote sensing companion: post-launch + 6-12 months)
+
+**VIIRS Land/Surface Products — Moderate-resolution optical and thermal products**
+
+- Format family: HDF5 / NetCDF4-style science products
+- Why: VIIRS is the operational successor to MODIS for many land-surface workflows and is a better
+  fit for the primary `wbhdf` path than MODIS.
+- Initial focus: raster-like gridded products and well-structured science datasets that do not
+  require broad CF/HDF5 generalization.
+- First target product families:
+  - `VNP09` / `VJ109` surface reflectance
+  - `VNP13` / `VJ113` vegetation index
+  - `VNP21` / `VJ121` land surface temperature
+
+**MODIS Land Products — Surface Reflectance, Vegetation, Land Surface Temperature**
+
+- Format family: HDF4 / HDF-EOS2
+- Why: MODIS remains one of the highest-value omitted legacy sensor families for Whitebox remote
+  sensing workflows, especially teaching and long time-series analyses.
+- Initial focus: raster/grid-style product families, not all swath products.
+- Constraint: this requires a dedicated HDF4/HDF-EOS2 module path inside `wbhdf` rather than
+  reuse of the core HDF5 path implementation.
+- First target product families:
+  - `MOD09` / `MYD09` surface reflectance
+  - `MOD13` / `MYD13` vegetation index
+  - `MOD11` / `MYD11` land surface temperature
+
 ### Tier 2 (Extended: 12+ months, Complex Type Dependent)
 
 **ALOS-2 PALSAR-2 MLC (Multi-Look Complex)** — L-Band PolSAR Coherency Matrices
@@ -88,7 +125,7 @@ product layouts actually in use is maintainable and practical.
 - Schema: Fixed compound datasets; complex-valued float32/float64 per element
 - **Blocker:** Requires `wbraster` complex data type support (see Section 5 below)
 - Why: L-band PolSAR data completeness for vegetation penetration studies; enables full-polarimetry workflows without SNAP export step
-- Timeline: Phase 2 of `wbhdf5` implementation, contingent on `wbraster` `ComplexF32`/`ComplexF64` support
+- Timeline: Phase 2 of `wbhdf` implementation, contingent on `wbraster` `ComplexF32`/`ComplexF64` support
 
 **Sentinel-5P L2** — Atmospheric Columns (NO₂, O₃, CO, CH₄)
 
@@ -96,6 +133,14 @@ product layouts actually in use is maintainable and practical.
 - Filters: GZIP + some Scaleoffset
 - Why: Teaching atmospheric correction / validation context for optical tools
 - Lower priority than Tier 1 (can use GDAL for now; nice-to-have for reproducibility)
+
+### Additional Product-Family Notes
+
+- **VIIRS** is a closer architectural fit to the primary `wbhdf` effort because it is commonly
+  distributed in HDF5/NetCDF4-class product layouts.
+- **MODIS** offers large practical value but should be handled as a targeted HDF4/HDF-EOS2
+  companion effort, not by widening the main HDF5 implementation into a general multi-format
+  science container library.
 
 ---
 
@@ -119,7 +164,7 @@ ALOS-2 PALSAR-2 MLC products store **complex-valued coherency matrices**:
 - Sentinel-1 cross-pol phase information is also inherently complex
 - Interferometric products (coherence, phase) are complex-valued
 
-Without `ComplexF32`/`ComplexF64` support in `wbraster`, even if `wbhdf5` successfully
+Without `ComplexF32`/`ComplexF64` support in `wbraster`, even if `wbhdf` successfully
 reads the HDF5 file, construction of a `Raster` will fail with a data type mismatch.
 
 ### Recommendation
@@ -127,7 +172,7 @@ reads the HDF5 file, construction of a `Raster` will fail with a data type misma
 **ALOS-2 HDF5 reading should be added to this roadmap as Phase 2, but its completion
 depends on a **separate architectural decision** in `wbraster` to support complex data types.**
 
-Once complex types are available in `wbraster`, extending `wbhdf5` to read ALOS-2 MLC
+Once complex types are available in `wbraster`, extending `wbhdf` to read ALOS-2 MLC
 files is trivial (additional 3–5 days of work). The HDF5 format reading is straightforward;
 the blocker is the raster data model.
 
@@ -137,6 +182,11 @@ Complex data type support in `wbraster` would also enable:
 - Interferometric SAR products (phase, coherence)
 - Complex spectral unmixing residuals (if modeled as complex)
 - Waveform-domain lidar decomposition (amplitude + phase)
+
+MODIS/VIIRS support would also enable:
+- Long-horizon vegetation monitoring workflows spanning MODIS-to-VIIRS continuity
+- Thermal and land-surface teaching workflows without external format conversion
+- Repeatable moderate-resolution time-series analyses inside Whitebox-native pipelines
 
 ---
 
@@ -154,7 +204,7 @@ Complex data type support in `wbraster` would also enable:
 - Larger `wbraster` binary; complexity creep
 - Harder to reuse cleanly from other crates
 
-### Option B: Separate `wbhdf5` crate (recommended)
+### Option B: Separate `wbhdf` crate (recommended)
 
 **Pros:**
 - Reusable by `wbraster`, `wblidar`, future tools (wblidar point ingest, wbgeospectral endmember libraries, etc.)
@@ -165,15 +215,53 @@ Complex data type support in `wbraster` would also enable:
 
 **Cons:**
 - Additional crate to maintain
-- `wbraster` users need explicit `wbhdf5` import for HDF5 support (not transparent)
-- Slightly more boilerplate in wbraster format dispatch
+- Slightly more boilerplate in format dispatch and crate wiring
 
-**Decision:** Option B. Create `wbhdf5` as a focused, peer-reviewable library. `wbraster` gains an optional feature `hdf5_support` that adds `RasterFormat::Hdf5` and depends on `wbhdf5`.
+**Decision:** Option B. Create `wbhdf` as a focused, peer-reviewable library.
 
-### Module Structure for `wbhdf5`
+Integration policy:
+- During early implementation, temporary gating may be used only for stabilization.
+- After validation, HDF support is wired in as a standard integration path in both
+  `wblidar` and `wbraster` (no long-term optional feature requirement for users).
+- MODIS/HDF4-EOS2 support should live in a targeted module path under `wbhdf`, with clean
+  internal boundaries from HDF5-first code.
+
+Crate naming guidance:
+- The project should adopt `wbhdf` from the outset as the primary crate name.
+- Use module boundaries within `wbhdf` to keep HDF5-first implementation work scoped while
+  preserving a format-inclusive public identity.
+
+### Canonical Dataset URI Contract
+
+The reader surface needs one stable dataset-addressing format shared by `wbraster`, `wblidar`,
+and future bindings.
+
+**Canonical form:**
+- `container_path#dataset=/absolute/path/inside/container`
+
+**Examples:**
+- `tile.h5#dataset=/GEDI04_B/BEAM0000/geolocation/lat_lowestmode`
+- `VNP09.A2024123.h10v04.001.nc#dataset=/HDFEOS/GRIDS/VNP_Grid_1km_2D/Data Fields/SurfReflect_M1`
+- `MOD09A1.A2024121.h10v04.061.hdf#dataset=/MOD_Grid_500m_Surface_Reflectance/sur_refl_b01`
+
+**Contract rules:**
+- Dataset paths are absolute and begin with `/`.
+- URL query syntax (for example `?dataset=`) is not canonical and should not be emitted by docs.
+- Support legacy aliases temporarily in parsing only; normalize to canonical form in diagnostics.
+- Keep this contract stable across releases to preserve script/tool compatibility.
+- If escaping is required for uncommon characters, use percent-encoding only inside the
+  `dataset` value.
+
+**Error contract:**
+- Missing dataset selector -> `MissingDatasetSelector`
+- Dataset path not found -> `DatasetPathNotFound`
+- Container parsed but unsupported layout -> `UnsupportedLayout`
+- Required filter unavailable -> `UnsupportedFilter`
+
+### Module Structure for `wbhdf`
 
 ```
-wbhdf5/
+wbhdf/
   src/
     lib.rs                  — Public API (Reader trait, error types)
     superblock.rs           — HDF5 file superblock + root group discovery
@@ -220,6 +308,17 @@ wbhdf5/
 - Read file structure of a simple GEDI tile without error
 - Extract dataset names and dimensions
 
+### Phase 1b: HDF4/HDF-EOS2 Feasibility Slice for MODIS (~3-5 days)
+
+**Deliverables:**
+- [ ] Confirm initial MODIS targets: `MOD09`/`MYD09`, `MOD13`/`MYD13`, and `MOD11`/`MYD11` family layouts.
+- [ ] Prototype minimal HDF4 container parsing and SDS/grid enumeration on one representative MODIS product.
+- [ ] Document internal module boundaries for HDF5 and HDF4/HDF-EOS2 decoding within `wbhdf`.
+
+**Validation:**
+- Enumerate SDS/grid metadata from one MODIS land product without external conversion.
+- Confirm projected/grid metadata extraction path is practical for targeted support.
+
 ### Phase 2: B-tree v1 Chunk Indexing (~2 weeks, HIGH COMPLEXITY)
 
 **Deliverables:**
@@ -244,23 +343,26 @@ wbhdf5/
 - Read a complete 2D float32 array from GEDI L2B
 - Compare with reference output from `h5py` or `gdal_translate`
 
-### Phase 4: Integration with `wbraster` (~3 days)
+### Phase 4: Integration with `wbraster` and `wblidar` (~3-5 days)
 
 **Deliverables:**
-- [ ] `wbraster/src/formats/hdf5.rs` dispatch layer
-- [ ] `Raster` construction from HDF5 datasets
-- [ ] GIS metadata propagation (CRS from attributes, georeferencing from GEDI/ICESat-2 layouts)
-- [ ] Feature gate: `cargo build --features hdf5_support`
+- [ ] `wblidar` dataset adapters for Tier 1 GEDI/ICESat-2 products (primary Tier 1 integration)
+- [ ] `wbraster` dispatch layer for HDF5-backed raster datasets
+- [ ] `Raster` construction from HDF5 datasets where raster semantics are valid
+- [ ] GIS metadata propagation (CRS from attributes, georeferencing from dataset layouts)
+- [ ] Standard integration path in crate defaults after stabilization (no long-term user-facing gate)
 
 **Validation:**
-- `wbraster::Raster::read("data.h5:///path/to/dataset")` succeeds
-- Output raster dimensions and nodata match reference
+- `wblidar` can ingest Tier 1 GEDI/ICESat-2 inputs directly (no pre-conversion)
+- `wbraster::Raster::read("data.h5:///path/to/dataset")` succeeds for supported raster-like datasets
+- Output dimensions and nodata/fill handling match reference
 
 ### Phase 5: Testing + Documentation (~1 week)
 
 **Deliverables:**
 - [ ] Unit tests for B-tree traversal (synthetic trees + GEDI sample validation)
 - [ ] Integration tests: read GEDI/ICESat-2 tiles → export as GeoTIFF → validate pixel values
+- [ ] Integration tests: read at least one VIIRS gridded product and one MODIS targeted product path
 - [ ] Design documentation (B-tree algorithm, chunk layout assumptions, format notes)
 - [ ] User guide: how to read GEDI/ICESat-2 via wbraster
 
@@ -271,18 +373,175 @@ wbhdf5/
 - `wbraster` I/O paths updated to handle complex values
 
 **Deliverables:**
-- [ ] `wbhdf5` dataset reader extended to recognize complex HDF5 datatypes
+- [ ] `wbhdf` dataset reader extended to recognize complex HDF5 datatypes
 - [ ] Mapping of HDF5 complex types → `wbraster` `ComplexF32`/`ComplexF64`
 - [ ] Endianness conversion for complex components
 - [ ] Integration tests: read ALOS-2 MLC tile → validate coherency matrix elements
 
 **Timeline:** Begin after Phase 1 validation and once `wbraster` complex type support is available (estimated Q1 2027).
 
+### Phase 2a (Prerequisite): Non-Breaking Complex DataType Enablement in `wbraster` (~1-3 weeks)
+
+Goal: introduce complex-valued storage and access without breaking existing scalar APIs.
+
+**Non-breaking principles:**
+- Keep existing scalar APIs (`get`, `set`, `statistics`, nodata semantics) unchanged for real rasters.
+- Add complex support via additive APIs and enum variants.
+- Avoid changing existing function signatures used broadly by current tools.
+
+**Deliverables:**
+- [ ] Add `DataType::ComplexF32` and `DataType::ComplexF64`.
+- [ ] Add corresponding `RasterData` storage variants.
+- [ ] Add additive complex accessors (e.g., typed complex read/write methods) without removing scalar ones.
+- [ ] Define complex-safe nodata/fill behavior for ingestion paths (for example, optional component-wise sentinels or explicit validity masks).
+- [ ] Preserve existing behavior for all current real-valued formats and tools.
+
+**Compatibility guidance:**
+- Adding enum variants may require downstream wildcard/default arms in exhaustive matches.
+- This is treated as controlled API expansion, not a semantic break of existing scalar workflows.
+
+**Validation:**
+- Existing `wbraster` tests for real-valued rasters continue to pass unchanged.
+- New complex-specific tests validate storage, read/write accessors, and conversion boundaries.
+- ALOS-2 HDF5 ingestion path can construct in-memory complex rasters without touching existing scalar tool behavior.
+
+### Implementation Start Checklist (Week 1)
+
+Objective: start execution immediately with low-risk, test-first steps that preserve current APIs.
+
+Process rule for implementation:
+- [ ] Update crate changelogs whenever code changes land in affected crates (`wbhdf`, `wblidar`, `wbraster`).
+
+**Day 1: Repository and crate scaffolding**
+- [ ] Create `wbhdf` crate skeleton (`src/lib.rs`, `src/error.rs`, `src/superblock.rs`, `src/object_header.rs`, `src/dataset.rs`, `src/btree.rs`, `src/filters.rs`, `src/datatypes.rs`, `src/attributes.rs`).
+- [ ] Add crate-level docs stating strict scope (targeted decoder, GZIP-first, no full HDF5 claim).
+- [ ] Add initial unit-test harness and placeholder integration test file.
+
+**Day 2: Real sample fixture strategy**
+- [ ] Add fixture manifest file documenting expected sample products and known dataset paths for GEDI/ICESat-2.
+- [ ] Extend fixture manifest planning to first VIIRS and MODIS target products.
+- [ ] Use fixture tiers: tiny committed fixtures (KB-MB), plus externally fetched integration fixtures (100MB+).
+- [ ] Use `HDF_FIXTURE_ACQUISITION_MATRIX.md` as the source-of-truth for source/auth/fallback fixture planning.
+- [ ] Add fixture-loading utilities that skip gracefully when large test assets are not present locally.
+- [ ] Add a minimal metadata smoke test target (open file, validate HDF5 signature, list top-level groups).
+
+**Day 3: B-tree v1 implementation kickoff (Phase 2)**
+- [ ] Implement B-tree v1 node header parsing and typed internal/leaf node structs.
+- [ ] Add synthetic B-tree tests for traversal order and key range routing.
+- [ ] Implement chunk-address lookup API with deterministic error reporting.
+
+**Day 4: Chunk lookup validation path**
+- [ ] Wire B-tree lookup into dataset chunk locator flow (no full decode yet).
+- [ ] Add tests that validate located chunk addresses against known reference expectations.
+- [ ] Add `FORMAT_NOTES` entries for any key-layout variations discovered.
+
+**Day 5: Non-breaking complex enablement design stub (Phase 2a prep)**
+- [ ] Draft `wbraster` design note for additive complex API plan (`DataType` expansion, `RasterData` expansion, additive complex accessors only).
+- [ ] Enumerate all `DataType` match sites in `wbraster` and classify as: compile-only update, behavior-sensitive update, or deferred update.
+- [ ] Add compile-only placeholder tests proving existing scalar API usage remains unchanged.
+- [ ] Confirm `wbhdf` naming is applied consistently in docs, planning notes, and crate wiring.
+
+**Week 1 exit criteria**
+- [ ] `wbhdf` crate builds and tests pass (including synthetic B-tree tests).
+- [ ] At least one GEDI/ICESat-2 sample can be opened and traversed through metadata + chunk address lookup path.
+- [ ] A written non-breaking complex API plan is checked in and approved before touching `wbraster` public method signatures.
+
+### Implementation Start Checklist (Week 2)
+
+Objective: complete the first end-to-end decode path (chunk -> decompress -> typed values)
+and land initial `wblidar` Tier 1 ingestion plumbing.
+
+**Day 1: Phase 3 decode pipeline wiring**
+- [ ] Implement chunk read pipeline (`offset -> compressed bytes -> decompressed bytes -> typed decode`).
+- [ ] Add explicit endianness utilities for `F32`/`F64`/`I16` decoding from HDF5 payloads.
+- [ ] Add unit tests for decode correctness from synthetic little/big-endian byte fixtures.
+
+**Day 2: Fill value and nodata mapping**
+- [ ] Parse and apply HDF5 fill-value metadata during dataset materialization.
+- [ ] Define deterministic mapping from HDF5 fill values to consumer nodata semantics.
+- [ ] Add tests that verify fill handling and valid-cell counts against reference expectations.
+
+**Day 3: First reference-comparison harness**
+- [ ] Add comparison utility to validate decoded arrays against reference outputs (h5py/GDAL exports).
+- [ ] Add toleranced float comparison mode for `F32` products.
+- [ ] Run first GEDI variable validation and capture discrepancies in `FORMAT_NOTES`.
+- [ ] Identify first VIIRS reference product and expected validation outputs.
+
+**Day 4: Initial `wblidar` adapter slice (Tier 1 primary path)**
+- [ ] Add a minimal `wblidar` adapter interface that can request dataset reads from `wbhdf`.
+- [ ] Implement one concrete Tier 1 mapping path (GEDI L2B canopy-height style variable).
+- [ ] Add integration test proving `wblidar` can ingest this path without pre-conversion.
+
+**Day 5: Hardening and ergonomics**
+- [ ] Normalize error taxonomy for decode failures (invalid chunk, filter failure, datatype mismatch, unsupported layout).
+- [ ] Add structured debug metadata in errors (dataset path, chunk coordinate, file offset) for rapid troubleshooting.
+- [ ] Add concise API examples for targeted reads in crate docs.
+
+**Week 2 exit criteria**
+- [ ] One Tier 1 dataset path is decoded end-to-end with reference-checked values.
+- [ ] Fill/nodata behavior is explicitly tested and documented.
+- [ ] A first `wblidar` ingestion adapter path is merged behind temporary stabilization guardrails (if needed).
+- [ ] No changes to existing scalar `wbraster` API signatures.
+
+### Implementation Start Checklist (Week 3)
+
+Objective: harden integration quality, validate operational reliability, and define explicit
+criteria for moving from temporary stabilization guardrails to default integration paths.
+
+**Day 1: Multi-product Tier 1 coverage expansion**
+- [ ] Add a second Tier 1 ingestion path (either ATL08 or ATL03) through the `wblidar` adapter layer.
+- [ ] Validate dataset-path discovery for beam/group-structured products (dynamic group enumeration).
+- [ ] Add fixture-backed tests that verify path selection and missing-path error behavior.
+- [ ] Decide first VIIRS target product and first MODIS target product for remote-sensing validation.
+
+Suggested initial remote-sensing validation picks:
+- VIIRS: start with `VNP09`, then `VNP13`, then `VNP21`.
+- MODIS: start with `MOD09`, then `MOD13`, then `MOD11`.
+
+**Day 2: Operational robustness and observability**
+- [ ] Add decode/runtime diagnostics counters (chunks visited, chunks decoded, filter failures, unsupported-layout counts).
+- [ ] Add bounded-memory read safeguards for large products (chunk-at-a-time flow assertions).
+- [ ] Add regression tests for malformed metadata and partial-file corruption handling.
+
+**Day 3: `wbraster` integration hardening (raster-like datasets only)**
+- [ ] Land HDF raster dispatch for supported raster-like datasets with clear unsupported-layout errors elsewhere.
+- [ ] Add integration tests for `Raster::read("data.h5:///path")` success and failure semantics.
+- [ ] Confirm no regressions in existing format detection/read/write behavior.
+
+**Day 4: Documentation and operator guidance**
+- [ ] Add a concise user-facing "supported HDF product layouts" matrix.
+- [ ] Add troubleshooting guidance for common Tier 1 issues (missing dataset path, unsupported filter, fill-value mismatch).
+- [ ] Update `FORMAT_NOTES` with all known product-specific caveats discovered in Weeks 1-3.
+
+**Day 5: Default-integration readiness review**
+- [ ] Run readiness checklist for removing temporary stabilization guardrails.
+- [ ] Verify CI/local test matrix includes Tier 1 smoke coverage and non-HDF5 regression coverage.
+- [ ] Record go/no-go decision with blockers and next actions.
+
+**Week 3 exit criteria**
+- [ ] Two Tier 1 product paths are validated end-to-end.
+- [ ] `wblidar` Tier 1 ingestion is reliable for supported layouts with actionable diagnostics.
+- [ ] `wbraster` HDF5 raster-like reads are stable and non-regressive.
+- [ ] A documented readiness decision exists for default integration enablement.
+- [ ] Existing scalar `wbraster` API contracts remain unchanged.
+
+### Default Integration Enablement Gate (Decision Checklist)
+
+Enable default integration only when all items below are true:
+
+- [ ] Tier 1 supported-layout matrix is documented and tested.
+- [ ] Unsupported layouts fail fast with explicit, user-actionable errors.
+- [ ] Reference-comparison tolerances are established and met for validated sample products.
+- [ ] No high-severity regressions in non-HDF raster readers/writers.
+- [ ] `wblidar` workflows demonstrate no required pre-conversion for validated Tier 1 paths.
+- [ ] Rollback plan is documented (how to re-apply temporary stabilization guardrails if needed).
+- [ ] MODIS support scope is explicitly bounded to named product families if the HDF4/HDF-EOS2 companion path is enabled.
+
 ---
 
 ## 6. Risk Mitigation
 
-### Risk: HDF5 File Format Variations
+### Risk: HDF4/HDF5 File Format Variations
 
 **Likelihood:** High (GEDI/ICESat-2 use different writer libraries; versions differ)
 
@@ -316,8 +575,9 @@ wbhdf5/
 This work **will not** be part of WNG launch (target: Q3 2026). Instead:
 
 1. **WNG Launch (Q3 2026):** Remote sensing sprint (20 tools) + core infrastructure ship as planned.
-2. **Post-Launch Priority (Q3–Q4 2026):** Begin `wbhdf5` design + Phase 1–2 implementation while community feedback on sprint tools is gathered.
-3. **Integration (Q1 2027):** Wire `wbhdf5` into `wbraster` and `wblidar` workloads.
+2. **Post-Launch Priority (Q3–Q4 2026):** Begin `wbhdf` design + Phase 1–3 implementation while community feedback on sprint tools is gathered.
+3. **Integration (Q4 2026–Q1 2027):** Wire Tier 1 ingestion into `wblidar` first, then complete `wbraster` integration for supported raster datasets.
+4. **Complex Extension (Q1 2027):** Execute `wbraster` non-breaking complex enablement and unlock ALOS-2 MLC support.
 
 This sequencing allows:
 - WNG to launch on schedule without HDF5 dependency
@@ -330,7 +590,11 @@ This sequencing allows:
 
 **By end of Phase 5:**
 
-- [ ] Pure-Rust `wbhdf5` crate reads GEDI L2B, ICESat-2 ATL03/ATL08 files without errors
+- [ ] Pure-Rust `wbhdf` crate reads GEDI L2B, ICESat-2 ATL03/ATL08 files without errors
+- [ ] Whitebox can read at least one validated VIIRS product without external conversion
+- [ ] Whitebox can enumerate and extract at least one validated MODIS targeted product path without external conversion
+- [ ] First validated VIIRS path should come from `VNP09`/`VJ109` if available
+- [ ] First validated MODIS path should come from `MOD09`/`MYD09` if available
 - [ ] Pixel values round-trip match reference (GDAL or h5py output)
 - [ ] `wbraster::Raster::read("gedi_tile.h5:///GEDI04_B_2020011143935_O08005_02_T14003_02_002_02_CH_VEG_QUAL_02.h5")` works
 - [ ] `wblidar` tool pipelines can ingest GEDI canopy height directly (no pre-export step)
@@ -378,5 +642,5 @@ This sequencing allows:
 - B-tree v2 support (for HDF5 1.10+ files with large datasets)
 - SZIP filter (proprietary; requires external library)
 - Variable-length record support beyond strings (e.g., arrays-of-arrays)
-- HDF4 support (completely different format; separate effort if needed)
+- Broad general-purpose HDF4 support beyond named MODIS-targeted product families
 - Parallel I/O (not applicable for teaching workflows)

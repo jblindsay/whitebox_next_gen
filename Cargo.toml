@@ -5,6 +5,7 @@ members = [
   "crates/wbraster",
   "crates/wbvector",
   "crates/wblidar",
+  "crates/wbhdf",
   "crates/wbtopology",
   "crates/wbcore",
   "crates/wblicense_core",

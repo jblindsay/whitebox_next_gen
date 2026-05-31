@@ -1172,6 +1172,10 @@
       "license_tier": "open",
       "source_crate": "unknown"
     },
+    "baseline_matching_and_diagnostics_assessment": {
+      "license_tier": "pro",
+      "source_crate": "wbtools_pro"
+    },
     "basins": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -3491,10 +3495,6 @@
     "select_tiles_by_polygon": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
-    },
-    "baseline_matching_and_diagnostics_assessment": {
-      "license_tier": "pro",
-      "source_crate": "wbtools_pro"
     },
     "service_area_planning_and_coverage_optimization": {
       "license_tier": "pro",

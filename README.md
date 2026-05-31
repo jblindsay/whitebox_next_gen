@@ -196,6 +196,8 @@ bash scripts/run_maintainer_workflows.sh list
 
 This repository includes `crates/wblicense_core` for open, auditable license entitlement verification and capability evaluation.
 
+This repository does not contain canonical Pro contractual terms; see `docs/legal/PRO_LICENSING_NOTICE.md` for boundary guidance.
+
 This does not make the project non-OSS. The crate contains public trust logic (verification and policy checks), not private commercial issuance logic.
 
 See `crates/wblicense_core/README.md` for details on scope and architecture boundaries.

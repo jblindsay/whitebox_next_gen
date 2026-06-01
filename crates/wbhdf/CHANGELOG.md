@@ -259,6 +259,14 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 	  (`/gt1l/land_segments/canopy/can_quality_score`) and direct chunk payload
 	  decode viability on a shuffle+deflate-filtered 1D `{10000}` byte-quality
 	  path.
+- Added a thirty-third real-fixture chunk-index traversal probe in
+	`tests/integration_tests.rs`:
+	- `atl08_gt1l_subset_te_flag_bounded_chunk_index_probe_returns_records`
+	  validates bounded chunk-index traversal parity with direct leaf-chain
+	  enumeration for ATL08 terrain categorical flags on a left beam
+	  (`/gt1l/land_segments/terrain/subset_te_flag`) and direct chunk payload
+	  decode viability on a shuffle+deflate-filtered 2D `{10000,5}` byte-category
+	  path.
 - Bounded chunked multilevel traversal hardening in `src/btree.rs`:
 	- fail-fast `UnsupportedLayout` diagnostics for invalid internal child addresses
 	  (`0` or `u64::MAX`) before recursive descent,

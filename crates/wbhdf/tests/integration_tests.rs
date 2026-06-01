@@ -1632,6 +1632,83 @@ fn viirs_vnp21_longitude_row_major_window_matches_h5dump_reference() {
 }
 
 #[test]
+fn viirs_vnp21_longitude_bounded_chunk_index_probe_returns_expected_chunk_records() {
+    let path = std::path::Path::new(
+        "/Users/johnlindsay/Documents/data/hdf5_examples/VNP21_NRT.A2026151.0724.002.2026151100853.nc",
+    );
+    if !path.is_file() {
+        return;
+    }
+
+    let longitude = resolve_dataset_in_file(path, "/VIIRS_Swath_LSTE/Geolocation Fields/longitude")
+        .expect("VNP21 longitude dataset should be discoverable before chunk-index probe");
+    assert_eq!(longitude.path, "/VIIRS_Swath_LSTE/Geolocation Fields/longitude");
+
+    let tree_address = 31_324_409_usize;
+    let header_len = wbhdf::btree::NODE_HEADER_LEN;
+    let bytes = std::fs::read(path).expect("VNP21 fixture should be readable for longitude header probe");
+    assert!(
+        bytes.len() >= tree_address + header_len,
+        "VNP21 fixture should include longitude chunk-index node header bytes"
+    );
+    let header = parse_node_header(&bytes[tree_address..tree_address + header_len])
+        .expect("VNP21 longitude chunk-index root header should parse");
+    assert!(
+        header.node_level > 0,
+        "VNP21 longitude chunk-index root should be non-leaf for multilevel traversal evidence"
+    );
+
+    let records = read_chunked_storage_records_bounded_in_file(path, 31_324_409, 3, 512, 8_192)
+        .expect("VNP21 longitude bounded chunk-index probe should return chunk records");
+
+    assert!(!records.is_empty());
+    assert!(
+        records.len() >= 128,
+        "VNP21 longitude multilevel traversal should return a substantial chunk-record set"
+    );
+
+    let record_for_col = |col_offset: u64| {
+        records.iter().find(|record| {
+            record.chunk_offsets.len() >= 2
+                && ((record.chunk_offsets[0] == 0 && record.chunk_offsets[1] == col_offset)
+                    || (record.chunk_offsets[1] == 0 && record.chunk_offsets[0] == col_offset))
+        })
+    };
+
+    let geoloc_record = record_for_col(976)
+        .expect("chunk records should include the non-origin geolocation column offset (976)");
+    assert!(geoloc_record.chunk_size > 0);
+    assert!(geoloc_record.chunk_address > 0);
+
+    let compressed = read_chunk_payload_in_file(path, geoloc_record.chunk_address, geoloc_record.chunk_size)
+        .expect("VNP21 longitude geolocation chunk payload should be readable");
+    let decompressed = decompress_zlib(&compressed)
+        .expect("VNP21 longitude geolocation chunk payload should zlib-decompress");
+    assert_eq!(decompressed.len(), 204_800);
+
+    let decoded = decode_f32_slice(&decompressed, Endianness::Little)
+        .expect("VNP21 longitude geolocation chunk payload should decode as little-endian f32 values");
+    assert_eq!(decoded.len(), 51_200);
+
+    let valid_geo_count = decoded
+        .iter()
+        .filter(|v| v.is_finite() && **v >= -180.0 && **v <= 180.0)
+        .count();
+    assert!(
+        valid_geo_count > 1_000,
+        "decoded longitude chunk should contain substantial in-range geolocation values"
+    );
+
+    let has_reference_like_value = decoded
+        .iter()
+        .any(|v| (*v + 86.7945_f32).abs() <= 1e-3_f32 || (*v + 86.7484_f32).abs() <= 1e-3_f32);
+    assert!(
+        has_reference_like_value,
+        "decoded longitude chunk should include known reference-like geolocation values"
+    );
+}
+
+#[test]
 fn viirs_vnp21_pwv_row_major_window_and_semantics_match_h5dump_reference() {
     let path = std::path::Path::new(
         "/Users/johnlindsay/Documents/data/hdf5_examples/VNP21_NRT.A2026151.0724.002.2026151100853.nc",

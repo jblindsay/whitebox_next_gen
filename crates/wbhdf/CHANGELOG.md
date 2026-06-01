@@ -7,6 +7,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Bounded chunked multilevel traversal hardening in `src/btree.rs`:
+	- fail-fast `UnsupportedLayout` diagnostics for invalid internal child addresses
+	  (`0` or `u64::MAX`) before recursive descent,
+	- regression coverage in
+	  `btree::tests::reports_invalid_internal_child_address_as_unsupported`, and
+	- targeted non-regression confirmation for existing multilevel internal-fanout and
+	  budget-exhaustion traversal paths.
 - Initial crate scaffolding for `wbhdf`.
 - Module skeletons for error handling, superblock, object headers, datasets, chunk indexing, filters, datatypes, and attributes.
 - Explicit `Endianness`-aware decode helpers in `src/datatypes.rs` for `F32`, `F64`, and `I16` scalar/slice payload decoding, with synthetic little-endian and big-endian test coverage.

@@ -1255,6 +1255,24 @@ Practical interpretation of the snapshot above:
   than materially expanding generalized payload-engine breadth, so metadata confidence increased
   qualitatively while bounded-payload and full generalized readiness changed only marginally.
 
+### Traversal Hardening Checkpoint (2026-06-01)
+
+- Added fail-fast malformed-layout handling for staged multilevel chunk traversal:
+  internal records with sentinel/invalid child addresses (`0` or `u64::MAX`) now return
+  explicit `UnsupportedLayout` diagnostics instead of deferring failure to downstream
+  signature checks.
+- Added regression coverage in `wbhdf::btree`:
+  `reports_invalid_internal_child_address_as_unsupported`.
+- Targeted non-regression confirmations:
+  - `cargo test -p wbhdf reports_invalid_internal_child_address_as_unsupported -- --nocapture`
+  - `cargo test -p wbhdf multilevel_internal_fanout -- --nocapture`
+  - `cargo test -p wbhdf budget_exhaustion -- --nocapture`
+- Impact on Week 3/default-enable blockers:
+  - improves unsupported-layout diagnostics clarity for malformed multilevel trees,
+  - reduces ambiguity in parser-failure triage,
+  - does **not** close the broader staged-internal-shape validation blocker (still requires
+    additional real multi-level tree evidence).
+
 ### Tier 1 Operational Core Shortlist (Concrete Targets)
 
 Status legend:

@@ -730,6 +730,11 @@ fn read_chunked_storage_records_bounded_at_level(
         if all_records.len() >= max_records {
             break;
         }
+        if internal_record.child_address == 0 || internal_record.child_address == u64::MAX {
+            return Err(WbhdfError::UnsupportedLayout(
+                "chunked-storage internal record has invalid child address".to_string(),
+            ));
+        }
         let remaining = max_records - all_records.len();
         let child_records = read_chunked_storage_records_bounded_at_level(
             path,
@@ -1502,5 +1507,34 @@ mod tests {
         )
         .expect_err("insufficient internal-level budget should fail explicitly");
         assert!(format!("{err}").contains("exhausted internal-level budget at level 1"));
+    }
+
+    #[test]
+    fn reports_invalid_internal_child_address_as_unsupported() {
+        let tmp = NamedTempFile::new().expect("temp file should be created");
+        let root_offset = 128usize;
+        let mut bytes = vec![0u8; 256];
+
+        bytes[root_offset..root_offset + 4].copy_from_slice(b"TREE");
+        bytes[root_offset + 4] = 1;
+        bytes[root_offset + 5] = 1;
+        bytes[root_offset + 6..root_offset + 8].copy_from_slice(&(1u16).to_le_bytes());
+        bytes[root_offset + 8..root_offset + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[root_offset + 16..root_offset + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+        let mut cursor = root_offset + 24;
+        bytes[cursor..cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        cursor += 8;
+        bytes[cursor..cursor + 8].copy_from_slice(&(2u64).to_le_bytes());
+        cursor += 8;
+        bytes[cursor..cursor + 8].copy_from_slice(&u64::MAX.to_le_bytes());
+
+        fs::write(tmp.path(), &bytes).expect("temp bytes should be writable");
+
+        let err = read_chunked_storage_records_bounded_in_file(tmp.path(), root_offset as u64, 2, 4, 2)
+            .expect_err("internal node with invalid child address should fail explicitly");
+        assert!(
+            format!("{err}").contains("invalid child address"),
+            "unexpected error: {err}"
+        );
     }
 }

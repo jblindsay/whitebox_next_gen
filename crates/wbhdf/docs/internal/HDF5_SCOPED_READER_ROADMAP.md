@@ -1222,7 +1222,10 @@ Enable default integration only when all items below are true:
   Evidence (2026-06-01): added `crates/wbhdf/docs/internal/HDF_DEFAULT_ENABLE_ROLLBACK_PLAN.md` with
   Mode A/Mode B rollback paths, verification commands, incident logging requirements,
   and explicit re-enable criteria.
-- [ ] MODIS support scope is explicitly bounded to named product families if the HDF4/HDF-EOS2 companion path is enabled.
+- [x] MODIS support scope is explicitly bounded to named product families if the HDF4/HDF-EOS2 companion path is enabled.
+  Evidence (2026-06-01): added `crates/wbhdf/docs/internal/HDF_MODIS_SCOPE_BOUNDARY.md`
+  defining named in-scope families (`MOD09`/`MYD09`, `MOD11`/`MYD11`, `MOD13`/`MYD13`),
+  explicit out-of-scope categories, and default-enable operational wording constraints.
 
 ---
 

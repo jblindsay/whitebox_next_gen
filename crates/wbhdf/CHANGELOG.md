@@ -13,6 +13,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 	- VIIRS `XDim` reference validation now uses reusable `f64` tolerance helpers,
 	- `docs/internal/HDF_REFERENCE_TOLERANCE_MATRIX.md` documents explicit tolerance
 	  contracts for currently validated GEDI/VIIRS reference paths.
+- Explicit MODIS scope-boundary runbook in
+	`docs/internal/HDF_MODIS_SCOPE_BOUNDARY.md` defining named in-scope companion
+	families (`MOD09`/`MYD09`, `MOD11`/`MYD11`, `MOD13`/`MYD13`) and default-enable
+	wording/diagnostic constraints.
 - Bounded chunked multilevel traversal hardening in `src/btree.rs`:
 	- fail-fast `UnsupportedLayout` diagnostics for invalid internal child addresses
 	  (`0` or `u64::MAX`) before recursive descent,

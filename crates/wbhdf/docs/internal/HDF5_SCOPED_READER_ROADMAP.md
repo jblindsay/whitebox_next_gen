@@ -1345,7 +1345,13 @@ Follow-up real-fixture multilevel evidence (2026-06-01):
   chunk-index traversal parity with direct leaf-chain enumeration for ATL08 terrain
   (`terrain_slope`), and validates direct chunk-payload decode viability with plausible
   finite slope values.
+- Added fixture-backed integration test
+  `atl08_h_canopy_20m_bounded_chunk_index_probe_returns_records` that verifies bounded
+  chunk-index traversal parity with direct leaf-chain enumeration for ATL08 canopy
+  (`h_canopy_20m`) and validates direct chunk-payload decode viability for a 2D
+  `{10000,5}` chunk-shape path.
 - Targeted confirmations passed:
+  - `cargo test -p wbhdf atl08_h_canopy_20m_bounded_chunk_index_probe_returns_records -- --nocapture`
   - `cargo test -p wbhdf atl08_terrain_slope_bounded_chunk_index_probe_returns_records -- --nocapture`
   - `cargo test -p wbhdf atl08_h_te_best_fit_bounded_chunk_index_probe_returns_records -- --nocapture`
   - `cargo test -p wbhdf viirs_vnp13_ndvi_bounded_chunk_index_probe_returns_expected_chunk_records -- --nocapture`

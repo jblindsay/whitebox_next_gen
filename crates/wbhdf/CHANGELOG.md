@@ -69,6 +69,12 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 	  bounded chunk-index traversal parity with direct leaf-chain enumeration for
 	  ATL08 terrain (`/gt1l/land_segments/terrain/terrain_slope`) and direct
 	  chunk-payload decode viability with plausible finite slope values.
+- Added an eighth real-fixture chunk-index traversal probe in
+	`tests/integration_tests.rs`:
+	- `atl08_h_canopy_20m_bounded_chunk_index_probe_returns_records` validates
+	  bounded chunk-index traversal parity with direct leaf-chain enumeration for
+	  ATL08 canopy (`/gt1l/land_segments/canopy/h_canopy_20m`) and direct chunk
+	  payload decode viability for a 2D `{10000,5}` chunk-shape path.
 - Bounded chunked multilevel traversal hardening in `src/btree.rs`:
 	- fail-fast `UnsupportedLayout` diagnostics for invalid internal child addresses
 	  (`0` or `u64::MAX`) before recursive descent,

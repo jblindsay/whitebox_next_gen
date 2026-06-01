@@ -236,3 +236,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Updated metadata-text utilities to support non-slash swath metadata token
 	anchors in addition to slash-prefixed dataset paths, enabling report-based
 	diagnostics on HDF4 swath fixtures that do not expose enumerated dataset paths.
+- Added report-based documented field-vocabulary regressions for VIIRS HDF5
+	fixtures (`viirs_m3_documented_field_vocabulary_is_discoverable_with_reports`,
+	`viirs_i4_documented_field_vocabulary_is_discoverable_with_reports`),
+	validating M3/I4 science and geolocation metadata vocabulary discoverability
+	with explicit present/missing diagnostics.
+- Added report-based documented field-vocabulary regressions for ATL08/GEDI
+	fixture probes (`atl08_documented_field_vocabulary_is_discoverable_with_reports`,
+	`gedi_documented_field_vocabulary_is_discoverable_with_reports`), validating
+	canonical beam/segment/science metadata vocabulary discoverability with
+	explicit present/missing diagnostics.

@@ -375,6 +375,46 @@ fn gedi_fixture_dir_smoke_discovers_beam_groups() {
 }
 
 #[test]
+fn atl08_documented_field_vocabulary_is_discoverable_with_reports() {
+    let Some(path) = fixture_named("ATL08_20181120185605_08120102_007_01.h5") else {
+        return;
+    };
+
+    let report = dataset_metadata_text_report_in_file(
+        &path,
+        "/gt1l/land_segments/canopy/h_canopy",
+        &["gt1l", "land_segments", "canopy", "h_canopy"],
+    )
+    .expect("ATL08 metadata report should succeed");
+    assert!(
+        report.missing_terms.is_empty(),
+        "ATL08 documented vocabulary should be discoverable; present={:?}, missing={:?}",
+        report.present_terms,
+        report.missing_terms,
+    );
+}
+
+#[test]
+fn gedi_documented_field_vocabulary_is_discoverable_with_reports() {
+    let Some(path) = fixture_named("GEDI02_A_2025190205730_O37237_01_T04940_02_004_02_V002.h5") else {
+        return;
+    };
+
+    let report = dataset_metadata_text_report_in_file(
+        &path,
+        "/BEAM0000/elev_lowestmode",
+        &["BEAM0000", "shot_number", "elev_lowestmode"],
+    )
+    .expect("GEDI metadata report should succeed");
+    assert!(
+        report.missing_terms.is_empty(),
+        "GEDI documented vocabulary should be discoverable; present={:?}, missing={:?}",
+        report.present_terms,
+        report.missing_terms,
+    );
+}
+
+#[test]
 fn atl08_fixture_dir_object_header_probe_finds_signatures() {
     let Some(path) = fixture_named("ATL08_20181120185605_08120102_007_01.h5") else {
         return;
@@ -3860,6 +3900,64 @@ fn viirs_i4_hdf5_fixture_discovers_science_paths() {
     let g_ring_longitude = resolve_dataset_in_file(path, "/All_Data/VIIRS-I4-IMG-EDR_All/G-Ring_Longitude")
         .expect("VIIRS I4 G-Ring_Longitude dataset should be discoverable by path markers");
     assert_eq!(g_ring_longitude.path, "/All_Data/VIIRS-I4-IMG-EDR_All/G-Ring_Longitude");
+}
+
+#[test]
+fn viirs_m3_documented_field_vocabulary_is_discoverable_with_reports() {
+    let path = std::path::Path::new(
+        "/Users/johnlindsay/Documents/data/viirs/SVM03_j01_d20190505_t0010299_e0011544_b07557_c20210831195745130843_ADu_ops.h5",
+    );
+    if !path.is_file() {
+        return;
+    }
+
+    let report = dataset_metadata_text_report_in_file(
+        path,
+        "/All_Data/VIIRS-M3-SDR_All/Radiance",
+        &[
+            "VIIRS-M3-SDR",
+            "Radiance",
+            "Reflectance",
+            "G-Ring_Latitude",
+            "G-Ring_Longitude",
+        ],
+    )
+    .expect("VIIRS M3 metadata report should succeed");
+    assert!(
+        report.missing_terms.is_empty(),
+        "VIIRS M3 documented vocabulary should be discoverable; present={:?}, missing={:?}",
+        report.present_terms,
+        report.missing_terms,
+    );
+}
+
+#[test]
+fn viirs_i4_documented_field_vocabulary_is_discoverable_with_reports() {
+    let path = std::path::Path::new(
+        "/Users/johnlindsay/Documents/data/viirs/VI4BO_j02_d20260404_t0003522_e0005324_b17602_c20260404002835359000_oebc_ops.h5",
+    );
+    if !path.is_file() {
+        return;
+    }
+
+    let report = dataset_metadata_text_report_in_file(
+        path,
+        "/All_Data/VIIRS-I4-IMG-EDR_All/BrightnessTemperature",
+        &[
+            "VIIRS-I4-IMG-EDR",
+            "BrightnessTemperature",
+            "Radiance",
+            "G-Ring_Latitude",
+            "G-Ring_Longitude",
+        ],
+    )
+    .expect("VIIRS I4 metadata report should succeed");
+    assert!(
+        report.missing_terms.is_empty(),
+        "VIIRS I4 documented vocabulary should be discoverable; present={:?}, missing={:?}",
+        report.present_terms,
+        report.missing_terms,
+    );
 }
 
 #[test]

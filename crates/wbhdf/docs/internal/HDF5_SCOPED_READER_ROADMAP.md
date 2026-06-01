@@ -499,6 +499,20 @@ wbhdf/
   explicit present/missing diagnostics.
   though the current grid-field payload decoder does not yet model swath paths.
 
+- [x] Add report-based documented field-vocabulary diagnostics for VIIRS M3/I4 fixtures.
+  Evidence (2026-06-01): fixture-backed integration tests
+  `viirs_m3_documented_field_vocabulary_is_discoverable_with_reports` and
+  `viirs_i4_documented_field_vocabulary_is_discoverable_with_reports` now validate
+  documented science/geolocation vocabulary discoverability with explicit present/missing
+  diagnostics via `dataset_metadata_text_report_in_file(...)`.
+
+- [x] Add report-based documented field-vocabulary diagnostics for ATL08/GEDI fixture probes.
+  Evidence (2026-06-01): fixture-backed integration tests
+  `atl08_documented_field_vocabulary_is_discoverable_with_reports` and
+  `gedi_documented_field_vocabulary_is_discoverable_with_reports` now validate
+  canonical beam/segment/science vocabulary discoverability with explicit
+  present/missing diagnostics via `dataset_metadata_text_report_in_file(...)`.
+
 - [x] Add VNP21 NetCDF/HDF5 swath discoverability coverage.
   Evidence (2026-05-31): `viirs_vnp21_netcdf_metadata_probe_discovers_swath_group_and_lst_path` now
   verifies the new `VNP21_NRT` sample exposes the `VIIRS_Swath_LSTE` top-level group and that the
@@ -1233,14 +1247,14 @@ Status legend:
 
 | Family | Product | Current Status | What Works Today | Main Remaining Gap |
 |---|---|---|---|---|
-| GEDI | GEDI02_A | Supported (Core) | Real-fixture metadata + reference-checked contiguous payload window (`/BEAM0000/elev_lowestmode`) | Broaden to additional science variables and larger chunked layouts |
-| ICESat-2 | ATL08 | Partial (Strong) | Metadata, path discovery, bounded chunk decode + fill mapping on canopy path | More generalized traversal and broader variable coverage |
+| GEDI | GEDI02_A | Supported (Core) | Real-fixture metadata + report-based documented vocabulary diagnostics + reference-checked contiguous payload window (`/BEAM0000/elev_lowestmode`) | Broaden to additional science variables and larger chunked layouts |
+| ICESat-2 | ATL08 | Partial (Strong) | Metadata, path discovery, report-based documented vocabulary diagnostics, bounded chunk decode + fill mapping on canopy path | More generalized traversal and broader variable coverage |
 | ICESat-2 | ATL03 | Partial (Early) | Tier-1 routing and fixture-path planning are in place | Reference-checked payload validation still limited |
 | VIIRS | VNP13A4N | Partial (Strong) | Metadata/path coverage (`XDim`, `YDim`, NDVI/EVI/EVI2) + report-based documented field-vocabulary discoverability checks + reference-checked `XDim` payload + reusable chunked row-prefix and row-major 2D-window decode assertions for NDVI/EVI/EVI2 | Semantic normalization and broader reusable decoder coverage for additional VIIRS chunk-layout variants |
 | VIIRS | VNP21_NRT | Partial (Strong) | Metadata/path coverage across LST/geolocation/emissivity families + reference-checked bounded LST/LST_err/PWV/QC/oceanpix/View_angle/latitude/longitude/Emis_ASTER/Emis_14/Emis_15/Emis_16/Emis_14_err/Emis_15_err/Emis_16_err payload-window decode with semantic checks, including initial QA cross-field bit-pattern, observed bitfield-interpretation (including additional oceanpix=0 and inland-water oceanpix=1 slices), deterministic known/unknown profile classification, exhaustive multi-window observed-profile contracts, profile-to-bit invariants, raw-state whitelist-by-category contracts, non-overlapping profile-cluster contracts, documented QA/category vocabulary discoverability, documented QC vocabulary + observed bitfield-family consistency, utility-backed metadata-text assertions with missing-term diagnostics, report-style present/missing metadata diagnostics, state-histogram, row-alignment, and additional non-origin QA-window contracts | Expand from observed fixture-level QA contracts to externally documented QA flag semantics and broader cross-field invariants |
 | VIIRS | VNP09_NRT | Partial (Strong) | Broad swath metadata field enumeration across I/M reflectance and QF bands + report-based documented swath vocabulary diagnostics | Swath payload decode path not yet modeled |
-| VIIRS | VIIRS-M3-SDR fixture | Partial (Early) | Metadata + science/geolocation path discoverability | Payload decode validation for science fields |
-| VIIRS | VIIRS-I4-IMG-EDR fixture | Partial (Early) | Metadata + science/geolocation path discoverability | Payload decode validation for science fields |
+| VIIRS | VIIRS-M3-SDR fixture | Partial (Strong) | Metadata + science/geolocation path discoverability + report-based documented field-vocabulary diagnostics | Payload decode validation for science fields |
+| VIIRS | VIIRS-I4-IMG-EDR fixture | Partial (Strong) | Metadata + science/geolocation path discoverability + report-based documented field-vocabulary diagnostics | Payload decode validation for science fields |
 | MODIS | MOD09A1 | Partial (Strong) | HDF4 metadata/path/shape/georef + report-based documented field-vocabulary diagnostics + payload-window probe/decode-attempt coverage | Deterministic SDS descriptor-to-field mapping for full-scene extraction |
 | MODIS | MYD09A1 | Partial (Strong) | Aqua companion metadata + report-based documented field-vocabulary diagnostics + payload-window probe/decode-attempt coverage | Same full-scene deterministic mapping gap as MOD09 |
 | MODIS | MOD11A2 | Partial (Strong) | Metadata/path/shape/georef + report-based documented field-vocabulary diagnostics + real payload-window assertion for `LST_Day_1km` | Full-scene deterministic decode and broader QA semantics |

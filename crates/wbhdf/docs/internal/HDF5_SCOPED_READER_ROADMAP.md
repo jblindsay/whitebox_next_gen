@@ -1266,9 +1266,9 @@ Status legend:
 | MODIS (HDF4/HDF-EOS2) | High | Medium | Medium | Metadata/path/shape/georef + heuristic descriptor mapping + bounded window decode/probe APIs with guardrails; full deterministic SDS descriptor-to-field mapping and full-scene extraction remain pending. |
 
 Approximate progress toward the goal of reading metadata and payloads across GEDI/ICESat-2/VIIRS/MODIS:
-- **Metadata readiness:** ~92%
-- **Payload readiness (bounded practical reads):** ~91%
-- **Full robust product-read readiness (generalized, end-to-end):** ~76%
+- **Metadata readiness:** ~93%
+- **Payload readiness (bounded practical reads):** ~92%
+- **Full robust product-read readiness (generalized, end-to-end):** ~77%
 
 ### Plan Alignment Checkpoint (2026-06-01)
 
@@ -1395,7 +1395,13 @@ Follow-up real-fixture multilevel evidence (2026-06-01):
   chunk-index traversal parity with direct leaf-chain enumeration for ATL08 terrain categorical
   flags on a second beam (`/gt2l/land_segments/terrain/subset_te_flag`), validating direct
   chunk-payload decode viability on a shuffle+deflate-filtered 2D `{10000,5}` byte-category path.
+- Added fixture-backed integration test
+  `atl08_gt2l_subset_can_flag_bounded_chunk_index_probe_returns_records` that verifies bounded
+  chunk-index traversal parity with direct leaf-chain enumeration for ATL08 canopy categorical
+  flags on a second beam (`/gt2l/land_segments/canopy/subset_can_flag`), validating direct
+  chunk-payload decode viability on a shuffle+deflate-filtered 2D `{10000,5}` byte-category path.
 - Targeted confirmations passed:
+  - `cargo test -p wbhdf atl08_gt2l_subset_can_flag_bounded_chunk_index_probe_returns_records -- --nocapture`
   - `cargo test -p wbhdf atl08_gt2l_subset_te_flag_bounded_chunk_index_probe_returns_records -- --nocapture`
   - `cargo test -p wbhdf atl08_gt2l_can_quality_score_bounded_chunk_index_probe_returns_records -- --nocapture`
   - `cargo test -p wbhdf atl08_gt2l_te_quality_score_bounded_chunk_index_probe_returns_records -- --nocapture`

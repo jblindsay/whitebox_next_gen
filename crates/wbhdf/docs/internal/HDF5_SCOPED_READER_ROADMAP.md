@@ -1360,7 +1360,13 @@ Follow-up real-fixture multilevel evidence (2026-06-01):
   chunk-index traversal parity with direct leaf-chain enumeration for ATL08 canopy metrics
   (`canopy_h_metrics`) and validates direct chunk-payload decode viability for a wider 2D
   `{10000,18}` chunk-shape path.
+- Added fixture-backed integration test
+  `atl08_subset_can_flag_bounded_chunk_index_probe_returns_records` that verifies bounded
+  chunk-index traversal parity with direct leaf-chain enumeration for ATL08 canopy categorical
+  flags (`subset_can_flag`), and validates direct chunk-payload decode viability on a
+  shuffle+deflate-filtered 2D `{10000,5}` byte-category path.
 - Targeted confirmations passed:
+  - `cargo test -p wbhdf atl08_subset_can_flag_bounded_chunk_index_probe_returns_records -- --nocapture`
   - `cargo test -p wbhdf atl08_canopy_h_metrics_bounded_chunk_index_probe_returns_records -- --nocapture`
   - `cargo test -p wbhdf atl08_h_te_best_fit_20m_bounded_chunk_index_probe_returns_records -- --nocapture`
   - `cargo test -p wbhdf atl08_h_canopy_20m_bounded_chunk_index_probe_returns_records -- --nocapture`

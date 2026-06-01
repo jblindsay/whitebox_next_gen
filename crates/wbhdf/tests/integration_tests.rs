@@ -5363,6 +5363,80 @@ fn atl08_h_te_best_fit_20m_bounded_chunk_index_probe_returns_records() {
 }
 
 #[test]
+fn atl08_canopy_h_metrics_bounded_chunk_index_probe_returns_records() {
+    let Some(path) = fixture_named("ATL08_20181120185605_08120102_007_01.h5") else {
+        return;
+    };
+
+    let descriptor = resolve_dataset_in_file(&path, "/gt1l/land_segments/canopy/canopy_h_metrics")
+        .expect("ATL08 fixture should expose canonical canopy_h_metrics path marker");
+    assert_eq!(descriptor.path, "/gt1l/land_segments/canopy/canopy_h_metrics");
+
+    let parsed = parse_v1_object_header_in_file(&path, 311_833)
+        .expect("ATL08 canopy_h_metrics v1 object header should parse");
+    assert!(!parsed.chunked_layouts.is_empty());
+    let layout = &parsed.chunked_layouts[0];
+    assert_eq!(layout.index_address, 309_217);
+    assert_eq!(layout.chunk_dimensions, vec![10_000, 18, 4]);
+
+    let tree_address = layout.index_address as usize;
+    let header_len = wbhdf::btree::NODE_HEADER_LEN;
+    let bytes = std::fs::read(&path).expect("ATL08 fixture should be readable for header probe");
+    assert!(
+        bytes.len() >= tree_address + header_len,
+        "ATL08 fixture should include canopy_h_metrics chunk-index node header bytes"
+    );
+    let root_header = parse_node_header(&bytes[tree_address..tree_address + header_len])
+        .expect("ATL08 canopy_h_metrics chunk-index root header should parse");
+    assert!(
+        root_header.node_level <= 8,
+        "ATL08 canopy_h_metrics chunk-index root level should be bounded"
+    );
+
+    let first_record = read_first_chunked_storage_leaf_record_in_file(
+        &path,
+        layout.index_address,
+        layout.num_dimensions as usize,
+    )
+    .expect("ATL08 canopy_h_metrics first chunked-storage leaf record should parse");
+    let direct_leaf_chain_records = read_chunked_storage_leaf_chain_records_in_file(
+        &path,
+        layout.index_address,
+        layout.num_dimensions as usize,
+        8,
+        8,
+    )
+    .expect("ATL08 canopy_h_metrics direct leaf-chain probe should return chunk records");
+
+    let records = read_chunked_storage_records_bounded_in_file(
+        &path,
+        layout.index_address,
+        layout.num_dimensions as usize,
+        8,
+        8,
+    )
+    .expect("ATL08 canopy_h_metrics bounded chunk index probe should return chunk records");
+
+    assert!(!records.is_empty());
+    assert_eq!(records, direct_leaf_chain_records);
+    assert_eq!(records[0], first_record);
+
+    let compressed = read_chunk_payload_in_file(&path, records[0].chunk_address, records[0].chunk_size)
+        .expect("ATL08 canopy_h_metrics bounded first chunk should be readable");
+    let decompressed =
+        decompress_zlib(&compressed).expect("ATL08 canopy_h_metrics bounded first chunk should zlib-decompress");
+    assert_eq!(decompressed.len(), 720_000);
+
+    let values = decode_f32_slice(&decompressed, Endianness::Little)
+        .expect("ATL08 canopy_h_metrics bounded first chunk payload should decode as little-endian f32");
+    assert_eq!(values.len(), 180_000);
+    assert!(
+        values.iter().any(|v| v.is_finite() && *v > -500.0 && *v < 9000.0),
+        "ATL08 canopy_h_metrics should contain plausible finite canopy metric values"
+    );
+}
+
+#[test]
 fn dataset_chunk_locator_matches_known_reference_addresses() {
     let locator = DatasetChunkLocator::with_known_addresses(
         "/HDFEOS/GRIDS/VNP_Grid_1km_2D/Data Fields/SurfReflect_M1",

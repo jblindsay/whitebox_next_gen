@@ -948,6 +948,64 @@ fn viirs_vnp09_hdf4_eos_metadata_probe_enumerates_expected_fields() {
 }
 
 #[test]
+fn viirs_vnp09_documented_swath_vocabulary_is_discoverable_with_reports() {
+    let Some(path) = hdf4_example_fixture_named("VNP09_NRT.A2026150.1906.002.2026150222127.hdf") else {
+        return;
+    };
+
+    let i_band_report = dataset_metadata_text_report_in_file(
+        &path,
+        "DataFieldName=\"375m Surface Reflectance Band I1\"",
+        &[
+            "375m Surface Reflectance Band I1",
+            "375m Surface Reflectance Band I2",
+            "375m Surface Reflectance Band I3",
+        ],
+    )
+    .expect("VNP09 I-band metadata report should succeed");
+    assert!(
+        i_band_report.missing_terms.is_empty(),
+        "VNP09 I-band documented vocabulary should be discoverable; present={:?}, missing={:?}",
+        i_band_report.present_terms,
+        i_band_report.missing_terms,
+    );
+
+    let m_band_report = dataset_metadata_text_report_in_file(
+        &path,
+        "DataFieldName=\"750m Surface Reflectance Band M1\"",
+        &[
+            "750m Surface Reflectance Band M1",
+            "750m Surface Reflectance Band M11",
+            "land_water_mask",
+        ],
+    )
+    .expect("VNP09 M-band metadata report should succeed");
+    assert!(
+        m_band_report.missing_terms.is_empty(),
+        "VNP09 M-band documented vocabulary should be discoverable; present={:?}, missing={:?}",
+        m_band_report.present_terms,
+        m_band_report.missing_terms,
+    );
+
+    let qf_report = dataset_metadata_text_report_in_file(
+        &path,
+        "DataFieldName=\"QF1 Surface Reflectance\"",
+        &[
+            "QF1 Surface Reflectance",
+            "QF4 Surface Reflectance",
+            "QF7 Surface Reflectance",
+        ],
+    )
+    .expect("VNP09 QF metadata report should succeed");
+    assert!(
+        qf_report.missing_terms.is_empty(),
+        "VNP09 QF documented vocabulary should be discoverable; present={:?}, missing={:?}",
+        qf_report.present_terms,
+        qf_report.missing_terms,
+    );
+}
+
+#[test]
 fn viirs_vnp21_netcdf_metadata_probe_discovers_swath_group_and_lst_path() {
     let path = std::path::Path::new(
         "/Users/johnlindsay/Documents/data/hdf5_examples/VNP21_NRT.A2026151.0724.002.2026151100853.nc",

@@ -229,3 +229,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 	`myd13_documented_field_vocabulary_is_discoverable_with_reports`), validating
 	MYD09/MYD11/MYD13 grid/field metadata vocabulary discoverability with explicit
 	present/missing diagnostics.
+- Added report-based documented swath-vocabulary regression for VNP09
+	(`viirs_vnp09_documented_swath_vocabulary_is_discoverable_with_reports`),
+	validating I-band/M-band/QF metadata vocabulary discoverability with explicit
+	present/missing diagnostics.
+- Updated metadata-text utilities to support non-slash swath metadata token
+	anchors in addition to slash-prefixed dataset paths, enabling report-based
+	diagnostics on HDF4 swath fixtures that do not expose enumerated dataset paths.

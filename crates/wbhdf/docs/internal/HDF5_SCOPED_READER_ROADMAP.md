@@ -490,6 +490,13 @@ wbhdf/
   `QF3 Surface Reflectance`, `QF4 Surface Reflectance`, `QF5 Surface Reflectance`,
   `QF6 Surface Reflectance`, `QF7 Surface Reflectance`), keeping VIIRS HDF4 fixture coverage
   aligned even
+
+- [x] Add report-based documented swath-vocabulary diagnostics for VNP09.
+  Evidence (2026-06-01): fixture-backed integration test
+  `viirs_vnp09_documented_swath_vocabulary_is_discoverable_with_reports` now validates
+  documented I-band/M-band/QF vocabulary discoverability using
+  `dataset_metadata_text_report_in_file(...)` with swath metadata token anchors and
+  explicit present/missing diagnostics.
   though the current grid-field payload decoder does not yet model swath paths.
 
 - [x] Add VNP21 NetCDF/HDF5 swath discoverability coverage.
@@ -1231,7 +1238,7 @@ Status legend:
 | ICESat-2 | ATL03 | Partial (Early) | Tier-1 routing and fixture-path planning are in place | Reference-checked payload validation still limited |
 | VIIRS | VNP13A4N | Partial (Strong) | Metadata/path coverage (`XDim`, `YDim`, NDVI/EVI/EVI2) + report-based documented field-vocabulary discoverability checks + reference-checked `XDim` payload + reusable chunked row-prefix and row-major 2D-window decode assertions for NDVI/EVI/EVI2 | Semantic normalization and broader reusable decoder coverage for additional VIIRS chunk-layout variants |
 | VIIRS | VNP21_NRT | Partial (Strong) | Metadata/path coverage across LST/geolocation/emissivity families + reference-checked bounded LST/LST_err/PWV/QC/oceanpix/View_angle/latitude/longitude/Emis_ASTER/Emis_14/Emis_15/Emis_16/Emis_14_err/Emis_15_err/Emis_16_err payload-window decode with semantic checks, including initial QA cross-field bit-pattern, observed bitfield-interpretation (including additional oceanpix=0 and inland-water oceanpix=1 slices), deterministic known/unknown profile classification, exhaustive multi-window observed-profile contracts, profile-to-bit invariants, raw-state whitelist-by-category contracts, non-overlapping profile-cluster contracts, documented QA/category vocabulary discoverability, documented QC vocabulary + observed bitfield-family consistency, utility-backed metadata-text assertions with missing-term diagnostics, report-style present/missing metadata diagnostics, state-histogram, row-alignment, and additional non-origin QA-window contracts | Expand from observed fixture-level QA contracts to externally documented QA flag semantics and broader cross-field invariants |
-| VIIRS | VNP09_NRT | Partial (Strong) | Broad swath metadata field enumeration across I/M reflectance and QF bands | Swath payload decode path not yet modeled |
+| VIIRS | VNP09_NRT | Partial (Strong) | Broad swath metadata field enumeration across I/M reflectance and QF bands + report-based documented swath vocabulary diagnostics | Swath payload decode path not yet modeled |
 | VIIRS | VIIRS-M3-SDR fixture | Partial (Early) | Metadata + science/geolocation path discoverability | Payload decode validation for science fields |
 | VIIRS | VIIRS-I4-IMG-EDR fixture | Partial (Early) | Metadata + science/geolocation path discoverability | Payload decode validation for science fields |
 | MODIS | MOD09A1 | Partial (Strong) | HDF4 metadata/path/shape/georef + report-based documented field-vocabulary diagnostics + payload-window probe/decode-attempt coverage | Deterministic SDS descriptor-to-field mapping for full-scene extraction |

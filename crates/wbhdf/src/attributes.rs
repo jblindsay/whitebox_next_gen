@@ -32,12 +32,12 @@ pub fn dataset_metadata_contains_text_in_file(
 		));
 	}
 
-	let descriptor = resolve_dataset_in_file(container_path, dataset_path)?;
+	let anchor_path = resolve_metadata_anchor_path(container_path, dataset_path)?;
 	let bytes = fs::read(container_path)?;
 
 	let scoped = dataset_metadata_contains_text_near_path(
 		&bytes,
-		&descriptor.path,
+		&anchor_path,
 		needle,
 		METADATA_SEARCH_RADIUS_BYTES,
 	);
@@ -85,14 +85,14 @@ pub fn dataset_metadata_text_report_in_file(
 		));
 	}
 
-	let descriptor = resolve_dataset_in_file(container_path, dataset_path)?;
+	let anchor_path = resolve_metadata_anchor_path(container_path, dataset_path)?;
 	let bytes = fs::read(container_path)?;
 
     let mut present_terms = Vec::<String>::new();
     let mut missing_terms = Vec::<String>::new();
 
 	for needle in needles {
-		if dataset_metadata_contains_text_for_dataset(&bytes, &descriptor.path, needle) {
+		if dataset_metadata_contains_text_for_dataset(&bytes, &anchor_path, needle) {
 			present_terms.push((*needle).to_string());
 		} else {
 			missing_terms.push((*needle).to_string());
@@ -103,6 +103,15 @@ pub fn dataset_metadata_text_report_in_file(
 		present_terms,
 		missing_terms,
 	})
+}
+
+fn resolve_metadata_anchor_path(container_path: &Path, dataset_path: &str) -> WbhdfResult<String> {
+	if dataset_path.starts_with('/') {
+		let descriptor = resolve_dataset_in_file(container_path, dataset_path)?;
+		Ok(descriptor.path)
+	} else {
+		Ok(dataset_path.to_string())
+	}
 }
 
 fn dataset_metadata_contains_text_for_dataset(bytes: &[u8], dataset_path: &str, needle: &str) -> bool {
@@ -206,5 +215,15 @@ mod tests {
 		};
 		assert_eq!(report.present_terms.len(), 2);
 		assert_eq!(report.missing_terms, vec!["c".to_string()]);
+	}
+
+	#[test]
+	fn dataset_text_search_supports_non_slash_anchor_tokens() {
+		let bytes = b"prefix DataFieldName=alpha long_name=alpha units=beta";
+		assert!(dataset_metadata_contains_text_for_dataset(
+			bytes,
+			"DataFieldName=alpha",
+			"units=beta"
+		));
 	}
 }

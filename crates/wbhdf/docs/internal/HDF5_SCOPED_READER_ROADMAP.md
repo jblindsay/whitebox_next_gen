@@ -1390,7 +1390,13 @@ Follow-up real-fixture multilevel evidence (2026-06-01):
   chunk-index traversal parity with direct leaf-chain enumeration for ATL08 canopy quality
   scores on a second beam (`/gt2l/land_segments/canopy/can_quality_score`), validating direct
   chunk-payload decode viability on a shuffle+deflate-filtered 1D `{10000}` byte-quality path.
+- Added fixture-backed integration test
+  `atl08_gt2l_subset_te_flag_bounded_chunk_index_probe_returns_records` that verifies bounded
+  chunk-index traversal parity with direct leaf-chain enumeration for ATL08 terrain categorical
+  flags on a second beam (`/gt2l/land_segments/terrain/subset_te_flag`), validating direct
+  chunk-payload decode viability on a shuffle+deflate-filtered 2D `{10000,5}` byte-category path.
 - Targeted confirmations passed:
+  - `cargo test -p wbhdf atl08_gt2l_subset_te_flag_bounded_chunk_index_probe_returns_records -- --nocapture`
   - `cargo test -p wbhdf atl08_gt2l_can_quality_score_bounded_chunk_index_probe_returns_records -- --nocapture`
   - `cargo test -p wbhdf atl08_gt2l_te_quality_score_bounded_chunk_index_probe_returns_records -- --nocapture`
   - `cargo test -p wbhdf atl08_can_quality_score_bounded_chunk_index_probe_returns_records -- --nocapture`

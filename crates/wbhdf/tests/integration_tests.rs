@@ -5083,6 +5083,65 @@ fn atl08_h_canopy_bounded_chunk_index_probe_returns_records() {
 }
 
 #[test]
+fn atl08_h_te_best_fit_bounded_chunk_index_probe_returns_records() {
+    let Some(path) = fixture_named("ATL08_20181120185605_08120102_007_01.h5") else {
+        return;
+    };
+
+    let descriptor = resolve_dataset_in_file(&path, "/gt1l/land_segments/terrain/h_te_best_fit")
+        .expect("ATL08 fixture should expose canonical terrain-height path marker");
+    assert_eq!(descriptor.path, "/gt1l/land_segments/terrain/h_te_best_fit");
+
+    let parsed = parse_v1_object_header_in_file(&path, 392_317)
+        .expect("ATL08 h_te_best_fit v1 object header should parse");
+    assert!(!parsed.chunked_layouts.is_empty());
+    let layout = &parsed.chunked_layouts[0];
+    let first_record = read_first_chunked_storage_leaf_record_in_file(
+        &path,
+        layout.index_address,
+        layout.num_dimensions as usize,
+    )
+    .expect("ATL08 h_te_best_fit first chunked-storage leaf record should parse");
+    let direct_leaf_chain_records = read_chunked_storage_leaf_chain_records_in_file(
+        &path,
+        layout.index_address,
+        layout.num_dimensions as usize,
+        8,
+        8,
+    )
+    .expect("ATL08 h_te_best_fit direct leaf-chain probe should return chunk records");
+
+    let records = read_chunked_storage_records_bounded_in_file(
+        &path,
+        layout.index_address,
+        layout.num_dimensions as usize,
+        8,
+        8,
+    )
+    .expect("ATL08 h_te_best_fit bounded chunk index probe should return chunk records");
+
+    assert!(!records.is_empty());
+    assert_eq!(records, direct_leaf_chain_records);
+    assert_eq!(records[0], first_record);
+    assert_eq!(records[0].chunk_offsets.len(), layout.num_dimensions as usize);
+    assert_eq!(records[0].chunk_offsets[0], 0);
+
+    let compressed = read_chunk_payload_in_file(&path, records[0].chunk_address, records[0].chunk_size)
+        .expect("ATL08 h_te_best_fit bounded first chunk should be readable");
+    let decompressed =
+        decompress_zlib(&compressed).expect("ATL08 h_te_best_fit bounded first chunk should zlib-decompress");
+    assert!(!decompressed.is_empty());
+
+    let values = decode_f32_slice(&decompressed, Endianness::Little)
+        .expect("ATL08 h_te_best_fit bounded first chunk payload should decode as little-endian f32");
+    assert!(!values.is_empty());
+    assert!(
+        values.iter().any(|v| v.is_finite() && *v > -500.0 && *v < 9000.0),
+        "ATL08 h_te_best_fit should contain plausible finite terrain elevations"
+    );
+}
+
+#[test]
 fn dataset_chunk_locator_matches_known_reference_addresses() {
     let locator = DatasetChunkLocator::with_known_addresses(
         "/HDFEOS/GRIDS/VNP_Grid_1km_2D/Data Fields/SurfReflect_M1",

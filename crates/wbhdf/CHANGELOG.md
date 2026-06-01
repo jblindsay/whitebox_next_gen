@@ -45,6 +45,12 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 	  validates non-leaf root detection, bounded non-origin chunk-record retrieval,
 	  and direct chunk-payload decode viability/in-range geolocation values for
 	  VNP21 latitude chunk-index traversal.
+- Added a fourth real-fixture multilevel traversal probe in
+	`tests/integration_tests.rs`:
+	- `viirs_vnp13_ndvi_bounded_chunk_index_probe_returns_expected_chunk_records`
+	  validates non-leaf root detection, bounded chunk-record retrieval, and direct
+	  chunk-payload decode viability with reference-like NDVI values for the VNP13
+	  chunk-index traversal path.
 - Bounded chunked multilevel traversal hardening in `src/btree.rs`:
 	- fail-fast `UnsupportedLayout` diagnostics for invalid internal child addresses
 	  (`0` or `u64::MAX`) before recursive descent,

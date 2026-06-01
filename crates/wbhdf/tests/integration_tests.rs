@@ -854,6 +854,73 @@ fn viirs_vnp13_ndvi_row_major_window_matches_h5dump_reference() {
 }
 
 #[test]
+fn viirs_vnp13_ndvi_bounded_chunk_index_probe_returns_expected_chunk_records() {
+    let Some(path) = viirs_fixture_named("VNP13A4N.A2026150.h12v04.002.2026151015223.h5") else {
+        return;
+    };
+
+    let ndvi = resolve_dataset_in_file(
+        &path,
+        "/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/Data Fields/500 m 8 days NDVI",
+    )
+    .expect("VNP13 NDVI dataset should be discoverable before chunk-index probe");
+    assert_eq!(ndvi.path, "/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/Data Fields/500 m 8 days NDVI");
+
+    let tree_address = 112_552_usize;
+    let header_len = wbhdf::btree::NODE_HEADER_LEN;
+    let bytes = std::fs::read(&path).expect("VNP13 fixture should be readable for header probe");
+    assert!(
+        bytes.len() >= tree_address + header_len,
+        "VNP13 fixture should include NDVI chunk-index node header bytes"
+    );
+    let header = parse_node_header(&bytes[tree_address..tree_address + header_len])
+        .expect("VNP13 NDVI chunk-index root header should parse");
+    assert!(
+        header.node_level > 0,
+        "VNP13 NDVI chunk-index root should be non-leaf for multilevel traversal evidence"
+    );
+
+    let records = read_chunked_storage_records_bounded_in_file(&path, 112_552, 3, 64, 2_400)
+        .expect("VNP13 NDVI bounded chunk-index probe should return chunk records");
+
+    assert!(!records.is_empty());
+    assert!(
+        records.len() >= 8,
+        "VNP13 NDVI multilevel traversal should return a meaningful chunk-record set"
+    );
+
+    let nonorigin_record = records
+        .iter()
+        .find(|record| {
+            record.chunk_offsets.len() >= 2
+                && ((record.chunk_offsets[0] == 0 && record.chunk_offsets[1] == 0)
+                    || (record.chunk_offsets[1] == 0 && record.chunk_offsets[0] == 0))
+        })
+        .expect("VNP13 NDVI chunk records should include the origin chunk-offset record");
+
+    assert!(nonorigin_record.chunk_size > 0);
+    assert!(nonorigin_record.chunk_address > 0);
+
+    let compressed = read_chunk_payload_in_file(&path, nonorigin_record.chunk_address, nonorigin_record.chunk_size)
+        .expect("VNP13 NDVI origin chunk payload should be readable");
+    let decompressed = decompress_zlib(&compressed)
+        .expect("VNP13 NDVI origin chunk payload should zlib-decompress");
+    assert!(!decompressed.is_empty());
+    assert_eq!(decompressed.len() % 2, 0);
+
+    let decoded = wbhdf::datatypes::decode_i16_slice(&decompressed, Endianness::Little)
+        .expect("VNP13 NDVI origin chunk payload should decode as little-endian i16 values");
+    assert!(
+        decoded.len() >= 2_400,
+        "decoded VNP13 NDVI chunk should include at least one full chunk-width row"
+    );
+    assert!(
+        decoded.iter().any(|v| *v == 5_386_i16 || *v == 5_606_i16 || *v == 5_852_i16),
+        "decoded VNP13 NDVI chunk should include known NDVI reference-like values"
+    );
+}
+
+#[test]
 fn viirs_vnp09_hdf4_eos_metadata_probe_enumerates_expected_fields() {
     let Some(path) = hdf4_example_fixture_named("VNP09_NRT.A2026150.1906.002.2026150222127.hdf") else {
         return;

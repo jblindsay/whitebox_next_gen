@@ -1235,6 +1235,26 @@ Approximate progress toward the goal of reading metadata and payloads across GED
 - **Payload readiness (bounded practical reads):** ~91%
 - **Full robust product-read readiness (generalized, end-to-end):** ~76%
 
+### Plan Alignment Checkpoint (2026-06-01)
+
+Current position relative to the roadmap:
+- **Not off-plan.** Work is still aligned to the defined Phase and Week structure.
+- **Primary implementation energy is currently in Phase 1b + Week 3 hardening**, with extensive
+  fixture-backed metadata/semantic diagnostics expansion across VIIRS, MODIS, ATL08, and GEDI.
+- **Week 1 and Week 2 checkpoints remain complete** and continue to serve as the stable base.
+
+What is complete versus in progress:
+- **Complete/strong:** metadata/path discovery, bounded payload decode paths for validated targets,
+  and high-quality diagnostics coverage (present/missing vocabulary and explicit failure context).
+- **Still in progress:** generalized end-to-end robustness work called out by Week 3 exit criteria,
+  especially broad non-regression/default-integration confidence and default-enable gate closure.
+
+Practical interpretation of the snapshot above:
+- The current percentages remain directionally accurate for present scope.
+- Recent iterations mainly improved **diagnostic confidence and specification traceability** rather
+  than materially expanding generalized payload-engine breadth, so metadata confidence increased
+  qualitatively while bounded-payload and full generalized readiness changed only marginally.
+
 ### Tier 1 Operational Core Shortlist (Concrete Targets)
 
 Status legend:

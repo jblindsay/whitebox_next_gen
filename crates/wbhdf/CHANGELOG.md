@@ -246,3 +246,6 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 	`gedi_documented_field_vocabulary_is_discoverable_with_reports`), validating
 	canonical beam/segment/science metadata vocabulary discoverability with
 	explicit present/missing diagnostics.
+- Added a roadmap plan-alignment checkpoint in
+	`docs/internal/HDF5_SCOPED_READER_ROADMAP.md` to clarify current Phase/Week
+	position and the practical interpretation of readiness percentages.

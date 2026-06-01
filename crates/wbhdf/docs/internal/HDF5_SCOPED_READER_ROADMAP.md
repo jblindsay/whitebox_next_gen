@@ -1195,7 +1195,7 @@ Operational rule:
   Evidence (2026-05-31): **No-Go** for removing temporary stabilization guardrails at this time.
   Current blockers:
   - HDF5/NetCDF raster dataset URI materialization in `wbraster` is now partially implemented for metadata-resolved contiguous scalar layouts (`f32`/`f64`) plus bounded chunked recursive scalar layouts, including a validated single deflate-filter path, right-sibling leaf chaining, single-level internal-root traversal, and staged multilevel traversal with sibling internal-node fanout using the current internal-record shape; the same bounded helper now also has an env-gated ATL08 real-fixture smoke probe at the `wbhdf` layer. Malformed root-only trees, malformed sibling-fanout trees, recursion-budget exhaustion, and non-scalar layouts remain out of scope.
-  - Supported-layout matrix, rollback runbook, reference-tolerance matrix, and MODIS scope boundary are now documented, and repeatable non-HDF regression confidence is now refreshed with a passing smoke matrix; real multi-level tree validation depth is improved with ATL08 + VNP21 fixture probes, but broader cross-family and generalized end-to-end confidence gaps remain.
+  - Supported-layout matrix, rollback runbook, reference-tolerance matrix, and MODIS scope boundary are now documented, and repeatable non-HDF regression confidence is now refreshed with a passing smoke matrix; real multi-level tree validation depth is improved with ATL08 + VNP21 science/geolocation fixture probes, but broader cross-family and generalized end-to-end confidence gaps remain.
   Next actions:
   - harden and validate the staged internal-record assumptions against additional real multi-level HDF5 chunk trees,
   - expand non-HDF and Tier 1 smoke coverage into repeatable CI/lightweight local scripts,
@@ -1324,8 +1324,13 @@ Follow-up real-fixture multilevel evidence (2026-06-01):
   `viirs_vnp21_lst_bounded_chunk_index_probe_returns_expected_chunk_records` that verifies a
   non-leaf chunk-index root for VNP21 LST, confirms bounded record retrieval for key window
   column offsets, and validates direct chunk-payload decode viability from a bounded record.
+- Added fixture-backed integration test
+  `viirs_vnp21_latitude_bounded_chunk_index_probe_returns_expected_chunk_records` that verifies a
+  non-leaf chunk-index root for VNP21 geolocation latitude, confirms bounded non-origin record
+  retrieval, and validates direct chunk-payload decode viability/in-range geolocation values.
 - Targeted confirmations passed:
   - `cargo test -p wbhdf viirs_vnp21_lst_bounded_chunk_index_probe_returns_expected_chunk_records -- --nocapture`
+  - `cargo test -p wbhdf viirs_vnp21_latitude_bounded_chunk_index_probe_returns_expected_chunk_records -- --nocapture`
   - `cargo test -p wbhdf atl08_h_canopy_bounded_chunk_index_probe_returns_records -- --nocapture`
 
 ### Reference Tolerance Checkpoint (2026-06-01)

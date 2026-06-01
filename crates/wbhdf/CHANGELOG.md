@@ -34,6 +34,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 	`docs/internal/HDF5_SCOPED_READER_ROADMAP.md`:
 	- end-to-end pass of `scripts/run_default_enable_smoke.sh` after traversal hardening,
 	- non-HDF regression gate item marked complete from current run output.
+- Added a second real-fixture multilevel traversal probe in
+	`tests/integration_tests.rs`:
+	- `viirs_vnp21_lst_bounded_chunk_index_probe_returns_expected_chunk_records`
+	  validates non-leaf root detection, bounded chunk-record retrieval, and direct
+	  chunk-payload decode viability for VNP21 LST chunk-index traversal.
 - Bounded chunked multilevel traversal hardening in `src/btree.rs`:
 	- fail-fast `UnsupportedLayout` diagnostics for invalid internal child addresses
 	  (`0` or `u64::MAX`) before recursive descent,

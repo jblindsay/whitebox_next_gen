@@ -1,5 +1,5 @@
 use wbhdf::btree::{
-    read_chunk_payload_in_file, read_chunked_storage_leaf_chain_records_in_file,
+    parse_node_header, read_chunk_payload_in_file, read_chunked_storage_leaf_chain_records_in_file,
     read_first_chunked_storage_leaf_record_in_file,
 };
 use wbhdf::attributes::{
@@ -1146,6 +1146,92 @@ fn viirs_vnp21_lst_row_major_window_matches_h5dump_reference() {
     .expect("VNP21 LST row-major window should decode through v1 chunk-index traversal");
 
     assert_eq!(decoded, expected);
+}
+
+#[test]
+fn viirs_vnp21_lst_bounded_chunk_index_probe_returns_expected_chunk_records() {
+    let path = std::path::Path::new(
+        "/Users/johnlindsay/Documents/data/hdf5_examples/VNP21_NRT.A2026151.0724.002.2026151100853.nc",
+    );
+    if !path.is_file() {
+        return;
+    }
+
+    let lst = resolve_dataset_in_file(path, "/VIIRS_Swath_LSTE/Data Fields/LST")
+        .expect("VNP21 LST dataset should be discoverable before chunk-index probe");
+    assert_eq!(lst.path, "/VIIRS_Swath_LSTE/Data Fields/LST");
+
+    let tree_address = 65_387_786_usize;
+    let header_len = wbhdf::btree::NODE_HEADER_LEN;
+    let bytes = std::fs::read(path).expect("VNP21 fixture should be readable for header probe");
+    assert!(
+        bytes.len() >= tree_address + header_len,
+        "VNP21 fixture should include LST chunk-index node header bytes"
+    );
+    let header = parse_node_header(&bytes[tree_address..tree_address + header_len])
+        .expect("VNP21 LST chunk-index root header should parse");
+    assert!(
+        header.node_level > 0,
+        "VNP21 LST chunk-index root should be non-leaf for multilevel traversal evidence"
+    );
+
+    let records = read_chunked_storage_records_bounded_in_file(
+        path,
+        65_387_786,
+        3,
+        512,
+        8_192,
+    )
+    .expect("VNP21 LST bounded chunk-index probe should return chunk records");
+
+    assert!(!records.is_empty());
+    assert!(
+        records.len() >= 128,
+        "VNP21 LST multilevel traversal should return a substantial chunk-record set"
+    );
+
+    let record_for_col = |col_offset: u64| {
+        records.iter().find(|record| {
+            record.chunk_offsets.len() >= 2
+                && ((record.chunk_offsets[0] == 0 && record.chunk_offsets[1] == col_offset)
+                    || (record.chunk_offsets[1] == 0 && record.chunk_offsets[0] == col_offset))
+        })
+    };
+
+    let nonorigin_col_record = record_for_col(976)
+        .expect("chunk records should include the non-origin window column offset (976)");
+    assert!(nonorigin_col_record.chunk_size > 0);
+    assert!(nonorigin_col_record.chunk_address > 0);
+    assert!(
+        record_for_col(1_600).is_some(),
+        "chunk records should include the row-major reference window column offset (1600)"
+    );
+    assert!(
+        record_for_col(2_496).is_some(),
+        "chunk records should include the inland/fill window column offset (2496)"
+    );
+
+    let ref_chunk_record = record_for_col(1_600)
+        .expect("reference-window chunk offset (1600) should resolve to a chunk record");
+    let compressed = read_chunk_payload_in_file(path, ref_chunk_record.chunk_address, ref_chunk_record.chunk_size)
+        .expect("VNP21 LST reference chunk payload should be readable");
+    let decompressed = decompress_zlib(&compressed)
+        .expect("VNP21 LST reference chunk payload should zlib-decompress");
+    assert_eq!(decompressed.len(), 102_400);
+
+    let decoded = wbhdf::datatypes::decode_u16_slice(&decompressed, Endianness::Little)
+        .expect("VNP21 LST reference chunk payload should decode as little-endian u16 values");
+    assert_eq!(decoded.len(), 51_200);
+
+    let non_zero_count = decoded.iter().filter(|v| **v != 0).count();
+    assert!(
+        non_zero_count > 100,
+        "decoded VNP21 chunk should contain non-zero data values"
+    );
+    assert!(
+        decoded.contains(&14007_u16),
+        "decoded VNP21 chunk should include known LST reference values"
+    );
 }
 
 #[test]

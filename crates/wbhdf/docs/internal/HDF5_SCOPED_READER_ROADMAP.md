@@ -1290,6 +1290,17 @@ Practical interpretation of the snapshot above:
   - does **not** close the broader staged-internal-shape validation blocker (still requires
     additional real multi-level tree evidence).
 
+Follow-up hardening (2026-06-01):
+- Added recursion-path cycle detection for staged internal-node traversal so malformed
+  self-referential/internal-loop trees fail with explicit diagnostics rather than relying
+  on budget-exhaustion fallback behavior.
+- Added regression coverage in `wbhdf::btree`:
+  `reports_internal_node_cycle_as_unsupported`.
+- Targeted confirmations passed:
+  - `cargo test -p wbhdf reports_internal_node_cycle_as_unsupported -- --nocapture`
+  - `cargo test -p wbhdf multilevel_internal_fanout -- --nocapture`
+  - `cargo test -p wbhdf budget_exhaustion -- --nocapture`
+
 ### Reference Tolerance Checkpoint (2026-06-01)
 
 - Added reusable `f64` tolerance-comparison utilities in `wbhdf::compare`:

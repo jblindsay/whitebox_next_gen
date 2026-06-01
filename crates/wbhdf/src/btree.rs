@@ -685,6 +685,27 @@ fn read_chunked_storage_records_bounded_at_level(
     max_records: usize,
     remaining_internal_levels: usize,
 ) -> WbhdfResult<Vec<ChunkedStorageLeafRecord>> {
+    let mut traversal_path = Vec::<u64>::new();
+    read_chunked_storage_records_bounded_at_level_with_path(
+        path,
+        start_node_address,
+        num_dimensions,
+        max_leaf_nodes,
+        max_records,
+        remaining_internal_levels,
+        &mut traversal_path,
+    )
+}
+
+fn read_chunked_storage_records_bounded_at_level_with_path(
+    path: &Path,
+    start_node_address: u64,
+    num_dimensions: usize,
+    max_leaf_nodes: usize,
+    max_records: usize,
+    remaining_internal_levels: usize,
+    traversal_path: &mut Vec<u64>,
+) -> WbhdfResult<Vec<ChunkedStorageLeafRecord>> {
     if max_leaf_nodes == 0 {
         return Err(WbhdfError::InvalidInput(
             "bounded chunked traversal requires max_leaf_nodes >= 1".to_string(),
@@ -717,6 +738,13 @@ fn read_chunked_storage_records_bounded_at_level(
             max_records,
         );
     }
+    if traversal_path.contains(&start_node_address) {
+        return Err(WbhdfError::UnsupportedLayout(format!(
+            "bounded chunked traversal detected internal-node cycle at address {}",
+            start_node_address
+        )));
+    }
+
     if remaining_internal_levels == 0 {
         return Err(WbhdfError::UnsupportedLayout(format!(
             "bounded chunked traversal exhausted internal-level budget at level {}",
@@ -724,33 +752,41 @@ fn read_chunked_storage_records_bounded_at_level(
         )));
     }
 
-    let internal_records = parse_chunked_storage_internal_records(&bytes[start..], num_dimensions)?;
-    let mut all_records = Vec::<ChunkedStorageLeafRecord>::new();
-    for internal_record in internal_records {
-        if all_records.len() >= max_records {
-            break;
-        }
-        if internal_record.child_address == 0 || internal_record.child_address == u64::MAX {
-            return Err(WbhdfError::UnsupportedLayout(
-                "chunked-storage internal record has invalid child address".to_string(),
-            ));
-        }
-        let remaining = max_records - all_records.len();
-        let child_records = read_chunked_storage_records_bounded_at_level(
-            path,
-            internal_record.child_address,
-            num_dimensions,
-            max_leaf_nodes,
-            remaining,
-            remaining_internal_levels - 1,
-        )?;
-        all_records.extend(child_records);
-    }
+    traversal_path.push(start_node_address);
 
-    if all_records.len() > max_records {
-        all_records.truncate(max_records);
-    }
-    Ok(all_records)
+    let result = (|| {
+        let internal_records = parse_chunked_storage_internal_records(&bytes[start..], num_dimensions)?;
+        let mut all_records = Vec::<ChunkedStorageLeafRecord>::new();
+        for internal_record in internal_records {
+            if all_records.len() >= max_records {
+                break;
+            }
+            if internal_record.child_address == 0 || internal_record.child_address == u64::MAX {
+                return Err(WbhdfError::UnsupportedLayout(
+                    "chunked-storage internal record has invalid child address".to_string(),
+                ));
+            }
+            let remaining = max_records - all_records.len();
+            let child_records = read_chunked_storage_records_bounded_at_level_with_path(
+                path,
+                internal_record.child_address,
+                num_dimensions,
+                max_leaf_nodes,
+                remaining,
+                remaining_internal_levels - 1,
+                traversal_path,
+            )?;
+            all_records.extend(child_records);
+        }
+
+        if all_records.len() > max_records {
+            all_records.truncate(max_records);
+        }
+        Ok(all_records)
+    })();
+
+    traversal_path.pop();
+    result
 }
 
 pub fn read_chunk_payload_in_file(
@@ -1507,6 +1543,35 @@ mod tests {
         )
         .expect_err("insufficient internal-level budget should fail explicitly");
         assert!(format!("{err}").contains("exhausted internal-level budget at level 1"));
+    }
+
+    #[test]
+    fn reports_internal_node_cycle_as_unsupported() {
+        let tmp = NamedTempFile::new().expect("temp file should be created");
+        let root_offset = 128usize;
+        let mut bytes = vec![0u8; 256];
+
+        bytes[root_offset..root_offset + 4].copy_from_slice(b"TREE");
+        bytes[root_offset + 4] = 1;
+        bytes[root_offset + 5] = 1;
+        bytes[root_offset + 6..root_offset + 8].copy_from_slice(&(1u16).to_le_bytes());
+        bytes[root_offset + 8..root_offset + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[root_offset + 16..root_offset + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+        let mut cursor = root_offset + 24;
+        bytes[cursor..cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        cursor += 8;
+        bytes[cursor..cursor + 8].copy_from_slice(&(2u64).to_le_bytes());
+        cursor += 8;
+        bytes[cursor..cursor + 8].copy_from_slice(&(root_offset as u64).to_le_bytes());
+
+        fs::write(tmp.path(), &bytes).expect("temp bytes should be writable");
+
+        let err = read_chunked_storage_records_bounded_in_file(tmp.path(), root_offset as u64, 2, 4, 2)
+            .expect_err("internal-node cycle should fail explicitly");
+        assert!(
+            format!("{err}").contains("internal-node cycle"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]

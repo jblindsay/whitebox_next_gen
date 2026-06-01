@@ -528,7 +528,7 @@ mod tests {
     #[test]
     fn prj_sidecar_roundtrip() {
         let wkt_epsg_4326 = "GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433]]";
-        let mut cfg = RasterConfig {
+        let cfg = RasterConfig {
             cols: 10,
             rows: 10,
             bands: 1,

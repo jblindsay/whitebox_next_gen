@@ -23,6 +23,7 @@ exclude = [
 # wide provides portable SIMD via software fallback on unsupported targets.
 wide = "1.2"
 wbprojection = { path = "../wbprojection", version = "0.2.0" }
+wbhdf = { path = "../wbhdf", version = "0.1.0" }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"], optional = true }
 rayon = { version = "1.10", optional = true }
 

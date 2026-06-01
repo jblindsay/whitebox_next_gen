@@ -4282,8 +4282,10 @@ name = "wbhdf"
 version = "0.1.0"
 dependencies = [
  "byteorder",
+ "flate2",
  "miniz_oxide",
  "serde_json",
+ "tempfile",
  "thiserror 1.0.69",
 ]
 
@@ -4307,6 +4309,7 @@ dependencies = [
  "reqwest",
  "serde_json",
  "tiny_http",
+ "wbhdf",
  "wbprojection",
  "wide 1.3.0",
 ]
@@ -4341,6 +4344,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "wbgeotiff",
+ "wbhdf",
  "wbprojection",
  "wide 1.3.0",
  "zip 8.5.1",

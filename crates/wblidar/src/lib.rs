@@ -27,6 +27,10 @@ pub mod crs;
 pub mod e57;
 pub mod error;
 pub mod frontend;
+/// Minimal HDF adapter interfaces for incremental `wblidar` -> `wbhdf` integration.
+pub mod hdf_adapter;
+/// HDF LiDAR product-family detection and unified dispatch helpers.
+pub mod hdf_products;
 pub mod io;
 pub mod las;
 pub mod laz;
@@ -61,3 +65,34 @@ pub use frontend::{
 pub use crs::Crs;
 pub use point::{Color, ExtraBytes, GpsTime, PointRecord, Rgb16, WaveformPacket};
 pub use io::{PointReader, PointWriter, SeekableReader};
+pub use hdf_adapter::{
+	GEDI_L2B_CANOPY_STYLE_DATASET_PATH,
+	GEDI_L2B_CANOPY_STYLE_KNOWN_BYTE_OFFSET,
+	HdfAdapterResult,
+	HdfDatasetProvider,
+	HdfI16WindowRequest,
+	ICESAT2_ATL08_BEAM_GROUP_CANDIDATES,
+	ICESAT2_ATL08_CANOPY_NODATA_VALUE,
+	ICESAT2_ATL08_CANOPY_SUBPATH,
+	ICESAT2_ATL08_MAX_COMPRESSED_CHUNK_BYTES,
+	ICESAT2_ATL08_MAX_DECOMPRESSED_CHUNK_BYTES,
+	WbhdfDatasetProvider,
+	read_gedi_l2b_canopy_style_f32_window_in_file,
+	read_icesat2_atl08_h_canopy_f32_window_in_file,
+	resolve_icesat2_atl08_h_canopy_object_header_in_file,
+	resolve_icesat2_atl08_h_canopy_path_in_file,
+};
+pub use hdf_products::{
+	GediL2bCanopyProvider,
+	HdfLidarProductFamily,
+	HdfLidarProductProvider,
+	HdfLidarProductRegistry,
+	HdfLidarReadDiagnostics,
+	Icesat2Atl08CanopyProvider,
+	ResolvedHdfLidarProduct,
+	detect_hdf_lidar_product_family,
+	icesat2_atl08_canopy_subpath,
+	read_hdf_lidar_canopy_f32_window_in_file,
+	read_hdf_lidar_canopy_f32_window_with_diagnostics,
+	resolve_hdf_lidar_product,
+};

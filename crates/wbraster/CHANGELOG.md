@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning while in pre-1.0 development.
 
+## [Unreleased]
+
+### Changed
+- Removed entries that belonged to the `wbhdf` crate and consolidated that
+  history under `crates/wbhdf/CHANGELOG.md`.
+
+
 ## [0.1.5] – 2026-05-09
 
 ### Fixed
@@ -13,25 +20,52 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Testing
 - Interop Phase C.1 R09 case (GeoPackage raster roundtrip) now passes; full suite 6/6 passing.
 
-## [Unreleased]
-
 ### Added
-- Week 1 roadmap execution evidence update in
-  `docs/internal/HDF5_SCOPED_READER_ROADMAP.md`:
-  - marked `wbhdf` build/test exit criterion complete with test-run evidence,
-  - marked complex-design-plan exit criterion complete with committed Day 5 artifacts,
-  - kept real GEDI/ICESat-2 fixture traversal criterion open with explicit pending reason.
-- Day 5 complex-data enablement planning artifacts:
-  - `docs/internal/WBRASTER_COMPLEX_DATATYPE_DAY5_DESIGN.md` (additive, non-breaking design stub),
-  - `docs/internal/WBRASTER_DATATYPE_MATCH_SITE_AUDIT_DAY5.md` (file-level DataType match-site classification audit),
-  - `tests/scalar_api_contract.rs` (compile-oriented scalar API contract placeholder tests).
-- HDF roadmap planning updates in internal docs:
-  - adopted single-crate `wbhdf` umbrella direction for HDF5-first + scoped HDF4/HDF-EOS2 modules,
-  - defined canonical dataset URI contract (`container#dataset=/absolute/path`), and
-  - added fixture strategy expectations for tiered local/remote test assets.
-- New internal fixture planning document:
-  `docs/internal/HDF_FIXTURE_ACQUISITION_MATRIX.md` with source/auth/fallback guidance
-  for GEDI, ICESat-2, MODIS, VIIRS, Sentinel-5P, and ALOS-2 fixture acquisition.
+- Initial HDF dataset-URI read dispatch in `Raster::read` for paths like
+  canonical `container.h5#dataset=/dataset/path` (with legacy
+  `container.h5:///dataset/path` alias retained).
+  Current scope: HDF4 2D `DFNT_INT16` SDS datasets are materialized to rasters via
+  bounded `wbhdf` decode. HDF5/NetCDF URI materialization now supports
+  metadata-resolved contiguous scalar datasets (`f32` and `f64`) via `.h5`/`.nc`
+  URI reads, including validated GEDI `/BEAM0000/elev_lowestmode` and VIIRS
+  `/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/XDim` paths.
+- HDF5 staged raster materialization for the validated GEDI and VIIRS dataset paths
+  now resolves contiguous payload address and length from parsed HDF5 object-header
+  metadata (including continuation-chunk layout messages) instead of fixed byte offsets,
+  and the same metadata-driven contiguous path now applies to non-allowlisted dataset
+  paths when they resolve to supported contiguous scalar layouts.
+- HDF5 URI raster materialization now includes a bounded chunked fallback path for
+  single-chunk scalar datasets (`f32`/`f64`) discovered via v1 object-header and
+  chunk-index metadata, with deterministic failure diagnostics when chunked layouts
+  are unsupported by the current staged scope.
+- The bounded chunked HDF5 fallback now supports multi-record single-leaf assembly
+  for scalar datasets (`f32`/`f64`) when the chunk index, chunk offsets, and chunk
+  dimensions resolve a complete raster without requiring broader tree traversal.
+- Chunked HDF5 single-leaf assembly is now validated for both raw and zlib/deflate
+  chunk payloads in synthetic two-record `f32` fixtures, exercising the declared
+  single-filter pipeline path in addition to the unfiltered path.
+- The bounded chunked HDF5 path now follows a right-sibling chain of leaf nodes
+  starting at the chunk index address, allowing multi-leaf scalar assembly when
+  all required records are reachable without internal-node traversal.
+- Internal-root chunk indexes are now covered by an explicit unsupported-layout
+  regression test, so the current staged boundary fails with a deterministic
+  message instead of a generic chunk decode error.
+- The bounded chunked HDF5 path now supports a single internal root level above
+  leaf nodes for scalar datasets, while keeping multi-level chunk trees outside
+  the staged scope with an explicit unsupported diagnostic.
+- The staged multi-level boundary is now explicitly enforced by regression
+  coverage in the staged chunked raster-materialization flow.
+- The bounded chunked HDF5 path now supports recursive multi-level internal-node
+  traversal using the current staged chunked internal-record shape, with
+  malformed-tree fixtures still failing explicitly.
+- Recursive multi-level coverage now includes a synthetic sibling-internal
+  fanout shape in the raster-materialization path.
+- The staged unsupported boundary now has explicit malformed sibling-fanout
+  regressions, preserving deterministic failure diagnostics for deeper broken
+  chunk trees.
+- The recursive internal-level budget guardrail is now covered by a direct
+  regression on a well-formed multilevel fanout tree, proving explicit failure
+  when traversal allowance is intentionally undersized.
 - Formal Landsat calibration contract API on `LandsatBundle`:
   - `reflectance_coefficients_for_band(band_number)` -> `LandsatReflectanceCoefficients`
   - `thermal_constants_for_band(band_number)` -> `LandsatThermalConstants`
@@ -114,6 +148,12 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   `crs.epsg` -> `crs.wkt` -> `crs.proj4`.
   This enables reprojection workflows for datasets that provide PROJ metadata
   without a populated EPSG code.
+
+### Fixed
+- HFA test-build helper (`formats::hfa` test hook) now uses the shared
+  header-layout resolver instead of stale root/entry offset symbol names,
+  restoring clean `wbraster` test builds after the header-offset variant
+  refactor.
 
 ## [0.1.4] - 2026-05-07
 

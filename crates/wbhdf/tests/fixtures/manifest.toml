@@ -4,33 +4,49 @@
 # Tier B fixtures are external and resolved via WBHDF_FIXTURE_DIR.
 
 [[fixtures]]
-id = "gedi_l2b_smoke"
+id = "gedi_l2a_smoke"
 tier = "B"
 family = "GEDI"
 format = "HDF5"
-relative_path = "gedi/GEDI04_B_sample.h5"
-dataset_path = "/GEDI04_B/BEAM0000/geolocation/lat_lowestmode"
+relative_path = "GEDI02_A_2025190205730_O37237_01_T04940_02_004_02_V002.h5"
+dataset_path = "/BEAM0000/shot_number"
 
 [[fixtures]]
 id = "icesat2_atl08_smoke"
 tier = "B"
 family = "ICESat-2"
 format = "HDF5"
-relative_path = "icesat2/ATL08_sample.h5"
-dataset_path = "/gt1l/heights/h_canopy"
+relative_path = "ATL08_20181120185605_08120102_007_01.h5"
+dataset_path = "/gt1l/land_segments/canopy/h_canopy"
 
 [[fixtures]]
-id = "viirs_vnp09_smoke"
+id = "viirs_vnp13_smoke"
 tier = "B"
 family = "VIIRS"
-format = "HDF5/NetCDF4"
-relative_path = "viirs/VNP09_sample.nc"
-dataset_path = "/HDFEOS/GRIDS/VNP_Grid_1km_2D/Data Fields/SurfReflect_M1"
+format = "HDF5"
+relative_path = "VNP13A4N.A2026150.h12v04.002.2026151015223.h5"
+dataset_path = "/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/XDim"
 
 [[fixtures]]
 id = "modis_mod09_smoke"
 tier = "B"
 family = "MODIS"
 format = "HDF4/HDF-EOS2"
-relative_path = "modis/MOD09_sample.hdf"
+relative_path = "MOD09A1.A2022169.h04v09.061.2022178214640.hdf"
 dataset_path = "/MOD_Grid_500m_Surface_Reflectance/sur_refl_b01"
+
+[[fixtures]]
+id = "modis_mod13_smoke"
+tier = "B"
+family = "MODIS"
+format = "HDF4/HDF-EOS2"
+relative_path = "MOD13A1.A2021065.h03v07.061.2021082133352.hdf"
+dataset_path = "/MODIS_Grid_16DAY_500m_VI/250m 16 days NDVI"
+
+[[fixtures]]
+id = "modis_mod11_smoke"
+tier = "B"
+family = "MODIS"
+format = "HDF4/HDF-EOS2"
+relative_path = "MOD11A2.A2024041.h01v10.061.2024051155231.hdf"
+dataset_path = "/MODIS_Grid_8Day_1km_LST/LST_Day_1km"

@@ -2746,11 +2746,7 @@ mod tests {
     fn read_from_raw(raw: &[u8]) -> Result<Raster> {
         if raw.len() < 34 { return Err(RasterError::CorruptData("too short".into())); }
         if &raw[..16] != MAGIC { return Err(RasterError::UnknownFormat("HFA: missing EHFA_HEADER_TAG magic bytes".into())); }
-        let root_ptr = read_u32_le(raw, ROOT_PTR_OFFSET) as usize;
-        let entry_hdr_len = {
-            let v = read_u16_le(raw, ENTRY_HDR_LEN_OFFSET) as usize;
-            if v == 0 { DEFAULT_ENTRY_HDR_LEN } else { v }
-        };
+        let (root_ptr, entry_hdr_len) = read_root_and_entry_header_len(raw)?;
         let mut nodes: Vec<NodeHdr> = Vec::new();
         collect_nodes(raw, root_ptr, entry_hdr_len, None, &mut nodes)?;
         let mut children_of: HashMap<usize, Vec<usize>> = HashMap::new();

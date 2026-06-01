@@ -21,8 +21,10 @@ path = "src/lib.rs"
 
 [dependencies]
 byteorder = "1.5"
+flate2 = "1"
 miniz_oxide = "0.8"
 thiserror = { workspace = true }
 
 [dev-dependencies]
 serde_json = "1"
+tempfile = "3"

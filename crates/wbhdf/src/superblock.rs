@@ -19,31 +19,22 @@ pub struct ContainerMetadata {
 impl Superblock {
     /// Parses a superblock from raw bytes.
     pub fn parse(bytes: &[u8]) -> WbhdfResult<Self> {
-        if bytes.len() < 9 {
+        let signature_offset = find_hdf5_signature_offset(bytes)?;
+        let version_offset = signature_offset + HDF5_SIGNATURE.len();
+        if bytes.len() <= version_offset {
             return Err(WbhdfError::InvalidInput(
                 "superblock parse requires at least 9 bytes".to_string(),
             ));
         }
-        validate_hdf5_signature(bytes)?;
 
-        Ok(Self { version: bytes[8] })
+        Ok(Self {
+            version: bytes[version_offset],
+        })
     }
 }
 
 pub fn validate_hdf5_signature(bytes: &[u8]) -> WbhdfResult<()> {
-    if bytes.len() < HDF5_SIGNATURE.len() {
-        return Err(WbhdfError::InvalidInput(
-            "input is shorter than HDF5 signature".to_string(),
-        ));
-    }
-
-    if bytes[..HDF5_SIGNATURE.len()] != HDF5_SIGNATURE {
-        return Err(WbhdfError::UnsupportedLayout(
-            "missing HDF5 file signature".to_string(),
-        ));
-    }
-
-    Ok(())
+    find_hdf5_signature_offset(bytes).map(|_| ())
 }
 
 /// Probes minimal metadata used by the Day 2 smoke-path target.
@@ -57,9 +48,36 @@ pub fn probe_file_metadata(path: &Path) -> WbhdfResult<ContainerMetadata> {
     })
 }
 
+fn find_hdf5_signature_offset(bytes: &[u8]) -> WbhdfResult<usize> {
+    if bytes.len() < HDF5_SIGNATURE.len() {
+        return Err(WbhdfError::InvalidInput(
+            "input is shorter than HDF5 signature".to_string(),
+        ));
+    }
+
+    let search_len = usize::min(bytes.len(), 4096);
+    if search_len < HDF5_SIGNATURE.len() {
+        return Err(WbhdfError::InvalidInput(
+            "input is shorter than HDF5 signature".to_string(),
+        ));
+    }
+
+    for offset in 0..=search_len - HDF5_SIGNATURE.len() {
+        if bytes[offset..offset + HDF5_SIGNATURE.len()] == HDF5_SIGNATURE {
+            return Ok(offset);
+        }
+    }
+
+    Err(WbhdfError::UnsupportedLayout(
+        "missing HDF5 file signature".to_string(),
+    ))
+}
+
 fn discover_top_level_groups_heuristic(bytes: &[u8]) -> Vec<String> {
     let candidates = [
         "GEDI04_B",
+        "GEDI02_A",
+        "BEAM0000",
         "gt1l",
         "gt1r",
         "gt2l",
@@ -69,6 +87,9 @@ fn discover_top_level_groups_heuristic(bytes: &[u8]) -> Vec<String> {
         "HDFEOS",
         "MOD_Grid_500m_Surface_Reflectance",
         "VNP_Grid_1km_2D",
+        "VIIRS_Swath_LSTE",
+        "VIIRS-M3-SDR",
+        "VIIRS-I4-IMG-EDR",
     ];
 
     let mut found = Vec::new();

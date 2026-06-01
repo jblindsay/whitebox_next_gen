@@ -3735,6 +3735,9 @@ impl Raster {
     /// Read a raster from `path`, detecting the format automatically.
     pub fn read<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref().to_string_lossy().to_string();
+        if crate::formats::is_hdf_dataset_uri(&path) {
+            return crate::formats::read_hdf_dataset_uri(&path);
+        }
         let fmt = RasterFormat::detect(&path)?;
         fmt.read(&path)
     }
@@ -4302,6 +4305,8 @@ impl std::fmt::Display for Raster {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use flate2::{write::ZlibEncoder, Compression};
+    use std::io::Write;
     use std::sync::{Arc, Mutex};
 
     fn make_raster() -> Raster {
@@ -4313,6 +4318,1449 @@ mod tests {
             }
         }
         r
+    }
+
+    fn write_synthetic_hdf4_i16_fixture(file: &mut tempfile::NamedTempFile) {
+        let mut bytes = vec![0x0E, 0x03, 0x13, 0x01];
+        bytes.extend_from_slice(&[0x00, 0x01]);
+        bytes.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
+        bytes.extend_from_slice(&[
+            0x02, 0xBE, 0x00, 0x03, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x10,
+        ]);
+        bytes.resize(0x90, 0);
+        bytes[0x80..0x90].copy_from_slice(&[
+            0x01, 0x00, 0x02, 0x00, 0x03, 0x00, 0x04, 0x00,
+            0x05, 0x00, 0x06, 0x00, 0x07, 0x00, 0x08, 0x00,
+        ]);
+        bytes.extend_from_slice(
+            b"\nStructMetadata.0\nGridName=\"GridA\"\nXDim=4\nYDim=2\nUpperLeftPointMtrs=(0,10)\nLowerRightMtrs=(20,0)\nDataFieldName=\"FieldA\"\nDataType=DFNT_INT16\nDimList=(\"YDim\",\"XDim\")\n",
+        );
+        file.write_all(&bytes).expect("synthetic HDF4 fixture should be writable");
+    }
+
+    fn write_synthetic_hdf5_contiguous_fixture_header(
+        bytes: &mut [u8],
+        dataset_path: &str,
+        payload_offset: usize,
+        element_count: usize,
+        bytes_per_value: usize,
+    ) {
+        const HEADER_OFFSET: usize = 256;
+        const CONTINUATION_OFFSET: usize = 512;
+        const CONTINUATION_SIZE: usize = 26;
+
+        let marker = dataset_path.as_bytes();
+        bytes[64..64 + marker.len()].copy_from_slice(marker);
+
+        let payload_size = element_count * bytes_per_value;
+
+        let mut cursor = HEADER_OFFSET;
+        bytes[cursor..cursor + 4].copy_from_slice(b"OHDR");
+        cursor += 4;
+        bytes[cursor] = 2;
+        cursor += 1;
+        bytes[cursor] = 0;
+        cursor += 1;
+        bytes[cursor] = 0x34;
+        cursor += 1;
+
+        bytes[cursor..cursor + 4].copy_from_slice(&[0x01, 0x10, 0x00, 0x00]);
+        cursor += 4;
+        bytes[cursor..cursor + 8].copy_from_slice(&[0x02, 0x01, 0x00, 0x00, 0, 0, 0, 0]);
+        cursor += 8;
+        bytes[cursor..cursor + 8].copy_from_slice(&(element_count as u64).to_le_bytes());
+        cursor += 8;
+
+        bytes[cursor..cursor + 4].copy_from_slice(&[0x03, 0x08, 0x00, 0x00]);
+        cursor += 4;
+        bytes[cursor] = 0x13;
+        bytes[cursor + 1] = 0x00;
+        bytes[cursor + 2] = 0x00;
+        bytes[cursor + 3] = 0x00;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&(bytes_per_value as u32).to_le_bytes());
+        cursor += 8;
+
+        bytes[cursor..cursor + 4].copy_from_slice(&[0x10, 0x10, 0x00, 0x00]);
+        cursor += 4;
+        bytes[cursor..cursor + 8].copy_from_slice(&(CONTINUATION_OFFSET as u64).to_le_bytes());
+        cursor += 8;
+        bytes[cursor..cursor + 8].copy_from_slice(&(CONTINUATION_SIZE as u64).to_le_bytes());
+
+        let mut continuation_cursor = CONTINUATION_OFFSET;
+        bytes[continuation_cursor..continuation_cursor + 4].copy_from_slice(b"OCHK");
+        continuation_cursor += 4;
+        bytes[continuation_cursor..continuation_cursor + 4].copy_from_slice(&[0x08, 0x12, 0x00, 0x00]);
+        continuation_cursor += 4;
+        bytes[continuation_cursor] = 0x03;
+        bytes[continuation_cursor + 1] = 0x01;
+        continuation_cursor += 2;
+        bytes[continuation_cursor..continuation_cursor + 8]
+            .copy_from_slice(&(payload_offset as u64).to_le_bytes());
+        continuation_cursor += 8;
+        bytes[continuation_cursor..continuation_cursor + 8]
+            .copy_from_slice(&(payload_size as u64).to_le_bytes());
+    }
+
+    fn write_synthetic_hdf5_gedi_contiguous_fixture(file: &mut tempfile::NamedTempFile) {
+        const OFFSET: usize = 321_111;
+        const ELEMENTS: usize = 89_634;
+
+        let mut bytes = vec![0u8; OFFSET + ELEMENTS * 4];
+        write_synthetic_hdf5_contiguous_fixture_header(
+            &mut bytes,
+            "/BEAM0000/elev_lowestmode",
+            OFFSET,
+            ELEMENTS,
+            4,
+        );
+
+        for i in 0..ELEMENTS {
+            let v = i as f32;
+            let start = OFFSET + i * 4;
+            bytes[start..start + 4].copy_from_slice(&v.to_le_bytes());
+        }
+        file.write_all(&bytes)
+            .expect("synthetic HDF5 fixture should be writable");
+    }
+
+    fn write_synthetic_hdf5_viirs_xdim_fixture(file: &mut tempfile::NamedTempFile) {
+        const OFFSET: usize = 45_321;
+        const ELEMENTS: usize = 2_400;
+
+        let mut bytes = vec![0u8; OFFSET + ELEMENTS * 8];
+        write_synthetic_hdf5_contiguous_fixture_header(
+            &mut bytes,
+            "/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/XDim",
+            OFFSET,
+            ELEMENTS,
+            8,
+        );
+
+        for i in 0..ELEMENTS {
+            let v = i as f64 + 0.5;
+            let start = OFFSET + i * 8;
+            bytes[start..start + 8].copy_from_slice(&v.to_le_bytes());
+        }
+        file.write_all(&bytes)
+            .expect("synthetic HDF5 VIIRS fixture should be writable");
+    }
+
+    fn write_synthetic_hdf5_generic_contiguous_f32_fixture(file: &mut tempfile::NamedTempFile) {
+        const OFFSET: usize = 62_222;
+        const ELEMENTS: usize = 12;
+        const DATASET_PATH: &str = "/ScienceData/NDVI";
+
+        let mut bytes = vec![0u8; OFFSET + ELEMENTS * 4];
+        write_synthetic_hdf5_contiguous_fixture_header(
+            &mut bytes,
+            DATASET_PATH,
+            OFFSET,
+            ELEMENTS,
+            4,
+        );
+
+        for i in 0..ELEMENTS {
+            let v = (i as f32) * 0.25;
+            let start = OFFSET + i * 4;
+            bytes[start..start + 4].copy_from_slice(&v.to_le_bytes());
+        }
+        file.write_all(&bytes)
+            .expect("synthetic HDF5 generic fixture should be writable");
+    }
+
+    fn write_synthetic_hdf5_chunked_single_chunk_f32_fixture(file: &mut tempfile::NamedTempFile) {
+        const DATASET_PATH: &str = "/ScienceData/NDVI_Chunked";
+        const HEADER_OFFSET: usize = 1024;
+        const CHUNK_INDEX_OFFSET: usize = 4096;
+        const PAYLOAD_OFFSET: usize = 8192;
+        const ROWS: usize = 2;
+        const COLS: usize = 3;
+
+        let values = [0.5f32, 1.5, 2.5, 3.5, 4.5, 5.5];
+        let mut raw_payload = Vec::<u8>::new();
+        for value in values {
+            raw_payload.extend_from_slice(&value.to_le_bytes());
+        }
+
+        let total_len = PAYLOAD_OFFSET + raw_payload.len();
+        let mut bytes = vec![0u8; total_len];
+
+        let marker = DATASET_PATH.as_bytes();
+        bytes[64..64 + marker.len()].copy_from_slice(marker);
+
+        // v1 object header prefix.
+        let mut cursor = HEADER_OFFSET;
+        bytes[cursor] = 1;
+        bytes[cursor + 1] = 0;
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(3u16).to_le_bytes());
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&0u32.to_le_bytes());
+        bytes[cursor + 8..cursor + 12].copy_from_slice(&(95u32).to_le_bytes());
+        bytes[cursor + 12..cursor + 16].copy_from_slice(&0u32.to_le_bytes());
+        cursor += 16;
+
+        // Dataspace message (rank=2, dims=2x3).
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0001u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(24u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 2;
+        bytes[cursor + 1] = 2;
+        bytes[cursor + 2] = 0;
+        bytes[cursor + 3] = 0;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&0u32.to_le_bytes());
+        bytes[cursor + 8..cursor + 16].copy_from_slice(&(ROWS as u64).to_le_bytes());
+        bytes[cursor + 16..cursor + 24].copy_from_slice(&(COLS as u64).to_le_bytes());
+        cursor += 24;
+
+        // Datatype message (size=4).
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0003u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(8u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 0x13;
+        bytes[cursor + 1] = 0;
+        bytes[cursor + 2] = 0;
+        bytes[cursor + 3] = 0;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&(4u32).to_le_bytes());
+        cursor += 8;
+
+        // Chunked layout message (num_dimensions=2, chunk dims=2x3).
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0008u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(19u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 3;
+        bytes[cursor + 1] = 2;
+        bytes[cursor + 2] = 2;
+        bytes[cursor + 3..cursor + 11].copy_from_slice(&(CHUNK_INDEX_OFFSET as u64).to_le_bytes());
+        bytes[cursor + 11..cursor + 15].copy_from_slice(&(ROWS as u32).to_le_bytes());
+        bytes[cursor + 15..cursor + 19].copy_from_slice(&(COLS as u32).to_le_bytes());
+
+        // Chunk index node (first leaf record only, little-endian fields per current bounded parser).
+        let mut node_cursor = CHUNK_INDEX_OFFSET;
+        bytes[node_cursor..node_cursor + 4].copy_from_slice(b"TREE");
+        bytes[node_cursor + 4] = 1;
+        bytes[node_cursor + 5] = 0;
+        bytes[node_cursor + 6..node_cursor + 8].copy_from_slice(&(1u16).to_le_bytes());
+        node_cursor += 24;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(raw_payload.len() as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(PAYLOAD_OFFSET as u64).to_le_bytes());
+
+        // Chunk payload bytes.
+        bytes[PAYLOAD_OFFSET..PAYLOAD_OFFSET + raw_payload.len()]
+            .copy_from_slice(&raw_payload);
+
+        file.write_all(&bytes)
+            .expect("synthetic HDF5 chunked fixture should be writable");
+    }
+
+    fn write_synthetic_hdf5_chunked_two_chunk_f32_fixture(file: &mut tempfile::NamedTempFile) {
+        const DATASET_PATH: &str = "/ScienceData/NDVI_Chunked_Two";
+        const HEADER_OFFSET: usize = 1024;
+        const CHUNK_INDEX_OFFSET: usize = 4096;
+        const PAYLOAD_A_OFFSET: usize = 8192;
+        const PAYLOAD_B_OFFSET: usize = 8208;
+        const ROWS: usize = 2;
+        const COLS: usize = 4;
+        const CHUNK_ROWS: usize = 2;
+        const CHUNK_COLS: usize = 2;
+
+        let values_a = [0.5f32, 1.5, 4.5, 5.5];
+        let values_b = [2.5f32, 3.5, 6.5, 7.5];
+        let mut payload_a = Vec::<u8>::new();
+        let mut payload_b = Vec::<u8>::new();
+        for value in values_a {
+            payload_a.extend_from_slice(&value.to_le_bytes());
+        }
+        for value in values_b {
+            payload_b.extend_from_slice(&value.to_le_bytes());
+        }
+
+        let total_len = PAYLOAD_B_OFFSET + payload_b.len();
+        let mut bytes = vec![0u8; total_len];
+        let marker = DATASET_PATH.as_bytes();
+        bytes[64..64 + marker.len()].copy_from_slice(marker);
+
+        let mut cursor = HEADER_OFFSET;
+        bytes[cursor] = 1;
+        bytes[cursor + 1] = 0;
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(3u16).to_le_bytes());
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&0u32.to_le_bytes());
+        bytes[cursor + 8..cursor + 12].copy_from_slice(&(95u32).to_le_bytes());
+        bytes[cursor + 12..cursor + 16].copy_from_slice(&0u32.to_le_bytes());
+        cursor += 16;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0001u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(24u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 2;
+        bytes[cursor + 1] = 2;
+        bytes[cursor + 2] = 0;
+        bytes[cursor + 3] = 0;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&0u32.to_le_bytes());
+        bytes[cursor + 8..cursor + 16].copy_from_slice(&(ROWS as u64).to_le_bytes());
+        bytes[cursor + 16..cursor + 24].copy_from_slice(&(COLS as u64).to_le_bytes());
+        cursor += 24;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0003u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(8u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 0x13;
+        bytes[cursor + 1] = 0;
+        bytes[cursor + 2] = 0;
+        bytes[cursor + 3] = 0;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&(4u32).to_le_bytes());
+        cursor += 8;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0008u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(19u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 3;
+        bytes[cursor + 1] = 2;
+        bytes[cursor + 2] = 2;
+        bytes[cursor + 3..cursor + 11].copy_from_slice(&(CHUNK_INDEX_OFFSET as u64).to_le_bytes());
+        bytes[cursor + 11..cursor + 15].copy_from_slice(&(CHUNK_ROWS as u32).to_le_bytes());
+        bytes[cursor + 15..cursor + 19].copy_from_slice(&(CHUNK_COLS as u32).to_le_bytes());
+
+        let mut node_cursor = CHUNK_INDEX_OFFSET;
+        bytes[node_cursor..node_cursor + 4].copy_from_slice(b"TREE");
+        bytes[node_cursor + 4] = 1;
+        bytes[node_cursor + 5] = 0;
+        bytes[node_cursor + 6..node_cursor + 8].copy_from_slice(&(2u16).to_le_bytes());
+        node_cursor += 24;
+
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(payload_a.len() as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(PAYLOAD_A_OFFSET as u64).to_le_bytes());
+        node_cursor += 8;
+
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(payload_b.len() as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(2u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(PAYLOAD_B_OFFSET as u64).to_le_bytes());
+
+        bytes[PAYLOAD_A_OFFSET..PAYLOAD_A_OFFSET + payload_a.len()].copy_from_slice(&payload_a);
+        bytes[PAYLOAD_B_OFFSET..PAYLOAD_B_OFFSET + payload_b.len()].copy_from_slice(&payload_b);
+
+        file.write_all(&bytes)
+            .expect("synthetic HDF5 two-chunk fixture should be writable");
+    }
+
+    fn write_synthetic_hdf5_chunked_two_chunk_f32_deflate_fixture(
+        file: &mut tempfile::NamedTempFile,
+    ) {
+        const DATASET_PATH: &str = "/ScienceData/NDVI_Chunked_Two_Deflate";
+        const HEADER_OFFSET: usize = 1024;
+        const CHUNK_INDEX_OFFSET: usize = 4096;
+        const PAYLOAD_A_OFFSET: usize = 8192;
+        const ROWS: usize = 2;
+        const COLS: usize = 4;
+        const CHUNK_ROWS: usize = 2;
+        const CHUNK_COLS: usize = 2;
+
+        let values_a = [0.5f32, 1.5, 4.5, 5.5];
+        let values_b = [2.5f32, 3.5, 6.5, 7.5];
+        let payload_a = encode_f32_values_as_zlib(&values_a);
+        let payload_b = encode_f32_values_as_zlib(&values_b);
+        let payload_b_offset = PAYLOAD_A_OFFSET + payload_a.len();
+
+        let total_len = payload_b_offset + payload_b.len();
+        let mut bytes = vec![0u8; total_len];
+        let marker = DATASET_PATH.as_bytes();
+        bytes[64..64 + marker.len()].copy_from_slice(marker);
+
+        let mut cursor = HEADER_OFFSET;
+        bytes[cursor] = 1;
+        bytes[cursor + 1] = 0;
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(4u16).to_le_bytes());
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&0u32.to_le_bytes());
+        bytes[cursor + 8..cursor + 12].copy_from_slice(&(121u32).to_le_bytes());
+        bytes[cursor + 12..cursor + 16].copy_from_slice(&0u32.to_le_bytes());
+        cursor += 16;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0001u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(24u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 2;
+        bytes[cursor + 1] = 2;
+        bytes[cursor + 2] = 0;
+        bytes[cursor + 3] = 0;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&0u32.to_le_bytes());
+        bytes[cursor + 8..cursor + 16].copy_from_slice(&(ROWS as u64).to_le_bytes());
+        bytes[cursor + 16..cursor + 24].copy_from_slice(&(COLS as u64).to_le_bytes());
+        cursor += 24;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0003u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(8u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 0x13;
+        bytes[cursor + 1] = 0;
+        bytes[cursor + 2] = 0;
+        bytes[cursor + 3] = 0;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&(4u32).to_le_bytes());
+        cursor += 8;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0008u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(19u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 3;
+        bytes[cursor + 1] = 2;
+        bytes[cursor + 2] = 2;
+        bytes[cursor + 3..cursor + 11].copy_from_slice(&(CHUNK_INDEX_OFFSET as u64).to_le_bytes());
+        bytes[cursor + 11..cursor + 15].copy_from_slice(&(CHUNK_ROWS as u32).to_le_bytes());
+        bytes[cursor + 15..cursor + 19].copy_from_slice(&(CHUNK_COLS as u32).to_le_bytes());
+        cursor += 19;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x000bu16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(16u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 1;
+        bytes[cursor + 1] = 1;
+        bytes[cursor + 2..cursor + 8].copy_from_slice(&[0, 0, 0, 0, 0, 0]);
+        cursor += 8;
+        bytes[cursor..cursor + 2].copy_from_slice(&(1u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(0u16).to_le_bytes());
+        bytes[cursor + 4..cursor + 6].copy_from_slice(&(0u16).to_le_bytes());
+        bytes[cursor + 6..cursor + 8].copy_from_slice(&(0u16).to_le_bytes());
+
+        let mut node_cursor = CHUNK_INDEX_OFFSET;
+        bytes[node_cursor..node_cursor + 4].copy_from_slice(b"TREE");
+        bytes[node_cursor + 4] = 1;
+        bytes[node_cursor + 5] = 0;
+        bytes[node_cursor + 6..node_cursor + 8].copy_from_slice(&(2u16).to_le_bytes());
+        node_cursor += 24;
+
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(payload_a.len() as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(PAYLOAD_A_OFFSET as u64).to_le_bytes());
+        node_cursor += 8;
+
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(payload_b.len() as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(2u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(payload_b_offset as u64).to_le_bytes());
+
+        bytes[PAYLOAD_A_OFFSET..PAYLOAD_A_OFFSET + payload_a.len()].copy_from_slice(&payload_a);
+        bytes[payload_b_offset..payload_b_offset + payload_b.len()].copy_from_slice(&payload_b);
+
+        file.write_all(&bytes)
+            .expect("synthetic HDF5 deflate two-chunk fixture should be writable");
+    }
+
+    fn write_synthetic_hdf5_chunked_two_leaf_f32_fixture(file: &mut tempfile::NamedTempFile) {
+        const DATASET_PATH: &str = "/ScienceData/NDVI_Chunked_Two_Leaf";
+        const HEADER_OFFSET: usize = 1024;
+        const FIRST_LEAF_OFFSET: usize = 4096;
+        const SECOND_LEAF_OFFSET: usize = 4184;
+        const PAYLOAD_A_OFFSET: usize = 8192;
+        const PAYLOAD_B_OFFSET: usize = 8208;
+        const ROWS: usize = 2;
+        const COLS: usize = 4;
+        const CHUNK_ROWS: usize = 2;
+        const CHUNK_COLS: usize = 2;
+
+        let values_a = [0.5f32, 1.5, 4.5, 5.5];
+        let values_b = [2.5f32, 3.5, 6.5, 7.5];
+        let mut payload_a = Vec::<u8>::new();
+        let mut payload_b = Vec::<u8>::new();
+        for value in values_a {
+            payload_a.extend_from_slice(&value.to_le_bytes());
+        }
+        for value in values_b {
+            payload_b.extend_from_slice(&value.to_le_bytes());
+        }
+
+        let total_len = PAYLOAD_B_OFFSET + payload_b.len();
+        let mut bytes = vec![0u8; total_len];
+        let marker = DATASET_PATH.as_bytes();
+        bytes[64..64 + marker.len()].copy_from_slice(marker);
+
+        let mut cursor = HEADER_OFFSET;
+        bytes[cursor] = 1;
+        bytes[cursor + 1] = 0;
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(3u16).to_le_bytes());
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&0u32.to_le_bytes());
+        bytes[cursor + 8..cursor + 12].copy_from_slice(&(95u32).to_le_bytes());
+        bytes[cursor + 12..cursor + 16].copy_from_slice(&0u32.to_le_bytes());
+        cursor += 16;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0001u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(24u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 2;
+        bytes[cursor + 1] = 2;
+        bytes[cursor + 2] = 0;
+        bytes[cursor + 3] = 0;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&0u32.to_le_bytes());
+        bytes[cursor + 8..cursor + 16].copy_from_slice(&(ROWS as u64).to_le_bytes());
+        bytes[cursor + 16..cursor + 24].copy_from_slice(&(COLS as u64).to_le_bytes());
+        cursor += 24;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0003u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(8u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 0x13;
+        bytes[cursor + 1] = 0;
+        bytes[cursor + 2] = 0;
+        bytes[cursor + 3] = 0;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&(4u32).to_le_bytes());
+        cursor += 8;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0008u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(19u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 3;
+        bytes[cursor + 1] = 2;
+        bytes[cursor + 2] = 2;
+        bytes[cursor + 3..cursor + 11].copy_from_slice(&(FIRST_LEAF_OFFSET as u64).to_le_bytes());
+        bytes[cursor + 11..cursor + 15].copy_from_slice(&(CHUNK_ROWS as u32).to_le_bytes());
+        bytes[cursor + 15..cursor + 19].copy_from_slice(&(CHUNK_COLS as u32).to_le_bytes());
+
+        let mut node_cursor = FIRST_LEAF_OFFSET;
+        bytes[node_cursor..node_cursor + 4].copy_from_slice(b"TREE");
+        bytes[node_cursor + 4] = 1;
+        bytes[node_cursor + 5] = 0;
+        bytes[node_cursor + 6..node_cursor + 8].copy_from_slice(&(1u16).to_le_bytes());
+        bytes[node_cursor + 8..node_cursor + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[node_cursor + 16..node_cursor + 24].copy_from_slice(&(SECOND_LEAF_OFFSET as u64).to_le_bytes());
+        node_cursor += 24;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(payload_a.len() as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(PAYLOAD_A_OFFSET as u64).to_le_bytes());
+
+        let mut node_cursor = SECOND_LEAF_OFFSET;
+        bytes[node_cursor..node_cursor + 4].copy_from_slice(b"TREE");
+        bytes[node_cursor + 4] = 1;
+        bytes[node_cursor + 5] = 0;
+        bytes[node_cursor + 6..node_cursor + 8].copy_from_slice(&(1u16).to_le_bytes());
+        bytes[node_cursor + 8..node_cursor + 16].copy_from_slice(&(FIRST_LEAF_OFFSET as u64).to_le_bytes());
+        bytes[node_cursor + 16..node_cursor + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+        node_cursor += 24;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(payload_b.len() as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(2u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(PAYLOAD_B_OFFSET as u64).to_le_bytes());
+
+        bytes[PAYLOAD_A_OFFSET..PAYLOAD_A_OFFSET + payload_a.len()].copy_from_slice(&payload_a);
+        bytes[PAYLOAD_B_OFFSET..PAYLOAD_B_OFFSET + payload_b.len()].copy_from_slice(&payload_b);
+
+        file.write_all(&bytes)
+            .expect("synthetic HDF5 two-leaf fixture should be writable");
+    }
+
+    fn write_synthetic_hdf5_chunked_internal_root_fixture(file: &mut tempfile::NamedTempFile) {
+        const DATASET_PATH: &str = "/ScienceData/NDVI_Chunked_InternalRoot";
+        const HEADER_OFFSET: usize = 1024;
+        const INTERNAL_ROOT_OFFSET: usize = 4096;
+        const FIRST_LEAF_OFFSET: usize = 4168;
+        const SECOND_LEAF_OFFSET: usize = 4256;
+        const PAYLOAD_A_OFFSET: usize = 8192;
+        const PAYLOAD_B_OFFSET: usize = 8208;
+        const ROWS: usize = 2;
+        const COLS: usize = 4;
+        const CHUNK_ROWS: usize = 2;
+        const CHUNK_COLS: usize = 2;
+
+        let values_a = [0.5f32, 1.5, 4.5, 5.5];
+        let values_b = [2.5f32, 3.5, 6.5, 7.5];
+        let mut payload_a = Vec::<u8>::new();
+        let mut payload_b = Vec::<u8>::new();
+        for value in values_a {
+            payload_a.extend_from_slice(&value.to_le_bytes());
+        }
+        for value in values_b {
+            payload_b.extend_from_slice(&value.to_le_bytes());
+        }
+
+        let total_len = PAYLOAD_B_OFFSET + payload_b.len();
+        let mut bytes = vec![0u8; total_len];
+        let marker = DATASET_PATH.as_bytes();
+        bytes[64..64 + marker.len()].copy_from_slice(marker);
+
+        let mut cursor = HEADER_OFFSET;
+        bytes[cursor] = 1;
+        bytes[cursor + 1] = 0;
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(3u16).to_le_bytes());
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&0u32.to_le_bytes());
+        bytes[cursor + 8..cursor + 12].copy_from_slice(&(95u32).to_le_bytes());
+        bytes[cursor + 12..cursor + 16].copy_from_slice(&0u32.to_le_bytes());
+        cursor += 16;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0001u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(24u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 2;
+        bytes[cursor + 1] = 2;
+        bytes[cursor + 2] = 0;
+        bytes[cursor + 3] = 0;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&0u32.to_le_bytes());
+        bytes[cursor + 8..cursor + 16].copy_from_slice(&(ROWS as u64).to_le_bytes());
+        bytes[cursor + 16..cursor + 24].copy_from_slice(&(COLS as u64).to_le_bytes());
+        cursor += 24;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0003u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(8u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 0x13;
+        bytes[cursor + 1] = 0;
+        bytes[cursor + 2] = 0;
+        bytes[cursor + 3] = 0;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&(4u32).to_le_bytes());
+        cursor += 8;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0008u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(19u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 3;
+        bytes[cursor + 1] = 2;
+        bytes[cursor + 2] = 2;
+        bytes[cursor + 3..cursor + 11].copy_from_slice(&(INTERNAL_ROOT_OFFSET as u64).to_le_bytes());
+        bytes[cursor + 11..cursor + 15].copy_from_slice(&(CHUNK_ROWS as u32).to_le_bytes());
+        bytes[cursor + 15..cursor + 19].copy_from_slice(&(CHUNK_COLS as u32).to_le_bytes());
+
+        bytes[INTERNAL_ROOT_OFFSET..INTERNAL_ROOT_OFFSET + 4].copy_from_slice(b"TREE");
+        bytes[INTERNAL_ROOT_OFFSET + 4] = 1;
+        bytes[INTERNAL_ROOT_OFFSET + 5] = 1;
+        bytes[INTERNAL_ROOT_OFFSET + 6..INTERNAL_ROOT_OFFSET + 8].copy_from_slice(&(2u16).to_le_bytes());
+        bytes[INTERNAL_ROOT_OFFSET + 8..INTERNAL_ROOT_OFFSET + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[INTERNAL_ROOT_OFFSET + 16..INTERNAL_ROOT_OFFSET + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+
+        let mut node_cursor = INTERNAL_ROOT_OFFSET + 24;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(2u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(FIRST_LEAF_OFFSET as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(4u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(SECOND_LEAF_OFFSET as u64).to_le_bytes());
+
+        let mut node_cursor = FIRST_LEAF_OFFSET;
+        bytes[node_cursor..node_cursor + 4].copy_from_slice(b"TREE");
+        bytes[node_cursor + 4] = 1;
+        bytes[node_cursor + 5] = 0;
+        bytes[node_cursor + 6..node_cursor + 8].copy_from_slice(&(1u16).to_le_bytes());
+        bytes[node_cursor + 8..node_cursor + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[node_cursor + 16..node_cursor + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+        node_cursor += 24;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(payload_a.len() as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(PAYLOAD_A_OFFSET as u64).to_le_bytes());
+
+        let mut node_cursor = SECOND_LEAF_OFFSET;
+        bytes[node_cursor..node_cursor + 4].copy_from_slice(b"TREE");
+        bytes[node_cursor + 4] = 1;
+        bytes[node_cursor + 5] = 0;
+        bytes[node_cursor + 6..node_cursor + 8].copy_from_slice(&(1u16).to_le_bytes());
+        bytes[node_cursor + 8..node_cursor + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[node_cursor + 16..node_cursor + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+        node_cursor += 24;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(payload_b.len() as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(2u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(PAYLOAD_B_OFFSET as u64).to_le_bytes());
+
+        bytes[PAYLOAD_A_OFFSET..PAYLOAD_A_OFFSET + payload_a.len()].copy_from_slice(&payload_a);
+        bytes[PAYLOAD_B_OFFSET..PAYLOAD_B_OFFSET + payload_b.len()].copy_from_slice(&payload_b);
+
+        file.write_all(&bytes)
+            .expect("synthetic HDF5 internal-root fixture should be writable");
+    }
+
+    fn write_synthetic_hdf5_chunked_multilevel_root_fixture(file: &mut tempfile::NamedTempFile) {
+        const DATASET_PATH: &str = "/ScienceData/NDVI_Chunked_MultiLevelRoot";
+        const HEADER_OFFSET: usize = 1024;
+        const ROOT_OFFSET: usize = 4096;
+        const FIRST_INTERNAL_OFFSET: usize = 4168;
+        const SECOND_INTERNAL_OFFSET: usize = 4256;
+        const FIRST_LEAF_OFFSET: usize = 4344;
+        const SECOND_LEAF_OFFSET: usize = 4432;
+        const THIRD_LEAF_OFFSET: usize = 4520;
+        const PAYLOAD_A_OFFSET: usize = 8192;
+        const PAYLOAD_B_OFFSET: usize = 8208;
+        const PAYLOAD_C_OFFSET: usize = 8224;
+        const ROWS: usize = 2;
+        const COLS: usize = 6;
+        const CHUNK_ROWS: usize = 2;
+        const CHUNK_COLS: usize = 2;
+
+        let values_a = [0.5f32, 1.5, 4.5, 5.5];
+        let values_b = [2.5f32, 3.5, 6.5, 7.5];
+        let values_c = [8.5f32, 9.5, 10.5, 11.5];
+        let mut payload_a = Vec::<u8>::new();
+        let mut payload_b = Vec::<u8>::new();
+        let mut payload_c = Vec::<u8>::new();
+        for value in values_a {
+            payload_a.extend_from_slice(&value.to_le_bytes());
+        }
+        for value in values_b {
+            payload_b.extend_from_slice(&value.to_le_bytes());
+        }
+        for value in values_c {
+            payload_c.extend_from_slice(&value.to_le_bytes());
+        }
+
+        let total_len = PAYLOAD_C_OFFSET + payload_c.len();
+        let mut bytes = vec![0u8; total_len];
+        let marker = DATASET_PATH.as_bytes();
+        bytes[64..64 + marker.len()].copy_from_slice(marker);
+
+        let mut cursor = HEADER_OFFSET;
+        bytes[cursor] = 1;
+        bytes[cursor + 1] = 0;
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(3u16).to_le_bytes());
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&0u32.to_le_bytes());
+        bytes[cursor + 8..cursor + 12].copy_from_slice(&(95u32).to_le_bytes());
+        bytes[cursor + 12..cursor + 16].copy_from_slice(&0u32.to_le_bytes());
+        cursor += 16;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0001u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(24u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 2;
+        bytes[cursor + 1] = 2;
+        bytes[cursor + 2] = 0;
+        bytes[cursor + 3] = 0;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&0u32.to_le_bytes());
+        bytes[cursor + 8..cursor + 16].copy_from_slice(&(ROWS as u64).to_le_bytes());
+        bytes[cursor + 16..cursor + 24].copy_from_slice(&(COLS as u64).to_le_bytes());
+        cursor += 24;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0003u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(8u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 0x13;
+        bytes[cursor + 1] = 0;
+        bytes[cursor + 2] = 0;
+        bytes[cursor + 3] = 0;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&(4u32).to_le_bytes());
+        cursor += 8;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0008u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(19u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 3;
+        bytes[cursor + 1] = 2;
+        bytes[cursor + 2] = 2;
+        bytes[cursor + 3..cursor + 11].copy_from_slice(&(ROOT_OFFSET as u64).to_le_bytes());
+        bytes[cursor + 11..cursor + 15].copy_from_slice(&(CHUNK_ROWS as u32).to_le_bytes());
+        bytes[cursor + 15..cursor + 19].copy_from_slice(&(CHUNK_COLS as u32).to_le_bytes());
+
+        bytes[ROOT_OFFSET..ROOT_OFFSET + 4].copy_from_slice(b"TREE");
+        bytes[ROOT_OFFSET + 4] = 1;
+        bytes[ROOT_OFFSET + 5] = 2;
+        bytes[ROOT_OFFSET + 6..ROOT_OFFSET + 8].copy_from_slice(&(2u16).to_le_bytes());
+        bytes[ROOT_OFFSET + 8..ROOT_OFFSET + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[ROOT_OFFSET + 16..ROOT_OFFSET + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+
+        let mut node_cursor = ROOT_OFFSET + 24;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(2u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(FIRST_INTERNAL_OFFSET as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(6u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(SECOND_INTERNAL_OFFSET as u64).to_le_bytes());
+
+        bytes[FIRST_INTERNAL_OFFSET..FIRST_INTERNAL_OFFSET + 4].copy_from_slice(b"TREE");
+        bytes[FIRST_INTERNAL_OFFSET + 4] = 1;
+        bytes[FIRST_INTERNAL_OFFSET + 5] = 1;
+        bytes[FIRST_INTERNAL_OFFSET + 6..FIRST_INTERNAL_OFFSET + 8].copy_from_slice(&(2u16).to_le_bytes());
+        bytes[FIRST_INTERNAL_OFFSET + 8..FIRST_INTERNAL_OFFSET + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[FIRST_INTERNAL_OFFSET + 16..FIRST_INTERNAL_OFFSET + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+        let mut node_cursor = FIRST_INTERNAL_OFFSET + 24;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(2u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(FIRST_LEAF_OFFSET as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(4u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(SECOND_LEAF_OFFSET as u64).to_le_bytes());
+
+        bytes[SECOND_INTERNAL_OFFSET..SECOND_INTERNAL_OFFSET + 4].copy_from_slice(b"TREE");
+        bytes[SECOND_INTERNAL_OFFSET + 4] = 1;
+        bytes[SECOND_INTERNAL_OFFSET + 5] = 1;
+        bytes[SECOND_INTERNAL_OFFSET + 6..SECOND_INTERNAL_OFFSET + 8].copy_from_slice(&(1u16).to_le_bytes());
+        bytes[SECOND_INTERNAL_OFFSET + 8..SECOND_INTERNAL_OFFSET + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[SECOND_INTERNAL_OFFSET + 16..SECOND_INTERNAL_OFFSET + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+        let mut node_cursor = SECOND_INTERNAL_OFFSET + 24;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(6u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(THIRD_LEAF_OFFSET as u64).to_le_bytes());
+
+        let mut node_cursor = FIRST_LEAF_OFFSET;
+        bytes[node_cursor..node_cursor + 4].copy_from_slice(b"TREE");
+        bytes[node_cursor + 4] = 1;
+        bytes[node_cursor + 5] = 0;
+        bytes[node_cursor + 6..node_cursor + 8].copy_from_slice(&(1u16).to_le_bytes());
+        bytes[node_cursor + 8..node_cursor + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[node_cursor + 16..node_cursor + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+        node_cursor += 24;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(payload_a.len() as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(PAYLOAD_A_OFFSET as u64).to_le_bytes());
+
+        let mut node_cursor = SECOND_LEAF_OFFSET;
+        bytes[node_cursor..node_cursor + 4].copy_from_slice(b"TREE");
+        bytes[node_cursor + 4] = 1;
+        bytes[node_cursor + 5] = 0;
+        bytes[node_cursor + 6..node_cursor + 8].copy_from_slice(&(1u16).to_le_bytes());
+        bytes[node_cursor + 8..node_cursor + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[node_cursor + 16..node_cursor + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+        node_cursor += 24;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(payload_b.len() as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(2u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(PAYLOAD_B_OFFSET as u64).to_le_bytes());
+
+        let mut node_cursor = THIRD_LEAF_OFFSET;
+        bytes[node_cursor..node_cursor + 4].copy_from_slice(b"TREE");
+        bytes[node_cursor + 4] = 1;
+        bytes[node_cursor + 5] = 0;
+        bytes[node_cursor + 6..node_cursor + 8].copy_from_slice(&(1u16).to_le_bytes());
+        bytes[node_cursor + 8..node_cursor + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[node_cursor + 16..node_cursor + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+        node_cursor += 24;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(payload_c.len() as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(4u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(PAYLOAD_C_OFFSET as u64).to_le_bytes());
+
+        bytes[PAYLOAD_A_OFFSET..PAYLOAD_A_OFFSET + payload_a.len()].copy_from_slice(&payload_a);
+        bytes[PAYLOAD_B_OFFSET..PAYLOAD_B_OFFSET + payload_b.len()].copy_from_slice(&payload_b);
+        bytes[PAYLOAD_C_OFFSET..PAYLOAD_C_OFFSET + payload_c.len()].copy_from_slice(&payload_c);
+
+        file.write_all(&bytes)
+            .expect("synthetic HDF5 multilevel-root fixture should be writable");
+    }
+
+    fn write_synthetic_hdf5_chunked_malformed_multilevel_root_fixture(
+        file: &mut tempfile::NamedTempFile,
+    ) {
+        const DATASET_PATH: &str = "/ScienceData/NDVI_Chunked_MalformedMultiLevel";
+        const HEADER_OFFSET: usize = 1024;
+        const ROOT_OFFSET: usize = 4096;
+        const ROWS: usize = 2;
+        const COLS: usize = 4;
+        const CHUNK_ROWS: usize = 2;
+        const CHUNK_COLS: usize = 2;
+
+        let total_len = ROOT_OFFSET + 64;
+        let mut bytes = vec![0u8; total_len];
+        let marker = DATASET_PATH.as_bytes();
+        bytes[64..64 + marker.len()].copy_from_slice(marker);
+
+        let mut cursor = HEADER_OFFSET;
+        bytes[cursor] = 1;
+        bytes[cursor + 1] = 0;
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(3u16).to_le_bytes());
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&0u32.to_le_bytes());
+        bytes[cursor + 8..cursor + 12].copy_from_slice(&(95u32).to_le_bytes());
+        bytes[cursor + 12..cursor + 16].copy_from_slice(&0u32.to_le_bytes());
+        cursor += 16;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0001u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(24u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 2;
+        bytes[cursor + 1] = 2;
+        bytes[cursor + 2] = 0;
+        bytes[cursor + 3] = 0;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&0u32.to_le_bytes());
+        bytes[cursor + 8..cursor + 16].copy_from_slice(&(ROWS as u64).to_le_bytes());
+        bytes[cursor + 16..cursor + 24].copy_from_slice(&(COLS as u64).to_le_bytes());
+        cursor += 24;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0003u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(8u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 0x13;
+        bytes[cursor + 1] = 0;
+        bytes[cursor + 2] = 0;
+        bytes[cursor + 3] = 0;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&(4u32).to_le_bytes());
+        cursor += 8;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0008u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(19u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 3;
+        bytes[cursor + 1] = 2;
+        bytes[cursor + 2] = 2;
+        bytes[cursor + 3..cursor + 11].copy_from_slice(&(ROOT_OFFSET as u64).to_le_bytes());
+        bytes[cursor + 11..cursor + 15].copy_from_slice(&(CHUNK_ROWS as u32).to_le_bytes());
+        bytes[cursor + 15..cursor + 19].copy_from_slice(&(CHUNK_COLS as u32).to_le_bytes());
+
+        bytes[ROOT_OFFSET..ROOT_OFFSET + 4].copy_from_slice(b"TREE");
+        bytes[ROOT_OFFSET + 4] = 1;
+        bytes[ROOT_OFFSET + 5] = 2;
+        bytes[ROOT_OFFSET + 6..ROOT_OFFSET + 8].copy_from_slice(&(1u16).to_le_bytes());
+        bytes[ROOT_OFFSET + 8..ROOT_OFFSET + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[ROOT_OFFSET + 16..ROOT_OFFSET + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+
+        file.write_all(&bytes)
+            .expect("synthetic malformed multilevel-root fixture should be writable");
+    }
+
+    fn write_synthetic_hdf5_chunked_malformed_multilevel_fanout_fixture(
+        file: &mut tempfile::NamedTempFile,
+    ) {
+        const DATASET_PATH: &str = "/ScienceData/NDVI_Chunked_MalformedMultiLevelFanout";
+        const HEADER_OFFSET: usize = 1024;
+        const ROOT_OFFSET: usize = 4096;
+        const FIRST_INTERNAL_OFFSET: usize = 4168;
+        const SECOND_INTERNAL_OFFSET: usize = 4256;
+        const FIRST_LEAF_OFFSET: usize = 4344;
+        const SECOND_LEAF_OFFSET: usize = 4432;
+        const ROWS: usize = 2;
+        const COLS: usize = 6;
+        const CHUNK_ROWS: usize = 2;
+        const CHUNK_COLS: usize = 2;
+
+        let total_len = SECOND_LEAF_OFFSET + 64;
+        let mut bytes = vec![0u8; total_len];
+        let marker = DATASET_PATH.as_bytes();
+        bytes[64..64 + marker.len()].copy_from_slice(marker);
+
+        let mut cursor = HEADER_OFFSET;
+        bytes[cursor] = 1;
+        bytes[cursor + 1] = 0;
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(3u16).to_le_bytes());
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&0u32.to_le_bytes());
+        bytes[cursor + 8..cursor + 12].copy_from_slice(&(95u32).to_le_bytes());
+        bytes[cursor + 12..cursor + 16].copy_from_slice(&0u32.to_le_bytes());
+        cursor += 16;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0001u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(24u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 2;
+        bytes[cursor + 1] = 2;
+        bytes[cursor + 2] = 0;
+        bytes[cursor + 3] = 0;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&0u32.to_le_bytes());
+        bytes[cursor + 8..cursor + 16].copy_from_slice(&(ROWS as u64).to_le_bytes());
+        bytes[cursor + 16..cursor + 24].copy_from_slice(&(COLS as u64).to_le_bytes());
+        cursor += 24;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0003u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(8u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 0x13;
+        bytes[cursor + 1] = 0;
+        bytes[cursor + 2] = 0;
+        bytes[cursor + 3] = 0;
+        bytes[cursor + 4..cursor + 8].copy_from_slice(&(4u32).to_le_bytes());
+        cursor += 8;
+
+        bytes[cursor..cursor + 2].copy_from_slice(&(0x0008u16).to_le_bytes());
+        bytes[cursor + 2..cursor + 4].copy_from_slice(&(19u16).to_le_bytes());
+        bytes[cursor + 4] = 0;
+        bytes[cursor + 5..cursor + 8].copy_from_slice(&[0, 0, 0]);
+        cursor += 8;
+        bytes[cursor] = 3;
+        bytes[cursor + 1] = 2;
+        bytes[cursor + 2] = 2;
+        bytes[cursor + 3..cursor + 11].copy_from_slice(&(ROOT_OFFSET as u64).to_le_bytes());
+        bytes[cursor + 11..cursor + 15].copy_from_slice(&(CHUNK_ROWS as u32).to_le_bytes());
+        bytes[cursor + 15..cursor + 19].copy_from_slice(&(CHUNK_COLS as u32).to_le_bytes());
+
+        bytes[ROOT_OFFSET..ROOT_OFFSET + 4].copy_from_slice(b"TREE");
+        bytes[ROOT_OFFSET + 4] = 1;
+        bytes[ROOT_OFFSET + 5] = 2;
+        bytes[ROOT_OFFSET + 6..ROOT_OFFSET + 8].copy_from_slice(&(2u16).to_le_bytes());
+        bytes[ROOT_OFFSET + 8..ROOT_OFFSET + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[ROOT_OFFSET + 16..ROOT_OFFSET + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+        let mut node_cursor = ROOT_OFFSET + 24;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(2u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(FIRST_INTERNAL_OFFSET as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(6u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(SECOND_INTERNAL_OFFSET as u64).to_le_bytes());
+
+        bytes[FIRST_INTERNAL_OFFSET..FIRST_INTERNAL_OFFSET + 4].copy_from_slice(b"TREE");
+        bytes[FIRST_INTERNAL_OFFSET + 4] = 1;
+        bytes[FIRST_INTERNAL_OFFSET + 5] = 1;
+        bytes[FIRST_INTERNAL_OFFSET + 6..FIRST_INTERNAL_OFFSET + 8].copy_from_slice(&(2u16).to_le_bytes());
+        bytes[FIRST_INTERNAL_OFFSET + 8..FIRST_INTERNAL_OFFSET + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[FIRST_INTERNAL_OFFSET + 16..FIRST_INTERNAL_OFFSET + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+        let mut node_cursor = FIRST_INTERNAL_OFFSET + 24;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(2u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(FIRST_LEAF_OFFSET as u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(4u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(SECOND_LEAF_OFFSET as u64).to_le_bytes());
+
+        bytes[FIRST_LEAF_OFFSET..FIRST_LEAF_OFFSET + 4].copy_from_slice(b"TREE");
+        bytes[FIRST_LEAF_OFFSET + 4] = 1;
+        bytes[FIRST_LEAF_OFFSET + 5] = 0;
+        bytes[FIRST_LEAF_OFFSET + 6..FIRST_LEAF_OFFSET + 8].copy_from_slice(&(1u16).to_le_bytes());
+        bytes[FIRST_LEAF_OFFSET + 8..FIRST_LEAF_OFFSET + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[FIRST_LEAF_OFFSET + 16..FIRST_LEAF_OFFSET + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+        node_cursor = FIRST_LEAF_OFFSET + 24;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(16u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(8192u64).to_le_bytes());
+
+        bytes[SECOND_LEAF_OFFSET..SECOND_LEAF_OFFSET + 4].copy_from_slice(b"TREE");
+        bytes[SECOND_LEAF_OFFSET + 4] = 1;
+        bytes[SECOND_LEAF_OFFSET + 5] = 0;
+        bytes[SECOND_LEAF_OFFSET + 6..SECOND_LEAF_OFFSET + 8].copy_from_slice(&(1u16).to_le_bytes());
+        bytes[SECOND_LEAF_OFFSET + 8..SECOND_LEAF_OFFSET + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+        bytes[SECOND_LEAF_OFFSET + 16..SECOND_LEAF_OFFSET + 24].copy_from_slice(&u64::MAX.to_le_bytes());
+        node_cursor = SECOND_LEAF_OFFSET + 24;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(16u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&0u64.to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(2u64).to_le_bytes());
+        node_cursor += 8;
+        bytes[node_cursor..node_cursor + 8].copy_from_slice(&(8208u64).to_le_bytes());
+
+        file.write_all(&bytes)
+            .expect("synthetic malformed multilevel-fanout fixture should be writable");
+    }
+
+    fn encode_f32_values_as_zlib(values: &[f32]) -> Vec<u8> {
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        for value in values {
+            encoder
+                .write_all(&value.to_le_bytes())
+                .expect("zlib encoder should accept f32 bytes");
+        }
+        encoder
+            .finish()
+            .expect("zlib encoder should finish synthetic payload")
+    }
+
+    #[test]
+    fn raster_read_hdf4_dataset_uri_reads_supported_layout() {
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".hdf")
+            .tempfile()
+            .expect("temp file should be created");
+        write_synthetic_hdf4_i16_fixture(&mut tmp);
+
+        let uri = format!("{}:///GridA/FieldA", tmp.path().to_string_lossy());
+        let raster = Raster::read(&uri).expect("HDF4 dataset URI should decode to raster");
+
+        assert_eq!(raster.rows, 2);
+        assert_eq!(raster.cols, 4);
+        assert_eq!(raster.bands, 1);
+        assert_eq!(raster.data_type, DataType::I16);
+        assert_eq!(raster.get(0, 0, 0), 1.0);
+        assert_eq!(raster.get(0, 1, 3), 8.0);
+    }
+
+    #[test]
+    fn raster_read_hdf4_dataset_uri_reads_supported_layout_with_canonical_selector() {
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".hdf")
+            .tempfile()
+            .expect("temp file should be created");
+        write_synthetic_hdf4_i16_fixture(&mut tmp);
+
+        let uri = format!("{}#dataset=/GridA/FieldA", tmp.path().to_string_lossy());
+        let raster = Raster::read(&uri).expect("canonical HDF4 dataset URI should decode to raster");
+
+        assert_eq!(raster.rows, 2);
+        assert_eq!(raster.cols, 4);
+        assert_eq!(raster.get(0, 0, 0), 1.0);
+        assert_eq!(raster.get(0, 1, 3), 8.0);
+    }
+
+    #[test]
+    fn raster_read_hdf_dataset_uri_reports_missing_dataset_path() {
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".hdf")
+            .tempfile()
+            .expect("temp file should be created");
+        write_synthetic_hdf4_i16_fixture(&mut tmp);
+
+        let uri = format!("{}:///GridA/DoesNotExist", tmp.path().to_string_lossy());
+        let err = Raster::read(&uri).expect_err("missing dataset path should fail");
+        assert!(err.to_string().contains("dataset path resolution failed"));
+    }
+
+    #[test]
+    fn raster_read_hdf5_dataset_uri_reads_supported_gedi_path() {
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".h5")
+            .tempfile()
+            .expect("temp file should be created");
+        write_synthetic_hdf5_gedi_contiguous_fixture(&mut tmp);
+
+        let uri = format!("{}:///BEAM0000/elev_lowestmode", tmp.path().to_string_lossy());
+        let raster = Raster::read(&uri).expect("HDF5 GEDI URI should materialize to raster");
+
+        assert_eq!(raster.rows, 1);
+        assert_eq!(raster.cols, 89_634);
+        assert_eq!(raster.bands, 1);
+        assert_eq!(raster.data_type, DataType::F32);
+        assert_eq!(raster.get(0, 0, 0), 0.0);
+        assert_eq!(raster.get(0, 0, 12_345), 12_345.0);
+        assert_eq!(raster.get(0, 0, 89_633), 89_633.0);
+    }
+
+    #[test]
+    fn raster_read_hdf5_dataset_uri_reads_supported_gedi_path_with_canonical_selector() {
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".h5")
+            .tempfile()
+            .expect("temp file should be created");
+        write_synthetic_hdf5_gedi_contiguous_fixture(&mut tmp);
+
+        let uri = format!("{}#dataset=/BEAM0000/elev_lowestmode", tmp.path().to_string_lossy());
+        let raster = Raster::read(&uri).expect("canonical HDF5 GEDI URI should materialize to raster");
+
+        assert_eq!(raster.rows, 1);
+        assert_eq!(raster.cols, 89_634);
+        assert_eq!(raster.get(0, 0, 0), 0.0);
+        assert_eq!(raster.get(0, 0, 12_345), 12_345.0);
+    }
+
+    #[test]
+    fn raster_read_hdf5_dataset_uri_reads_supported_viirs_xdim_path() {
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".h5")
+            .tempfile()
+            .expect("temp file should be created");
+        write_synthetic_hdf5_viirs_xdim_fixture(&mut tmp);
+
+        let uri = format!(
+            "{}:///HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/XDim",
+            tmp.path().to_string_lossy()
+        );
+        let raster = Raster::read(&uri).expect("HDF5 VIIRS URI should materialize to raster");
+
+        assert_eq!(raster.rows, 1);
+        assert_eq!(raster.cols, 2_400);
+        assert_eq!(raster.bands, 1);
+        assert_eq!(raster.data_type, DataType::F64);
+        assert_eq!(raster.get(0, 0, 0), 0.5);
+        assert_eq!(raster.get(0, 0, 1_234), 1_234.5);
+        assert_eq!(raster.get(0, 0, 2_399), 2_399.5);
+    }
+
+    #[test]
+    fn raster_read_hdf5_dataset_uri_reads_generic_contiguous_f32_path() {
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".h5")
+            .tempfile()
+            .expect("temp file should be created");
+        write_synthetic_hdf5_generic_contiguous_f32_fixture(&mut tmp);
+
+        let uri = format!("{}#dataset=/ScienceData/NDVI", tmp.path().to_string_lossy());
+        let raster = Raster::read(&uri).expect("generic contiguous HDF5 URI should materialize");
+
+        assert_eq!(raster.rows, 1);
+        assert_eq!(raster.cols, 12);
+        assert_eq!(raster.bands, 1);
+        assert_eq!(raster.data_type, DataType::F32);
+        assert_eq!(raster.get(0, 0, 0), 0.0);
+        assert_eq!(raster.get(0, 0, 4), 1.0);
+        assert_eq!(raster.get(0, 0, 11), 2.75);
+    }
+
+    #[test]
+    fn raster_read_hdf5_dataset_uri_reads_chunked_single_chunk_f32_path() {
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".h5")
+            .tempfile()
+            .expect("temp file should be created");
+        write_synthetic_hdf5_chunked_single_chunk_f32_fixture(&mut tmp);
+
+        let uri = format!("{}#dataset=/ScienceData/NDVI_Chunked", tmp.path().to_string_lossy());
+        let raster = Raster::read(&uri).expect("chunked single-chunk HDF5 URI should materialize");
+
+        assert_eq!(raster.rows, 2);
+        assert_eq!(raster.cols, 3);
+        assert_eq!(raster.bands, 1);
+        assert_eq!(raster.data_type, DataType::F32);
+        assert_eq!(raster.get(0, 0, 0), 0.5);
+        assert_eq!(raster.get(0, 0, 2), 2.5);
+        assert_eq!(raster.get(0, 1, 2), 5.5);
+    }
+
+    #[test]
+    fn raster_read_hdf5_dataset_uri_reads_chunked_two_chunk_f32_path() {
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".h5")
+            .tempfile()
+            .expect("temp file should be created");
+        write_synthetic_hdf5_chunked_two_chunk_f32_fixture(&mut tmp);
+
+        let uri = format!("{}#dataset=/ScienceData/NDVI_Chunked_Two", tmp.path().to_string_lossy());
+        let raster = Raster::read(&uri).expect("chunked two-chunk HDF5 URI should materialize");
+
+        assert_eq!(raster.rows, 2);
+        assert_eq!(raster.cols, 4);
+        assert_eq!(raster.bands, 1);
+        assert_eq!(raster.data_type, DataType::F32);
+        assert_eq!(raster.get(0, 0, 0), 0.5);
+        assert_eq!(raster.get(0, 0, 3), 3.5);
+        assert_eq!(raster.get(0, 1, 0), 4.5);
+        assert_eq!(raster.get(0, 1, 3), 7.5);
+    }
+
+    #[test]
+    fn raster_read_hdf5_dataset_uri_reads_chunked_two_chunk_f32_deflate_path() {
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".h5")
+            .tempfile()
+            .expect("temp file should be created");
+        write_synthetic_hdf5_chunked_two_chunk_f32_deflate_fixture(&mut tmp);
+
+        let uri = format!(
+            "{}#dataset=/ScienceData/NDVI_Chunked_Two_Deflate",
+            tmp.path().to_string_lossy()
+        );
+        let raster = Raster::read(&uri)
+            .expect("chunked deflate two-chunk HDF5 URI should materialize");
+
+        assert_eq!(raster.rows, 2);
+        assert_eq!(raster.cols, 4);
+        assert_eq!(raster.bands, 1);
+        assert_eq!(raster.data_type, DataType::F32);
+        assert_eq!(raster.get(0, 0, 0), 0.5);
+        assert_eq!(raster.get(0, 0, 3), 3.5);
+        assert_eq!(raster.get(0, 1, 0), 4.5);
+        assert_eq!(raster.get(0, 1, 3), 7.5);
+    }
+
+    #[test]
+    fn raster_read_hdf5_dataset_uri_reads_chunked_two_leaf_f32_path() {
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".h5")
+            .tempfile()
+            .expect("temp file should be created");
+        write_synthetic_hdf5_chunked_two_leaf_f32_fixture(&mut tmp);
+
+        let uri = format!(
+            "{}#dataset=/ScienceData/NDVI_Chunked_Two_Leaf",
+            tmp.path().to_string_lossy()
+        );
+        let raster = Raster::read(&uri).expect("chunked two-leaf HDF5 URI should materialize");
+
+        assert_eq!(raster.rows, 2);
+        assert_eq!(raster.cols, 4);
+        assert_eq!(raster.bands, 1);
+        assert_eq!(raster.data_type, DataType::F32);
+        assert_eq!(raster.get(0, 0, 0), 0.5);
+        assert_eq!(raster.get(0, 0, 3), 3.5);
+        assert_eq!(raster.get(0, 1, 0), 4.5);
+        assert_eq!(raster.get(0, 1, 3), 7.5);
+    }
+
+    #[test]
+    fn raster_read_hdf5_dataset_uri_reads_chunked_internal_root_f32_path() {
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".h5")
+            .tempfile()
+            .expect("temp file should be created");
+        write_synthetic_hdf5_chunked_internal_root_fixture(&mut tmp);
+
+        let uri = format!(
+            "{}#dataset=/ScienceData/NDVI_Chunked_InternalRoot",
+            tmp.path().to_string_lossy()
+        );
+        let raster = Raster::read(&uri).expect("internal-root chunk index should materialize");
+        assert_eq!(raster.rows, 2);
+        assert_eq!(raster.cols, 4);
+        assert_eq!(raster.bands, 1);
+        assert_eq!(raster.data_type, DataType::F32);
+        assert_eq!(raster.get(0, 0, 0), 0.5);
+        assert_eq!(raster.get(0, 0, 3), 3.5);
+        assert_eq!(raster.get(0, 1, 0), 4.5);
+        assert_eq!(raster.get(0, 1, 3), 7.5);
+    }
+
+    #[test]
+    fn raster_read_hdf5_dataset_uri_reads_chunked_multilevel_root_f32_path() {
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".h5")
+            .tempfile()
+            .expect("temp file should be created");
+        write_synthetic_hdf5_chunked_multilevel_root_fixture(&mut tmp);
+
+        let uri = format!(
+            "{}#dataset=/ScienceData/NDVI_Chunked_MultiLevelRoot",
+            tmp.path().to_string_lossy()
+        );
+        let raster = Raster::read(&uri).expect("multilevel root chunk index should materialize");
+        assert_eq!(raster.rows, 2);
+        assert_eq!(raster.cols, 6);
+        assert_eq!(raster.bands, 1);
+        assert_eq!(raster.data_type, DataType::F32);
+        assert_eq!(raster.get(0, 0, 0), 0.5);
+        assert_eq!(raster.get(0, 0, 3), 3.5);
+        assert_eq!(raster.get(0, 0, 5), 9.5);
+        assert_eq!(raster.get(0, 1, 0), 4.5);
+        assert_eq!(raster.get(0, 1, 3), 7.5);
+        assert_eq!(raster.get(0, 1, 5), 11.5);
+    }
+
+    #[test]
+    fn raster_read_hdf5_dataset_uri_reports_malformed_multilevel_root_as_unsupported() {
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".h5")
+            .tempfile()
+            .expect("temp file should be created");
+        write_synthetic_hdf5_chunked_malformed_multilevel_root_fixture(&mut tmp);
+
+        let uri = format!(
+            "{}#dataset=/ScienceData/NDVI_Chunked_MalformedMultiLevel",
+            tmp.path().to_string_lossy()
+        );
+        let err = Raster::read(&uri).expect_err("malformed multilevel root should fail explicitly");
+        assert!(err
+            .to_string()
+            .contains("B-tree node is missing TREE signature"));
+    }
+
+    #[test]
+    fn raster_read_hdf5_dataset_uri_reports_malformed_multilevel_fanout_as_unsupported() {
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".h5")
+            .tempfile()
+            .expect("temp file should be created");
+        write_synthetic_hdf5_chunked_malformed_multilevel_fanout_fixture(&mut tmp);
+
+        let uri = format!(
+            "{}#dataset=/ScienceData/NDVI_Chunked_MalformedMultiLevelFanout",
+            tmp.path().to_string_lossy()
+        );
+        let err = Raster::read(&uri)
+            .expect_err("malformed multilevel fanout should fail explicitly");
+        assert!(err
+            .to_string()
+            .contains("B-tree node is missing TREE signature"));
+    }
+
+    #[test]
+    fn raster_read_hdf5_dataset_uri_reports_unimplemented_materialization() {
+        let err = Raster::read("mock_scene.h5:///ScienceData/DoesNotExist")
+            .expect_err("HDF5 dataset URI should currently fail explicitly");
+        assert!(err
+            .to_string()
+            .contains("HDF5 dataset path resolution failed"));
     }
 
     #[test]

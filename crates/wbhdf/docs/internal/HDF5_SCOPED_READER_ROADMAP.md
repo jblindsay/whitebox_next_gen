@@ -1189,11 +1189,13 @@ Operational rule:
   `crates/wbhdf/scripts/run_default_enable_smoke.sh` covering the same Tier 1/non-HDF matrix
   plus core `wbhdf` multilevel regressions (`multilevel_internal_fanout`, `budget_exhaustion`),
   with shell syntax validation (`bash -n crates/wbhdf/scripts/run_default_enable_smoke.sh`).
+  Follow-up evidence (2026-06-01): executed the smoke runner end-to-end after traversal-hardening
+  updates and aligned malformed-layout assertion expectations in `wbraster`; full matrix passed.
 - [x] Record go/no-go decision with blockers and next actions.
   Evidence (2026-05-31): **No-Go** for removing temporary stabilization guardrails at this time.
   Current blockers:
   - HDF5/NetCDF raster dataset URI materialization in `wbraster` is now partially implemented for metadata-resolved contiguous scalar layouts (`f32`/`f64`) plus bounded chunked recursive scalar layouts, including a validated single deflate-filter path, right-sibling leaf chaining, single-level internal-root traversal, and staged multilevel traversal with sibling internal-node fanout using the current internal-record shape; the same bounded helper now also has an env-gated ATL08 real-fixture smoke probe at the `wbhdf` layer. Malformed root-only trees, malformed sibling-fanout trees, recursion-budget exhaustion, and non-scalar layouts remain out of scope.
-  - Supported-layout matrix, rollback runbook, reference-tolerance matrix, and MODIS scope boundary are now documented, but broader default-enable gate items remain incomplete (repeatable non-HDF regression confidence at decision time and real multi-level tree validation depth).
+  - Supported-layout matrix, rollback runbook, reference-tolerance matrix, and MODIS scope boundary are now documented, and repeatable non-HDF regression confidence is now refreshed with a passing smoke matrix; broader readiness gaps remain in real multi-level tree validation depth and generalized end-to-end confidence.
   Next actions:
   - harden and validate the staged internal-record assumptions against additional real multi-level HDF5 chunk trees,
   - expand non-HDF and Tier 1 smoke coverage into repeatable CI/lightweight local scripts,
@@ -1229,7 +1231,11 @@ Enable default integration only when all items below are true:
   - `cargo test -p wbhdf viirs_vnp13_xdim_contiguous_window_matches_h5dump_reference -- --nocapture`
   - `cargo test -p wbhdf viirs_vnp21_latitude_row_major_window_matches_h5dump_reference -- --nocapture`
   - `cargo test -p wbhdf viirs_vnp21_longitude_row_major_window_matches_h5dump_reference -- --nocapture`
-- [ ] No high-severity regressions in non-HDF raster readers/writers.
+- [x] No high-severity regressions in non-HDF raster readers/writers.
+  Evidence (2026-06-01): repeatable smoke matrix passed via
+  `./crates/wbhdf/scripts/run_default_enable_smoke.sh`, including
+  `raster::tests::get_set`, `raster::tests::statistics`,
+  `roundtrip_esri_ascii`, and `roundtrip_geotiff` coverage.
 - [x] `wblidar` workflows demonstrate no required pre-conversion for validated Tier 1 paths.
   Evidence (2026-06-01): validated direct `wblidar` adapter paths for GEDI canopy-style
   contiguous reads and ATL08 canopy chunked reads with fixture-backed tests and explicit

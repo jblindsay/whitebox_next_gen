@@ -30,6 +30,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 	- Tier 1 supported-layout matrix documented/tested,
 	- fail-fast unsupported-layout diagnostics coverage,
 	- direct `wblidar` no-preconversion validation for currently validated Tier 1 paths.
+- Fresh smoke-matrix execution evidence recorded in
+	`docs/internal/HDF5_SCOPED_READER_ROADMAP.md`:
+	- end-to-end pass of `scripts/run_default_enable_smoke.sh` after traversal hardening,
+	- non-HDF regression gate item marked complete from current run output.
 - Bounded chunked multilevel traversal hardening in `src/btree.rs`:
 	- fail-fast `UnsupportedLayout` diagnostics for invalid internal child addresses
 	  (`0` or `u64::MAX`) before recursive descent,

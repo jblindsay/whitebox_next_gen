@@ -9,6 +9,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Changed
 - Removed entries that belonged to the `wbhdf` crate and consolidated that
   history under `crates/wbhdf/CHANGELOG.md`.
+- Updated malformed multilevel HDF5 URI regression assertions to accept explicit
+  staged traversal diagnostics emitted by current `wbhdf` hardening paths
+  (`invalid child address`, `internal-node cycle`, and internal-level budget
+  exhaustion), while retaining compatibility with legacy TREE-signature failures.
 
 
 ## [0.1.5] – 2026-05-09

@@ -5730,9 +5730,14 @@ mod tests {
             tmp.path().to_string_lossy()
         );
         let err = Raster::read(&uri).expect_err("malformed multilevel root should fail explicitly");
-        assert!(err
-            .to_string()
-            .contains("B-tree node is missing TREE signature"));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("B-tree node is missing TREE signature")
+                || msg.contains("exhausted internal-level budget")
+                || msg.contains("internal-node cycle")
+                || msg.contains("invalid child address"),
+            "unexpected malformed-root diagnostic: {msg}"
+        );
     }
 
     #[test]
@@ -5749,9 +5754,14 @@ mod tests {
         );
         let err = Raster::read(&uri)
             .expect_err("malformed multilevel fanout should fail explicitly");
-        assert!(err
-            .to_string()
-            .contains("B-tree node is missing TREE signature"));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("B-tree node is missing TREE signature")
+                || msg.contains("exhausted internal-level budget")
+                || msg.contains("internal-node cycle")
+                || msg.contains("invalid child address"),
+            "unexpected malformed-fanout diagnostic: {msg}"
+        );
     }
 
     #[test]

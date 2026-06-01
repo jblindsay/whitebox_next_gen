@@ -25,6 +25,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 	- recursion-path cycle detection for internal-node traversal,
 	- explicit `UnsupportedLayout` diagnostics when internal-node cycles are detected,
 	- regression coverage in `btree::tests::reports_internal_node_cycle_as_unsupported`.
+- Default-enable roadmap gate evidence updates in
+	`docs/internal/HDF5_SCOPED_READER_ROADMAP.md` marking completion evidence for:
+	- Tier 1 supported-layout matrix documented/tested,
+	- fail-fast unsupported-layout diagnostics coverage,
+	- direct `wblidar` no-preconversion validation for currently validated Tier 1 paths.
 - Bounded chunked multilevel traversal hardening in `src/btree.rs`:
 	- fail-fast `UnsupportedLayout` diagnostics for invalid internal child addresses
 	  (`0` or `u64::MAX`) before recursive descent,

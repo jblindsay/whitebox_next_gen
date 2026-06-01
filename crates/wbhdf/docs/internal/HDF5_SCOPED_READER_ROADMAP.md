@@ -1193,7 +1193,7 @@ Operational rule:
   Evidence (2026-05-31): **No-Go** for removing temporary stabilization guardrails at this time.
   Current blockers:
   - HDF5/NetCDF raster dataset URI materialization in `wbraster` is now partially implemented for metadata-resolved contiguous scalar layouts (`f32`/`f64`) plus bounded chunked recursive scalar layouts, including a validated single deflate-filter path, right-sibling leaf chaining, single-level internal-root traversal, and staged multilevel traversal with sibling internal-node fanout using the current internal-record shape; the same bounded helper now also has an env-gated ATL08 real-fixture smoke probe at the `wbhdf` layer. Malformed root-only trees, malformed sibling-fanout trees, recursion-budget exhaustion, and non-scalar layouts remain out of scope.
-  - Supported-layout matrix, rollback runbook, and reference-tolerance matrix are now documented, but broader default-enable gate items remain incomplete (real multi-level tree validation depth and MODIS scope-boundary closure for default enablement).
+  - Supported-layout matrix, rollback runbook, reference-tolerance matrix, and MODIS scope boundary are now documented, but broader default-enable gate items remain incomplete (repeatable non-HDF regression confidence at decision time and real multi-level tree validation depth).
   Next actions:
   - harden and validate the staged internal-record assumptions against additional real multi-level HDF5 chunk trees,
   - expand non-HDF and Tier 1 smoke coverage into repeatable CI/lightweight local scripts,
@@ -1210,8 +1210,17 @@ Operational rule:
 
 Enable default integration only when all items below are true:
 
-- [ ] Tier 1 supported-layout matrix is documented and tested.
-- [ ] Unsupported layouts fail fast with explicit, user-actionable errors.
+- [x] Tier 1 supported-layout matrix is documented and tested.
+  Evidence (2026-06-01): documented matrix in `crates/wbhdf/docs/SUPPORTED_HDF_PRODUCT_LAYOUTS.md`,
+  plus fixture-backed targeted coverage and repeatable smoke-runner command set in
+  `crates/wbhdf/scripts/run_default_enable_smoke.sh`.
+- [x] Unsupported layouts fail fast with explicit, user-actionable errors.
+  Evidence (2026-06-01): explicit malformed-layout regression coverage now includes multilevel
+  malformed root/fanout handling, invalid internal child-address handling, and internal-node
+  cycle detection (`reports_malformed_multilevel_root_as_unsupported`,
+  `reports_malformed_multilevel_internal_fanout_as_unsupported`,
+  `reports_invalid_internal_child_address_as_unsupported`,
+  `reports_internal_node_cycle_as_unsupported`) with deterministic `UnsupportedLayout` diagnostics.
 - [x] Reference-comparison tolerances are established and met for validated sample products.
   Evidence (2026-06-01): added `crates/wbhdf/docs/internal/HDF_REFERENCE_TOLERANCE_MATRIX.md`
   capturing explicit tolerance contracts for validated GEDI/VIIRS reference paths and
@@ -1221,7 +1230,10 @@ Enable default integration only when all items below are true:
   - `cargo test -p wbhdf viirs_vnp21_latitude_row_major_window_matches_h5dump_reference -- --nocapture`
   - `cargo test -p wbhdf viirs_vnp21_longitude_row_major_window_matches_h5dump_reference -- --nocapture`
 - [ ] No high-severity regressions in non-HDF raster readers/writers.
-- [ ] `wblidar` workflows demonstrate no required pre-conversion for validated Tier 1 paths.
+- [x] `wblidar` workflows demonstrate no required pre-conversion for validated Tier 1 paths.
+  Evidence (2026-06-01): validated direct `wblidar` adapter paths for GEDI canopy-style
+  contiguous reads and ATL08 canopy chunked reads with fixture-backed tests and explicit
+  diagnostics coverage in `wblidar::hdf_adapter` and `wblidar::hdf_products`.
 - [x] Rollback plan is documented (how to re-apply temporary stabilization guardrails if needed).
   Evidence (2026-06-01): added `crates/wbhdf/docs/internal/HDF_DEFAULT_ENABLE_ROLLBACK_PLAN.md` with
   Mode A/Mode B rollback paths, verification commands, incident logging requirements,

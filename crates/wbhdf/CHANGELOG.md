@@ -17,6 +17,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 	`docs/internal/HDF_MODIS_SCOPE_BOUNDARY.md` defining named in-scope companion
 	families (`MOD09`/`MYD09`, `MOD11`/`MYD11`, `MOD13`/`MYD13`) and default-enable
 	wording/diagnostic constraints.
+- Repeatable default-enable smoke script
+	`scripts/run_default_enable_smoke.sh` to run Tier 1 HDF dispatch checks,
+	representative non-HDF `wbraster` regressions, and core `wbhdf` multilevel
+	traversal regressions from a single command path.
 - Bounded chunked multilevel traversal hardening in `src/btree.rs`:
 	- fail-fast `UnsupportedLayout` diagnostics for invalid internal child addresses
 	  (`0` or `u64::MAX`) before recursive descent,

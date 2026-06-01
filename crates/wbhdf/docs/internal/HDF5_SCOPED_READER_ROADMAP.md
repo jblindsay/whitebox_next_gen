@@ -1185,6 +1185,10 @@ Operational rule:
   Evidence (2026-05-31): checklist reviewed against current Week 3 outcomes (Tier 1 paths validated, diagnostics in place, bounded-memory safeguards present, and `wbraster` non-HDF regression smoke checks passing).
 - [x] Verify CI/local test matrix includes Tier 1 smoke coverage and non-HDF5 regression coverage.
   Evidence (2026-05-31): local matrix now includes targeted Tier 1/HDF dispatch checks (`cargo check -p wbraster`, `cargo test -p wbraster raster_read_hdf -- --nocapture`) plus representative non-HDF regressions (`cargo test -p wbraster raster::tests::get_set -- --nocapture`, `cargo test -p wbraster raster::tests::statistics -- --nocapture`, `cargo test -p wbraster --test integration roundtrip_esri_ascii -- --nocapture`, `cargo test -p wbraster --test integration roundtrip_geotiff -- --nocapture`).
+  Follow-up evidence (2026-06-01): added repeatable local smoke runner
+  `crates/wbhdf/scripts/run_default_enable_smoke.sh` covering the same Tier 1/non-HDF matrix
+  plus core `wbhdf` multilevel regressions (`multilevel_internal_fanout`, `budget_exhaustion`),
+  with shell syntax validation (`bash -n crates/wbhdf/scripts/run_default_enable_smoke.sh`).
 - [x] Record go/no-go decision with blockers and next actions.
   Evidence (2026-05-31): **No-Go** for removing temporary stabilization guardrails at this time.
   Current blockers:

@@ -7,6 +7,12 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Reference-tolerance formalization artifacts:
+	- `wbhdf::compare` now includes `compare_f64_exact` and
+	  `compare_f64_with_tolerance` with unit coverage,
+	- VIIRS `XDim` reference validation now uses reusable `f64` tolerance helpers,
+	- `docs/internal/HDF_REFERENCE_TOLERANCE_MATRIX.md` documents explicit tolerance
+	  contracts for currently validated GEDI/VIIRS reference paths.
 - Bounded chunked multilevel traversal hardening in `src/btree.rs`:
 	- fail-fast `UnsupportedLayout` diagnostics for invalid internal child addresses
 	  (`0` or `u64::MAX`) before recursive descent,

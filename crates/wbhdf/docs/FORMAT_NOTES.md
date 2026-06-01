@@ -120,6 +120,16 @@ real GEDI/ICESat-2 chunk-layout fixtures in subsequent phases.
 - Additional VIIRS fields in this product (for example, `500 m 8 days EVI`) are chunked +
 	deflate and remain follow-up targets for generalized chunked numeric decode paths.
 
+## Day 4.12b Notes (Reference Tolerance Contracts)
+
+- Added `docs/internal/HDF_REFERENCE_TOLERANCE_MATRIX.md` as the canonical tolerance-contract
+	reference for fixture-backed value comparisons against external extracts.
+- Introduced reusable `f64` comparison helpers in `wbhdf::compare` so contiguous `f64`
+	reference checks use the same mismatch/max-diff diagnostics model as `f32` checks.
+- VIIRS `XDim` reference validation now routes through `compare_f64_with_tolerance(..., 1e-8)`
+	instead of per-index manual diff assertions, keeping tolerance enforcement explicit and
+	consistent.
+
 ## Day 4.13 Notes (MODIS Fixture Intake for HDF4 Feasibility)
 
 - Local MODIS fixture intake now includes all three requested family variants:

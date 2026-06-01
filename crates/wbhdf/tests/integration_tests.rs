@@ -6,7 +6,7 @@ use wbhdf::attributes::{
     dataset_metadata_contains_text_in_file, dataset_metadata_text_report_in_file,
 };
 use wbhdf::btree::read_chunked_storage_records_bounded_in_file;
-use wbhdf::compare::compare_f32_with_tolerance;
+use wbhdf::compare::{compare_f32_with_tolerance, compare_f64_with_tolerance};
 use wbhdf::dataset::{
     apply_fill_value_mapping_f32, decode_chunked_i16_row_major_window_in_file,
     decode_chunked_f32_row_major_window_in_file,
@@ -588,14 +588,11 @@ fn viirs_vnp13_xdim_contiguous_window_matches_h5dump_reference() {
     let actual = read_contiguous_f64_window_in_file(&path, 78_857, expected.len(), Endianness::Little)
         .expect("VIIRS VNP13 XDim contiguous f64 window should decode");
 
-    assert_eq!(actual.len(), expected.len());
-    for (idx, (a, e)) in actual.iter().zip(expected.iter()).enumerate() {
-        let diff = (a - e).abs();
-        assert!(
-            diff <= 1e-8,
-            "VIIRS XDim mismatch at index {idx}: actual={a}, expected={e}, abs_diff={diff}"
-        );
-    }
+    let summary = compare_f64_with_tolerance(&actual, &expected, 1e-8)
+        .expect("VIIRS XDim first-window comparison should succeed");
+    assert_eq!(summary.compared_len, expected.len());
+    assert_eq!(summary.mismatches, 0);
+    assert!(summary.max_abs_diff <= 1e-8);
 
     let overlap = read_contiguous_f64_window_in_file(&path, 78_857 + 4 * 8, 4, Endianness::Little)
         .expect("VIIRS VNP13 XDim overlapping f64 window should decode");

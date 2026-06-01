@@ -1189,7 +1189,7 @@ Operational rule:
   Evidence (2026-05-31): **No-Go** for removing temporary stabilization guardrails at this time.
   Current blockers:
   - HDF5/NetCDF raster dataset URI materialization in `wbraster` is now partially implemented for metadata-resolved contiguous scalar layouts (`f32`/`f64`) plus bounded chunked recursive scalar layouts, including a validated single deflate-filter path, right-sibling leaf chaining, single-level internal-root traversal, and staged multilevel traversal with sibling internal-node fanout using the current internal-record shape; the same bounded helper now also has an env-gated ATL08 real-fixture smoke probe at the `wbhdf` layer. Malformed root-only trees, malformed sibling-fanout trees, recursion-budget exhaustion, and non-scalar layouts remain out of scope.
-  - Supported-layout matrix is now documented, but broader default-enable gate items remain incomplete (reference-tolerance expansion).
+  - Supported-layout matrix, rollback runbook, and reference-tolerance matrix are now documented, but broader default-enable gate items remain incomplete (real multi-level tree validation depth and MODIS scope-boundary closure for default enablement).
   Next actions:
   - harden and validate the staged internal-record assumptions against additional real multi-level HDF5 chunk trees,
   - expand non-HDF and Tier 1 smoke coverage into repeatable CI/lightweight local scripts,
@@ -1208,7 +1208,14 @@ Enable default integration only when all items below are true:
 
 - [ ] Tier 1 supported-layout matrix is documented and tested.
 - [ ] Unsupported layouts fail fast with explicit, user-actionable errors.
-- [ ] Reference-comparison tolerances are established and met for validated sample products.
+- [x] Reference-comparison tolerances are established and met for validated sample products.
+  Evidence (2026-06-01): added `crates/wbhdf/docs/internal/HDF_REFERENCE_TOLERANCE_MATRIX.md`
+  capturing explicit tolerance contracts for validated GEDI/VIIRS reference paths and
+  aligned utility coverage. Targeted confirmations passed:
+  - `cargo test -p wbhdf gedi_elev_lowestmode_contiguous_window_matches_h5dump_reference -- --nocapture`
+  - `cargo test -p wbhdf viirs_vnp13_xdim_contiguous_window_matches_h5dump_reference -- --nocapture`
+  - `cargo test -p wbhdf viirs_vnp21_latitude_row_major_window_matches_h5dump_reference -- --nocapture`
+  - `cargo test -p wbhdf viirs_vnp21_longitude_row_major_window_matches_h5dump_reference -- --nocapture`
 - [ ] No high-severity regressions in non-HDF raster readers/writers.
 - [ ] `wblidar` workflows demonstrate no required pre-conversion for validated Tier 1 paths.
 - [x] Rollback plan is documented (how to re-apply temporary stabilization guardrails if needed).
@@ -1275,6 +1282,24 @@ Practical interpretation of the snapshot above:
   - reduces ambiguity in parser-failure triage,
   - does **not** close the broader staged-internal-shape validation blocker (still requires
     additional real multi-level tree evidence).
+
+### Reference Tolerance Checkpoint (2026-06-01)
+
+- Added reusable `f64` tolerance-comparison utilities in `wbhdf::compare`:
+  `compare_f64_exact(...)` and `compare_f64_with_tolerance(...)` with unit coverage.
+- Updated VIIRS `XDim` reference validation to use the reusable `f64` tolerance helper,
+  replacing ad hoc per-index diff assertions.
+- Added explicit tolerance-contract documentation in
+  `crates/wbhdf/docs/internal/HDF_REFERENCE_TOLERANCE_MATRIX.md` covering currently
+  validated GEDI/VIIRS reference paths.
+- Targeted helper + fixture-backed tolerance checks passed:
+  - `cargo test -p wbhdf compare::tests::reports_f64_exact_match_without_mismatches -- --nocapture`
+  - `cargo test -p wbhdf compare::tests::reports_f64_toleranced_match_when_diffs_are_small -- --nocapture`
+  - `cargo test -p wbhdf compare::tests::reports_f64_mismatches_and_first_index -- --nocapture`
+  - `cargo test -p wbhdf gedi_elev_lowestmode_contiguous_window_matches_h5dump_reference -- --nocapture`
+  - `cargo test -p wbhdf viirs_vnp13_xdim_contiguous_window_matches_h5dump_reference -- --nocapture`
+  - `cargo test -p wbhdf viirs_vnp21_latitude_row_major_window_matches_h5dump_reference -- --nocapture`
+  - `cargo test -p wbhdf viirs_vnp21_longitude_row_major_window_matches_h5dump_reference -- --nocapture`
 
 ### Tier 1 Operational Core Shortlist (Concrete Targets)
 

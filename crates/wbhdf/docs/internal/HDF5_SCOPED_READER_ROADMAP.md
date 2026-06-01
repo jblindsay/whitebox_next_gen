@@ -1189,7 +1189,7 @@ Operational rule:
   Evidence (2026-05-31): **No-Go** for removing temporary stabilization guardrails at this time.
   Current blockers:
   - HDF5/NetCDF raster dataset URI materialization in `wbraster` is now partially implemented for metadata-resolved contiguous scalar layouts (`f32`/`f64`) plus bounded chunked recursive scalar layouts, including a validated single deflate-filter path, right-sibling leaf chaining, single-level internal-root traversal, and staged multilevel traversal with sibling internal-node fanout using the current internal-record shape; the same bounded helper now also has an env-gated ATL08 real-fixture smoke probe at the `wbhdf` layer. Malformed root-only trees, malformed sibling-fanout trees, recursion-budget exhaustion, and non-scalar layouts remain out of scope.
-  - Supported-layout matrix is now documented, but broader default-enable gate items remain incomplete (reference tolerance expansion and rollback-plan documentation).
+  - Supported-layout matrix is now documented, but broader default-enable gate items remain incomplete (reference-tolerance expansion).
   Next actions:
   - harden and validate the staged internal-record assumptions against additional real multi-level HDF5 chunk trees,
   - expand non-HDF and Tier 1 smoke coverage into repeatable CI/lightweight local scripts,
@@ -1211,7 +1211,10 @@ Enable default integration only when all items below are true:
 - [ ] Reference-comparison tolerances are established and met for validated sample products.
 - [ ] No high-severity regressions in non-HDF raster readers/writers.
 - [ ] `wblidar` workflows demonstrate no required pre-conversion for validated Tier 1 paths.
-- [ ] Rollback plan is documented (how to re-apply temporary stabilization guardrails if needed).
+- [x] Rollback plan is documented (how to re-apply temporary stabilization guardrails if needed).
+  Evidence (2026-06-01): added `crates/wbhdf/docs/internal/HDF_DEFAULT_ENABLE_ROLLBACK_PLAN.md` with
+  Mode A/Mode B rollback paths, verification commands, incident logging requirements,
+  and explicit re-enable criteria.
 - [ ] MODIS support scope is explicitly bounded to named product families if the HDF4/HDF-EOS2 companion path is enabled.
 
 ---

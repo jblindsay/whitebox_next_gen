@@ -14,6 +14,12 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 	  `btree::tests::reports_invalid_internal_child_address_as_unsupported`, and
 	- targeted non-regression confirmation for existing multilevel internal-fanout and
 	  budget-exhaustion traversal paths.
+- Default-enable rollback runbook in
+	`docs/internal/HDF_DEFAULT_ENABLE_ROLLBACK_PLAN.md` defining:
+	- fast operational guardrail rollback for `wbraster` HDF URI dispatch,
+	- hard scope-clamp fallback for HDF5/NetCDF URI materialization,
+	- post-rollback verification matrix, and
+	- incident logging + re-enable criteria.
 - Initial crate scaffolding for `wbhdf`.
 - Module skeletons for error handling, superblock, object headers, datasets, chunk indexing, filters, datatypes, and attributes.
 - Explicit `Endianness`-aware decode helpers in `src/datatypes.rs` for `F32`, `F64`, and `I16` scalar/slice payload decoding, with synthetic little-endian and big-endian test coverage.

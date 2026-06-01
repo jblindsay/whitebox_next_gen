@@ -223,3 +223,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 	`modis_mod13_documented_field_vocabulary_is_discoverable_with_reports`),
 	validating MOD09/MOD11/MOD13 grid/field metadata vocabulary discoverability
 	with explicit present/missing diagnostics.
+- Added report-based documented field-vocabulary regressions for MODIS Aqua
+	companions (`myd09_documented_field_vocabulary_is_discoverable_with_reports`,
+	`myd11_documented_field_vocabulary_is_discoverable_with_reports`,
+	`myd13_documented_field_vocabulary_is_discoverable_with_reports`), validating
+	MYD09/MYD11/MYD13 grid/field metadata vocabulary discoverability with explicit
+	present/missing diagnostics.

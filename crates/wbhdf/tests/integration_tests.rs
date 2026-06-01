@@ -3677,6 +3677,74 @@ fn myd13_hdf4_eos_metadata_probe_and_payload_window_are_exercised() {
 }
 
 #[test]
+fn myd09_documented_field_vocabulary_is_discoverable_with_reports() {
+    let Some(path) = hdf4_example_fixture_in_data_dir("MYD09A1.A2008057.h01v08.061.2021087165611.hdf") else {
+        return;
+    };
+
+    let report = dataset_metadata_text_report_in_file(
+        &path,
+        "/MOD_Grid_500m_Surface_Reflectance/sur_refl_b01",
+        &[
+            "MOD_Grid_500m_Surface_Reflectance",
+            "sur_refl_b01",
+            "sur_refl_state_500m",
+        ],
+    )
+    .expect("MYD09 metadata report should succeed");
+    assert!(
+        report.missing_terms.is_empty(),
+        "MYD09 documented vocabulary should be discoverable; present={:?}, missing={:?}",
+        report.present_terms,
+        report.missing_terms,
+    );
+}
+
+#[test]
+fn myd11_documented_field_vocabulary_is_discoverable_with_reports() {
+    let Some(path) = hdf4_example_fixture_in_data_dir("MYD11A2.A2026073.h04v11.061.2026083154149.hdf") else {
+        return;
+    };
+
+    let report = dataset_metadata_text_report_in_file(
+        &path,
+        "/MODIS_Grid_8Day_1km_LST/LST_Day_1km",
+        &["MODIS_Grid_8Day_1km_LST", "LST_Day_1km", "QC_Day"],
+    )
+    .expect("MYD11 metadata report should succeed");
+    assert!(
+        report.missing_terms.is_empty(),
+        "MYD11 documented vocabulary should be discoverable; present={:?}, missing={:?}",
+        report.present_terms,
+        report.missing_terms,
+    );
+}
+
+#[test]
+fn myd13_documented_field_vocabulary_is_discoverable_with_reports() {
+    let Some(path) = hdf4_example_fixture_in_data_dir("MYD13A1.A2017281.h01v10.061.2021286205049.hdf") else {
+        return;
+    };
+
+    let report = dataset_metadata_text_report_in_file(
+        &path,
+        "/MODIS_Grid_16DAY_500m_VI/500m 16 days NDVI",
+        &[
+            "MODIS_Grid_16DAY_500m_VI",
+            "500m 16 days NDVI",
+            "500m 16 days VI Quality",
+        ],
+    )
+    .expect("MYD13 metadata report should succeed");
+    assert!(
+        report.missing_terms.is_empty(),
+        "MYD13 documented vocabulary should be discoverable; present={:?}, missing={:?}",
+        report.present_terms,
+        report.missing_terms,
+    );
+}
+
+#[test]
 fn viirs_m3_hdf5_fixture_discovers_science_paths() {
     let path = std::path::Path::new(
         "/Users/johnlindsay/Documents/data/viirs/SVM03_j01_d20190505_t0010299_e0011544_b07557_c20210831195745130843_ADu_ops.h5",

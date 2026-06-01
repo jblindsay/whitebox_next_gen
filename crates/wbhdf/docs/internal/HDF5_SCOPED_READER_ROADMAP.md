@@ -468,6 +468,14 @@ wbhdf/
   documented grid/field vocabulary discoverability with explicit present/missing diagnostics
   via `dataset_metadata_text_report_in_file(...)` for MOD09/MOD11/MOD13 reference datasets.
 
+- [x] Extend report-based documented field-vocabulary diagnostics to Aqua companion fixtures.
+  Evidence (2026-06-01): fixture-backed integration tests
+  `myd09_documented_field_vocabulary_is_discoverable_with_reports`,
+  `myd11_documented_field_vocabulary_is_discoverable_with_reports`, and
+  `myd13_documented_field_vocabulary_is_discoverable_with_reports` now validate
+  documented grid/field vocabulary discoverability with explicit present/missing diagnostics
+  via `dataset_metadata_text_report_in_file(...)` for MYD09/MYD11/MYD13 companion datasets.
+
 - [x] Add VIIRS HDF4 swath metadata enumeration coverage.
   Evidence (2026-05-31): `viirs_vnp09_hdf4_eos_metadata_probe_enumerates_expected_fields` now
   probes the HDF4 `VNP09_NRT` swath fixture and verifies the embedded EOS metadata enumerates the
@@ -1227,11 +1235,11 @@ Status legend:
 | VIIRS | VIIRS-M3-SDR fixture | Partial (Early) | Metadata + science/geolocation path discoverability | Payload decode validation for science fields |
 | VIIRS | VIIRS-I4-IMG-EDR fixture | Partial (Early) | Metadata + science/geolocation path discoverability | Payload decode validation for science fields |
 | MODIS | MOD09A1 | Partial (Strong) | HDF4 metadata/path/shape/georef + report-based documented field-vocabulary diagnostics + payload-window probe/decode-attempt coverage | Deterministic SDS descriptor-to-field mapping for full-scene extraction |
-| MODIS | MYD09A1 | Partial (Strong) | Aqua companion metadata + payload-window probe/decode-attempt coverage | Same full-scene deterministic mapping gap as MOD09 |
+| MODIS | MYD09A1 | Partial (Strong) | Aqua companion metadata + report-based documented field-vocabulary diagnostics + payload-window probe/decode-attempt coverage | Same full-scene deterministic mapping gap as MOD09 |
 | MODIS | MOD11A2 | Partial (Strong) | Metadata/path/shape/georef + report-based documented field-vocabulary diagnostics + real payload-window assertion for `LST_Day_1km` | Full-scene deterministic decode and broader QA semantics |
-| MODIS | MYD11A2 | Partial (Strong) | Aqua companion metadata + payload-window probe/decode-attempt coverage | Same full-scene deterministic mapping gap as MOD11 |
+| MODIS | MYD11A2 | Partial (Strong) | Aqua companion metadata + report-based documented field-vocabulary diagnostics + payload-window probe/decode-attempt coverage | Same full-scene deterministic mapping gap as MOD11 |
 | MODIS | MOD13A1 | Partial (Strong) | Metadata/path/shape/georef + report-based documented field-vocabulary diagnostics + real payload-window assertion for NDVI path | Full-scene deterministic decode and richer semantic normalization |
-| MODIS | MYD13A1 | Partial (Strong) | Aqua companion metadata + payload-window probe/decode-attempt coverage | Same full-scene deterministic mapping gap as MOD13 |
+| MODIS | MYD13A1 | Partial (Strong) | Aqua companion metadata + report-based documented field-vocabulary diagnostics + payload-window probe/decode-attempt coverage | Same full-scene deterministic mapping gap as MOD13 |
 
 Tier 1 interpretation for planning:
 - **Supported (Core):** 1 product currently meets core bar (GEDI02_A)

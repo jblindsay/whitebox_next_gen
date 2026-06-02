@@ -46,15 +46,16 @@ Tracked projected realization families in current registry surface:
 - v2: EPSG 22207-22222
 - v3: EPSG 22307-22324
 - v4: EPSG 22407-22424
+- v5: EPSG 22507-22524
 - v6: EPSG 22607-22624
 - v7: EPSG 22707-22724
 - v8: EPSG 22807-22824
 
 Projected-v5 note:
-- A projected NAD83(CSRS)v5 UTM corridor family is not currently wired in the same pattern as v2/v3/v4/v6/v7/v8, so projected v5 pair activation is treated as N/A in this matrix for now.
+- A projected NAD83(CSRS)v5 UTM corridor family is now tracked in the scaffold and represented in this matrix as Pending.
 
 Pending zone-corridor rule (coded):
-- None in the currently scoped CSRS forward corridors (to v8) for zones 7-24.
+- Reverse-direction corridors `v8 -> v3/v4/v6/v7` are explicitly marked Pending for zones 7-24.
 
 | Source realization | Target realization | Status | Preferred operation |
 |---|---|---|---:|

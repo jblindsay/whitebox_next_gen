@@ -1310,6 +1310,7 @@ enum CsrsRealization {
     V2,
     V3,
     V4,
+    V5,
     V6,
     V7,
     V8,
@@ -1319,6 +1320,7 @@ const CSRS_SUPPORTED_REALIZATIONS: &[CsrsRealization] = &[
     CsrsRealization::V2,
     CsrsRealization::V3,
     CsrsRealization::V4,
+    CsrsRealization::V5,
     CsrsRealization::V6,
     CsrsRealization::V7,
     CsrsRealization::V8,
@@ -1332,6 +1334,7 @@ fn csrs_realization_label(realization: CsrsRealization) -> &'static str {
         CsrsRealization::V2 => "v2",
         CsrsRealization::V3 => "v3",
         CsrsRealization::V4 => "v4",
+        CsrsRealization::V5 => "v5",
         CsrsRealization::V6 => "v6",
         CsrsRealization::V7 => "v7",
         CsrsRealization::V8 => "v8",
@@ -1388,6 +1391,9 @@ fn csrs_realization_zone_from_epsg(code: u32) -> Option<(CsrsRealization, u8)> {
     if (22407..=22424).contains(&code) {
         return Some((CsrsRealization::V4, (code - 22400) as u8));
     }
+    if (22507..=22524).contains(&code) {
+        return Some((CsrsRealization::V5, (code - 22500) as u8));
+    }
     if (22607..=22624).contains(&code) {
         return Some((CsrsRealization::V6, (code - 22600) as u8));
     }
@@ -1422,7 +1428,14 @@ const CSRS_ACTIVE_PAIR_POLICIES: &[(CsrsRealization, CsrsRealization, u32)] = &[
 ];
 
 /// Pending CSRS realization-pair policies under current rollout scope.
-const CSRS_PENDING_PAIR_POLICIES: &[(CsrsRealization, CsrsRealization)] = &[];
+const CSRS_PENDING_PAIR_POLICIES: &[(CsrsRealization, CsrsRealization)] = &[
+    // Reverse-direction corridors are intentionally pending until authoritative
+    // operation preferences are finalized for reverse routing.
+    (CsrsRealization::V8, CsrsRealization::V3),
+    (CsrsRealization::V8, CsrsRealization::V4),
+    (CsrsRealization::V8, CsrsRealization::V6),
+    (CsrsRealization::V8, CsrsRealization::V7),
+];
 
 /// Activation matrix for NAD83(CSRS) realization-to-realization UTM transforms.
 ///

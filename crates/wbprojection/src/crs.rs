@@ -1830,4 +1830,34 @@ mod tests {
         assert!((via_pref.1 - base.1).abs() < 1e-9);
         assert!((via_pref.2 - base.2).abs() < 1e-9);
     }
+
+    #[test]
+    fn transform_to_with_preferred_operation_reports_pending_for_reverse_csrs_corridor() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let src = Crs::from_epsg(22817).unwrap();
+        let dst = Crs::from_epsg(22317).unwrap();
+
+        let err = src
+            .transform_to_with_preferred_operation(500_000.0, 5_500_000.0, &dst, None)
+            .unwrap_err();
+        let msg = format!("{err}").to_ascii_lowercase();
+        assert!(msg.contains("pending authoritative activation"));
+    }
+
+    #[test]
+    fn transform_to_3d_with_preferred_operation_reports_pending_for_reverse_csrs_corridor() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let src = Crs::from_epsg(22817).unwrap();
+        let dst = Crs::from_epsg(22317).unwrap();
+
+        let err = src
+            .transform_to_3d_with_preferred_operation(500_000.0, 5_500_000.0, 42.0, &dst, None)
+            .unwrap_err();
+        let msg = format!("{err}").to_ascii_lowercase();
+        assert!(msg.contains("pending authoritative activation"));
+    }
 }

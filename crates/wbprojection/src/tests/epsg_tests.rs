@@ -10,6 +10,7 @@ use crate::{
     GridVerticalOffsetProvider,
     VerticalOffsetGrid,
     clear_runtime_epsg_aliases,
+    is_pending_preferred_operation_crs_pair,
     epsg_alias_catalog,
     epsg_from_srs_reference,
     epsg_from_wkt,
@@ -1189,6 +1190,7 @@ fn epsg_csrs_utm_active_and_realization_codes_roundtrip() {
         (9713u32, -39.0, 8.5),   // NAD83(CSRS) zone 24N
         (22207u32, -141.0, 64.0), // NAD83(CSRS)v2 zone 7N
         (22222u32, -45.0, 72.0),  // NAD83(CSRS)v2 zone 22N
+        (22521u32, -57.0, 47.0),  // NAD83(CSRS)v5 zone 21N
         (22807u32, -141.0, 64.0), // NAD83(CSRS)v8 zone 7N
         (22822u32, -45.0, 72.0),  // NAD83(CSRS)v8 zone 22N
     ];
@@ -1251,8 +1253,8 @@ fn epsg_preferred_operation_csrs_v4_v8_same_zone_maps_to_10715() {
 }
 
 #[test]
-fn epsg_preferred_operation_csrs_activation_scaffold_enables_v3_v4_v6_v7_to_v8() {
-    let realization_bases = [22200u32, 22300u32, 22400u32, 22600u32, 22700u32, 22800u32];
+fn epsg_preferred_operation_csrs_activation_scaffold_tracks_v2_to_v8_families() {
+    let realization_bases = [22200u32, 22300u32, 22400u32, 22500u32, 22600u32, 22700u32, 22800u32];
     let zone = 17u32;
 
     for src_base in realization_bases {
@@ -1272,6 +1274,20 @@ fn epsg_preferred_operation_csrs_activation_scaffold_enables_v3_v4_v6_v7_to_v8()
             }
         }
     }
+}
+
+#[test]
+fn epsg_pending_preferred_operation_flags_reverse_v8_corridors() {
+    assert!(is_pending_preferred_operation_crs_pair(22817, 22317));
+    assert!(is_pending_preferred_operation_crs_pair(22817, 22417));
+    assert!(is_pending_preferred_operation_crs_pair(22817, 22617));
+    assert!(is_pending_preferred_operation_crs_pair(22817, 22717));
+
+    // Active forward corridors must not be flagged as pending.
+    assert!(!is_pending_preferred_operation_crs_pair(22317, 22817));
+    assert!(!is_pending_preferred_operation_crs_pair(22417, 22817));
+    assert!(!is_pending_preferred_operation_crs_pair(22617, 22817));
+    assert!(!is_pending_preferred_operation_crs_pair(22717, 22817));
 }
 
 #[test]

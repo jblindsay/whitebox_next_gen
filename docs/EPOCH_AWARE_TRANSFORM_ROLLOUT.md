@@ -73,19 +73,27 @@ Known limitation:
 ### What Is Implemented Today
 
 Current preferred-operation mapping in `wbprojection` is prototype-scoped to a known corridor family:
-- Matched-zone UTM `223xx -> 228xx` (v3 -> v8) using operation 10715, currently covering zones 7-24.
-- This routing now uses an internal realization-pair matrix scaffold (catalog-style), with only `v3 -> v8` currently marked active.
+- Matched-zone UTM forward-to-v8 corridors are active for
+  `223xx -> 228xx` (v3 -> v8),
+  `224xx -> 228xx` (v4 -> v8),
+  `226xx -> 228xx` (v6 -> v8), and
+  `227xx -> 228xx` (v7 -> v8),
+  all using operation 10715 for zones 7-24.
+- This routing uses an internal realization-pair matrix scaffold (catalog-style)
+  covering v2-v8 families, with v5 currently tracked as pending (no active
+  preferred-operation corridor yet).
 
 This does not yet cover the broader active NAD83(CSRS) UTM family in the registry
 (`2955–2962`, `3154–3160`, `3761`, `9709`, `9713`), which spans zones 7-24.
 
 Projected-v5 caveat:
-- The current compiled realization UTM family surface is v2/v3/v4/v6/v7/v8 corridors.
-- A projected v5 UTM corridor family is not yet wired in the same pattern, so projected v5 corridor activation is currently treated as out-of-scope/N/A.
+- The projected v5 UTM family (`225xx`) is now tracked in the realization scaffold.
+- No preferred-operation v5 activation is currently enabled; v5 corridors remain pending.
 
 ### What Is Not Yet Implemented
 
-- No equivalent preferred-operation mappings are currently wired for v4, v5, v6, or v7 realization families.
+- No preferred-operation mappings are currently wired for any v5 realization corridor.
+- Reverse-direction preferred-operation policies (for example, `v8 -> v3/v4/v6/v7`) remain pending.
 - No broad operation-catalog ingestion exists yet for all CSRS realization pairings.
 
 ### What Adding v4-v7 Requires

@@ -1302,6 +1302,14 @@ pub fn preferred_operation_code_for_crs_pair(source_epsg: u32, target_epsg: u32)
         return Some(operation_code);
     }
 
+    if let Some(operation_code) = preferred_operation_code_for_us_phase1_pair(source_epsg, target_epsg) {
+        return Some(operation_code);
+    }
+
+    if let Some(operation_code) = preferred_operation_code_for_europe_phase1_pair(source_epsg, target_epsg) {
+        return Some(operation_code);
+    }
+
     None
 }
 
@@ -1571,6 +1579,30 @@ pub fn europe_phase1_preferred_operation_support_snapshot(
         phase_label: EUROPE_PHASE1_LABEL,
         pairs,
     }
+}
+
+fn preferred_operation_code_for_us_phase1_pair(source_epsg: u32, target_epsg: u32) -> Option<u32> {
+    let snapshot = us_phase1_preferred_operation_support_snapshot();
+    snapshot
+        .pairs
+        .iter()
+        .find(|pair| pair.source_crs_epsg == source_epsg && pair.target_crs_epsg == target_epsg)
+        .and_then(|pair| match pair.status {
+            UsPreferredOperationStatus::Active => pair.preferred_operation_code,
+            UsPreferredOperationStatus::Pending => None,
+        })
+}
+
+fn preferred_operation_code_for_europe_phase1_pair(source_epsg: u32, target_epsg: u32) -> Option<u32> {
+    let snapshot = europe_phase1_preferred_operation_support_snapshot();
+    snapshot
+        .pairs
+        .iter()
+        .find(|pair| pair.source_crs_epsg == source_epsg && pair.target_crs_epsg == target_epsg)
+        .and_then(|pair| match pair.status {
+            EuropePreferredOperationStatus::Active => pair.preferred_operation_code,
+            EuropePreferredOperationStatus::Pending => None,
+        })
 }
 
 /// Parse supported NAD83(CSRS) realization UTM EPSG code families.

@@ -220,6 +220,10 @@ Runtime scaffolding note:
 - Europe phase-1 snapshot now expands beyond seeds with broad
    ETRS89 UTM (25801-25860) -> ETRS89 / LAEA Europe (3035) coverage,
    plus core ETRS89 anchor pairs.
+- Runtime preferred-operation lookup now consults these active US/EU corridor
+   inventories directly.
+- If a corridor has no authoritative operation code yet, lookup intentionally
+   returns no preferred code (fallback-safe behavior).
 
 ## EPSG Anchor-Epoch Notes (Realization Metadata)
 

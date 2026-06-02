@@ -1501,6 +1501,21 @@ fn epsg_europe_phase1_support_snapshot_tracks_active_seed_corridors() {
 }
 
 #[test]
+fn epsg_preferred_operation_us_europe_active_corridors_fallback_to_none_without_codes() {
+    // US phase-1 active corridor entries are now surfaced through preferred-op
+    // lookup; without authoritative operation codes they intentionally fallback.
+    assert_eq!(preferred_operation_code_for_crs_pair(3582, 6487), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(3600, 6568), None);
+
+    // Europe broad rollout corridors are likewise visible to lookup and
+    // fallback safely until operation-code evidence is assigned.
+    assert_eq!(preferred_operation_code_for_crs_pair(4258, 4258), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(25832, 3035), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(25801, 3035), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(25860, 3035), None);
+}
+
+#[test]
 fn epsg_sirgas2000_utm_active_codes_roundtrip() {
     let checks = [
         (31965u32, -117.2, 14.5), // 11N

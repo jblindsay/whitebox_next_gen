@@ -1,0 +1,4 @@
+# Template for Europe prioritized epoch-aware corridor checkpoint capture.
+# Fill rows as authoritative sources become available.
+# Suggested scope: ETRS89 realization-family corridors with explicit operation metadata.
+station,source_crs_epsg,target_crs_epsg,operation_code,epoch_decimal_year,input_x_m,input_y_m,input_z_m,output_x_m,output_y_m,output_z_m,source_reference

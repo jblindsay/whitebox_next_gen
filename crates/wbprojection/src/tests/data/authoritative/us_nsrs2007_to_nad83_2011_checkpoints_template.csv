@@ -1,0 +1,5 @@
+# Template for US prioritized epoch-aware corridor checkpoint capture.
+# Fill rows as authoritative sources become available.
+# Suggested scope: NAD83(NSRS2007) State Plane -> NAD83(2011) State Plane
+# (matched state/zone where possible).
+station,source_crs_epsg,target_crs_epsg,operation_code,epoch_decimal_year,input_x_m,input_y_m,input_z_m,output_x_m,output_y_m,output_z_m,source_reference

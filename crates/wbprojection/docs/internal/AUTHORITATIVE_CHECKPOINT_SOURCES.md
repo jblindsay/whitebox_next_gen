@@ -181,6 +181,19 @@ Reverse corridors:
 4. v8 -> v6: src/tests/data/authoritative/csrs_v8_to_v6_checkpoints_template.csv
 5. v8 -> v7: src/tests/data/authoritative/csrs_v8_to_v7_checkpoints_template.csv
 
+US/Europe prioritized expansion templates (new scaffold):
+
+1. US NSRS2007 -> NAD83(2011):
+   src/tests/data/authoritative/us_nsrs2007_to_nad83_2011_checkpoints_template.csv
+2. Europe ETRS89 realization corridors:
+   src/tests/data/authoritative/europe_etrs89_realization_checkpoints_template.csv
+
+Notes for these new templates:
+
+- They use the same schema/parse harness as CSRS corridor templates.
+- Empty templates are valid until authoritative checkpoints are captured.
+- Immediate priority order for fill-in is US first, then Europe.
+
 ## EPSG Anchor-Epoch Notes (Realization Metadata)
 
 Observed in EPSG WKT content used during this rollout:

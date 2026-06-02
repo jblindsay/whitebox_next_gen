@@ -1673,6 +1673,42 @@ fn epsg_spcs83_nad83_2011_codes_roundtrip() {
 }
 
 #[test]
+fn epsg_us_and_europe_epoch_aware_anchor_codes_roundtrip() {
+    let us_cases = [
+        (3582u32, -77.0, 38.3),   // NAD83(NSRS2007) Maryland
+        (3600u32, -90.33333333333333, 29.5), // NAD83(NSRS2007) Mississippi West
+    ];
+
+    for (code, lon_in, lat_in) in us_cases {
+        let crs = Crs::from_epsg(code).unwrap();
+        let (e, n) = crs.forward(lon_in, lat_in).unwrap();
+        let (lon, lat) = crs.inverse(e, n).unwrap();
+        assert!((lon - lon_in).abs() < 1e-4, "EPSG:{code} lon");
+        assert!((lat - lat_in).abs() < 1e-4, "EPSG:{code} lat");
+        assert!(crs.name.contains("NSRS2007"), "EPSG:{code} name");
+    }
+
+    let etrs89 = Crs::from_epsg(4258).unwrap();
+    let (e, n) = etrs89.forward(10.0, 52.0).unwrap();
+    let (lon, lat) = etrs89.inverse(e, n).unwrap();
+    assert!((lon - 10.0).abs() < 1e-4);
+    assert!((lat - 52.0).abs() < 1e-4);
+    assert_eq!(etrs89.datum.name, "ETRS 89");
+
+    let crs_3034 = Crs::from_epsg(3034).unwrap();
+    let (e, n) = crs_3034.forward(10.0, 52.0).unwrap();
+    let (lon, lat) = crs_3034.inverse(e, n).unwrap();
+    assert!((lon - 10.0).abs() < 1e-4);
+    assert!((lat - 52.0).abs() < 1e-4);
+
+    let crs_3035 = Crs::from_epsg(3035).unwrap();
+    let (e, n) = crs_3035.forward(10.0, 52.0).unwrap();
+    let (lon, lat) = crs_3035.inverse(e, n).unwrap();
+    assert!((lon - 10.0).abs() < 1e-4);
+    assert!((lat - 52.0).abs() < 1e-4);
+}
+
+#[test]
 fn epsg_26947_is_unassigned_returns_error() {
     assert!(Crs::from_epsg(26947).is_err());
 }

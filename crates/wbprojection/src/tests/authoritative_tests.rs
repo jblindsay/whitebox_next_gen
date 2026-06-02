@@ -27,6 +27,10 @@ const CSRS_V8_TO_V6_TEMPLATE: &str =
     include_str!("data/authoritative/csrs_v8_to_v6_checkpoints_template.csv");
 const CSRS_V8_TO_V7_TEMPLATE: &str =
     include_str!("data/authoritative/csrs_v8_to_v7_checkpoints_template.csv");
+const US_NSRS2007_TO_NAD83_2011_TEMPLATE: &str =
+    include_str!("data/authoritative/us_nsrs2007_to_nad83_2011_checkpoints_template.csv");
+const EUROPE_ETRS89_REALIZATION_TEMPLATE: &str =
+    include_str!("data/authoritative/europe_etrs89_realization_checkpoints_template.csv");
 
 #[derive(Debug)]
 struct NrcanTrxCheckpoint {
@@ -782,6 +786,68 @@ fn csrs_v8_to_v5_template_fixture_is_parseable() {
             (row.source_crs_epsg - 22800) == (row.target_crs_epsg - 22500),
             "source/target zones should match"
         );
+        if let Some(code) = row.operation_code {
+            assert!(code > 0, "operation_code must be positive when supplied");
+        }
+        let values = [
+            row.epoch_decimal_year,
+            row.input_x_m,
+            row.input_y_m,
+            row.input_z_m,
+            row.output_x_m,
+            row.output_y_m,
+            row.output_z_m,
+        ];
+        assert!(values.iter().all(|v| v.is_finite()), "all numeric fields must be finite");
+        assert!(
+            !row.source_reference.is_empty(),
+            "source_reference should be non-empty"
+        );
+    }
+}
+
+#[test]
+fn us_nsrs2007_to_nad83_2011_template_fixture_is_parseable() {
+    let rows = parse_csrs_pair_template_fixture(US_NSRS2007_TO_NAD83_2011_TEMPLATE)
+        .expect("US NSRS2007->NAD83(2011) template fixture should parse");
+
+    for row in &rows {
+        assert!(!row.station.is_empty(), "station should be non-empty");
+        assert!(
+            row.source_crs_epsg >= 3465 && row.source_crs_epsg <= 3751,
+            "expected source EPSG in NSRS2007 state-plane family"
+        );
+        assert!(
+            row.target_crs_epsg >= 6355 && row.target_crs_epsg <= 6613,
+            "expected target EPSG in NAD83(2011) state-plane family"
+        );
+        if let Some(code) = row.operation_code {
+            assert!(code > 0, "operation_code must be positive when supplied");
+        }
+        let values = [
+            row.epoch_decimal_year,
+            row.input_x_m,
+            row.input_y_m,
+            row.input_z_m,
+            row.output_x_m,
+            row.output_y_m,
+            row.output_z_m,
+        ];
+        assert!(values.iter().all(|v| v.is_finite()), "all numeric fields must be finite");
+        assert!(
+            !row.source_reference.is_empty(),
+            "source_reference should be non-empty"
+        );
+    }
+}
+
+#[test]
+fn europe_etrs89_realization_template_fixture_is_parseable() {
+    let rows = parse_csrs_pair_template_fixture(EUROPE_ETRS89_REALIZATION_TEMPLATE)
+        .expect("Europe ETRS89 realization template fixture should parse");
+
+    for row in &rows {
+        assert!(!row.station.is_empty(), "station should be non-empty");
         if let Some(code) = row.operation_code {
             assert!(code > 0, "operation_code must be positive when supplied");
         }

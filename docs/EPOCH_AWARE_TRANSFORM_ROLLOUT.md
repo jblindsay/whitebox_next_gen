@@ -121,6 +121,15 @@ Short answer: use a hybrid strategy.
 - Infrastructure should be generalized once.
 - Production activation should be corridor-by-corridor (use-case-by-use-case) based on authoritative data availability.
 
+### Next Priority Order
+
+For the next expansion phase, prioritize:
+
+1. US epoch-aware corridors and realization catalogs that already have stable datum hooks in the engine.
+2. European epoch-aware corridors and realization catalogs, starting with ETRS89-centered families.
+
+This keeps the first follow-on scope aligned with the existing engine surfaces while keeping the rollout incremental and testable.
+
 Why:
 - Global dynamic-datum coverage is large and uneven by data availability.
 - Authoritative checkpoints and file-distribution policies vary by country/agency.

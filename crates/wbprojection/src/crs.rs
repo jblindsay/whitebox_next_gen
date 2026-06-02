@@ -2139,4 +2139,56 @@ mod tests {
         assert!((via_pref.1 - base.1).abs() < 1e-9);
         assert!((via_pref.2 - base.2).abs() < 1e-9);
     }
+
+    #[test]
+    fn transform_to_with_preferred_operation_matches_explicit_default_policy() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let src = Crs::from_epsg(22317).unwrap();
+        let dst = Crs::from_epsg(22817).unwrap();
+
+        let via_default_api = src
+            .transform_to_with_preferred_operation(500_000.0, 5_500_000.0, &dst, None)
+            .unwrap();
+        let via_default_policy = src
+            .transform_to_with_preferred_operation_and_policy(
+                500_000.0,
+                5_500_000.0,
+                &dst,
+                None,
+                PreferredOperationPolicy::default(),
+            )
+            .unwrap();
+
+        assert!((via_default_api.0 - via_default_policy.0).abs() < 1e-9);
+        assert!((via_default_api.1 - via_default_policy.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn transform_to_3d_with_preferred_operation_matches_explicit_default_policy() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let src = Crs::from_epsg(22317).unwrap();
+        let dst = Crs::from_epsg(22817).unwrap();
+
+        let via_default_api = src
+            .transform_to_3d_with_preferred_operation(500_000.0, 5_500_000.0, 42.0, &dst, None)
+            .unwrap();
+        let via_default_policy = src
+            .transform_to_3d_with_preferred_operation_and_policy(
+                500_000.0,
+                5_500_000.0,
+                42.0,
+                &dst,
+                None,
+                PreferredOperationPolicy::default(),
+            )
+            .unwrap();
+
+        assert!((via_default_api.0 - via_default_policy.0).abs() < 1e-9);
+        assert!((via_default_api.1 - via_default_policy.1).abs() < 1e-9);
+        assert!((via_default_api.2 - via_default_policy.2).abs() < 1e-9);
+    }
 }

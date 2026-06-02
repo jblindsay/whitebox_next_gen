@@ -1575,6 +1575,42 @@ fn epsg_preferred_operation_definition_default_api_remains_fallback_safe() {
 }
 
 #[test]
+fn epsg_preferred_operation_code_default_api_matches_default_policy_api() {
+    let policy = PreferredOperationPolicy::default();
+
+    assert_eq!(
+        preferred_operation_code_for_crs_pair(22317, 22817),
+        preferred_operation_code_for_crs_pair_with_policy(22317, 22817, policy)
+    );
+    assert_eq!(
+        preferred_operation_code_for_crs_pair(3582, 6487),
+        preferred_operation_code_for_crs_pair_with_policy(3582, 6487, policy)
+    );
+    assert_eq!(
+        preferred_operation_code_for_crs_pair(25832, 3035),
+        preferred_operation_code_for_crs_pair_with_policy(25832, 3035, policy)
+    );
+}
+
+#[test]
+fn epsg_preferred_operation_definition_default_api_matches_default_policy_api() {
+    let policy = PreferredOperationPolicy::default();
+
+    assert_eq!(
+        preferred_operation_for_crs_pair(22317, 22817),
+        preferred_operation_for_crs_pair_with_policy(22317, 22817, policy)
+    );
+    assert_eq!(
+        preferred_operation_for_crs_pair(3582, 6487),
+        preferred_operation_for_crs_pair_with_policy(3582, 6487, policy)
+    );
+    assert_eq!(
+        preferred_operation_for_crs_pair(25832, 3035),
+        preferred_operation_for_crs_pair_with_policy(25832, 3035, policy)
+    );
+}
+
+#[test]
 fn epsg_sirgas2000_utm_active_codes_roundtrip() {
     let checks = [
         (31965u32, -117.2, 14.5), // 11N

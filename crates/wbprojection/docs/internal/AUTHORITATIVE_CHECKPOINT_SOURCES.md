@@ -215,6 +215,11 @@ Runtime scaffolding note:
 - Snapshot entries are now `Active` for broad mathematical rollout.
 - Preferred operation code remains optional (`None`) until corresponding
    authoritative checkpoint rows are filled and validated.
+- US phase-1 snapshot now expands beyond seeds by auto-matching
+   NSRS2007/NAD83(2011) StatePlane corridor names.
+- Europe phase-1 snapshot now expands beyond seeds with broad
+   ETRS89 UTM (25801-25860) -> ETRS89 / LAEA Europe (3035) coverage,
+   plus core ETRS89 anchor pairs.
 
 ## EPSG Anchor-Epoch Notes (Realization Metadata)
 

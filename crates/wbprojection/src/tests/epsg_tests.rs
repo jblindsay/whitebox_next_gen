@@ -1435,7 +1435,10 @@ fn epsg_csrs_support_snapshot_reports_active_and_pending_pairs() {
 fn epsg_us_phase1_support_snapshot_tracks_active_seed_corridors() {
     let snapshot = us_phase1_preferred_operation_support_snapshot();
     assert_eq!(snapshot.phase_label, "phase-1");
-    assert_eq!(snapshot.pairs.len(), 2);
+    assert!(
+        snapshot.pairs.len() >= 2,
+        "US phase-1 corridor inventory should include at least seed pairs"
+    );
 
     let expected = [(3582u32, 6487u32), (3600u32, 6568u32)];
     for (source_crs_epsg, target_crs_epsg) in expected {
@@ -1447,13 +1450,21 @@ fn epsg_us_phase1_support_snapshot_tracks_active_seed_corridors() {
         assert_eq!(pair.status, UsPreferredOperationStatus::Active);
         assert_eq!(pair.preferred_operation_code, None);
     }
+
+    assert!(
+        snapshot.pairs.iter().all(|p| p.status == UsPreferredOperationStatus::Active),
+        "all US phase-1 pairs should be active in broad rollout mode"
+    );
 }
 
 #[test]
-    fn epsg_europe_phase1_support_snapshot_tracks_active_seed_corridors() {
+fn epsg_europe_phase1_support_snapshot_tracks_active_seed_corridors() {
     let snapshot = europe_phase1_preferred_operation_support_snapshot();
     assert_eq!(snapshot.phase_label, "phase-1");
-    assert_eq!(snapshot.pairs.len(), 2);
+    assert!(
+        snapshot.pairs.len() > 2,
+        "Europe phase-1 corridor inventory should expand beyond seed pairs"
+    );
 
     let expected = [(4258u32, 4258u32), (25832u32, 3035u32)];
     for (source_crs_epsg, target_crs_epsg) in expected {
@@ -1465,6 +1476,28 @@ fn epsg_us_phase1_support_snapshot_tracks_active_seed_corridors() {
         assert_eq!(pair.status, EuropePreferredOperationStatus::Active);
         assert_eq!(pair.preferred_operation_code, None);
     }
+
+    assert!(
+        snapshot
+            .pairs
+            .iter()
+            .any(|p| p.source_crs_epsg == 25801 && p.target_crs_epsg == 3035),
+        "expected broad ETRS89 UTM->3035 coverage"
+    );
+    assert!(
+        snapshot
+            .pairs
+            .iter()
+            .any(|p| p.source_crs_epsg == 25860 && p.target_crs_epsg == 3035),
+        "expected broad ETRS89 UTM->3035 coverage"
+    );
+    assert!(
+        snapshot
+            .pairs
+            .iter()
+            .all(|p| p.status == EuropePreferredOperationStatus::Active),
+        "all Europe phase-1 pairs should be active in broad rollout mode"
+    );
 }
 
 #[test]

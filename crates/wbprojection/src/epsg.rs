@@ -1446,11 +1446,88 @@ const EUROPE_PHASE1_LABEL: &str = "phase-1";
 const US_PHASE1_CORRIDOR_SEEDS: &[(u32, u32)] = &[(3582, 6487), (3600, 6568)];
 const EUROPE_PHASE1_CORRIDOR_SEEDS: &[(u32, u32)] = &[(4258, 4258), (25832, 3035)];
 
+fn us_phase1_corridor_pairs() -> &'static Vec<(u32, u32)> {
+    static PAIRS: OnceLock<Vec<(u32, u32)>> = OnceLock::new();
+    PAIRS.get_or_init(|| {
+        let mut source_by_key: HashMap<String, Vec<u32>> = HashMap::new();
+        let mut target_by_key: HashMap<String, Vec<u32>> = HashMap::new();
+
+        for code in known_epsg_codes() {
+            let Some(info) = epsg_info(code) else {
+                continue;
+            };
+
+            let normalized = normalize_name(strip_epsg_suffix(info.name));
+            if !normalized.contains("stateplane") || !normalized.contains("nad") {
+                continue;
+            }
+
+            // Match US corridors by shared StatePlane identity while removing
+            // realization token differences (NSRS2007 vs 2011).
+            let key = normalized
+                .replace("nad1983nsrs2007", "nad1983")
+                .replace("nad83nsrs2007", "nad83")
+                .replace("nad19832011", "nad1983")
+                .replace("nad832011", "nad83");
+
+            if normalized.contains("nsrs2007") {
+                source_by_key.entry(key.clone()).or_default().push(code);
+            }
+            if normalized.contains("2011") {
+                target_by_key.entry(key).or_default().push(code);
+            }
+        }
+
+        let mut pairs: Vec<(u32, u32)> = Vec::new();
+        for (key, src_codes) in source_by_key {
+            if let Some(dst_codes) = target_by_key.get(&key) {
+                for src in &src_codes {
+                    for dst in dst_codes {
+                        pairs.push((*src, *dst));
+                    }
+                }
+            }
+        }
+
+        // Ensure seed pairs are always represented explicitly.
+        pairs.extend_from_slice(US_PHASE1_CORRIDOR_SEEDS);
+
+        pairs.sort_unstable();
+        pairs.dedup();
+        pairs
+    })
+}
+
+fn europe_phase1_corridor_pairs() -> &'static Vec<(u32, u32)> {
+    static PAIRS: OnceLock<Vec<(u32, u32)>> = OnceLock::new();
+    PAIRS.get_or_init(|| {
+        let mut pairs: Vec<(u32, u32)> = EUROPE_PHASE1_CORRIDOR_SEEDS.to_vec();
+
+        // Broad Europe baseline: activate all ETRS89 UTM north zones into
+        // ETRS89 / LAEA Europe for cross-form corridor coverage.
+        for code in 25801u32..=25860u32 {
+            if epsg_info(code).is_some() {
+                pairs.push((code, 3035));
+            }
+        }
+
+        // Include core ETRS89 realization anchors and same-realization pairs.
+        for pair in [(3034u32, 3035u32), (3035u32, 3034u32), (3034u32, 3034u32), (3035u32, 3035u32)] {
+            pairs.push(pair);
+        }
+
+        pairs.sort_unstable();
+        pairs.dedup();
+        pairs
+    })
+}
+
 /// Return a snapshot of US NSRS2007->NAD83(2011) phase-1 preferred-operation support.
 pub fn us_phase1_preferred_operation_support_snapshot() -> UsPreferredOperationSupportSnapshot {
-    let mut pairs = Vec::with_capacity(US_PHASE1_CORRIDOR_SEEDS.len());
+    let corridor_pairs = us_phase1_corridor_pairs();
+    let mut pairs = Vec::with_capacity(corridor_pairs.len());
 
-    for (source_crs_epsg, target_crs_epsg) in US_PHASE1_CORRIDOR_SEEDS {
+    for (source_crs_epsg, target_crs_epsg) in corridor_pairs {
         // Broad rollout mode: corridor activation is mathematical-first.
         // Operation code is optional until authoritative evidence is captured.
         let status = UsPreferredOperationStatus::Active;
@@ -1473,9 +1550,10 @@ pub fn us_phase1_preferred_operation_support_snapshot() -> UsPreferredOperationS
 /// Return a snapshot of Europe ETRS89 phase-1 preferred-operation support.
 pub fn europe_phase1_preferred_operation_support_snapshot(
 ) -> EuropePreferredOperationSupportSnapshot {
-    let mut pairs = Vec::with_capacity(EUROPE_PHASE1_CORRIDOR_SEEDS.len());
+    let corridor_pairs = europe_phase1_corridor_pairs();
+    let mut pairs = Vec::with_capacity(corridor_pairs.len());
 
-    for (source_crs_epsg, target_crs_epsg) in EUROPE_PHASE1_CORRIDOR_SEEDS {
+    for (source_crs_epsg, target_crs_epsg) in corridor_pairs {
         // Broad rollout mode: corridor activation is mathematical-first.
         // Operation code is optional until authoritative evidence is captured.
         let status = EuropePreferredOperationStatus::Active;

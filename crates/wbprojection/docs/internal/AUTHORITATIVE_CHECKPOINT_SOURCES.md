@@ -226,6 +226,9 @@ Runtime scaffolding note:
    returns no preferred code (fallback-safe behavior).
 - Callers can opt into policy-default operation codes for active corridors via
    the policy-aware lookup API without changing the corridor inventory itself.
+- High-level CRS transform helpers now expose policy-aware preferred-operation
+   variants so callers can select strict fallback-safe mode or default-code mode
+   at runtime.
 
 ## EPSG Anchor-Epoch Notes (Realization Metadata)
 

@@ -6,9 +6,13 @@
 use crate::datum::{Datum, DatumTransformPolicy};
 use crate::epsg::EpsgResolutionPolicy;
 use crate::error::{ProjectionError, Result};
-use crate::operations::get_coordinate_operation;
+use crate::operations::{CoordinateOperationDef, OperationMethod, get_coordinate_operation};
 use crate::projections::{Projection, ProjectionParams, ProjectionKind};
-use crate::{preferred_operation_for_crs_pair, register_coordinate_operation};
+use crate::{
+    PreferredOperationPolicy,
+    preferred_operation_code_for_crs_pair_with_policy,
+    register_coordinate_operation,
+};
 use crate::datum::{ecef_to_geodetic, geodetic_to_ecef};
 use crate::transform::TransformEpochContext;
 use crate::vertical_grid::get_vertical_offset_grid;
@@ -20,6 +24,24 @@ fn epsg_code_from_crs_name(name: &str) -> Option<u32> {
     let rest = &name[start..];
     let end = rest.find(')')?;
     rest[..end].parse::<u32>().ok()
+}
+
+fn preferred_operation_def_for_crs_pair_with_policy(
+    source_epsg: u32,
+    target_epsg: u32,
+    policy: PreferredOperationPolicy,
+) -> Option<CoordinateOperationDef> {
+    preferred_operation_code_for_crs_pair_with_policy(source_epsg, target_epsg, policy).map(
+        |operation_code| {
+            CoordinateOperationDef::new(
+                operation_code,
+                source_epsg,
+                target_epsg,
+                OperationMethod::DynamicGridShift,
+            )
+            .preferred(true)
+        },
+    )
 }
 
 fn sample_vertical_offset_with_policy(
@@ -500,11 +522,35 @@ impl Crs {
         target: &Crs,
         ctx: Option<TransformEpochContext>,
     ) -> Result<(f64, f64)> {
+        self.transform_to_with_preferred_operation_and_policy(
+            x,
+            y,
+            target,
+            ctx,
+            PreferredOperationPolicy::default(),
+        )
+    }
+
+    /// Transform a point using a preferred operation for the CRS pair when available,
+    /// using an explicit preferred-operation policy.
+    ///
+    /// Fallback behavior: when no preferred operation mapping is available under
+    /// the given policy, this delegates to the standard transform path.
+    pub fn transform_to_with_preferred_operation_and_policy(
+        &self,
+        x: f64,
+        y: f64,
+        target: &Crs,
+        ctx: Option<TransformEpochContext>,
+        preferred_op_policy: PreferredOperationPolicy,
+    ) -> Result<(f64, f64)> {
         let src_code = epsg_code_from_crs_name(&self.name);
         let dst_code = epsg_code_from_crs_name(&target.name);
 
         if let (Some(src), Some(dst)) = (src_code, dst_code) {
-            if let Some(op_def) = preferred_operation_for_crs_pair(src, dst) {
+            if let Some(op_def) =
+                preferred_operation_def_for_crs_pair_with_policy(src, dst, preferred_op_policy)
+            {
                 register_coordinate_operation(op_def.clone())?;
                 return self.transform_to_with_operation(
                     x,
@@ -663,11 +709,37 @@ impl Crs {
         target: &Crs,
         ctx: Option<TransformEpochContext>,
     ) -> Result<(f64, f64, f64)> {
+        self.transform_to_3d_with_preferred_operation_and_policy(
+            x,
+            y,
+            z,
+            target,
+            ctx,
+            PreferredOperationPolicy::default(),
+        )
+    }
+
+    /// Transform a 3D point using a preferred operation for the CRS pair when available,
+    /// using an explicit preferred-operation policy.
+    ///
+    /// Fallback behavior: when no preferred operation mapping is available under
+    /// the given policy, this delegates to the standard 3D transform path.
+    pub fn transform_to_3d_with_preferred_operation_and_policy(
+        &self,
+        x: f64,
+        y: f64,
+        z: f64,
+        target: &Crs,
+        ctx: Option<TransformEpochContext>,
+        preferred_op_policy: PreferredOperationPolicy,
+    ) -> Result<(f64, f64, f64)> {
         let src_code = epsg_code_from_crs_name(&self.name);
         let dst_code = epsg_code_from_crs_name(&target.name);
 
         if let (Some(src), Some(dst)) = (src_code, dst_code) {
-            if let Some(op_def) = preferred_operation_for_crs_pair(src, dst) {
+            if let Some(op_def) =
+                preferred_operation_def_for_crs_pair_with_policy(src, dst, preferred_op_policy)
+            {
                 register_coordinate_operation(op_def.clone())?;
                 return self.transform_to_3d_with_operation(
                     x,
@@ -1402,6 +1474,7 @@ mod tests {
         CoordinateOperationDef,
         Datum, DynamicGridShiftGrid, DynamicGridShiftSample, Ellipsoid, Projection,
         OperationMethod,
+        PreferredOperationPolicy,
         ProjectionParams, TransformEpochContext, clear_coordinate_operations,
         preferred_operation_code_for_crs_pair,
         register_coordinate_operation, register_dynamic_grid, unregister_dynamic_grid,
@@ -1845,6 +1918,60 @@ mod tests {
 
         let via_pref = src
             .transform_to_3d_with_preferred_operation(500_000.0, 5_500_000.0, 42.0, &dst, None)
+            .unwrap();
+        let base = src.transform_to_3d(500_000.0, 5_500_000.0, 42.0, &dst).unwrap();
+        assert!((via_pref.0 - base.0).abs() < 1e-9);
+        assert!((via_pref.1 - base.1).abs() < 1e-9);
+        assert!((via_pref.2 - base.2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn transform_to_with_preferred_operation_and_policy_supports_us_corridor_defaults() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let src = Crs::from_epsg(3582).unwrap();
+        let dst = Crs::from_epsg(6487).unwrap();
+        let policy = PreferredOperationPolicy {
+            us_phase1_default_operation_code: Some(10715),
+            europe_phase1_default_operation_code: None,
+        };
+
+        let via_pref = src
+            .transform_to_with_preferred_operation_and_policy(
+                500_000.0,
+                5_500_000.0,
+                &dst,
+                None,
+                policy,
+            )
+            .unwrap();
+        let base = src.transform_to(500_000.0, 5_500_000.0, &dst).unwrap();
+        assert!((via_pref.0 - base.0).abs() < 1e-9);
+        assert!((via_pref.1 - base.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn transform_to_3d_with_preferred_operation_and_policy_supports_europe_corridor_defaults() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let src = Crs::from_epsg(25832).unwrap();
+        let dst = Crs::from_epsg(3035).unwrap();
+        let policy = PreferredOperationPolicy {
+            us_phase1_default_operation_code: None,
+            europe_phase1_default_operation_code: Some(10715),
+        };
+
+        let via_pref = src
+            .transform_to_3d_with_preferred_operation_and_policy(
+                500_000.0,
+                5_500_000.0,
+                42.0,
+                &dst,
+                None,
+                policy,
+            )
             .unwrap();
         let base = src.transform_to_3d(500_000.0, 5_500_000.0, 42.0, &dst).unwrap();
         assert!((via_pref.0 - base.0).abs() < 1e-9);

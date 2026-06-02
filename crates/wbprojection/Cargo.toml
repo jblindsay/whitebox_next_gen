@@ -1,6 +1,6 @@
 [package]
 name = "wbprojection"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["John Lindsay, Whitebox Geospatial Inc."]
 description = "Whitebox Projections is a map projection library for Rust, inspired by PROJ"

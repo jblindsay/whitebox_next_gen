@@ -20,7 +20,7 @@ A map projection library for Rust, inspired by [PROJ](https://proj.org/), and in
 - [CRS-to-CRS Transformation](#crs-to-crs-transformation)
 - [Batch Transformation](#batch-transformation)
 - [Grid-Shift Datum Workflow (NTv2 / NADCON)](#grid-shift-datum-workflow-ntv2--nadcon)
-- [Epoch-Aware Datum Prototype](#epoch-aware-datum-prototype)
+- [Epoch-Aware Datum and Preferred-Operation Policy](#epoch-aware-datum-and-preferred-operation-policy)
 - [Supported Projections](#supported-projections)
 - [Error Handling](#error-handling)
 - [Compilation Features](#compilation-features)
@@ -80,7 +80,7 @@ No. `wbprojection` is developed primarily to support Whitebox, but it is not res
 - **UTM convenience constructor** for all 60 zones, N and S
 - **Datum transformations** across 28 built-in datums (Helmert + Molodensky + grid-shift capable)
 - **Grid-shift datum support** with NTv2 (`.gsb`) and NADCON ASCII pair loaders
-- **Epoch-aware prototype APIs** for transform contexts, dynamic grids, and preferred-operation routing
+- **Epoch-aware opt-in APIs** for transform contexts, dynamic grids, and preferred-operation routing
 - **Area-of-use API** — `Crs::area_of_use()` and `epsg_area_of_use(code)` provide geographic validity bounds
 - **Compound CRS support** — `CompoundCrs::from_epsg(...)` and `compound_from_wkt(...)` for common horizontal+vertical systems
 - **CRS-to-CRS pipelines**: transform directly between any two supported coordinate reference systems
@@ -1124,17 +1124,23 @@ Before using a grid-shift transform in production, verify:
 
 ---
 
-## Epoch-Aware Datum Prototype
+## Epoch-Aware Datum and Preferred-Operation Policy
 
-`wbprojection` now includes an additive prototype path for epoch-aware datum workflows. The long-standing `transform_to*` APIs are unchanged; the new APIs are opt-in and intended to support dynamic grids and explicit operation routing without changing the static fast path.
+`wbprojection` includes additive, opt-in APIs for epoch-aware datum workflows and policy-aware preferred-operation routing. The long-standing `transform_to*` APIs remain unchanged, so existing static workflows are preserved.
 
-Current prototype surface:
+Current surface:
 
 - `TransformEpochContext` for decimal-year coordinate epoch input.
 - `transform_to_with_context(...)` and `transform_to_3d_with_context(...)` for context-aware CRS transforms.
 - Dynamic grid registry and sampling support for velocity-style grid models.
 - `transform_to_with_operation(...)` and `transform_to_3d_with_operation(...)` for explicit operation-code routing.
 - `transform_to_with_preferred_operation(...)` and `transform_to_3d_with_preferred_operation(...)` for preferred EPSG operation lookup with fallback to the normal transform path.
+- `transform_to_with_preferred_operation_and_policy(...)` and `transform_to_3d_with_preferred_operation_and_policy(...)` for explicit policy-driven preferred-operation behavior.
+- `PreferredOperationPolicy` for opting into default operation codes on active phase-1 corridors.
+- Snapshot/inspection helpers:
+    - `csrs_preferred_operation_support_snapshot()`
+    - `us_phase1_preferred_operation_support_snapshot()`
+    - `europe_phase1_preferred_operation_support_snapshot()`
 
 ```rust
 use wbprojection::{Crs, TransformEpochContext};
@@ -1153,9 +1159,38 @@ let (x2, y2) = src.transform_to_with_preferred_operation(
 println!("{x2}, {y2}");
 ```
 
-Current prototype notes:
+Policy-aware example:
+
+```rust
+use wbprojection::{
+    Crs,
+    PreferredOperationPolicy,
+    TransformEpochContext,
+};
+
+let src = Crs::from_epsg(3582)?; // NAD83(NSRS2007) / Maryland (ftUS)
+let dst = Crs::from_epsg(6487)?; // NAD83(2011) / Maryland
+let ctx = TransformEpochContext::at_epoch(2026.0);
+
+let policy = PreferredOperationPolicy {
+    us_phase1_default_operation_code: Some(10715),
+    europe_phase1_default_operation_code: None,
+};
+
+let (_x2, _y2) = src.transform_to_with_preferred_operation_and_policy(
+    500_000.0,
+    500_000.0,
+    &dst,
+    Some(ctx),
+    policy,
+)?;
+```
+
+Behavior notes:
 
 - The first preferred-operation mapping implemented is same-zone NAD83(CSRS)v3 -> NAD83(CSRS)v8 UTM routing via operation `10715`.
+- Active phase-1 US and Europe corridor inventories are available at runtime for policy-aware lookup/build.
+- For US/Europe active corridors, default lookup remains strict fallback-safe (`None`) unless a caller opts into policy default codes.
 - Dynamic transform variants are strict about missing epoch context and return an error instead of silently degrading.
 - Initial conformance coverage exists for a CSRS zone 17 corridor and currently verifies deterministic routing consistency at a millimeter-level tolerance.
 - This is still a staged implementation, not yet a full EPSG operation catalog or full deformation-model engine.

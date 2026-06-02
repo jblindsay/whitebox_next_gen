@@ -13,6 +13,7 @@ use crate::{
     OperationMethod,
     PreferredOperationPolicy,
     UsPreferredOperationStatus,
+    has_coordinate_operation,
 };
 use std::collections::HashSet;
 
@@ -44,6 +45,21 @@ const US_NSRS2007_TO_NAD83_2011_TEMPLATE: &str =
     include_str!("data/authoritative/us_nsrs2007_to_nad83_2011_checkpoints_template.csv");
 const EUROPE_ETRS89_REALIZATION_TEMPLATE: &str =
     include_str!("data/authoritative/europe_etrs89_realization_checkpoints_template.csv");
+
+const US_PHASE1_ALLOWLISTED_CORRIDORS: &[(u32, u32)] = &[
+    (3582u32, 6487u32),
+    (6487u32, 3582u32),
+    (3600u32, 6568u32),
+    (6568u32, 3600u32),
+];
+
+const EUROPE_PHASE1_ALLOWLISTED_CORRIDORS: &[(u32, u32)] = &[
+    (4258u32, 4258u32),
+    (25801u32, 3035u32),
+    (25832u32, 3035u32),
+    (3035u32, 25801u32),
+    (3035u32, 25832u32),
+];
 
 #[derive(Debug)]
 struct NrcanTrxCheckpoint {
@@ -407,6 +423,134 @@ fn assert_phase1_metadata_conventions(row: &CsrsPairTemplateCheckpoint, region: 
         source_reference.contains(':') || source_reference.contains('/'),
         "phase-1 {region} template row source_reference must include a namespaced code or URL"
     );
+}
+
+fn env_flag_enabled(name: &str) -> bool {
+    match std::env::var(name) {
+        Ok(value) => {
+            let normalized = value.trim().to_ascii_lowercase();
+            matches!(normalized.as_str(), "1" | "true" | "yes" | "on")
+        }
+        Err(_) => false,
+    }
+}
+
+fn env_usize(name: &str) -> Option<usize> {
+    match std::env::var(name) {
+        Ok(value) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+            Some(
+                trimmed
+                    .parse::<usize>()
+                    .unwrap_or_else(|_| panic!("{name} must be a non-negative integer")),
+            )
+        }
+        Err(_) => None,
+    }
+}
+
+fn missing_corridors(
+    rows: &[CsrsPairTemplateCheckpoint],
+    allowlist: &[(u32, u32)],
+) -> Vec<(u32, u32)> {
+    let present: HashSet<(u32, u32)> = rows
+        .iter()
+        .map(|row| (row.source_crs_epsg, row.target_crs_epsg))
+        .collect();
+
+    allowlist
+        .iter()
+        .copied()
+        .filter(|pair| !present.contains(pair))
+        .collect()
+}
+
+fn assert_no_duplicate_station_rows(rows: &[CsrsPairTemplateCheckpoint], region: &str) {
+    let mut seen = HashSet::new();
+    for row in rows {
+        let key = (
+            row.station.trim().to_ascii_lowercase(),
+            row.source_crs_epsg,
+            row.target_crs_epsg,
+            row.epoch_decimal_year.to_bits(),
+        );
+        assert!(
+            seen.insert(key),
+            "{region} template contains duplicate row for station/corridor/epoch"
+        );
+    }
+}
+
+fn assert_operation_code_consistency_per_corridor(
+    rows: &[CsrsPairTemplateCheckpoint],
+    region: &str,
+) {
+    let mut per_corridor_codes = std::collections::HashMap::<(u32, u32), u32>::new();
+    for row in rows {
+        if let Some(code) = row.operation_code {
+            let key = (row.source_crs_epsg, row.target_crs_epsg);
+            if let Some(existing) = per_corridor_codes.get(&key) {
+                assert_eq!(
+                    *existing, code,
+                    "{region} template has conflicting operation_code values for corridor {:?}",
+                    key
+                );
+            } else {
+                per_corridor_codes.insert(key, code);
+            }
+        }
+    }
+}
+
+fn assert_operation_codes_are_registered(rows: &[CsrsPairTemplateCheckpoint], region: &str) {
+    for row in rows {
+        if let Some(code) = row.operation_code {
+            let exists = has_coordinate_operation(code)
+                .expect("operation catalog lookup should not fail");
+            let us_policy = PreferredOperationPolicy {
+                us_phase1_default_operation_code: Some(code),
+                europe_phase1_default_operation_code: None,
+            };
+            let eu_policy = PreferredOperationPolicy {
+                us_phase1_default_operation_code: None,
+                europe_phase1_default_operation_code: Some(code),
+            };
+            let policy_materializable = preferred_operation_for_crs_pair_with_policy(
+                row.source_crs_epsg,
+                row.target_crs_epsg,
+                us_policy,
+            )
+            .map(|op| op.operation_code == code)
+            .unwrap_or(false)
+                || preferred_operation_for_crs_pair_with_policy(
+                    row.source_crs_epsg,
+                    row.target_crs_epsg,
+                    eu_policy,
+                )
+                .map(|op| op.operation_code == code)
+                .unwrap_or(false);
+            assert!(
+                exists || policy_materializable,
+                "{region} template row operation_code {} is neither registered nor policy-materializable for corridor ({}, {})",
+                code,
+                row.source_crs_epsg,
+                row.target_crs_epsg
+            );
+        }
+    }
+}
+
+fn coverage_for_allowlist(
+    rows: &[CsrsPairTemplateCheckpoint],
+    allowlist: &[(u32, u32)],
+) -> (usize, usize, Vec<(u32, u32)>) {
+    let missing = missing_corridors(rows, allowlist);
+    let total = allowlist.len();
+    let covered = total.saturating_sub(missing.len());
+    (covered, total, missing)
 }
 
 #[test]
@@ -943,14 +1087,7 @@ fn us_nsrs2007_to_nad83_2011_template_phase1_pairs_are_allowlisted() {
 
     // Phase-1 US seed corridors for first authoritative captures.
     // Reverse directions are now allowlisted as active bidirectional corridors.
-    let allowlist: HashSet<(u32, u32)> = [
-        (3582u32, 6487u32),
-        (6487u32, 3582u32),
-        (3600u32, 6568u32),
-        (6568u32, 3600u32),
-    ]
-    .into_iter()
-    .collect();
+    let allowlist: HashSet<(u32, u32)> = US_PHASE1_ALLOWLISTED_CORRIDORS.iter().copied().collect();
 
     for row in &rows {
         assert!(
@@ -966,21 +1103,31 @@ fn us_nsrs2007_to_nad83_2011_template_phase1_pairs_are_allowlisted() {
 }
 
 #[test]
+fn us_nsrs2007_to_nad83_2011_template_phase1_population_gate() {
+    let rows = parse_csrs_pair_template_fixture(US_NSRS2007_TO_NAD83_2011_TEMPLATE)
+        .expect("US NSRS2007->NAD83(2011) template fixture should parse");
+
+    let gate_enabled = env_flag_enabled("WBPROJECTION_ENFORCE_PHASE1_TEMPLATE_POPULATION");
+    if !gate_enabled {
+        return;
+    }
+
+    let missing = missing_corridors(&rows, US_PHASE1_ALLOWLISTED_CORRIDORS);
+    assert!(
+        missing.is_empty(),
+        "US phase-1 template population gate failed; missing corridors: {:?}",
+        missing
+    );
+}
+
+#[test]
 fn europe_etrs89_realization_template_phase1_pairs_are_allowlisted() {
     let rows = parse_csrs_pair_template_fixture(EUROPE_ETRS89_REALIZATION_TEMPLATE)
         .expect("Europe ETRS89 realization template fixture should parse");
 
     // Phase-1 Europe seed corridors for first authoritative captures.
     // Reverse directions are now allowlisted as active bidirectional corridors.
-    let allowlist: HashSet<(u32, u32)> = [
-        (4258u32, 4258u32),
-        (25801u32, 3035u32),
-        (25832u32, 3035u32),
-        (3035u32, 25801u32),
-        (3035u32, 25832u32),
-    ]
-    .into_iter()
-    .collect();
+    let allowlist: HashSet<(u32, u32)> = EUROPE_PHASE1_ALLOWLISTED_CORRIDORS.iter().copied().collect();
 
     for row in &rows {
         assert!(
@@ -992,6 +1139,175 @@ fn europe_etrs89_realization_template_phase1_pairs_are_allowlisted() {
             "phase-1 Europe template rows must include operation_code"
         );
         assert_phase1_metadata_conventions(row, "Europe");
+    }
+}
+
+#[test]
+fn europe_etrs89_realization_template_phase1_population_gate() {
+    let rows = parse_csrs_pair_template_fixture(EUROPE_ETRS89_REALIZATION_TEMPLATE)
+        .expect("Europe ETRS89 realization template fixture should parse");
+
+    let gate_enabled = env_flag_enabled("WBPROJECTION_ENFORCE_PHASE1_TEMPLATE_POPULATION");
+    if !gate_enabled {
+        return;
+    }
+
+    let missing = missing_corridors(&rows, EUROPE_PHASE1_ALLOWLISTED_CORRIDORS);
+    assert!(
+        missing.is_empty(),
+        "Europe phase-1 template population gate failed; missing corridors: {:?}",
+        missing
+    );
+}
+
+#[test]
+fn us_nsrs2007_to_nad83_2011_template_rows_have_no_duplicates_or_code_conflicts() {
+    let rows = parse_csrs_pair_template_fixture(US_NSRS2007_TO_NAD83_2011_TEMPLATE)
+        .expect("US NSRS2007->NAD83(2011) template fixture should parse");
+
+    assert_no_duplicate_station_rows(&rows, "US phase-1");
+    assert_operation_code_consistency_per_corridor(&rows, "US phase-1");
+    assert_operation_codes_are_registered(&rows, "US phase-1");
+}
+
+#[test]
+fn europe_etrs89_realization_template_rows_have_no_duplicates_or_code_conflicts() {
+    let rows = parse_csrs_pair_template_fixture(EUROPE_ETRS89_REALIZATION_TEMPLATE)
+        .expect("Europe ETRS89 realization template fixture should parse");
+
+    assert_no_duplicate_station_rows(&rows, "Europe phase-1");
+    assert_operation_code_consistency_per_corridor(&rows, "Europe phase-1");
+    assert_operation_codes_are_registered(&rows, "Europe phase-1");
+}
+
+#[test]
+fn us_nsrs2007_to_nad83_2011_template_rows_are_policy_materializable() {
+    let rows = parse_csrs_pair_template_fixture(US_NSRS2007_TO_NAD83_2011_TEMPLATE)
+        .expect("US NSRS2007->NAD83(2011) template fixture should parse");
+
+    for row in &rows {
+        let Some(code) = row.operation_code else {
+            continue;
+        };
+
+        let policy = PreferredOperationPolicy {
+            us_phase1_default_operation_code: Some(code),
+            europe_phase1_default_operation_code: None,
+        };
+
+        let op = preferred_operation_for_crs_pair_with_policy(
+            row.source_crs_epsg,
+            row.target_crs_epsg,
+            policy,
+        )
+        .expect("US populated template row should build preferred definition under policy default");
+        assert_eq!(op.operation_code, code);
+        assert_eq!(op.source_crs_code, row.source_crs_epsg);
+        assert_eq!(op.target_crs_code, row.target_crs_epsg);
+        assert!(op.preferred);
+    }
+}
+
+#[test]
+fn europe_etrs89_realization_template_rows_are_policy_materializable() {
+    let rows = parse_csrs_pair_template_fixture(EUROPE_ETRS89_REALIZATION_TEMPLATE)
+        .expect("Europe ETRS89 realization template fixture should parse");
+
+    for row in &rows {
+        let Some(code) = row.operation_code else {
+            continue;
+        };
+
+        let policy = PreferredOperationPolicy {
+            us_phase1_default_operation_code: None,
+            europe_phase1_default_operation_code: Some(code),
+        };
+
+        let op = preferred_operation_for_crs_pair_with_policy(
+            row.source_crs_epsg,
+            row.target_crs_epsg,
+            policy,
+        )
+        .expect(
+            "Europe populated template row should build preferred definition under policy default",
+        );
+        assert_eq!(op.operation_code, code);
+        assert_eq!(op.source_crs_code, row.source_crs_epsg);
+        assert_eq!(op.target_crs_code, row.target_crs_epsg);
+        assert!(op.preferred);
+    }
+}
+
+#[test]
+fn phase1_template_population_progress_snapshot() {
+    let us_rows = parse_csrs_pair_template_fixture(US_NSRS2007_TO_NAD83_2011_TEMPLATE)
+        .expect("US NSRS2007->NAD83(2011) template fixture should parse");
+    let eu_rows = parse_csrs_pair_template_fixture(EUROPE_ETRS89_REALIZATION_TEMPLATE)
+        .expect("Europe ETRS89 realization template fixture should parse");
+
+    let (us_covered, us_total, us_missing) =
+        coverage_for_allowlist(&us_rows, US_PHASE1_ALLOWLISTED_CORRIDORS);
+    let (eu_covered, eu_total, eu_missing) =
+        coverage_for_allowlist(&eu_rows, EUROPE_PHASE1_ALLOWLISTED_CORRIDORS);
+
+    let print_progress = env_flag_enabled("WBPROJECTION_PRINT_PHASE1_TEMPLATE_PROGRESS");
+    if print_progress {
+        eprintln!(
+            "phase-1 template progress: US={}/{} Europe={}/{}",
+            us_covered, us_total, eu_covered, eu_total
+        );
+        if !us_missing.is_empty() {
+            eprintln!("US missing corridors: {:?}", us_missing);
+        }
+        if !eu_missing.is_empty() {
+            eprintln!("Europe missing corridors: {:?}", eu_missing);
+        }
+    }
+
+    let min_us = env_usize("WBPROJECTION_MIN_US_PHASE1_COVERAGE");
+    if let Some(min) = min_us {
+        assert!(
+            min <= us_total,
+            "WBPROJECTION_MIN_US_PHASE1_COVERAGE ({}) cannot exceed total US corridors ({})",
+            min,
+            us_total
+        );
+        assert!(
+            us_covered >= min,
+            "US phase-1 coverage {} is below minimum required {}",
+            us_covered,
+            min
+        );
+    }
+
+    let min_eu = env_usize("WBPROJECTION_MIN_EUROPE_PHASE1_COVERAGE");
+    if let Some(min) = min_eu {
+        assert!(
+            min <= eu_total,
+            "WBPROJECTION_MIN_EUROPE_PHASE1_COVERAGE ({}) cannot exceed total Europe corridors ({})",
+            min,
+            eu_total
+        );
+        assert!(
+            eu_covered >= min,
+            "Europe phase-1 coverage {} is below minimum required {}",
+            eu_covered,
+            min
+        );
+    }
+
+    let enforce = env_flag_enabled("WBPROJECTION_ENFORCE_PHASE1_TEMPLATE_POPULATION");
+    if enforce {
+        assert!(
+            us_missing.is_empty() && eu_missing.is_empty(),
+            "phase-1 template coverage gate failed: US {}/{} missing {:?}; Europe {}/{} missing {:?}",
+            us_covered,
+            us_total,
+            us_missing,
+            eu_covered,
+            eu_total,
+            eu_missing
+        );
     }
 }
 
@@ -1060,14 +1376,9 @@ fn csrs_template_inventory_covers_active_and_pending_corridors() {
 #[test]
 fn us_phase1_snapshot_includes_reverse_seed_corridors_as_active() {
     let snapshot = us_phase1_preferred_operation_support_snapshot();
-    let expected_pairs = [
-        (3582u32, 6487u32),
-        (6487u32, 3582u32),
-        (3600u32, 6568u32),
-        (6568u32, 3600u32),
-    ];
+    let expected_pairs = US_PHASE1_ALLOWLISTED_CORRIDORS;
 
-    for (src, dst) in expected_pairs {
+    for &(src, dst) in expected_pairs {
         let pair = snapshot
             .pairs
             .iter()
@@ -1080,15 +1391,9 @@ fn us_phase1_snapshot_includes_reverse_seed_corridors_as_active() {
 #[test]
 fn europe_phase1_snapshot_includes_reverse_seed_corridors_as_active() {
     let snapshot = europe_phase1_preferred_operation_support_snapshot();
-    let expected_pairs = [
-        (4258u32, 4258u32),
-        (25801u32, 3035u32),
-        (25832u32, 3035u32),
-        (3035u32, 25801u32),
-        (3035u32, 25832u32),
-    ];
+    let expected_pairs = EUROPE_PHASE1_ALLOWLISTED_CORRIDORS;
 
-    for (src, dst) in expected_pairs {
+    for &(src, dst) in expected_pairs {
         let pair = snapshot
             .pairs
             .iter()
@@ -1100,18 +1405,13 @@ fn europe_phase1_snapshot_includes_reverse_seed_corridors_as_active() {
 
 #[test]
 fn us_phase1_allowlisted_corridors_follow_policy_default_contract() {
-    let allowlisted = [
-        (3582u32, 6487u32),
-        (6487u32, 3582u32),
-        (3600u32, 6568u32),
-        (6568u32, 3600u32),
-    ];
+    let allowlisted = US_PHASE1_ALLOWLISTED_CORRIDORS;
     let policy = PreferredOperationPolicy {
         us_phase1_default_operation_code: Some(10715),
         europe_phase1_default_operation_code: None,
     };
 
-    for (src, dst) in allowlisted {
+    for &(src, dst) in allowlisted {
         assert_eq!(
             preferred_operation_code_for_crs_pair(src, dst),
             None,
@@ -1127,19 +1427,13 @@ fn us_phase1_allowlisted_corridors_follow_policy_default_contract() {
 
 #[test]
 fn europe_phase1_allowlisted_corridors_follow_policy_default_contract() {
-    let allowlisted = [
-        (4258u32, 4258u32),
-        (25801u32, 3035u32),
-        (25832u32, 3035u32),
-        (3035u32, 25801u32),
-        (3035u32, 25832u32),
-    ];
+    let allowlisted = EUROPE_PHASE1_ALLOWLISTED_CORRIDORS;
     let policy = PreferredOperationPolicy {
         us_phase1_default_operation_code: None,
         europe_phase1_default_operation_code: Some(10715),
     };
 
-    for (src, dst) in allowlisted {
+    for &(src, dst) in allowlisted {
         assert_eq!(
             preferred_operation_code_for_crs_pair(src, dst),
             None,
@@ -1155,18 +1449,13 @@ fn europe_phase1_allowlisted_corridors_follow_policy_default_contract() {
 
 #[test]
 fn us_phase1_allowlisted_corridors_follow_definition_policy_contract() {
-    let allowlisted = [
-        (3582u32, 6487u32),
-        (6487u32, 3582u32),
-        (3600u32, 6568u32),
-        (6568u32, 3600u32),
-    ];
+    let allowlisted = US_PHASE1_ALLOWLISTED_CORRIDORS;
     let policy = PreferredOperationPolicy {
         us_phase1_default_operation_code: Some(10715),
         europe_phase1_default_operation_code: None,
     };
 
-    for (src, dst) in allowlisted {
+    for &(src, dst) in allowlisted {
         assert_eq!(
             preferred_operation_for_crs_pair(src, dst),
             None,
@@ -1185,19 +1474,13 @@ fn us_phase1_allowlisted_corridors_follow_definition_policy_contract() {
 
 #[test]
 fn europe_phase1_allowlisted_corridors_follow_definition_policy_contract() {
-    let allowlisted = [
-        (4258u32, 4258u32),
-        (25801u32, 3035u32),
-        (25832u32, 3035u32),
-        (3035u32, 25801u32),
-        (3035u32, 25832u32),
-    ];
+    let allowlisted = EUROPE_PHASE1_ALLOWLISTED_CORRIDORS;
     let policy = PreferredOperationPolicy {
         us_phase1_default_operation_code: None,
         europe_phase1_default_operation_code: Some(10715),
     };
 
-    for (src, dst) in allowlisted {
+    for &(src, dst) in allowlisted {
         assert_eq!(
             preferred_operation_for_crs_pair(src, dst),
             None,
@@ -1211,6 +1494,190 @@ fn europe_phase1_allowlisted_corridors_follow_definition_policy_contract() {
         assert_eq!(op.target_crs_code, dst);
         assert_eq!(op.method, OperationMethod::DynamicGridShift);
         assert!(op.preferred);
+    }
+}
+
+#[test]
+fn us_phase1_allowlisted_template_pairs_exist_in_active_snapshot() {
+    let allowlisted: HashSet<(u32, u32)> = US_PHASE1_ALLOWLISTED_CORRIDORS.iter().copied().collect();
+
+    let snapshot = us_phase1_preferred_operation_support_snapshot();
+    let active_snapshot_pairs: HashSet<(u32, u32)> = snapshot
+        .pairs
+        .iter()
+        .filter(|p| p.status == UsPreferredOperationStatus::Active)
+        .map(|p| (p.source_crs_epsg, p.target_crs_epsg))
+        .collect();
+
+    for pair in allowlisted {
+        assert!(
+            active_snapshot_pairs.contains(&pair),
+            "US allowlisted template corridor should exist in active runtime snapshot"
+        );
+    }
+}
+
+#[test]
+fn europe_phase1_allowlisted_template_pairs_exist_in_active_snapshot() {
+    let allowlisted: HashSet<(u32, u32)> = EUROPE_PHASE1_ALLOWLISTED_CORRIDORS.iter().copied().collect();
+
+    let snapshot = europe_phase1_preferred_operation_support_snapshot();
+    let active_snapshot_pairs: HashSet<(u32, u32)> = snapshot
+        .pairs
+        .iter()
+        .filter(|p| p.status == EuropePreferredOperationStatus::Active)
+        .map(|p| (p.source_crs_epsg, p.target_crs_epsg))
+        .collect();
+
+    for pair in allowlisted {
+        assert!(
+            active_snapshot_pairs.contains(&pair),
+            "Europe allowlisted template corridor should exist in active runtime snapshot"
+        );
+    }
+}
+
+#[test]
+fn us_phase1_all_active_snapshot_pairs_follow_policy_contract() {
+    let snapshot = us_phase1_preferred_operation_support_snapshot();
+    let policy = PreferredOperationPolicy {
+        us_phase1_default_operation_code: Some(10715),
+        europe_phase1_default_operation_code: None,
+    };
+
+    for pair in &snapshot.pairs {
+        assert_eq!(pair.status, UsPreferredOperationStatus::Active);
+
+        assert_eq!(
+            preferred_operation_code_for_crs_pair(pair.source_crs_epsg, pair.target_crs_epsg),
+            None,
+            "US active snapshot pair should remain strict fallback-safe without policy defaults"
+        );
+        assert_eq!(
+            preferred_operation_code_for_crs_pair_with_policy(
+                pair.source_crs_epsg,
+                pair.target_crs_epsg,
+                policy,
+            ),
+            Some(10715),
+            "US active snapshot pair should use policy default operation code"
+        );
+
+        assert_eq!(
+            preferred_operation_for_crs_pair(pair.source_crs_epsg, pair.target_crs_epsg),
+            None,
+            "US active snapshot pair should not build a preferred definition without policy defaults"
+        );
+        let op = preferred_operation_for_crs_pair_with_policy(
+            pair.source_crs_epsg,
+            pair.target_crs_epsg,
+            policy,
+        )
+        .expect("US active snapshot pair should build preferred definition with policy defaults");
+        assert_eq!(op.operation_code, 10715);
+        assert_eq!(op.source_crs_code, pair.source_crs_epsg);
+        assert_eq!(op.target_crs_code, pair.target_crs_epsg);
+        assert_eq!(op.method, OperationMethod::DynamicGridShift);
+        assert!(op.preferred);
+    }
+}
+
+#[test]
+fn europe_phase1_all_active_snapshot_pairs_follow_policy_contract() {
+    let snapshot = europe_phase1_preferred_operation_support_snapshot();
+    let policy = PreferredOperationPolicy {
+        us_phase1_default_operation_code: None,
+        europe_phase1_default_operation_code: Some(10715),
+    };
+
+    for pair in &snapshot.pairs {
+        assert_eq!(pair.status, EuropePreferredOperationStatus::Active);
+
+        assert_eq!(
+            preferred_operation_code_for_crs_pair(pair.source_crs_epsg, pair.target_crs_epsg),
+            None,
+            "Europe active snapshot pair should remain strict fallback-safe without policy defaults"
+        );
+        assert_eq!(
+            preferred_operation_code_for_crs_pair_with_policy(
+                pair.source_crs_epsg,
+                pair.target_crs_epsg,
+                policy,
+            ),
+            Some(10715),
+            "Europe active snapshot pair should use policy default operation code"
+        );
+
+        assert_eq!(
+            preferred_operation_for_crs_pair(pair.source_crs_epsg, pair.target_crs_epsg),
+            None,
+            "Europe active snapshot pair should not build a preferred definition without policy defaults"
+        );
+        let op = preferred_operation_for_crs_pair_with_policy(
+            pair.source_crs_epsg,
+            pair.target_crs_epsg,
+            policy,
+        )
+        .expect("Europe active snapshot pair should build preferred definition with policy defaults");
+        assert_eq!(op.operation_code, 10715);
+        assert_eq!(op.source_crs_code, pair.source_crs_epsg);
+        assert_eq!(op.target_crs_code, pair.target_crs_epsg);
+        assert_eq!(op.method, OperationMethod::DynamicGridShift);
+        assert!(op.preferred);
+    }
+}
+
+#[test]
+fn us_phase1_snapshot_pairs_are_unique() {
+    let snapshot = us_phase1_preferred_operation_support_snapshot();
+    let pairs: HashSet<(u32, u32)> = snapshot
+        .pairs
+        .iter()
+        .map(|p| (p.source_crs_epsg, p.target_crs_epsg))
+        .collect();
+    assert_eq!(
+        pairs.len(),
+        snapshot.pairs.len(),
+        "US phase-1 snapshot should not contain duplicate corridor pairs"
+    );
+}
+
+#[test]
+fn europe_phase1_snapshot_pairs_are_unique() {
+    let snapshot = europe_phase1_preferred_operation_support_snapshot();
+    let pairs: HashSet<(u32, u32)> = snapshot
+        .pairs
+        .iter()
+        .map(|p| (p.source_crs_epsg, p.target_crs_epsg))
+        .collect();
+    assert_eq!(
+        pairs.len(),
+        snapshot.pairs.len(),
+        "Europe phase-1 snapshot should not contain duplicate corridor pairs"
+    );
+}
+
+#[test]
+fn europe_phase1_broad_utm_laea_corridors_are_bidirectional() {
+    let snapshot = europe_phase1_preferred_operation_support_snapshot();
+    let pairs: HashSet<(u32, u32)> = snapshot
+        .pairs
+        .iter()
+        .map(|p| (p.source_crs_epsg, p.target_crs_epsg))
+        .collect();
+
+    for zone_code in 25801u32..=25860u32 {
+        // Broad Europe policy currently activates both directions for UTM<->3035.
+        if crate::from_epsg(zone_code).is_ok() {
+            assert!(
+                pairs.contains(&(zone_code, 3035u32)),
+                "expected forward Europe broad corridor {zone_code} -> 3035"
+            );
+            assert!(
+                pairs.contains(&(3035u32, zone_code)),
+                "expected reverse Europe broad corridor 3035 -> {zone_code}"
+            );
+        }
     }
 }
 

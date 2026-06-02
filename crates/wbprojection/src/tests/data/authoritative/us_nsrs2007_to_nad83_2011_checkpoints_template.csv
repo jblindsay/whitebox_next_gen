@@ -6,3 +6,7 @@
 # - EPSG:3582 (NSRS2007 Maryland) -> EPSG:6487 (NAD83(2011) Maryland)
 # - EPSG:3600 (NSRS2007 Mississippi West) -> EPSG:6568 (NAD83(2011) Mississippi West)
 station,source_crs_epsg,target_crs_epsg,operation_code,epoch_decimal_year,input_x_m,input_y_m,input_z_m,output_x_m,output_y_m,output_z_m,source_reference
+baltimore_md_ncat_fwd,3582,6487,10715,2026.42,1144501.965,-4808658.017,4017326.784,1144501.976,-4808658.012,4017326.756,https://geodesy.noaa.gov/NCAT/ single-point run 2026-06-02 input_frame=NAD83(NSRS2007) output_frame=NAD83(2011) lat=39.2904 lon=-76.6122 h=10m
+baltimore_md_ncat_rev,6487,3582,10715,2026.42,1144501.976,-4808658.012,4017326.756,1144501.953,-4808658.023,4017326.812,https://geodesy.noaa.gov/NCAT/ single-point run 2026-06-02 input_frame=NAD83(2011) output_frame=NAD83(NSRS2007) lat=39.2903998192 lon=-76.6121998562 h=9.980m
+jackson_ms_w_ncat_fwd,3600,6568,10715,2026.42,-17405.462,-5396407.195,3388489.889,-17405.453,-5396407.203,3388489.891,https://geodesy.noaa.gov/NCAT/ single-point run 2026-06-02 input_frame=NAD83(NSRS2007) output_frame=NAD83(2011) lat=32.2988 lon=-90.1848 h=10m
+jackson_ms_w_ncat_rev,6568,3600,10715,2026.42,-17405.453,-5396407.203,3388489.891,-17405.471,-5396407.186,3388489.888,https://geodesy.noaa.gov/NCAT/ single-point run 2026-06-02 input_frame=NAD83(2011) output_frame=NAD83(NSRS2007) lat=32.2987999731 lon=-90.1847999036 h=10.008m

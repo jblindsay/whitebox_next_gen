@@ -2459,4 +2459,210 @@ mod tests {
         assert!((via_pref.1 - base.1).abs() < 1e-9);
         assert!((via_pref.2 - base.2).abs() < 1e-9);
     }
+
+    #[test]
+    fn transform_to_with_preferred_operation_and_policy_us_allowlisted_matrix_behaves_as_expected() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let pairs = [
+            (3582u32, 6487u32),
+            (6487u32, 3582u32),
+            (3600u32, 6568u32),
+            (6568u32, 3600u32),
+        ];
+        let default_policy = PreferredOperationPolicy {
+            us_phase1_default_operation_code: Some(10715),
+            europe_phase1_default_operation_code: None,
+        };
+        let strict_policy = PreferredOperationPolicy::default();
+
+        for (src_code, dst_code) in pairs {
+            let src = Crs::from_epsg(src_code).unwrap();
+            let dst = Crs::from_epsg(dst_code).unwrap();
+
+            let base = src.transform_to(500_000.0, 5_500_000.0, &dst).unwrap();
+            let via_default = src
+                .transform_to_with_preferred_operation_and_policy(
+                    500_000.0,
+                    5_500_000.0,
+                    &dst,
+                    None,
+                    default_policy,
+                )
+                .unwrap();
+            let via_strict = src
+                .transform_to_with_preferred_operation_and_policy(
+                    500_000.0,
+                    5_500_000.0,
+                    &dst,
+                    None,
+                    strict_policy,
+                )
+                .unwrap();
+
+            assert!((via_default.0 - base.0).abs() < 1e-9);
+            assert!((via_default.1 - base.1).abs() < 1e-9);
+            assert!((via_strict.0 - base.0).abs() < 1e-9);
+            assert!((via_strict.1 - base.1).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn transform_to_with_preferred_operation_and_policy_europe_allowlisted_matrix_behaves_as_expected() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let pairs = [
+            (4258u32, 4258u32),
+            (25801u32, 3035u32),
+            (25832u32, 3035u32),
+            (3035u32, 25801u32),
+            (3035u32, 25832u32),
+        ];
+        let default_policy = PreferredOperationPolicy {
+            us_phase1_default_operation_code: None,
+            europe_phase1_default_operation_code: Some(10715),
+        };
+        let strict_policy = PreferredOperationPolicy::default();
+
+        for (src_code, dst_code) in pairs {
+            let src = Crs::from_epsg(src_code).unwrap();
+            let dst = Crs::from_epsg(dst_code).unwrap();
+
+            let base = src.transform_to(500_000.0, 5_500_000.0, &dst).unwrap();
+            let via_default = src
+                .transform_to_with_preferred_operation_and_policy(
+                    500_000.0,
+                    5_500_000.0,
+                    &dst,
+                    None,
+                    default_policy,
+                )
+                .unwrap();
+            let via_strict = src
+                .transform_to_with_preferred_operation_and_policy(
+                    500_000.0,
+                    5_500_000.0,
+                    &dst,
+                    None,
+                    strict_policy,
+                )
+                .unwrap();
+
+            assert!((via_default.0 - base.0).abs() < 1e-9);
+            assert!((via_default.1 - base.1).abs() < 1e-9);
+            assert!((via_strict.0 - base.0).abs() < 1e-9);
+            assert!((via_strict.1 - base.1).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn transform_to_3d_with_preferred_operation_and_policy_us_allowlisted_matrix_behaves_as_expected() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let pairs = [
+            (3582u32, 6487u32),
+            (6487u32, 3582u32),
+            (3600u32, 6568u32),
+            (6568u32, 3600u32),
+        ];
+        let default_policy = PreferredOperationPolicy {
+            us_phase1_default_operation_code: Some(10715),
+            europe_phase1_default_operation_code: None,
+        };
+        let strict_policy = PreferredOperationPolicy::default();
+
+        for (src_code, dst_code) in pairs {
+            let src = Crs::from_epsg(src_code).unwrap();
+            let dst = Crs::from_epsg(dst_code).unwrap();
+
+            let base = src
+                .transform_to_3d(500_000.0, 5_500_000.0, 42.0, &dst)
+                .unwrap();
+            let via_default = src
+                .transform_to_3d_with_preferred_operation_and_policy(
+                    500_000.0,
+                    5_500_000.0,
+                    42.0,
+                    &dst,
+                    None,
+                    default_policy,
+                )
+                .unwrap();
+            let via_strict = src
+                .transform_to_3d_with_preferred_operation_and_policy(
+                    500_000.0,
+                    5_500_000.0,
+                    42.0,
+                    &dst,
+                    None,
+                    strict_policy,
+                )
+                .unwrap();
+
+            assert!((via_default.0 - base.0).abs() < 1e-9);
+            assert!((via_default.1 - base.1).abs() < 1e-9);
+            assert!((via_default.2 - base.2).abs() < 1e-9);
+            assert!((via_strict.0 - base.0).abs() < 1e-9);
+            assert!((via_strict.1 - base.1).abs() < 1e-9);
+            assert!((via_strict.2 - base.2).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn transform_to_3d_with_preferred_operation_and_policy_europe_allowlisted_matrix_behaves_as_expected() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let pairs = [
+            (4258u32, 4258u32),
+            (25801u32, 3035u32),
+            (25832u32, 3035u32),
+            (3035u32, 25801u32),
+            (3035u32, 25832u32),
+        ];
+        let default_policy = PreferredOperationPolicy {
+            us_phase1_default_operation_code: None,
+            europe_phase1_default_operation_code: Some(10715),
+        };
+        let strict_policy = PreferredOperationPolicy::default();
+
+        for (src_code, dst_code) in pairs {
+            let src = Crs::from_epsg(src_code).unwrap();
+            let dst = Crs::from_epsg(dst_code).unwrap();
+
+            let base = src
+                .transform_to_3d(500_000.0, 5_500_000.0, 42.0, &dst)
+                .unwrap();
+            let via_default = src
+                .transform_to_3d_with_preferred_operation_and_policy(
+                    500_000.0,
+                    5_500_000.0,
+                    42.0,
+                    &dst,
+                    None,
+                    default_policy,
+                )
+                .unwrap();
+            let via_strict = src
+                .transform_to_3d_with_preferred_operation_and_policy(
+                    500_000.0,
+                    5_500_000.0,
+                    42.0,
+                    &dst,
+                    None,
+                    strict_policy,
+                )
+                .unwrap();
+
+            assert!((via_default.0 - base.0).abs() < 1e-9);
+            assert!((via_default.1 - base.1).abs() < 1e-9);
+            assert!((via_default.2 - base.2).abs() < 1e-9);
+            assert!((via_strict.0 - base.0).abs() < 1e-9);
+            assert!((via_strict.1 - base.1).abs() < 1e-9);
+            assert!((via_strict.2 - base.2).abs() < 1e-9);
+        }
+    }
 }

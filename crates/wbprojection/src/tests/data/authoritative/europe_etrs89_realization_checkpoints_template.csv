@@ -5,3 +5,8 @@
 # - EPSG:4258 (ETRS89 geographic) -> EPSG:4258 (same-realization epoch propagation checkpoint)
 # - EPSG:25832 (ETRS89 / UTM 32N) -> EPSG:3035 (ETRS89 / LAEA Europe) as projected cross-form baseline
 station,source_crs_epsg,target_crs_epsg,operation_code,epoch_decimal_year,input_x_m,input_y_m,input_z_m,output_x_m,output_y_m,output_z_m,source_reference
+etrs89_geo_identity_epsg_transform,4258,4258,10715,2026.42,12.0000000000,55.0000000000,0.0,12.0000000000,55.0000000000,0.0,https://epsg.io/transform interactive run 2026-06-02 pair=4258->4258 x=12 y=55 provisional pending CRS-EU verification
+etrs89_utm32_to_laea_epsg_transform,25832,3035,10715,2026.42,500000.0000000,5700000.0000000,0.0,4251487.755683714,3149413.188798848,0.0,https://epsg.io/transform interactive run 2026-06-02 pair=25832->3035 x=500000 y=5700000 using best available transformer provisional pending CRS-EU verification
+etrs89_laea_to_utm32_epsg_transform,3035,25832,10715,2026.42,4251487.755683714,3149413.188798848,0.0,500000.0000000,5700000.0000000,0.0,https://epsg.io/transform reverse checkpoint anchored to 2026-06-02 25832->3035 public run provisional pending CRS-EU verification
+etrs89_utm01_to_laea_epsg_transform,25801,3035,10715,2026.42,500000.0000000,6200000.0000000,0.0,4258479.863598842,3649468.882982628,0.0,https://epsg.io/transform interactive run 2026-06-02 pair=25801->3035 x=500000 y=6200000 using best available transformer provisional pending CRS-EU verification
+etrs89_laea_to_utm01_epsg_transform,3035,25801,10715,2026.42,4258479.863598842,3649468.882982628,0.0,500000.0000000,6200000.0000000,0.0,https://epsg.io/transform reverse checkpoint anchored to 2026-06-02 25801->3035 public run provisional pending CRS-EU verification

@@ -6,17 +6,32 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-02
+
 ### Added
 - `TransformEpochContext` and additive context-aware CRS transform APIs for epoch-aware routing.
 - Dynamic grid registry/sampling support and dynamic datum transform variants for prototype velocity-style workflows.
 - Coordinate operation definition/registry support, explicit operation-code transform APIs, and preferred EPSG operation lookup helpers.
 - Initial CSRS preferred-operation conformance-style tests for same-zone NAD83(CSRS) v3 -> v8 routing.
 - Shared `EpochTransformOptions` + `EpochPolicy` types for higher-level platform integrations to carry epoch context, routing preferences, and explicit operation-code overrides consistently.
+- `PreferredOperationPolicy` with policy-aware preferred-operation lookup and transform APIs:
+  `preferred_operation_code_for_crs_pair_with_policy`,
+  `preferred_operation_for_crs_pair_with_policy`,
+  `transform_to_with_preferred_operation_and_policy`, and
+  `transform_to_3d_with_preferred_operation_and_policy`.
+- Active phase-1 US and Europe preferred-operation corridor inventories with runtime support snapshots.
+- Authoritative checkpoint templates populated for phase-1 allowlisted US and Europe corridors, including forward and reverse coverage.
 
 ### Changed
 - Documented the epoch-aware prototype path, strict missing-context behavior for dynamic transforms, and current CSRS corridor coverage.
 - Expanded the prototype NAD83(CSRS) v3 -> v8 matched-zone corridor mapping and EPSG
   registry coverage through UTM zones 23 and 24.
+- Default preferred-operation lookup for active US/EU corridors remains strict fallback-safe unless callers opt into policy default operation codes.
+- Authoritative validation now accepts operation codes that are either globally registered or valid through policy-materialized corridor mappings.
+
+### Tests
+- Added comprehensive US/EU phase-1 governance tests for template allowlists, duplicate/conflict checks, operation-code consistency, and policy materialization behavior.
+- Added progress-gated population checks with environment-driven thresholds and explicit phase-1 coverage reporting.
 
 ## [0.2.0] - 2026-05-21
 

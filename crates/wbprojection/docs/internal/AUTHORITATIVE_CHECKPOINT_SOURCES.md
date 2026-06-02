@@ -213,6 +213,37 @@ Phase-1 strict fill rules (enforced by tests when rows are present):
    - Be non-empty and not a placeholder token (`tbd`, `todo`, `pending`, `n/a`, etc.).
    - Include either a namespaced code (`EPSG:...`) or a URL-style path.
 
+Optional full-population gate:
+
+- Set environment variable `WBPROJECTION_ENFORCE_PHASE1_TEMPLATE_POPULATION=1` while running tests
+   to enforce that every US/Europe phase-1 allowlisted corridor has at least one template row.
+- Default behavior keeps this gate disabled so empty templates remain valid during evidence collection.
+
+Optional progress-print mode:
+
+- Set environment variable `WBPROJECTION_PRINT_PHASE1_TEMPLATE_PROGRESS=1` while running tests
+   to print US/Europe phase-1 corridor coverage counts and missing-corridor lists.
+- The consolidated test `phase1_template_population_progress_snapshot` supports both modes:
+   progress-print only, or strict enforcement when the population gate flag is also enabled.
+
+Optional incremental minimum-coverage gates:
+
+- Set `WBPROJECTION_MIN_US_PHASE1_COVERAGE=<n>` to require at least `n` US corridors populated.
+- Set `WBPROJECTION_MIN_EUROPE_PHASE1_COVERAGE=<n>` to require at least `n` Europe corridors populated.
+- These thresholds are checked by `phase1_template_population_progress_snapshot` and can be used
+   for staged rollout checkpoints before the full all-corridor gate is enabled.
+
+Template integrity guards (always on):
+
+- US/Europe template tests reject duplicate rows for the same
+   `(station, source_crs_epsg, target_crs_epsg, epoch_decimal_year)` tuple.
+- US/Europe template tests reject conflicting `operation_code` values within the same corridor.
+- US/Europe template tests require each populated `operation_code` to be either:
+   - resolvable in the runtime coordinate-operation catalog, or
+   - policy-materializable for the row corridor under phase-1 preferred-operation policy defaults.
+- US/Europe template tests require each populated row to be policy-materializable into
+   a preferred operation definition for its `(source_crs_epsg, target_crs_epsg)` corridor.
+
 Runtime scaffolding note:
 
 - `wbprojection` now exposes phase-1 US and Europe support snapshots for these

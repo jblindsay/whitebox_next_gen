@@ -126,6 +126,14 @@ Working policy conclusion:
 - Date-routed NRCan outputs with preserved run metadata are accepted as authoritative-inference evidence.
 - Lack of literal realization labels in NRCan interfaces is not treated as a project failure condition.
 
+Reverse-direction policy status (current code):
+
+- Reverse preferred-operation corridors `v8 -> v3/v4/v6/v7` are explicitly marked pending.
+- Preferred-operation API calls for these reverse corridors now return a clear
+   pending-activation error rather than silently using fallback routing.
+- Reverse activation requires corridor-specific authoritative operation mapping
+   and checkpoint evidence, same as forward activation standards.
+
 A ready-to-fill template for this capture is available at:
 
 - src/tests/data/authoritative/op10715_csrs_v3_to_v8_checkpoints_template.csv
@@ -133,6 +141,11 @@ A ready-to-fill template for this capture is available at:
 Additional ready-to-fill template for the next planned pair activation (v4 -> v8):
 
 - src/tests/data/authoritative/csrs_v4_to_v8_checkpoints_template.csv
+
+Reverse-direction template recommendation (next):
+
+- Add `src/tests/data/authoritative/csrs_v8_to_v4_checkpoints_template.csv`
+   once a traceable reverse operation mapping source is available.
 
 Convenience batch-input CSV for NRCan geographic batch mode (Guelph + two additional points):
 

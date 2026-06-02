@@ -1315,7 +1315,7 @@ fn epsg_csrs_support_snapshot_reports_active_and_pending_pairs() {
 
     assert_eq!(snapshot.zone_min, 7);
     assert_eq!(snapshot.zone_max, 24);
-    assert_eq!(snapshot.pairs.len(), 36);
+    assert_eq!(snapshot.pairs.len(), 49);
 
     let active_pairs = [
         ("v3", "v8"),
@@ -1344,6 +1344,14 @@ fn epsg_csrs_support_snapshot_reports_active_and_pending_pairs() {
         .expect("pending pair should exist in snapshot");
     assert_eq!(pending.status, CsrsPreferredOperationStatus::Pending);
     assert_eq!(pending.preferred_operation_code, None);
+
+    let v5_pending = snapshot
+        .pairs
+        .iter()
+        .find(|p| p.source_realization == "v5" && p.target_realization == "v8")
+        .expect("v5 pending pair should exist in snapshot");
+    assert_eq!(v5_pending.status, CsrsPreferredOperationStatus::Pending);
+    assert_eq!(v5_pending.preferred_operation_code, None);
 }
 
 #[test]

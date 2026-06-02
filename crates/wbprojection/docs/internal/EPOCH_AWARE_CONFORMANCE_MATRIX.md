@@ -40,7 +40,6 @@ Current usable scope in this repository:
 Status legend:
 - Active: preferred operation mapping is enabled in code.
 - Pending: candidate corridor not yet activated (missing validated operation metadata/assets/checkpoints).
-- N/A: projected realization family not currently represented in the compiled CSRS realization UTM corridor set.
 
 Tracked projected realization families in current registry surface:
 - v2: EPSG 22207-22222
@@ -77,21 +76,31 @@ Pending zone-corridor rule (coded):
 | v4 | v6 | Pending | - |
 | v4 | v7 | Pending | - |
 | v4 | v8 | Active | 10715 |
+| v5 | v2 | Pending | - |
+| v5 | v3 | Pending | - |
+| v5 | v4 | Pending | - |
+| v5 | v5 | Pending | - |
+| v5 | v6 | Pending | - |
+| v5 | v7 | Pending | - |
+| v5 | v8 | Pending | - |
 | v6 | v2 | Pending | - |
 | v6 | v3 | Pending | - |
 | v6 | v4 | Pending | - |
+| v6 | v5 | Pending | - |
 | v6 | v6 | Pending | - |
 | v6 | v7 | Pending | - |
 | v6 | v8 | Active | 10715 |
 | v7 | v2 | Pending | - |
 | v7 | v3 | Pending | - |
 | v7 | v4 | Pending | - |
+| v7 | v5 | Pending | - |
 | v7 | v6 | Pending | - |
 | v7 | v7 | Pending | - |
 | v7 | v8 | Active | 10715 |
 | v8 | v2 | Pending | - |
 | v8 | v3 | Pending | - |
 | v8 | v4 | Pending | - |
+| v8 | v5 | Pending | - |
 | v8 | v6 | Pending | - |
 | v8 | v7 | Pending | - |
 | v8 | v8 | Pending | - |

@@ -51,6 +51,12 @@ To activate a pair like v4 -> v8 in code, we need at least one of:
 4. Authoritative-inference package: date-routed authoritative outputs plus realization anchor-epoch
   metadata that uniquely supports one pair interpretation in the implemented corridor model.
 
+Reverse-direction note:
+
+1. Reverse corridors (for example `v8 -> v4`) require their own operation preference evidence.
+2. Do not infer reverse preferred-operation activation solely from forward corridor evidence.
+3. Keep reverse pairs pending until reverse operation mapping is explicitly documented and tested.
+
 ## What the Date-Only NRCan UI Can And Cannot Do
 
 Can do:
@@ -118,6 +124,12 @@ These fields match the template header exactly.
 1. If realization pair is explicit and traceable -> eligible for activation.
 2. If realization pair is not explicit but authoritative-inference criteria are met -> eligible for documented inferred activation.
 3. Otherwise keep as pending; use outputs for epoch-propagation validation only.
+
+Reverse-corridor extension:
+
+1. Forward and reverse directions are evaluated independently for preferred-operation activation.
+2. If reverse mapping evidence is missing, reverse stays pending even when forward is active.
+3. Pending reverse corridors should produce explicit pending-activation errors in preferred-operation APIs.
 
 ## Practical Proceed-Now Policy (When UI Is Date-Only)
 

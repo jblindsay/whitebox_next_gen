@@ -225,7 +225,10 @@ Runtime scaffolding note:
 - If a corridor has no authoritative operation code yet, lookup intentionally
    returns no preferred code (fallback-safe behavior).
 - Callers can opt into policy-default operation codes for active corridors via
-   the policy-aware lookup API without changing the corridor inventory itself.
+   the policy-aware lookup API (`preferred_operation_code_for_crs_pair_with_policy`)
+   without changing the corridor inventory itself.
+- Callers that need a policy-aware operation definition can use
+   `preferred_operation_for_crs_pair_with_policy`.
 - High-level CRS transform helpers now expose policy-aware preferred-operation
    variants so callers can select strict fallback-safe mode or default-code mode
    at runtime.

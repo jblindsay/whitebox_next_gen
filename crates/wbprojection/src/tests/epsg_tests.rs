@@ -32,6 +32,7 @@ use crate::{
     to_geotiff_info,
     preferred_operation_code_for_crs_pair,
     preferred_operation_code_for_crs_pair_with_policy,
+    preferred_operation_for_crs_pair,
     preferred_operation_for_crs_pair_with_policy,
     PreferredOperationPolicy,
     CsrsPreferredOperationStatus,
@@ -1557,6 +1558,20 @@ fn epsg_preferred_operation_definition_with_policy_builds_dynamic_grid_shift_op(
     assert_eq!(op.target_crs_code, 6487);
     assert_eq!(op.method, crate::OperationMethod::DynamicGridShift);
     assert!(op.preferred);
+}
+
+#[test]
+fn epsg_preferred_operation_definition_with_policy_falls_back_without_defaults() {
+    let policy = PreferredOperationPolicy::default();
+
+    assert_eq!(preferred_operation_for_crs_pair_with_policy(3582, 6487, policy), None);
+    assert_eq!(preferred_operation_for_crs_pair_with_policy(25832, 3035, policy), None);
+}
+
+#[test]
+fn epsg_preferred_operation_definition_default_api_remains_fallback_safe() {
+    assert_eq!(preferred_operation_for_crs_pair(3582, 6487), None);
+    assert_eq!(preferred_operation_for_crs_pair(25832, 3035), None);
 }
 
 #[test]

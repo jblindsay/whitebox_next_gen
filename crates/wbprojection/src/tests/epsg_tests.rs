@@ -1432,7 +1432,7 @@ fn epsg_csrs_support_snapshot_reports_active_and_pending_pairs() {
 }
 
 #[test]
-fn epsg_us_phase1_support_snapshot_tracks_pending_seed_corridors() {
+fn epsg_us_phase1_support_snapshot_tracks_active_seed_corridors() {
     let snapshot = us_phase1_preferred_operation_support_snapshot();
     assert_eq!(snapshot.phase_label, "phase-1");
     assert_eq!(snapshot.pairs.len(), 2);
@@ -1444,13 +1444,13 @@ fn epsg_us_phase1_support_snapshot_tracks_pending_seed_corridors() {
             .iter()
             .find(|p| p.source_crs_epsg == source_crs_epsg && p.target_crs_epsg == target_crs_epsg)
             .expect("expected US phase-1 pair in snapshot");
-        assert_eq!(pair.status, UsPreferredOperationStatus::Pending);
+        assert_eq!(pair.status, UsPreferredOperationStatus::Active);
         assert_eq!(pair.preferred_operation_code, None);
     }
 }
 
 #[test]
-fn epsg_europe_phase1_support_snapshot_tracks_pending_seed_corridors() {
+    fn epsg_europe_phase1_support_snapshot_tracks_active_seed_corridors() {
     let snapshot = europe_phase1_preferred_operation_support_snapshot();
     assert_eq!(snapshot.phase_label, "phase-1");
     assert_eq!(snapshot.pairs.len(), 2);
@@ -1462,7 +1462,7 @@ fn epsg_europe_phase1_support_snapshot_tracks_pending_seed_corridors() {
             .iter()
             .find(|p| p.source_crs_epsg == source_crs_epsg && p.target_crs_epsg == target_crs_epsg)
             .expect("expected Europe phase-1 pair in snapshot");
-        assert_eq!(pair.status, EuropePreferredOperationStatus::Pending);
+        assert_eq!(pair.status, EuropePreferredOperationStatus::Active);
         assert_eq!(pair.preferred_operation_code, None);
     }
 }

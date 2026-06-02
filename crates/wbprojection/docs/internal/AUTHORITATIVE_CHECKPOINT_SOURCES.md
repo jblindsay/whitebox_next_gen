@@ -212,8 +212,9 @@ Runtime scaffolding note:
 
 - `wbprojection` now exposes phase-1 US and Europe support snapshots for these
    seeded corridor pairs.
-- Snapshot entries are intentionally `Pending` with no preferred operation code
-   until the corresponding authoritative checkpoint rows are filled and validated.
+- Snapshot entries are now `Active` for broad mathematical rollout.
+- Preferred operation code remains optional (`None`) until corresponding
+   authoritative checkpoint rows are filled and validated.
 
 ## EPSG Anchor-Epoch Notes (Realization Metadata)
 

@@ -1451,9 +1451,9 @@ pub fn us_phase1_preferred_operation_support_snapshot() -> UsPreferredOperationS
     let mut pairs = Vec::with_capacity(US_PHASE1_CORRIDOR_SEEDS.len());
 
     for (source_crs_epsg, target_crs_epsg) in US_PHASE1_CORRIDOR_SEEDS {
-        // Phase-1 US corridors remain pending until authoritative checkpoint
-        // evidence enables an explicit operation-code activation.
-        let status = UsPreferredOperationStatus::Pending;
+        // Broad rollout mode: corridor activation is mathematical-first.
+        // Operation code is optional until authoritative evidence is captured.
+        let status = UsPreferredOperationStatus::Active;
         let preferred_operation_code = None;
 
         pairs.push(UsPreferredOperationPairSupport {
@@ -1476,9 +1476,9 @@ pub fn europe_phase1_preferred_operation_support_snapshot(
     let mut pairs = Vec::with_capacity(EUROPE_PHASE1_CORRIDOR_SEEDS.len());
 
     for (source_crs_epsg, target_crs_epsg) in EUROPE_PHASE1_CORRIDOR_SEEDS {
-        // Phase-1 Europe corridors remain pending until authoritative checkpoint
-        // evidence enables an explicit operation-code activation.
-        let status = EuropePreferredOperationStatus::Pending;
+        // Broad rollout mode: corridor activation is mathematical-first.
+        // Operation code is optional until authoritative evidence is captured.
+        let status = EuropePreferredOperationStatus::Active;
         let preferred_operation_code = None;
 
         pairs.push(EuropePreferredOperationPairSupport {

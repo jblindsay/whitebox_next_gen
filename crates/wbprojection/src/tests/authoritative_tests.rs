@@ -968,7 +968,9 @@ fn europe_etrs89_realization_template_phase1_pairs_are_allowlisted() {
     // Reverse directions are now allowlisted as active bidirectional corridors.
     let allowlist: HashSet<(u32, u32)> = [
         (4258u32, 4258u32),
+        (25801u32, 3035u32),
         (25832u32, 3035u32),
+        (3035u32, 25801u32),
         (3035u32, 25832u32),
     ]
     .into_iter()
@@ -1074,7 +1076,9 @@ fn europe_phase1_snapshot_includes_reverse_seed_corridors_as_active() {
     let snapshot = europe_phase1_preferred_operation_support_snapshot();
     let expected_pairs = [
         (4258u32, 4258u32),
+        (25801u32, 3035u32),
         (25832u32, 3035u32),
+        (3035u32, 25801u32),
         (3035u32, 25832u32),
     ];
 

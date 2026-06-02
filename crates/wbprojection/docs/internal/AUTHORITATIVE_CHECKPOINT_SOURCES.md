@@ -203,7 +203,9 @@ Phase-1 strict fill rules (enforced by tests when rows are present):
    - 6568 -> 3600
 - Europe template allowlist corridors:
    - 4258 -> 4258
+   - 25801 -> 3035
    - 25832 -> 3035
+   - 3035 -> 25801
    - 3035 -> 25832
 - For both templates, each filled row must include `operation_code`.
 - For both templates, each filled row must keep `epoch_decimal_year` in [1980, 2100].

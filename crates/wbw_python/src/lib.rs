@@ -901,6 +901,25 @@ impl PythonToolRuntime {
     }
 
     pub fn get_runtime_capabilities_json(&self) -> Value {
+        let csrs_support = wbprojection::csrs_preferred_operation_support_snapshot();
+        let csrs_pairs: Vec<Value> = csrs_support
+            .pairs
+            .iter()
+            .map(|pair| {
+                json!({
+                    "source_realization": pair.source_realization,
+                    "target_realization": pair.target_realization,
+                    "zone_min": pair.zone_min,
+                    "zone_max": pair.zone_max,
+                    "status": match pair.status {
+                        wbprojection::CsrsPreferredOperationStatus::Active => "active",
+                        wbprojection::CsrsPreferredOperationStatus::Pending => "pending",
+                    },
+                    "preferred_operation_code": pair.preferred_operation_code,
+                })
+            })
+            .collect();
+
         let mut out = json!({
             "compiled_with_pro_support": cfg!(feature = "pro"),
             "include_pro": self.include_pro,
@@ -912,6 +931,11 @@ impl PythonToolRuntime {
             },
             "catalog_tool_count": self.build_catalog_manifests().len(),
             "visible_tool_count": self.visible_manifests().len(),
+            "projection_csrs_preferred_operation_support": {
+                "zone_min": csrs_support.zone_min,
+                "zone_max": csrs_support.zone_max,
+                "pairs": csrs_pairs,
+            },
         });
 
         if let Value::Object(obj) = &mut out {

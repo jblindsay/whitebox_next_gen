@@ -204,6 +204,28 @@ For NAD83(CSRS) realization-routing in current WbW builds:
 For CRS pairs without a registered preferred operation mapping, standard
 reprojection remains available via the baseline transform path.
 
+Expected active set in current builds:
+
+| Source | Target | Status | Operation | Zones |
+|---|---|---|---:|---|
+| v3 | v8 | active | 10715 | 7-24 |
+| v4 | v8 | active | 10715 | 7-24 |
+| v6 | v8 | active | 10715 | 7-24 |
+| v7 | v8 | active | 10715 | 7-24 |
+
+### Inspect CSRS support in QGIS diagnostics
+
+The plugin diagnostics report now includes a `csrs_preferred_operation_support`
+summary with:
+
+- zone range (`zone_min`, `zone_max`)
+- active realization pairs and operation codes
+- pending pair count
+
+Open diagnostics from the Whitebox Workflows plugin menu, then inspect the
+`capabilities` block in the report text or JSON section for
+`projection_csrs_preferred_operation_support`.
+
 ### Epoch-aware raster example
 
 ```python

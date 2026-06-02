@@ -1315,6 +1315,66 @@ enum CsrsRealization {
     V8,
 }
 
+const CSRS_SUPPORTED_REALIZATIONS: &[CsrsRealization] = &[
+    CsrsRealization::V2,
+    CsrsRealization::V3,
+    CsrsRealization::V4,
+    CsrsRealization::V6,
+    CsrsRealization::V7,
+    CsrsRealization::V8,
+];
+
+const CSRS_ZONE_MIN: u8 = 7;
+const CSRS_ZONE_MAX: u8 = 24;
+
+fn csrs_realization_label(realization: CsrsRealization) -> &'static str {
+    match realization {
+        CsrsRealization::V2 => "v2",
+        CsrsRealization::V3 => "v3",
+        CsrsRealization::V4 => "v4",
+        CsrsRealization::V6 => "v6",
+        CsrsRealization::V7 => "v7",
+        CsrsRealization::V8 => "v8",
+    }
+}
+
+/// Status of a CSRS preferred-operation realization corridor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CsrsPreferredOperationStatus {
+    /// Pair is active with a preferred operation code.
+    Active,
+    /// Pair is known but not yet activated.
+    Pending,
+}
+
+/// Preferred-operation support details for a CSRS realization pair.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CsrsPreferredOperationPairSupport {
+    /// Source realization label (for example `v3`).
+    pub source_realization: &'static str,
+    /// Target realization label (for example `v8`).
+    pub target_realization: &'static str,
+    /// Minimum supported UTM zone for this pair.
+    pub zone_min: u8,
+    /// Maximum supported UTM zone for this pair.
+    pub zone_max: u8,
+    /// Pair activation status.
+    pub status: CsrsPreferredOperationStatus,
+    /// Preferred operation code when status is active.
+    pub preferred_operation_code: Option<u32>,
+}
+
+/// Snapshot of CSRS preferred-operation support in the current build.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CsrsPreferredOperationSupportSnapshot {
+    /// Minimum supported UTM zone for scoped CSRS realization corridors.
+    pub zone_min: u8,
+    /// Maximum supported UTM zone for scoped CSRS realization corridors.
+    pub zone_max: u8,
+    /// Realization-pair support entries.
+    pub pairs: Vec<CsrsPreferredOperationPairSupport>,
+}
+
 /// Parse supported NAD83(CSRS) realization UTM EPSG code families.
 ///
 /// Returns `(realization, zone)` for known realization UTM corridors.
@@ -1420,6 +1480,41 @@ fn preferred_operation_code_for_csrs_realization_pair(
     match csrs_pair_activation(src_realization, dst_realization) {
         CsrsPairActivation::Active(operation_code) => Some(operation_code),
         CsrsPairActivation::Pending => None,
+    }
+}
+
+/// Return a snapshot of CSRS preferred-operation realization support.
+///
+/// The snapshot includes all tracked realization-pair combinations for the
+/// current CSRS rollout scaffold, each tagged as active or pending.
+pub fn csrs_preferred_operation_support_snapshot() -> CsrsPreferredOperationSupportSnapshot {
+    let mut pairs = Vec::new();
+
+    for source in CSRS_SUPPORTED_REALIZATIONS {
+        for target in CSRS_SUPPORTED_REALIZATIONS {
+            let activation = csrs_pair_activation(*source, *target);
+            let (status, preferred_operation_code) = match activation {
+                CsrsPairActivation::Active(code) => {
+                    (CsrsPreferredOperationStatus::Active, Some(code))
+                }
+                CsrsPairActivation::Pending => (CsrsPreferredOperationStatus::Pending, None),
+            };
+
+            pairs.push(CsrsPreferredOperationPairSupport {
+                source_realization: csrs_realization_label(*source),
+                target_realization: csrs_realization_label(*target),
+                zone_min: CSRS_ZONE_MIN,
+                zone_max: CSRS_ZONE_MAX,
+                status,
+                preferred_operation_code,
+            });
+        }
+    }
+
+    CsrsPreferredOperationSupportSnapshot {
+        zone_min: CSRS_ZONE_MIN,
+        zone_max: CSRS_ZONE_MAX,
+        pairs,
     }
 }
 

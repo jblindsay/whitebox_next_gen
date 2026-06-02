@@ -9,6 +9,9 @@ Completed in this phase:
 - Backend epoch-routing contract is wired through `wbprojection`, `wbraster`, `wbvector`, and `wblidar` reprojection options.
 - CSRS preferred-operation forward corridors now cover matched zones 7-24 for
   `v3 -> v8`, `v4 -> v8`, `v6 -> v8`, and `v7 -> v8`.
+- `wbprojection` now exposes a programmatic CSRS support snapshot surface
+  (`csrs_preferred_operation_support_snapshot`) so callers can query active vs
+  pending realization pairs and scoped zone bounds without reading internal docs.
 - CSRS preferred-operation routing now uses a matrix-based helper in `wbprojection` (catalog-style scaffold) rather than a single hardcoded conditional, enabling phased realization-pair expansion.
 - CSRS activation/pending policy is now data-driven (table-based) rather than
   hand-enumerated per zone pair.

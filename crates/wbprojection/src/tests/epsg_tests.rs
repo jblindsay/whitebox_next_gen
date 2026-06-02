@@ -16,6 +16,7 @@ use crate::{
     identify_epsg_from_wkt_report,
     identify_epsg_from_wkt_with_policy,
     compound_from_wkt,
+    csrs_preferred_operation_support_snapshot,
     from_epsg,
     from_epsg_with_catalog,
     from_epsg_with_policy,
@@ -29,6 +30,7 @@ use crate::{
     to_ogc_wkt,
     to_geotiff_info,
     preferred_operation_code_for_crs_pair,
+    CsrsPreferredOperationStatus,
     unregister_vertical_offset_grid,
     unregister_epsg_alias,
     vertical_offset_grid_name,
@@ -1289,6 +1291,43 @@ fn epsg_preferred_operation_csrs_v6_v7_to_v8_same_zone_maps_to_10715() {
 
     assert_eq!(preferred_operation_code_for_crs_pair(22617, 22818), None);
     assert_eq!(preferred_operation_code_for_crs_pair(22717, 22818), None);
+}
+
+#[test]
+fn epsg_csrs_support_snapshot_reports_active_and_pending_pairs() {
+    let snapshot = csrs_preferred_operation_support_snapshot();
+
+    assert_eq!(snapshot.zone_min, 7);
+    assert_eq!(snapshot.zone_max, 24);
+    assert_eq!(snapshot.pairs.len(), 36);
+
+    let active_pairs = [
+        ("v3", "v8"),
+        ("v4", "v8"),
+        ("v6", "v8"),
+        ("v7", "v8"),
+    ];
+
+    for (src, dst) in active_pairs {
+        let entry = snapshot
+            .pairs
+            .iter()
+            .find(|p| p.source_realization == src && p.target_realization == dst)
+            .expect("active pair should exist in snapshot");
+
+        assert_eq!(entry.status, CsrsPreferredOperationStatus::Active);
+        assert_eq!(entry.preferred_operation_code, Some(10715));
+        assert_eq!(entry.zone_min, 7);
+        assert_eq!(entry.zone_max, 24);
+    }
+
+    let pending = snapshot
+        .pairs
+        .iter()
+        .find(|p| p.source_realization == "v2" && p.target_realization == "v8")
+        .expect("pending pair should exist in snapshot");
+    assert_eq!(pending.status, CsrsPreferredOperationStatus::Pending);
+    assert_eq!(pending.preferred_operation_code, None);
 }
 
 #[test]

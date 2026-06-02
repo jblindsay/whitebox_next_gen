@@ -112,6 +112,24 @@ fn assert_csrs_preferred_matches_baseline(
     }
 }
 
+fn csrs_zone_checkpoints(zone: u32) -> [(f64, f64); 3] {
+    let northing = 4_000_000.0 + (zone as f64) * 120_000.0;
+    [
+        (500_000.0, northing),
+        (540_000.0, northing + 150_000.0),
+        (460_000.0, northing - 150_000.0),
+    ]
+}
+
+fn csrs_zone_baseline_points(zone: u32) -> [(f64, f64); 3] {
+    let northing = 4_000_000.0 + (zone as f64) * 120_000.0;
+    [
+        (500_000.0, northing),
+        (520_000.0, northing + 80_000.0),
+        (480_000.0, northing - 80_000.0),
+    ]
+}
+
 // ─── UTM ───────────────────────────────────────────────────────────────────
 
 #[test]
@@ -1513,6 +1531,34 @@ fn csrs_v7_to_v8_preferred_operation_matches_fallback_baseline_for_now() {
     ];
 
     assert_csrs_preferred_matches_baseline(22717, 22817, &points);
+}
+
+#[test]
+fn csrs_active_forward_corridors_zone_complete_preferred_matches_explicit() {
+    let active_source_bases = [22300u32, 22400u32, 22600u32, 22700u32];
+
+    for source_base in active_source_bases {
+        for zone in 7u32..=24u32 {
+            let source_epsg = source_base + zone;
+            let target_epsg = 22800u32 + zone;
+            let checkpoints = csrs_zone_checkpoints(zone);
+            assert_csrs_preferred_matches_explicit(source_epsg, target_epsg, &checkpoints);
+        }
+    }
+}
+
+#[test]
+fn csrs_active_forward_corridors_zone_complete_preferred_matches_baseline() {
+    let active_source_bases = [22300u32, 22400u32, 22600u32, 22700u32];
+
+    for source_base in active_source_bases {
+        for zone in 7u32..=24u32 {
+            let source_epsg = source_base + zone;
+            let target_epsg = 22800u32 + zone;
+            let points = csrs_zone_baseline_points(zone);
+            assert_csrs_preferred_matches_baseline(source_epsg, target_epsg, &points);
+        }
+    }
 }
 
 #[test]

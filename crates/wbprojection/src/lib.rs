@@ -186,6 +186,9 @@ pub use crs::{
 pub use datum::{Datum, DatumTransform, HelmertParams, MolodenskyParams};
 pub use ellipsoid::Ellipsoid;
 pub use epsg::{
+    CsrsPreferredOperationPairSupport,
+    CsrsPreferredOperationStatus,
+    CsrsPreferredOperationSupportSnapshot,
     CrsBoundingBox,
     EpsgAliasEntry,
     EpsgIdentifyCandidate,
@@ -196,6 +199,7 @@ pub use epsg::{
     canonical_wkt_for_epsg,
     clear_runtime_epsg_aliases,
     crs_to_wkt,
+    csrs_preferred_operation_support_snapshot,
     epsg_alias_catalog,
     epsg_from_srs_reference,
     epsg_from_wkt,

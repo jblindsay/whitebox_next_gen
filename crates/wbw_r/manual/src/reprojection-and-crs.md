@@ -155,6 +155,23 @@ For NAD83(CSRS) realization-routing in current WbW builds:
 For CRS pairs without a registered preferred operation mapping, standard
 reprojection remains available via the baseline transform path.
 
+Expected active set in current builds:
+
+| Source | Target | Status | Operation | Zones |
+|---|---|---|---:|---|
+| v3 | v8 | active | 10715 | 7-24 |
+| v4 | v8 | active | 10715 | 7-24 |
+| v6 | v8 | active | 10715 | 7-24 |
+| v7 | v8 | active | 10715 | 7-24 |
+
+Conformance note:
+
+1. Integration tests in `wbprojection` now validate zone-complete coverage for
+  active forward corridors (zones 7-24) for both preferred-vs-explicit and
+  preferred-vs-baseline routes.
+2. For runtime verification inside QGIS deployments, use the QGIS diagnostics
+  panel output described in the WbW-QGIS manual.
+
 ### Example: match-grid categorical reprojection
 
 ```r

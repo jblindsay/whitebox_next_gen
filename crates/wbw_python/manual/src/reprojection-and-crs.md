@@ -173,6 +173,37 @@ For NAD83(CSRS) realization-routing in current WbW builds:
 For CRS pairs without a registered preferred operation mapping, standard
 reprojection remains available via the baseline transform path.
 
+### Query CSRS support status at runtime
+
+Use the runtime capabilities payload to inspect active vs pending CSRS
+realization corridors in the current environment.
+
+```python
+import json
+import whitebox_workflows as wb
+
+caps = json.loads(wb.get_runtime_capabilities_json_with_options(include_pro=False, tier='open'))
+csrs = caps.get('projection_csrs_preferred_operation_support', {})
+
+print('zone range:', csrs.get('zone_min'), 'to', csrs.get('zone_max'))
+
+for pair in csrs.get('pairs', []):
+    if pair.get('status') == 'active':
+        print(
+            f"{pair.get('source_realization')} -> {pair.get('target_realization')} "
+            f"op={pair.get('preferred_operation_code')}"
+        )
+```
+
+Expected active set in current builds:
+
+| Source | Target | Status | Operation | Zones |
+|---|---|---|---:|---|
+| v3 | v8 | active | 10715 | 7-24 |
+| v4 | v8 | active | 10715 | 7-24 |
+| v6 | v8 | active | 10715 | 7-24 |
+| v7 | v8 | active | 10715 | 7-24 |
+
 ### Example: grid-matching reprojection
 
 ```python

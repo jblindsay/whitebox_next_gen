@@ -21,6 +21,8 @@ Current usable scope in this repository:
 - Active preferred CSRS corridors: v3 -> v8, v4 -> v8, v6 -> v8, and v7 -> v8
 	(zone-matched UTM, zones 7-24), operation 10715.
 - Evidence model: authoritative-inference is accepted when NRCan operational tools are date-oriented.
+- Programmatic support query: `csrs_preferred_operation_support_snapshot()` returns
+  active vs pending realization-pair status and scoped zone bounds for this matrix.
 
 ## Corridor Matrix
 

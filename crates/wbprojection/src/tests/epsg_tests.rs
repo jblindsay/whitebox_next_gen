@@ -1515,8 +1515,10 @@ fn epsg_preferred_operation_us_europe_active_corridors_fallback_to_none_without_
     // fallback safely until operation-code evidence is assigned.
     assert_eq!(preferred_operation_code_for_crs_pair(4258, 4258), None);
     assert_eq!(preferred_operation_code_for_crs_pair(25832, 3035), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(3035, 25832), None);
     assert_eq!(preferred_operation_code_for_crs_pair(25801, 3035), None);
     assert_eq!(preferred_operation_code_for_crs_pair(25860, 3035), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(3035, 25860), None);
 }
 
 #[test]
@@ -1539,7 +1541,19 @@ fn epsg_preferred_operation_us_europe_active_corridors_can_use_policy_default_co
         Some(10715)
     );
     assert_eq!(
+        preferred_operation_code_for_crs_pair_with_policy(3035, 25832, policy),
+        Some(10715)
+    );
+    assert_eq!(
         preferred_operation_code_for_crs_pair_with_policy(25860, 3035, policy),
+        Some(10715)
+    );
+    assert_eq!(
+        preferred_operation_code_for_crs_pair_with_policy(3035, 25860, policy),
+        Some(10715)
+    );
+    assert_eq!(
+        preferred_operation_code_for_crs_pair_with_policy(6487, 3582, policy),
         Some(10715)
     );
 }

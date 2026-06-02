@@ -1532,6 +1532,7 @@ fn us_phase1_corridor_pairs() -> &'static Vec<(u32, u32)> {
                 for src in &src_codes {
                     for dst in dst_codes {
                         pairs.push((*src, *dst));
+                        pairs.push((*dst, *src));
                     }
                 }
             }
@@ -1539,6 +1540,9 @@ fn us_phase1_corridor_pairs() -> &'static Vec<(u32, u32)> {
 
         // Ensure seed pairs are always represented explicitly.
         pairs.extend_from_slice(US_PHASE1_CORRIDOR_SEEDS);
+        for (src, dst) in US_PHASE1_CORRIDOR_SEEDS {
+            pairs.push((*dst, *src));
+        }
 
         pairs.sort_unstable();
         pairs.dedup();
@@ -1556,6 +1560,7 @@ fn europe_phase1_corridor_pairs() -> &'static Vec<(u32, u32)> {
         for code in 25801u32..=25860u32 {
             if epsg_info(code).is_some() {
                 pairs.push((code, 3035));
+                pairs.push((3035, code));
             }
         }
 

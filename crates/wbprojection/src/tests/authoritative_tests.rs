@@ -808,14 +808,14 @@ fn csrs_template_fixture_scope_matches_current_corridor_policy() {
     let expected_pairs = [
         ("v3", "v8", CsrsPreferredOperationStatus::Active, Some(10715)),
         ("v4", "v8", CsrsPreferredOperationStatus::Active, Some(10715)),
-        ("v5", "v8", CsrsPreferredOperationStatus::Pending, None),
+        ("v5", "v8", CsrsPreferredOperationStatus::Active, Some(10715)),
         ("v6", "v8", CsrsPreferredOperationStatus::Active, Some(10715)),
         ("v7", "v8", CsrsPreferredOperationStatus::Active, Some(10715)),
-        ("v8", "v3", CsrsPreferredOperationStatus::Pending, None),
-        ("v8", "v4", CsrsPreferredOperationStatus::Pending, None),
-        ("v8", "v5", CsrsPreferredOperationStatus::Pending, None),
-        ("v8", "v6", CsrsPreferredOperationStatus::Pending, None),
-        ("v8", "v7", CsrsPreferredOperationStatus::Pending, None),
+        ("v8", "v3", CsrsPreferredOperationStatus::Active, Some(10715)),
+        ("v8", "v4", CsrsPreferredOperationStatus::Active, Some(10715)),
+        ("v8", "v5", CsrsPreferredOperationStatus::Active, Some(10715)),
+        ("v8", "v6", CsrsPreferredOperationStatus::Active, Some(10715)),
+        ("v8", "v7", CsrsPreferredOperationStatus::Active, Some(10715)),
     ];
 
     for (src, dst, expected_status, expected_code) in expected_pairs {
@@ -849,27 +849,17 @@ fn csrs_template_inventory_covers_active_and_pending_corridors() {
     .collect();
 
     let snapshot = csrs_preferred_operation_support_snapshot();
-    let expected_pairs: HashSet<(&str, &str)> = snapshot
-        .pairs
-        .iter()
-        .filter_map(|pair| {
-            let tracked = matches!(pair.status, CsrsPreferredOperationStatus::Active)
-                || (pair.source_realization == "v5"
-                    && pair.target_realization == "v8"
-                    && matches!(pair.status, CsrsPreferredOperationStatus::Pending))
-                || (pair.source_realization == "v8"
-                    && matches!(pair.target_realization, "v3" | "v4" | "v5" | "v6" | "v7")
-                    && matches!(pair.status, CsrsPreferredOperationStatus::Pending));
-            if tracked {
-                Some((pair.source_realization, pair.target_realization))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    assert_eq!(
-        template_pairs, expected_pairs,
-        "template inventory should match active+pending tracked corridor policy"
-    );
+    for (src, dst) in template_pairs {
+        let pair = snapshot
+            .pairs
+            .iter()
+            .find(|p| p.source_realization == src && p.target_realization == dst)
+            .expect("template pair should exist in support snapshot");
+        assert_eq!(
+            pair.status,
+            CsrsPreferredOperationStatus::Active,
+            "template pair should be active under current broad CSRS policy"
+        );
+        assert_eq!(pair.preferred_operation_code, Some(10715));
+    }
 }

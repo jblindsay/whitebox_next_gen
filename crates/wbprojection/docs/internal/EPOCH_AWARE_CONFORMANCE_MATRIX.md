@@ -18,8 +18,9 @@ for practical CSRS readiness.
 
 Current usable scope in this repository:
 
-- Active preferred CSRS corridors: v3 -> v8, v4 -> v8, v6 -> v8, and v7 -> v8
-	(zone-matched UTM, zones 7-24), operation 10715.
+- Active preferred CSRS corridors: all matched-zone realization-to-realization
+	UTM corridors across v2..v8 (excluding same-realization no-op pairs),
+	operation 10715.
 - Evidence model: authoritative-inference is accepted when NRCan operational tools are date-oriented.
 - Programmatic support query: `csrs_preferred_operation_support_snapshot()` returns
   active vs pending realization-pair status and scoped zone bounds for this matrix.
@@ -39,7 +40,7 @@ Current usable scope in this repository:
 
 Status legend:
 - Active: preferred operation mapping is enabled in code.
-- Pending: candidate corridor not yet activated (missing validated operation metadata/assets/checkpoints).
+- Pending: same-realization no-op pair where no preferred operation is required.
 
 Tracked projected realization families in current registry surface:
 - v2: EPSG 22207-22222
@@ -51,10 +52,8 @@ Tracked projected realization families in current registry surface:
 - v8: EPSG 22807-22824
 
 Projected-v5 note:
-- A projected NAD83(CSRS)v5 UTM corridor family is now tracked in the scaffold and represented in this matrix as Pending.
-
-Pending zone-corridor rule (coded):
-- Reverse-direction corridors `v8 -> v3/v4/v5/v6/v7` are explicitly marked Pending for zones 7-24.
+- Projected NAD83(CSRS)v5 UTM corridors participate in the same matched-zone
+	preferred-operation routing rule as other realization families.
 
 | Source realization | Target realization | Status | Preferred operation |
 |---|---|---|---:|
@@ -111,9 +110,9 @@ For each checkpoint in each corridor:
 - Preferred-route output matches explicit operation-route output within tolerance.
 - Preferred-route output matches baseline output within tolerance.
 
-For pending v5 corridors in scoped zones (7-24):
-- Forward `v5 -> v8` has no preferred-operation code (remains pending).
-- Reverse `v8 -> v5` is explicitly flagged as pending by policy detection.
+For matched-zone v5 corridors in scoped zones (7-24):
+- Forward `v5 -> v8` uses preferred operation 10715.
+- Reverse `v8 -> v5` uses preferred operation 10715.
 
 ## Next Expansion Targets
 

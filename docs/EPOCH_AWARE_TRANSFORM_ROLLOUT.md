@@ -1,14 +1,15 @@
 # Epoch-Aware Transform Rollout (Whitebox Next Gen)
 
 Date: 2026-06-02
-Status: CSRS forward-to-v8 rollout is operational for targeted realization families; broader catalog expansion pending.
+Status: CSRS matched-zone realization routing is operational across v2..v8 families under a mathematically-driven preferred-operation policy.
 
 ## Rollout Status Snapshot (2026-06-02)
 
 Completed in this phase:
 - Backend epoch-routing contract is wired through `wbprojection`, `wbraster`, `wbvector`, and `wblidar` reprojection options.
-- CSRS preferred-operation forward corridors now cover matched zones 7-24 for
-  `v3 -> v8`, `v4 -> v8`, `v6 -> v8`, and `v7 -> v8`.
+- CSRS preferred-operation routing now covers matched zones 7-24 for
+  realization-to-realization corridors across v2..v8 families
+  (excluding same-realization no-op pairs).
 - `wbprojection` now exposes a programmatic CSRS support snapshot surface
   (`csrs_preferred_operation_support_snapshot`) so callers can query active vs
   pending realization pairs and scoped zone bounds without reading internal docs.
@@ -31,7 +32,6 @@ Completed in this phase:
 Still pending:
 - WbW-R typed facade/signature surfacing (beyond generic `run_tool` argument pass-through).
 - End-to-end Python + R smoke examples with known dynamic-datum datasets.
-- Reverse-direction CSRS realization strategy and operation-policy decisions beyond currently pending `v8 -> v3/v4/v5/v6/v7` corridors.
 - Broader corridor/catalog expansion beyond current CSRS prototype families and operation metadata.
 
 ## Checkpoint Resume Notes (2026-06-02)
@@ -72,28 +72,22 @@ Known limitation:
 
 ### What Is Implemented Today
 
-Current preferred-operation mapping in `wbprojection` is prototype-scoped to a known corridor family:
-- Matched-zone UTM forward-to-v8 corridors are active for
-  `223xx -> 228xx` (v3 -> v8),
-  `224xx -> 228xx` (v4 -> v8),
-  `226xx -> 228xx` (v6 -> v8), and
-  `227xx -> 228xx` (v7 -> v8),
-  all using operation 10715 for zones 7-24.
+Current preferred-operation mapping in `wbprojection` uses a broad
+mathematically-driven corridor policy:
+- Matched-zone UTM realization-to-realization transforms across v2..v8 use
+  operation 10715 for zones 7-24 (same-realization pairs remain no-op/baseline).
 - This routing uses an internal realization-pair matrix scaffold (catalog-style)
-  covering v2-v8 families, with v5 currently tracked as pending (no active
-  preferred-operation corridor yet).
+  covering v2-v8 families.
 
 This does not yet cover the broader active NAD83(CSRS) UTM family in the registry
 (`2955–2962`, `3154–3160`, `3761`, `9709`, `9713`), which spans zones 7-24.
 
-Projected-v5 caveat:
-- The projected v5 UTM family (`225xx`) is now tracked in the realization scaffold.
-- No preferred-operation v5 activation is currently enabled; v5 corridors remain pending.
+Projected-v5 note:
+- The projected v5 UTM family (`225xx`) participates in the same matched-zone
+  preferred-operation rule as other realization families.
 
 ### What Is Not Yet Implemented
 
-- No preferred-operation mappings are currently active for any v5 realization corridor.
-- Reverse-direction preferred-operation policies (for example, `v8 -> v3/v4/v5/v6/v7`) remain pending.
 - No broad operation-catalog ingestion exists yet for all CSRS realization pairings.
 
 ### What Adding/Activating Additional Corridors Requires

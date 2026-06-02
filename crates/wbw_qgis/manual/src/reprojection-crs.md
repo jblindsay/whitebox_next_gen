@@ -196,34 +196,22 @@ time-dependent CRS transformations.
 For NAD83(CSRS) realization-routing in current WbW builds:
 
 - Active preferred-operation corridors (zone-matched UTM, zones 7-24):
-  - v3 -> v8 (`223xx -> 228xx`), operation `10715`
-  - v4 -> v8 (`224xx -> 228xx`), operation `10715`
-  - v6 -> v8 (`226xx -> 228xx`), operation `10715`
-  - v7 -> v8 (`227xx -> 228xx`), operation `10715`
+  - all matched-zone CSRS realization pairs `v2..v8 -> v2..v8`
+    (excluding same-realization no-op pairs), operation `10715`
 
 For CRS pairs without a registered preferred operation mapping, standard
 reprojection remains available via the baseline transform path.
 
-Tracked pending CSRS corridors in current builds include:
+There is no reverse-corridor pending gate in this policy.
 
-- v5 -> v8 (`225xx -> 228xx`)
-- v8 -> v3/v4/v5/v6/v7 (`228xx -> 223xx/224xx/225xx/226xx/227xx`)
-
-Expected active set in current builds:
+Expected active examples in current builds:
 
 | Source | Target | Status | Operation | Zones |
 |---|---|---|---:|---|
 | v3 | v8 | active | 10715 | 7-24 |
-| v4 | v8 | active | 10715 | 7-24 |
-| v6 | v8 | active | 10715 | 7-24 |
-| v7 | v8 | active | 10715 | 7-24 |
-
-Tracked pending examples in current builds:
-
-| Source | Target | Status | Operation | Zones |
-|---|---|---|---:|---|
-| v5 | v8 | pending | - | 7-24 |
-| v8 | v5 | pending | - | 7-24 |
+| v4 | v6 | active | 10715 | 7-24 |
+| v5 | v8 | active | 10715 | 7-24 |
+| v8 | v5 | active | 10715 | 7-24 |
 
 ### Inspect CSRS support in QGIS diagnostics
 
@@ -232,7 +220,7 @@ summary with:
 
 - zone range (`zone_min`, `zone_max`)
 - active realization pairs and operation codes
-- pending pair count
+- pending pair count (expected to be zero for non-identical realization pairs)
 
 Open diagnostics from the Whitebox Workflows plugin menu, then inspect the
 `capabilities` block in the report text or JSON section for

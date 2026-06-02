@@ -119,7 +119,7 @@ authoritative-inference activation is permitted when the authoritative source is
 Practical CSRS usability target:
 
 - Maintain operationally usable preferred mappings for CSRS workflows under the date-routed
-   NRCan evidence ceiling, while keeping unresolved corridors explicitly pending.
+   NRCan evidence ceiling using mathematically-driven matched-zone activation.
 
 Working policy conclusion:
 
@@ -128,11 +128,10 @@ Working policy conclusion:
 
 Reverse-direction policy status (current code):
 
-- Reverse preferred-operation corridors `v8 -> v3/v4/v5/v6/v7` are explicitly marked pending.
-- Preferred-operation API calls for these reverse corridors now return a clear
-   pending-activation error rather than silently using fallback routing.
-- Reverse activation requires corridor-specific authoritative operation mapping
-   and checkpoint evidence, same as forward activation standards.
+- Matched-zone reverse preferred-operation corridors are enabled under the same
+   CSRS realization-pair routing rule used for forward corridors.
+- Preferred-operation APIs no longer block reverse corridors behind pending
+   activation errors.
 
 A ready-to-fill template for this capture is available at:
 
@@ -152,7 +151,7 @@ Reverse-direction template (added):
 - `src/tests/data/authoritative/csrs_v8_to_v5_checkpoints_template.csv`
 - `src/tests/data/authoritative/csrs_v8_to_v6_checkpoints_template.csv`
 - `src/tests/data/authoritative/csrs_v8_to_v7_checkpoints_template.csv`
-   for pending reverse-corridor activation evidence capture.
+   for ongoing reverse-corridor conformance evidence capture.
 
 Convenience batch-input CSV for NRCan geographic batch mode (Guelph + two additional points):
 
@@ -161,7 +160,7 @@ Convenience batch-input CSV for NRCan geographic batch mode (Guelph + two additi
 Template harness behavior:
 
 - `src/tests/authoritative_tests.rs` now parses all CSRS template fixtures currently tracked (forward and reverse).
-- Empty templates are valid while a corridor is pending.
+- Empty templates are valid while external checkpoint acquisition is still in progress.
 - Once rows are added, tests validate schema and numeric/zone constraints automatically.
 
 Template inventory (current):

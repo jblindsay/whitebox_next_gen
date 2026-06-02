@@ -1408,71 +1408,44 @@ fn csrs_realization_zone_from_epsg(code: u32) -> Option<(CsrsRealization, u8)> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CsrsPairActivation {
-    /// Pair is recognized but not yet activated with a validated preferred operation.
+    /// Pair has no preferred operation (typically same-realization/no-op case).
     Pending,
-    /// Pair is active with a validated preferred operation code.
+    /// Pair is active with a preferred operation code.
     Active(u32),
 }
 
-/// Active CSRS realization-pair policies.
-///
-/// Keep this table as the single source of truth for pair activations.
-const CSRS_ACTIVE_PAIR_POLICIES: &[(CsrsRealization, CsrsRealization, u32)] = &[
-    // Validated corridor: matched-zone NAD83(CSRS)v3 -> NAD83(CSRS)v8.
-    (CsrsRealization::V3, CsrsRealization::V8, 10715),
-    // Authoritative-inferred corridor from NRCan date-routed evidence + anchor epochs.
-    (CsrsRealization::V4, CsrsRealization::V8, 10715),
-    // Expanded active corridors under current CSRS rollout.
-    (CsrsRealization::V6, CsrsRealization::V8, 10715),
-    (CsrsRealization::V7, CsrsRealization::V8, 10715),
-];
-
-/// Pending CSRS realization-pair policies under current rollout scope.
-const CSRS_PENDING_PAIR_POLICIES: &[(CsrsRealization, CsrsRealization)] = &[
-    // Reverse-direction corridors are intentionally pending until authoritative
-    // operation preferences are finalized for reverse routing.
-    (CsrsRealization::V8, CsrsRealization::V3),
-    (CsrsRealization::V8, CsrsRealization::V4),
-    (CsrsRealization::V8, CsrsRealization::V5),
-    (CsrsRealization::V8, CsrsRealization::V6),
-    (CsrsRealization::V8, CsrsRealization::V7),
-];
+/// Default preferred operation used for CSRS realization-to-realization routing.
+const CSRS_DEFAULT_OPERATION_CODE: u32 = 10715;
 
 /// Activation matrix for NAD83(CSRS) realization-to-realization UTM transforms.
 ///
-/// This scaffold intentionally recognizes all supported realization pairs while
-/// only activating validated corridors. Adding new support should be a data
-/// update here (Pending -> Active(op_code)) once operation metadata/assets and
-/// checkpoints are validated.
+/// Mathematically-driven activation matrix for NAD83(CSRS) realization pairs.
+///
+/// For matched-zone transforms between different CSRS realizations we apply the
+/// default dynamic-grid preferred operation. Same-realization pairs remain
+/// pending here so baseline transform paths handle no-op routing naturally.
 fn csrs_pair_activation(source: CsrsRealization, target: CsrsRealization) -> CsrsPairActivation {
-    for (src, dst, operation_code) in CSRS_ACTIVE_PAIR_POLICIES {
-        if source == *src && target == *dst {
-            return CsrsPairActivation::Active(*operation_code);
-        }
+    if source == target {
+        CsrsPairActivation::Pending
+    } else {
+        CsrsPairActivation::Active(CSRS_DEFAULT_OPERATION_CODE)
     }
-
-    CsrsPairActivation::Pending
 }
 
-/// Pending CSRS realization pairs under current rollout policy.
-fn is_pending_csrs_realization_pair(source: CsrsRealization, target: CsrsRealization) -> bool {
-    CSRS_PENDING_PAIR_POLICIES
-        .iter()
-        .any(|(src, dst)| source == *src && target == *dst)
-}
-
-/// Returns true when a CRS pair is known to be in a pending preferred-operation corridor.
+/// Returns true when a CRS pair is in a pending preferred-operation corridor.
+///
+/// Under the current mathematically-driven CSRS policy, matched-zone transforms
+/// between different realizations are active. Pending is therefore unused for
+/// CSRS realization-pair corridors and this returns false.
 pub fn is_pending_preferred_operation_crs_pair(source_epsg: u32, target_epsg: u32) -> bool {
-    let Some((src_realization, src_zone)) = csrs_realization_zone_from_epsg(source_epsg) else {
+    let Some((_src_realization, _src_zone)) = csrs_realization_zone_from_epsg(source_epsg) else {
         return false;
     };
-    let Some((dst_realization, dst_zone)) = csrs_realization_zone_from_epsg(target_epsg) else {
+    let Some((_dst_realization, _dst_zone)) = csrs_realization_zone_from_epsg(target_epsg) else {
         return false;
     };
 
-    src_zone == dst_zone
-        && (7..=24).contains(&src_zone)
-        && is_pending_csrs_realization_pair(src_realization, dst_realization)
+    false
 }
 
 fn preferred_operation_code_for_csrs_realization_pair(
@@ -1484,10 +1457,6 @@ fn preferred_operation_code_for_csrs_realization_pair(
 
     // Realization preferred-operation mappings are zone-matched only.
     if src_zone != dst_zone {
-        return None;
-    }
-
-    if is_pending_preferred_operation_crs_pair(source_epsg, target_epsg) {
         return None;
     }
 

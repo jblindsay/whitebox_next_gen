@@ -8,7 +8,7 @@ use crate::epsg::EpsgResolutionPolicy;
 use crate::error::{ProjectionError, Result};
 use crate::operations::get_coordinate_operation;
 use crate::projections::{Projection, ProjectionParams, ProjectionKind};
-use crate::{is_pending_preferred_operation_crs_pair, preferred_operation_for_crs_pair, register_coordinate_operation};
+use crate::{preferred_operation_for_crs_pair, register_coordinate_operation};
 use crate::datum::{ecef_to_geodetic, geodetic_to_ecef};
 use crate::transform::TransformEpochContext;
 use crate::vertical_grid::get_vertical_offset_grid;
@@ -504,12 +504,6 @@ impl Crs {
         let dst_code = epsg_code_from_crs_name(&target.name);
 
         if let (Some(src), Some(dst)) = (src_code, dst_code) {
-            if is_pending_preferred_operation_crs_pair(src, dst) {
-                return Err(ProjectionError::DatumError(format!(
-                    "preferred operation for EPSG:{src} -> EPSG:{dst} is pending authoritative activation"
-                )));
-            }
-
             if let Some(op_def) = preferred_operation_for_crs_pair(src, dst) {
                 register_coordinate_operation(op_def.clone())?;
                 return self.transform_to_with_operation(
@@ -673,12 +667,6 @@ impl Crs {
         let dst_code = epsg_code_from_crs_name(&target.name);
 
         if let (Some(src), Some(dst)) = (src_code, dst_code) {
-            if is_pending_preferred_operation_crs_pair(src, dst) {
-                return Err(ProjectionError::DatumError(format!(
-                    "preferred operation for EPSG:{src} -> EPSG:{dst} is pending authoritative activation"
-                )));
-            }
-
             if let Some(op_def) = preferred_operation_for_crs_pair(src, dst) {
                 register_coordinate_operation(op_def.clone())?;
                 return self.transform_to_3d_with_operation(
@@ -1832,32 +1820,35 @@ mod tests {
     }
 
     #[test]
-    fn transform_to_with_preferred_operation_reports_pending_for_reverse_csrs_corridor() {
+    fn transform_to_with_preferred_operation_supports_reverse_csrs_corridor() {
         let _guard = coordinate_operation_test_guard();
         clear_coordinate_operations().unwrap();
 
         let src = Crs::from_epsg(22817).unwrap();
         let dst = Crs::from_epsg(22317).unwrap();
 
-        let err = src
+        let via_pref = src
             .transform_to_with_preferred_operation(500_000.0, 5_500_000.0, &dst, None)
-            .unwrap_err();
-        let msg = format!("{err}").to_ascii_lowercase();
-        assert!(msg.contains("pending authoritative activation"));
+            .unwrap();
+        let base = src.transform_to(500_000.0, 5_500_000.0, &dst).unwrap();
+        assert!((via_pref.0 - base.0).abs() < 1e-9);
+        assert!((via_pref.1 - base.1).abs() < 1e-9);
     }
 
     #[test]
-    fn transform_to_3d_with_preferred_operation_reports_pending_for_reverse_csrs_corridor() {
+    fn transform_to_3d_with_preferred_operation_supports_reverse_csrs_corridor() {
         let _guard = coordinate_operation_test_guard();
         clear_coordinate_operations().unwrap();
 
         let src = Crs::from_epsg(22817).unwrap();
         let dst = Crs::from_epsg(22317).unwrap();
 
-        let err = src
+        let via_pref = src
             .transform_to_3d_with_preferred_operation(500_000.0, 5_500_000.0, 42.0, &dst, None)
-            .unwrap_err();
-        let msg = format!("{err}").to_ascii_lowercase();
-        assert!(msg.contains("pending authoritative activation"));
+            .unwrap();
+        let base = src.transform_to_3d(500_000.0, 5_500_000.0, 42.0, &dst).unwrap();
+        assert!((via_pref.0 - base.0).abs() < 1e-9);
+        assert!((via_pref.1 - base.1).abs() < 1e-9);
+        assert!((via_pref.2 - base.2).abs() < 1e-9);
     }
 }

@@ -1226,10 +1226,9 @@ fn epsg_preferred_operation_csrs_v3_v8_same_zone_maps_to_10715() {
     assert_eq!(preferred_operation_code_for_crs_pair(22417, 22817), Some(10715));
     assert_eq!(preferred_operation_code_for_crs_pair(22617, 22817), Some(10715));
     assert_eq!(preferred_operation_code_for_crs_pair(22717, 22817), Some(10715));
-    assert_eq!(preferred_operation_code_for_crs_pair(22317, 22717), None);
-    // Projected-v5 family is tracked but remains pending for preferred-operation activation.
-    assert_eq!(preferred_operation_code_for_crs_pair(22521, 22821), None);
-    assert_eq!(preferred_operation_code_for_crs_pair(22321, 22521), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(22317, 22717), Some(10715));
+    assert_eq!(preferred_operation_code_for_crs_pair(22521, 22821), Some(10715));
+    assert_eq!(preferred_operation_code_for_crs_pair(22321, 22521), Some(10715));
     assert_eq!(preferred_operation_code_for_crs_pair(4326, 3857), None);
 }
 
@@ -1263,14 +1262,10 @@ fn epsg_preferred_operation_csrs_activation_scaffold_tracks_v2_to_v8_families() 
             let dst = dst_base + zone;
             let got = preferred_operation_code_for_crs_pair(src, dst);
 
-            if (src_base == 22300 && dst_base == 22800)
-                || (src_base == 22400 && dst_base == 22800)
-                || (src_base == 22600 && dst_base == 22800)
-                || (src_base == 22700 && dst_base == 22800)
-            {
+            if src_base != dst_base {
                 assert_eq!(got, Some(10715), "expected active scaffold mapping for {src}->{dst}");
             } else {
-                assert_eq!(got, None, "expected pending scaffold mapping for {src}->{dst}");
+                assert_eq!(got, None, "expected no preferred-op no-op mapping for {src}->{dst}");
             }
         }
     }
@@ -1278,13 +1273,14 @@ fn epsg_preferred_operation_csrs_activation_scaffold_tracks_v2_to_v8_families() 
 
 #[test]
 fn epsg_pending_preferred_operation_flags_reverse_v8_corridors() {
-    assert!(is_pending_preferred_operation_crs_pair(22817, 22317));
-    assert!(is_pending_preferred_operation_crs_pair(22817, 22417));
-    assert!(is_pending_preferred_operation_crs_pair(22817, 22517));
-    assert!(is_pending_preferred_operation_crs_pair(22817, 22617));
-    assert!(is_pending_preferred_operation_crs_pair(22817, 22717));
+    // Mathematically-driven broad activation removes pending reverse corridor
+    // gates for matched-zone CSRS realization transforms.
+    assert!(!is_pending_preferred_operation_crs_pair(22817, 22317));
+    assert!(!is_pending_preferred_operation_crs_pair(22817, 22417));
+    assert!(!is_pending_preferred_operation_crs_pair(22817, 22517));
+    assert!(!is_pending_preferred_operation_crs_pair(22817, 22617));
+    assert!(!is_pending_preferred_operation_crs_pair(22817, 22717));
 
-    // Active forward corridors must not be flagged as pending.
     assert!(!is_pending_preferred_operation_crs_pair(22317, 22817));
     assert!(!is_pending_preferred_operation_crs_pair(22417, 22817));
     assert!(!is_pending_preferred_operation_crs_pair(22517, 22817));
@@ -1293,31 +1289,31 @@ fn epsg_pending_preferred_operation_flags_reverse_v8_corridors() {
 }
 
 #[test]
-fn epsg_preferred_operation_csrs_v5_v8_pending_across_all_scoped_zones() {
+fn epsg_preferred_operation_csrs_v5_v8_active_across_all_scoped_zones() {
     for zone in 7u32..=24u32 {
         let v5 = 22500 + zone;
         let v8 = 22800 + zone;
 
-        // Forward v5->v8 remains pending (no preferred operation code yet).
+        // Forward v5->v8 now uses the broad CSRS preferred-operation rule.
         assert_eq!(
             preferred_operation_code_for_crs_pair(v5, v8),
-            None,
-            "expected pending v5->v8 zone {zone}"
+            Some(10715),
+            "expected active v5->v8 zone {zone}"
         );
         assert!(
             !is_pending_preferred_operation_crs_pair(v5, v8),
-            "v5->v8 should not be flagged by reverse-pending detector for zone {zone}"
+            "v5->v8 should not be flagged pending for zone {zone}"
         );
 
-        // Reverse v8->v5 is explicitly pending under current policy.
+        // Reverse v8->v5 now uses the same preferred-operation rule.
         assert_eq!(
             preferred_operation_code_for_crs_pair(v8, v5),
-            None,
-            "expected pending v8->v5 zone {zone}"
+            Some(10715),
+            "expected active v8->v5 zone {zone}"
         );
         assert!(
-            is_pending_preferred_operation_crs_pair(v8, v5),
-            "v8->v5 should be flagged pending for zone {zone}"
+            !is_pending_preferred_operation_crs_pair(v8, v5),
+            "v8->v5 should not be flagged pending for zone {zone}"
         );
     }
 
@@ -1352,49 +1348,17 @@ fn epsg_csrs_support_snapshot_reports_active_and_pending_pairs() {
     assert_eq!(snapshot.zone_max, 24);
     assert_eq!(snapshot.pairs.len(), 49);
 
-    let active_pairs = [
-        ("v3", "v8"),
-        ("v4", "v8"),
-        ("v6", "v8"),
-        ("v7", "v8"),
-    ];
-
-    for (src, dst) in active_pairs {
-        let entry = snapshot
-            .pairs
-            .iter()
-            .find(|p| p.source_realization == src && p.target_realization == dst)
-            .expect("active pair should exist in snapshot");
-
-        assert_eq!(entry.status, CsrsPreferredOperationStatus::Active);
-        assert_eq!(entry.preferred_operation_code, Some(10715));
+    for entry in &snapshot.pairs {
+        if entry.source_realization == entry.target_realization {
+            assert_eq!(entry.status, CsrsPreferredOperationStatus::Pending);
+            assert_eq!(entry.preferred_operation_code, None);
+        } else {
+            assert_eq!(entry.status, CsrsPreferredOperationStatus::Active);
+            assert_eq!(entry.preferred_operation_code, Some(10715));
+        }
         assert_eq!(entry.zone_min, 7);
         assert_eq!(entry.zone_max, 24);
     }
-
-    let pending = snapshot
-        .pairs
-        .iter()
-        .find(|p| p.source_realization == "v2" && p.target_realization == "v8")
-        .expect("pending pair should exist in snapshot");
-    assert_eq!(pending.status, CsrsPreferredOperationStatus::Pending);
-    assert_eq!(pending.preferred_operation_code, None);
-
-    let v5_pending = snapshot
-        .pairs
-        .iter()
-        .find(|p| p.source_realization == "v5" && p.target_realization == "v8")
-        .expect("v5 pending pair should exist in snapshot");
-    assert_eq!(v5_pending.status, CsrsPreferredOperationStatus::Pending);
-    assert_eq!(v5_pending.preferred_operation_code, None);
-
-    let reverse_v5_pending = snapshot
-        .pairs
-        .iter()
-        .find(|p| p.source_realization == "v8" && p.target_realization == "v5")
-        .expect("reverse v8->v5 pending pair should exist in snapshot");
-    assert_eq!(reverse_v5_pending.status, CsrsPreferredOperationStatus::Pending);
-    assert_eq!(reverse_v5_pending.preferred_operation_code, None);
 }
 
 #[test]

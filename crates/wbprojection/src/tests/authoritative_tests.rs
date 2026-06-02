@@ -1,6 +1,13 @@
 //! Tests for external authoritative fixture ingestion.
 
-use crate::{csrs_preferred_operation_support_snapshot, CsrsPreferredOperationStatus};
+use crate::{
+    csrs_preferred_operation_support_snapshot,
+    europe_phase1_preferred_operation_support_snapshot,
+    us_phase1_preferred_operation_support_snapshot,
+    CsrsPreferredOperationStatus,
+    EuropePreferredOperationStatus,
+    UsPreferredOperationStatus,
+};
 use std::collections::HashSet;
 
 const NRCAN_TRX_FIXTURE: &str = include_str!("data/authoritative/nrcan_trx_nad83csrs_to_itrf2014_epoch2010_checkpoints.csv");
@@ -929,9 +936,12 @@ fn us_nsrs2007_to_nad83_2011_template_phase1_pairs_are_allowlisted() {
         .expect("US NSRS2007->NAD83(2011) template fixture should parse");
 
     // Phase-1 US seed corridors for first authoritative captures.
+    // Reverse directions are now allowlisted as active bidirectional corridors.
     let allowlist: HashSet<(u32, u32)> = [
         (3582u32, 6487u32),
+        (6487u32, 3582u32),
         (3600u32, 6568u32),
+        (6568u32, 3600u32),
     ]
     .into_iter()
     .collect();
@@ -955,9 +965,11 @@ fn europe_etrs89_realization_template_phase1_pairs_are_allowlisted() {
         .expect("Europe ETRS89 realization template fixture should parse");
 
     // Phase-1 Europe seed corridors for first authoritative captures.
+    // Reverse directions are now allowlisted as active bidirectional corridors.
     let allowlist: HashSet<(u32, u32)> = [
         (4258u32, 4258u32),
         (25832u32, 3035u32),
+        (3035u32, 25832u32),
     ]
     .into_iter()
     .collect();
@@ -1034,5 +1046,44 @@ fn csrs_template_inventory_covers_active_and_pending_corridors() {
             "template pair should be active under current broad CSRS policy"
         );
         assert_eq!(pair.preferred_operation_code, Some(10715));
+    }
+}
+
+#[test]
+fn us_phase1_snapshot_includes_reverse_seed_corridors_as_active() {
+    let snapshot = us_phase1_preferred_operation_support_snapshot();
+    let expected_pairs = [
+        (3582u32, 6487u32),
+        (6487u32, 3582u32),
+        (3600u32, 6568u32),
+        (6568u32, 3600u32),
+    ];
+
+    for (src, dst) in expected_pairs {
+        let pair = snapshot
+            .pairs
+            .iter()
+            .find(|p| p.source_crs_epsg == src && p.target_crs_epsg == dst)
+            .expect("expected US phase-1 seed corridor to be present");
+        assert_eq!(pair.status, UsPreferredOperationStatus::Active);
+    }
+}
+
+#[test]
+fn europe_phase1_snapshot_includes_reverse_seed_corridors_as_active() {
+    let snapshot = europe_phase1_preferred_operation_support_snapshot();
+    let expected_pairs = [
+        (4258u32, 4258u32),
+        (25832u32, 3035u32),
+        (3035u32, 25832u32),
+    ];
+
+    for (src, dst) in expected_pairs {
+        let pair = snapshot
+            .pairs
+            .iter()
+            .find(|p| p.source_crs_epsg == src && p.target_crs_epsg == dst)
+            .expect("expected Europe phase-1 seed corridor to be present");
+        assert_eq!(pair.status, EuropePreferredOperationStatus::Active);
     }
 }

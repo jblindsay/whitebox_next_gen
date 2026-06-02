@@ -1,7 +1,7 @@
 # CSRS Pair Checkpoint Acquisition Playbook
 
 Date: 2026-06-02
-Scope: How to obtain usable checkpoints for CSRS realization-pair activation (for example, v4 -> v8).
+Scope: How to obtain usable checkpoints for CSRS realization-pair activation across currently tracked forward and reverse corridors.
 
 ## Short Answer
 
@@ -104,13 +104,39 @@ No-go decision:
 - Keep unresolved pairs marked pending in code/docs.
 - Continue using date-based outputs for epoch-propagation conformance.
 
+Reverse-corridor template path:
+
+- `src/tests/data/authoritative/csrs_v8_to_v3_checkpoints_template.csv`
+- `src/tests/data/authoritative/csrs_v8_to_v4_checkpoints_template.csv`
+- `src/tests/data/authoritative/csrs_v8_to_v5_checkpoints_template.csv`
+- `src/tests/data/authoritative/csrs_v8_to_v6_checkpoints_template.csv`
+- `src/tests/data/authoritative/csrs_v8_to_v7_checkpoints_template.csv`
+
+## Tracked Template Inventory (Current)
+
+Forward corridors (active policy):
+
+1. v3 -> v8: `src/tests/data/authoritative/op10715_csrs_v3_to_v8_checkpoints_template.csv`
+2. v4 -> v8: `src/tests/data/authoritative/csrs_v4_to_v8_checkpoints_template.csv`
+3. v5 -> v8: `src/tests/data/authoritative/csrs_v5_to_v8_checkpoints_template.csv`
+4. v6 -> v8: `src/tests/data/authoritative/csrs_v6_to_v8_checkpoints_template.csv`
+5. v7 -> v8: `src/tests/data/authoritative/csrs_v7_to_v8_checkpoints_template.csv`
+
+Reverse corridors (pending policy):
+
+1. v8 -> v3: `src/tests/data/authoritative/csrs_v8_to_v3_checkpoints_template.csv`
+2. v8 -> v4: `src/tests/data/authoritative/csrs_v8_to_v4_checkpoints_template.csv`
+3. v8 -> v5: `src/tests/data/authoritative/csrs_v8_to_v5_checkpoints_template.csv`
+4. v8 -> v6: `src/tests/data/authoritative/csrs_v8_to_v6_checkpoints_template.csv`
+5. v8 -> v7: `src/tests/data/authoritative/csrs_v8_to_v7_checkpoints_template.csv`
+
 ## Minimal Data Package To Send Back
 
 If you get any usable source, provide rows with:
 
 1. station
-2. source_crs_epsg (`224xx`)
-3. target_crs_epsg (`228xx`, same zone)
+2. source_crs_epsg (pair-specific UTM realization code, same-zone source)
+3. target_crs_epsg (pair-specific UTM realization code, same-zone target)
 4. operation_code (if known)
 5. epoch_decimal_year (or date we can convert)
 6. input_x_m, input_y_m, input_z_m

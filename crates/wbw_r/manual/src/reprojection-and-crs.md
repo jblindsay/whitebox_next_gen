@@ -155,6 +155,11 @@ For NAD83(CSRS) realization-routing in current WbW builds:
 For CRS pairs without a registered preferred operation mapping, standard
 reprojection remains available via the baseline transform path.
 
+Tracked pending CSRS corridors in current builds include:
+
+- v5 -> v8 (`225xx -> 228xx`)
+- v8 -> v3/v4/v5/v6/v7 (`228xx -> 223xx/224xx/225xx/226xx/227xx`)
+
 Expected active set in current builds:
 
 | Source | Target | Status | Operation | Zones |
@@ -163,6 +168,13 @@ Expected active set in current builds:
 | v4 | v8 | active | 10715 | 7-24 |
 | v6 | v8 | active | 10715 | 7-24 |
 | v7 | v8 | active | 10715 | 7-24 |
+
+Tracked pending examples in current builds:
+
+| Source | Target | Status | Operation | Zones |
+|---|---|---|---:|---|
+| v5 | v8 | pending | - | 7-24 |
+| v8 | v5 | pending | - | 7-24 |
 
 Conformance note:
 

@@ -1,0 +1,18 @@
+# Template for authoritative CSRS v8 -> v4 checkpoints
+# Corridor family: NAD83(CSRS)v8 UTM -> NAD83(CSRS)v4 UTM (matched zone)
+# Preferred operation: TBD (pending reverse mapping validation)
+#
+# Required metadata to retain with captured rows:
+# - source_crs_epsg (expected 228xx)
+# - target_crs_epsg (expected 224xx, same zone)
+# - operation_code (if known)
+# - epoch_decimal_year (or exact date converted to decimal year)
+# - source system/tool URL and capture date
+#
+# Column contract (do not reorder):
+# station,source_crs_epsg,target_crs_epsg,operation_code,epoch_decimal_year,input_x_m,input_y_m,input_z_m,output_x_m,output_y_m,output_z_m,source_reference
+#
+# Example placeholder rows (replace with authoritative values):
+# example_station_z17,22817,22417,,2010.0,500000.0,5500000.0,100.0,500000.000,5500000.000,100.000,https://example.org
+# example_station_z20,22820,22420,,2010.0,450000.0,5300000.0,50.0,450000.000,5300000.000,50.000,https://example.org
+station,source_crs_epsg,target_crs_epsg,operation_code,epoch_decimal_year,input_x_m,input_y_m,input_z_m,output_x_m,output_y_m,output_z_m,source_reference

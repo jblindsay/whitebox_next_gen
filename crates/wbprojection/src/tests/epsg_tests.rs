@@ -1227,7 +1227,7 @@ fn epsg_preferred_operation_csrs_v3_v8_same_zone_maps_to_10715() {
     assert_eq!(preferred_operation_code_for_crs_pair(22617, 22817), Some(10715));
     assert_eq!(preferred_operation_code_for_crs_pair(22717, 22817), Some(10715));
     assert_eq!(preferred_operation_code_for_crs_pair(22317, 22717), None);
-    // Current projected-v5 family is not wired as a CSRS realization corridor.
+    // Projected-v5 family is tracked but remains pending for preferred-operation activation.
     assert_eq!(preferred_operation_code_for_crs_pair(22521, 22821), None);
     assert_eq!(preferred_operation_code_for_crs_pair(22321, 22521), None);
     assert_eq!(preferred_operation_code_for_crs_pair(4326, 3857), None);
@@ -1280,14 +1280,49 @@ fn epsg_preferred_operation_csrs_activation_scaffold_tracks_v2_to_v8_families() 
 fn epsg_pending_preferred_operation_flags_reverse_v8_corridors() {
     assert!(is_pending_preferred_operation_crs_pair(22817, 22317));
     assert!(is_pending_preferred_operation_crs_pair(22817, 22417));
+    assert!(is_pending_preferred_operation_crs_pair(22817, 22517));
     assert!(is_pending_preferred_operation_crs_pair(22817, 22617));
     assert!(is_pending_preferred_operation_crs_pair(22817, 22717));
 
     // Active forward corridors must not be flagged as pending.
     assert!(!is_pending_preferred_operation_crs_pair(22317, 22817));
     assert!(!is_pending_preferred_operation_crs_pair(22417, 22817));
+    assert!(!is_pending_preferred_operation_crs_pair(22517, 22817));
     assert!(!is_pending_preferred_operation_crs_pair(22617, 22817));
     assert!(!is_pending_preferred_operation_crs_pair(22717, 22817));
+}
+
+#[test]
+fn epsg_preferred_operation_csrs_v5_v8_pending_across_all_scoped_zones() {
+    for zone in 7u32..=24u32 {
+        let v5 = 22500 + zone;
+        let v8 = 22800 + zone;
+
+        // Forward v5->v8 remains pending (no preferred operation code yet).
+        assert_eq!(
+            preferred_operation_code_for_crs_pair(v5, v8),
+            None,
+            "expected pending v5->v8 zone {zone}"
+        );
+        assert!(
+            !is_pending_preferred_operation_crs_pair(v5, v8),
+            "v5->v8 should not be flagged by reverse-pending detector for zone {zone}"
+        );
+
+        // Reverse v8->v5 is explicitly pending under current policy.
+        assert_eq!(
+            preferred_operation_code_for_crs_pair(v8, v5),
+            None,
+            "expected pending v8->v5 zone {zone}"
+        );
+        assert!(
+            is_pending_preferred_operation_crs_pair(v8, v5),
+            "v8->v5 should be flagged pending for zone {zone}"
+        );
+    }
+
+    // Zone mismatch should not be considered a pending corridor.
+    assert!(!is_pending_preferred_operation_crs_pair(22817, 22518));
 }
 
 #[test]
@@ -1352,6 +1387,14 @@ fn epsg_csrs_support_snapshot_reports_active_and_pending_pairs() {
         .expect("v5 pending pair should exist in snapshot");
     assert_eq!(v5_pending.status, CsrsPreferredOperationStatus::Pending);
     assert_eq!(v5_pending.preferred_operation_code, None);
+
+    let reverse_v5_pending = snapshot
+        .pairs
+        .iter()
+        .find(|p| p.source_realization == "v8" && p.target_realization == "v5")
+        .expect("reverse v8->v5 pending pair should exist in snapshot");
+    assert_eq!(reverse_v5_pending.status, CsrsPreferredOperationStatus::Pending);
+    assert_eq!(reverse_v5_pending.preferred_operation_code, None);
 }
 
 #[test]

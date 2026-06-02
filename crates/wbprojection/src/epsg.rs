@@ -1433,6 +1433,7 @@ const CSRS_PENDING_PAIR_POLICIES: &[(CsrsRealization, CsrsRealization)] = &[
     // operation preferences are finalized for reverse routing.
     (CsrsRealization::V8, CsrsRealization::V3),
     (CsrsRealization::V8, CsrsRealization::V4),
+    (CsrsRealization::V8, CsrsRealization::V5),
     (CsrsRealization::V8, CsrsRealization::V6),
     (CsrsRealization::V8, CsrsRealization::V7),
 ];

@@ -128,7 +128,7 @@ Working policy conclusion:
 
 Reverse-direction policy status (current code):
 
-- Reverse preferred-operation corridors `v8 -> v3/v4/v6/v7` are explicitly marked pending.
+- Reverse preferred-operation corridors `v8 -> v3/v4/v5/v6/v7` are explicitly marked pending.
 - Preferred-operation API calls for these reverse corridors now return a clear
    pending-activation error rather than silently using fallback routing.
 - Reverse activation requires corridor-specific authoritative operation mapping
@@ -138,14 +138,21 @@ A ready-to-fill template for this capture is available at:
 
 - src/tests/data/authoritative/op10715_csrs_v3_to_v8_checkpoints_template.csv
 
-Additional ready-to-fill template for the next planned pair activation (v4 -> v8):
+Additional ready-to-fill templates for active/planned forward pair activations:
 
 - src/tests/data/authoritative/csrs_v4_to_v8_checkpoints_template.csv
+- src/tests/data/authoritative/csrs_v5_to_v8_checkpoints_template.csv
+- src/tests/data/authoritative/csrs_v6_to_v8_checkpoints_template.csv
+- src/tests/data/authoritative/csrs_v7_to_v8_checkpoints_template.csv
 
-Reverse-direction template recommendation (next):
+Reverse-direction template (added):
 
-- Add `src/tests/data/authoritative/csrs_v8_to_v4_checkpoints_template.csv`
-   once a traceable reverse operation mapping source is available.
+- `src/tests/data/authoritative/csrs_v8_to_v3_checkpoints_template.csv`
+- `src/tests/data/authoritative/csrs_v8_to_v4_checkpoints_template.csv`
+- `src/tests/data/authoritative/csrs_v8_to_v5_checkpoints_template.csv`
+- `src/tests/data/authoritative/csrs_v8_to_v6_checkpoints_template.csv`
+- `src/tests/data/authoritative/csrs_v8_to_v7_checkpoints_template.csv`
+   for pending reverse-corridor activation evidence capture.
 
 Convenience batch-input CSV for NRCan geographic batch mode (Guelph + two additional points):
 
@@ -153,9 +160,27 @@ Convenience batch-input CSV for NRCan geographic batch mode (Guelph + two additi
 
 Template harness behavior:
 
-- `src/tests/authoritative_tests.rs` now parses both CSRS template fixtures.
+- `src/tests/authoritative_tests.rs` now parses all CSRS template fixtures currently tracked (forward and reverse).
 - Empty templates are valid while a corridor is pending.
 - Once rows are added, tests validate schema and numeric/zone constraints automatically.
+
+Template inventory (current):
+
+Forward corridors:
+
+1. v3 -> v8: src/tests/data/authoritative/op10715_csrs_v3_to_v8_checkpoints_template.csv
+2. v4 -> v8: src/tests/data/authoritative/csrs_v4_to_v8_checkpoints_template.csv
+3. v5 -> v8: src/tests/data/authoritative/csrs_v5_to_v8_checkpoints_template.csv
+4. v6 -> v8: src/tests/data/authoritative/csrs_v6_to_v8_checkpoints_template.csv
+5. v7 -> v8: src/tests/data/authoritative/csrs_v7_to_v8_checkpoints_template.csv
+
+Reverse corridors:
+
+1. v8 -> v3: src/tests/data/authoritative/csrs_v8_to_v3_checkpoints_template.csv
+2. v8 -> v4: src/tests/data/authoritative/csrs_v8_to_v4_checkpoints_template.csv
+3. v8 -> v5: src/tests/data/authoritative/csrs_v8_to_v5_checkpoints_template.csv
+4. v8 -> v6: src/tests/data/authoritative/csrs_v8_to_v6_checkpoints_template.csv
+5. v8 -> v7: src/tests/data/authoritative/csrs_v8_to_v7_checkpoints_template.csv
 
 ## EPSG Anchor-Epoch Notes (Realization Metadata)
 

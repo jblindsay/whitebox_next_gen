@@ -31,7 +31,7 @@ Completed in this phase:
 Still pending:
 - WbW-R typed facade/signature surfacing (beyond generic `run_tool` argument pass-through).
 - End-to-end Python + R smoke examples with known dynamic-datum datasets.
-- Reverse-direction CSRS realization strategy and operation-policy decisions.
+- Reverse-direction CSRS realization strategy and operation-policy decisions beyond currently pending `v8 -> v3/v4/v5/v6/v7` corridors.
 - Broader corridor/catalog expansion beyond current CSRS prototype families and operation metadata.
 
 ## Checkpoint Resume Notes (2026-06-02)
@@ -92,11 +92,11 @@ Projected-v5 caveat:
 
 ### What Is Not Yet Implemented
 
-- No preferred-operation mappings are currently wired for any v5 realization corridor.
-- Reverse-direction preferred-operation policies (for example, `v8 -> v3/v4/v6/v7`) remain pending.
+- No preferred-operation mappings are currently active for any v5 realization corridor.
+- Reverse-direction preferred-operation policies (for example, `v8 -> v3/v4/v5/v6/v7`) remain pending.
 - No broad operation-catalog ingestion exists yet for all CSRS realization pairings.
 
-### What Adding v4-v7 Requires
+### What Adding/Activating Additional Corridors Requires
 
 For each realization pair to be added, we need:
 1. Validated source/target EPSG CRS pairs.

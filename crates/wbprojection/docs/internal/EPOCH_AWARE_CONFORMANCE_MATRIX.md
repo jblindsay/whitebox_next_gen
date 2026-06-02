@@ -54,7 +54,7 @@ Projected-v5 note:
 - A projected NAD83(CSRS)v5 UTM corridor family is now tracked in the scaffold and represented in this matrix as Pending.
 
 Pending zone-corridor rule (coded):
-- Reverse-direction corridors `v8 -> v3/v4/v6/v7` are explicitly marked Pending for zones 7-24.
+- Reverse-direction corridors `v8 -> v3/v4/v5/v6/v7` are explicitly marked Pending for zones 7-24.
 
 | Source realization | Target realization | Status | Preferred operation |
 |---|---|---|---:|
@@ -111,6 +111,10 @@ For each checkpoint in each corridor:
 - Preferred-route output matches explicit operation-route output within tolerance.
 - Preferred-route output matches baseline output within tolerance.
 
+For pending v5 corridors in scoped zones (7-24):
+- Forward `v5 -> v8` has no preferred-operation code (remains pending).
+- Reverse `v8 -> v5` is explicitly flagged as pending by policy detection.
+
 ## Next Expansion Targets
 
 1. Keep zone-matched coverage at 7-24 for all active forward-to-v8 corridors and add explicit checkpoints for every active zone.
@@ -129,6 +133,16 @@ For each checkpoint in each corridor:
 - src/tests/data/authoritative/nrcan_trx_nad83csrs_to_itrf2014_epoch2010_checkpoints.csv
 - src/tests/data/authoritative/nrcan_nad83csrs_epoch_propagation_2010_to_2020_checkpoints.csv
 - src/tests/data/authoritative/nrcan_trx_nad83csrs_epoch_2002_to_2010_guelph_vancouver_sample2.csv
+- src/tests/data/authoritative/op10715_csrs_v3_to_v8_checkpoints_template.csv
+- src/tests/data/authoritative/csrs_v4_to_v8_checkpoints_template.csv
+- src/tests/data/authoritative/csrs_v5_to_v8_checkpoints_template.csv
+- src/tests/data/authoritative/csrs_v6_to_v8_checkpoints_template.csv
+- src/tests/data/authoritative/csrs_v7_to_v8_checkpoints_template.csv
+- src/tests/data/authoritative/csrs_v8_to_v3_checkpoints_template.csv
+- src/tests/data/authoritative/csrs_v8_to_v4_checkpoints_template.csv
+- src/tests/data/authoritative/csrs_v8_to_v5_checkpoints_template.csv
+- src/tests/data/authoritative/csrs_v8_to_v6_checkpoints_template.csv
+- src/tests/data/authoritative/csrs_v8_to_v7_checkpoints_template.csv
 
 Notes:
 - The NRCan TRX fixture is authoritative for that TRX workflow and complements preferred-operation corridor consistency checks.

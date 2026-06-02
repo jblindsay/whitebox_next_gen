@@ -1,5 +1,8 @@
 //! Tests for external authoritative fixture ingestion.
 
+use crate::{csrs_preferred_operation_support_snapshot, CsrsPreferredOperationStatus};
+use std::collections::HashSet;
+
 const NRCAN_TRX_FIXTURE: &str = include_str!("data/authoritative/nrcan_trx_nad83csrs_to_itrf2014_epoch2010_checkpoints.csv");
 const NRCAN_EPOCH_PROPAGATION_FIXTURE: &str = include_str!("data/authoritative/nrcan_nad83csrs_epoch_propagation_2010_to_2020_checkpoints.csv");
 const NRCAN_TRX_CSRS_2002_TO_2010_FIXTURE: &str =
@@ -8,6 +11,22 @@ const OP10715_CSRS_V3_TO_V8_TEMPLATE: &str =
     include_str!("data/authoritative/op10715_csrs_v3_to_v8_checkpoints_template.csv");
 const CSRS_V4_TO_V8_TEMPLATE: &str =
     include_str!("data/authoritative/csrs_v4_to_v8_checkpoints_template.csv");
+const CSRS_V5_TO_V8_TEMPLATE: &str =
+    include_str!("data/authoritative/csrs_v5_to_v8_checkpoints_template.csv");
+const CSRS_V6_TO_V8_TEMPLATE: &str =
+    include_str!("data/authoritative/csrs_v6_to_v8_checkpoints_template.csv");
+const CSRS_V7_TO_V8_TEMPLATE: &str =
+    include_str!("data/authoritative/csrs_v7_to_v8_checkpoints_template.csv");
+const CSRS_V8_TO_V3_TEMPLATE: &str =
+    include_str!("data/authoritative/csrs_v8_to_v3_checkpoints_template.csv");
+const CSRS_V8_TO_V4_TEMPLATE: &str =
+    include_str!("data/authoritative/csrs_v8_to_v4_checkpoints_template.csv");
+const CSRS_V8_TO_V5_TEMPLATE: &str =
+    include_str!("data/authoritative/csrs_v8_to_v5_checkpoints_template.csv");
+const CSRS_V8_TO_V6_TEMPLATE: &str =
+    include_str!("data/authoritative/csrs_v8_to_v6_checkpoints_template.csv");
+const CSRS_V8_TO_V7_TEMPLATE: &str =
+    include_str!("data/authoritative/csrs_v8_to_v7_checkpoints_template.csv");
 
 #[derive(Debug)]
 struct NrcanTrxCheckpoint {
@@ -517,4 +536,340 @@ fn csrs_v4_to_v8_template_fixture_is_parseable() {
             "source_reference should be non-empty"
         );
     }
+}
+
+#[test]
+fn csrs_v5_to_v8_template_fixture_is_parseable() {
+    let rows = parse_csrs_pair_template_fixture(CSRS_V5_TO_V8_TEMPLATE)
+        .expect("v5->v8 template fixture should parse");
+
+    for row in &rows {
+        assert!(!row.station.is_empty(), "station should be non-empty");
+        assert!(row.source_crs_epsg >= 22507 && row.source_crs_epsg <= 22524);
+        assert!(row.target_crs_epsg >= 22807 && row.target_crs_epsg <= 22824);
+        assert!(
+            (row.source_crs_epsg - 22500) == (row.target_crs_epsg - 22800),
+            "source/target zones should match"
+        );
+        if let Some(code) = row.operation_code {
+            assert!(code > 0, "operation_code must be positive when supplied");
+        }
+        let values = [
+            row.epoch_decimal_year,
+            row.input_x_m,
+            row.input_y_m,
+            row.input_z_m,
+            row.output_x_m,
+            row.output_y_m,
+            row.output_z_m,
+        ];
+        assert!(values.iter().all(|v| v.is_finite()), "all numeric fields must be finite");
+        assert!(
+            !row.source_reference.is_empty(),
+            "source_reference should be non-empty"
+        );
+    }
+}
+
+#[test]
+fn csrs_v6_to_v8_template_fixture_is_parseable() {
+    let rows = parse_csrs_pair_template_fixture(CSRS_V6_TO_V8_TEMPLATE)
+        .expect("v6->v8 template fixture should parse");
+
+    for row in &rows {
+        assert!(!row.station.is_empty(), "station should be non-empty");
+        assert!(row.source_crs_epsg >= 22607 && row.source_crs_epsg <= 22624);
+        assert!(row.target_crs_epsg >= 22807 && row.target_crs_epsg <= 22824);
+        assert!(
+            (row.source_crs_epsg - 22600) == (row.target_crs_epsg - 22800),
+            "source/target zones should match"
+        );
+        if let Some(code) = row.operation_code {
+            assert!(code > 0, "operation_code must be positive when supplied");
+        }
+        let values = [
+            row.epoch_decimal_year,
+            row.input_x_m,
+            row.input_y_m,
+            row.input_z_m,
+            row.output_x_m,
+            row.output_y_m,
+            row.output_z_m,
+        ];
+        assert!(values.iter().all(|v| v.is_finite()), "all numeric fields must be finite");
+        assert!(
+            !row.source_reference.is_empty(),
+            "source_reference should be non-empty"
+        );
+    }
+}
+
+#[test]
+fn csrs_v7_to_v8_template_fixture_is_parseable() {
+    let rows = parse_csrs_pair_template_fixture(CSRS_V7_TO_V8_TEMPLATE)
+        .expect("v7->v8 template fixture should parse");
+
+    for row in &rows {
+        assert!(!row.station.is_empty(), "station should be non-empty");
+        assert!(row.source_crs_epsg >= 22707 && row.source_crs_epsg <= 22724);
+        assert!(row.target_crs_epsg >= 22807 && row.target_crs_epsg <= 22824);
+        assert!(
+            (row.source_crs_epsg - 22700) == (row.target_crs_epsg - 22800),
+            "source/target zones should match"
+        );
+        if let Some(code) = row.operation_code {
+            assert!(code > 0, "operation_code must be positive when supplied");
+        }
+        let values = [
+            row.epoch_decimal_year,
+            row.input_x_m,
+            row.input_y_m,
+            row.input_z_m,
+            row.output_x_m,
+            row.output_y_m,
+            row.output_z_m,
+        ];
+        assert!(values.iter().all(|v| v.is_finite()), "all numeric fields must be finite");
+        assert!(
+            !row.source_reference.is_empty(),
+            "source_reference should be non-empty"
+        );
+    }
+}
+
+#[test]
+fn csrs_v8_to_v4_template_fixture_is_parseable() {
+    let rows = parse_csrs_pair_template_fixture(CSRS_V8_TO_V4_TEMPLATE)
+        .expect("v8->v4 template fixture should parse");
+
+    for row in &rows {
+        assert!(!row.station.is_empty(), "station should be non-empty");
+        assert!(row.source_crs_epsg >= 22807 && row.source_crs_epsg <= 22824);
+        assert!(row.target_crs_epsg >= 22407 && row.target_crs_epsg <= 22424);
+        assert!(
+            (row.source_crs_epsg - 22800) == (row.target_crs_epsg - 22400),
+            "source/target zones should match"
+        );
+        if let Some(code) = row.operation_code {
+            assert!(code > 0, "operation_code must be positive when supplied");
+        }
+        let values = [
+            row.epoch_decimal_year,
+            row.input_x_m,
+            row.input_y_m,
+            row.input_z_m,
+            row.output_x_m,
+            row.output_y_m,
+            row.output_z_m,
+        ];
+        assert!(values.iter().all(|v| v.is_finite()), "all numeric fields must be finite");
+        assert!(
+            !row.source_reference.is_empty(),
+            "source_reference should be non-empty"
+        );
+    }
+}
+
+#[test]
+fn csrs_v8_to_v3_template_fixture_is_parseable() {
+    let rows = parse_csrs_pair_template_fixture(CSRS_V8_TO_V3_TEMPLATE)
+        .expect("v8->v3 template fixture should parse");
+
+    for row in &rows {
+        assert!(!row.station.is_empty(), "station should be non-empty");
+        assert!(row.source_crs_epsg >= 22807 && row.source_crs_epsg <= 22824);
+        assert!(row.target_crs_epsg >= 22307 && row.target_crs_epsg <= 22324);
+        assert!(
+            (row.source_crs_epsg - 22800) == (row.target_crs_epsg - 22300),
+            "source/target zones should match"
+        );
+        if let Some(code) = row.operation_code {
+            assert!(code > 0, "operation_code must be positive when supplied");
+        }
+        let values = [
+            row.epoch_decimal_year,
+            row.input_x_m,
+            row.input_y_m,
+            row.input_z_m,
+            row.output_x_m,
+            row.output_y_m,
+            row.output_z_m,
+        ];
+        assert!(values.iter().all(|v| v.is_finite()), "all numeric fields must be finite");
+        assert!(
+            !row.source_reference.is_empty(),
+            "source_reference should be non-empty"
+        );
+    }
+}
+
+#[test]
+fn csrs_v8_to_v6_template_fixture_is_parseable() {
+    let rows = parse_csrs_pair_template_fixture(CSRS_V8_TO_V6_TEMPLATE)
+        .expect("v8->v6 template fixture should parse");
+
+    for row in &rows {
+        assert!(!row.station.is_empty(), "station should be non-empty");
+        assert!(row.source_crs_epsg >= 22807 && row.source_crs_epsg <= 22824);
+        assert!(row.target_crs_epsg >= 22607 && row.target_crs_epsg <= 22624);
+        assert!(
+            (row.source_crs_epsg - 22800) == (row.target_crs_epsg - 22600),
+            "source/target zones should match"
+        );
+        if let Some(code) = row.operation_code {
+            assert!(code > 0, "operation_code must be positive when supplied");
+        }
+        let values = [
+            row.epoch_decimal_year,
+            row.input_x_m,
+            row.input_y_m,
+            row.input_z_m,
+            row.output_x_m,
+            row.output_y_m,
+            row.output_z_m,
+        ];
+        assert!(values.iter().all(|v| v.is_finite()), "all numeric fields must be finite");
+        assert!(
+            !row.source_reference.is_empty(),
+            "source_reference should be non-empty"
+        );
+    }
+}
+
+#[test]
+fn csrs_v8_to_v7_template_fixture_is_parseable() {
+    let rows = parse_csrs_pair_template_fixture(CSRS_V8_TO_V7_TEMPLATE)
+        .expect("v8->v7 template fixture should parse");
+
+    for row in &rows {
+        assert!(!row.station.is_empty(), "station should be non-empty");
+        assert!(row.source_crs_epsg >= 22807 && row.source_crs_epsg <= 22824);
+        assert!(row.target_crs_epsg >= 22707 && row.target_crs_epsg <= 22724);
+        assert!(
+            (row.source_crs_epsg - 22800) == (row.target_crs_epsg - 22700),
+            "source/target zones should match"
+        );
+        if let Some(code) = row.operation_code {
+            assert!(code > 0, "operation_code must be positive when supplied");
+        }
+        let values = [
+            row.epoch_decimal_year,
+            row.input_x_m,
+            row.input_y_m,
+            row.input_z_m,
+            row.output_x_m,
+            row.output_y_m,
+            row.output_z_m,
+        ];
+        assert!(values.iter().all(|v| v.is_finite()), "all numeric fields must be finite");
+        assert!(
+            !row.source_reference.is_empty(),
+            "source_reference should be non-empty"
+        );
+    }
+}
+
+#[test]
+fn csrs_v8_to_v5_template_fixture_is_parseable() {
+    let rows = parse_csrs_pair_template_fixture(CSRS_V8_TO_V5_TEMPLATE)
+        .expect("v8->v5 template fixture should parse");
+
+    for row in &rows {
+        assert!(!row.station.is_empty(), "station should be non-empty");
+        assert!(row.source_crs_epsg >= 22807 && row.source_crs_epsg <= 22824);
+        assert!(row.target_crs_epsg >= 22507 && row.target_crs_epsg <= 22524);
+        assert!(
+            (row.source_crs_epsg - 22800) == (row.target_crs_epsg - 22500),
+            "source/target zones should match"
+        );
+        if let Some(code) = row.operation_code {
+            assert!(code > 0, "operation_code must be positive when supplied");
+        }
+        let values = [
+            row.epoch_decimal_year,
+            row.input_x_m,
+            row.input_y_m,
+            row.input_z_m,
+            row.output_x_m,
+            row.output_y_m,
+            row.output_z_m,
+        ];
+        assert!(values.iter().all(|v| v.is_finite()), "all numeric fields must be finite");
+        assert!(
+            !row.source_reference.is_empty(),
+            "source_reference should be non-empty"
+        );
+    }
+}
+
+#[test]
+fn csrs_template_fixture_scope_matches_current_corridor_policy() {
+    let snapshot = csrs_preferred_operation_support_snapshot();
+    let expected_pairs = [
+        ("v3", "v8", CsrsPreferredOperationStatus::Active, Some(10715)),
+        ("v4", "v8", CsrsPreferredOperationStatus::Active, Some(10715)),
+        ("v5", "v8", CsrsPreferredOperationStatus::Pending, None),
+        ("v6", "v8", CsrsPreferredOperationStatus::Active, Some(10715)),
+        ("v7", "v8", CsrsPreferredOperationStatus::Active, Some(10715)),
+        ("v8", "v3", CsrsPreferredOperationStatus::Pending, None),
+        ("v8", "v4", CsrsPreferredOperationStatus::Pending, None),
+        ("v8", "v5", CsrsPreferredOperationStatus::Pending, None),
+        ("v8", "v6", CsrsPreferredOperationStatus::Pending, None),
+        ("v8", "v7", CsrsPreferredOperationStatus::Pending, None),
+    ];
+
+    for (src, dst, expected_status, expected_code) in expected_pairs {
+        let pair = snapshot
+            .pairs
+            .iter()
+            .find(|p| p.source_realization == src && p.target_realization == dst)
+            .expect("expected corridor pair to be present in support snapshot");
+        assert_eq!(pair.status, expected_status);
+        assert_eq!(pair.preferred_operation_code, expected_code);
+        assert_eq!(pair.zone_min, snapshot.zone_min);
+        assert_eq!(pair.zone_max, snapshot.zone_max);
+    }
+}
+
+#[test]
+fn csrs_template_inventory_covers_active_and_pending_corridors() {
+    let template_pairs: HashSet<(&str, &str)> = [
+        ("v3", "v8"),
+        ("v4", "v8"),
+        ("v5", "v8"),
+        ("v6", "v8"),
+        ("v7", "v8"),
+        ("v8", "v3"),
+        ("v8", "v4"),
+        ("v8", "v5"),
+        ("v8", "v6"),
+        ("v8", "v7"),
+    ]
+    .into_iter()
+    .collect();
+
+    let snapshot = csrs_preferred_operation_support_snapshot();
+    let expected_pairs: HashSet<(&str, &str)> = snapshot
+        .pairs
+        .iter()
+        .filter_map(|pair| {
+            let tracked = matches!(pair.status, CsrsPreferredOperationStatus::Active)
+                || (pair.source_realization == "v5"
+                    && pair.target_realization == "v8"
+                    && matches!(pair.status, CsrsPreferredOperationStatus::Pending))
+                || (pair.source_realization == "v8"
+                    && matches!(pair.target_realization, "v3" | "v4" | "v5" | "v6" | "v7")
+                    && matches!(pair.status, CsrsPreferredOperationStatus::Pending));
+            if tracked {
+                Some((pair.source_realization, pair.target_realization))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    assert_eq!(
+        template_pairs, expected_pairs,
+        "template inventory should match active+pending tracked corridor policy"
+    );
 }

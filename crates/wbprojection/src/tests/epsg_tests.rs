@@ -1602,6 +1602,22 @@ fn epsg_preferred_operation_definition_with_policy_builds_dynamic_grid_shift_op(
     assert_eq!(op.target_crs_code, 6487);
     assert_eq!(op.method, crate::OperationMethod::DynamicGridShift);
     assert!(op.preferred);
+
+    let reverse_us = preferred_operation_for_crs_pair_with_policy(6568, 3600, policy)
+        .expect("expected reverse US policy-default preferred operation definition");
+    assert_eq!(reverse_us.operation_code, 10715);
+    assert_eq!(reverse_us.source_crs_code, 6568);
+    assert_eq!(reverse_us.target_crs_code, 3600);
+    assert_eq!(reverse_us.method, crate::OperationMethod::DynamicGridShift);
+    assert!(reverse_us.preferred);
+
+    let reverse_europe = preferred_operation_for_crs_pair_with_policy(3035, 25801, policy)
+        .expect("expected reverse Europe policy-default preferred operation definition");
+    assert_eq!(reverse_europe.operation_code, 10715);
+    assert_eq!(reverse_europe.source_crs_code, 3035);
+    assert_eq!(reverse_europe.target_crs_code, 25801);
+    assert_eq!(reverse_europe.method, crate::OperationMethod::DynamicGridShift);
+    assert!(reverse_europe.preferred);
 }
 
 #[test]
@@ -1610,6 +1626,8 @@ fn epsg_preferred_operation_definition_with_policy_falls_back_without_defaults()
 
     assert_eq!(preferred_operation_for_crs_pair_with_policy(3582, 6487, policy), None);
     assert_eq!(preferred_operation_for_crs_pair_with_policy(25832, 3035, policy), None);
+    assert_eq!(preferred_operation_for_crs_pair_with_policy(6568, 3600, policy), None);
+    assert_eq!(preferred_operation_for_crs_pair_with_policy(3035, 25801, policy), None);
 }
 
 #[test]

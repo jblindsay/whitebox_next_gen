@@ -237,6 +237,7 @@ pub use epsg::{
     preferred_operation_code_for_crs_pair,
     preferred_operation_code_for_crs_pair_with_policy,
     preferred_operation_for_crs_pair,
+    preferred_operation_for_crs_pair_with_policy,
     PreferredOperationPolicy,
 };
 pub use proj_string::{ParsedProjString, ParsedProjUnits};

@@ -32,6 +32,7 @@ use crate::{
     to_geotiff_info,
     preferred_operation_code_for_crs_pair,
     preferred_operation_code_for_crs_pair_with_policy,
+    preferred_operation_for_crs_pair_with_policy,
     PreferredOperationPolicy,
     CsrsPreferredOperationStatus,
     EuropePreferredOperationStatus,
@@ -1540,6 +1541,22 @@ fn epsg_preferred_operation_us_europe_active_corridors_can_use_policy_default_co
         preferred_operation_code_for_crs_pair_with_policy(25860, 3035, policy),
         Some(10715)
     );
+}
+
+#[test]
+fn epsg_preferred_operation_definition_with_policy_builds_dynamic_grid_shift_op() {
+    let policy = PreferredOperationPolicy {
+        us_phase1_default_operation_code: Some(10715),
+        europe_phase1_default_operation_code: Some(10715),
+    };
+
+    let op = preferred_operation_for_crs_pair_with_policy(3582, 6487, policy)
+        .expect("expected policy-default preferred operation definition");
+    assert_eq!(op.operation_code, 10715);
+    assert_eq!(op.source_crs_code, 3582);
+    assert_eq!(op.target_crs_code, 6487);
+    assert_eq!(op.method, crate::OperationMethod::DynamicGridShift);
+    assert!(op.preferred);
 }
 
 #[test]

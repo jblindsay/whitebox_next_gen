@@ -6,11 +6,11 @@
 use crate::datum::{Datum, DatumTransformPolicy};
 use crate::epsg::EpsgResolutionPolicy;
 use crate::error::{ProjectionError, Result};
-use crate::operations::{CoordinateOperationDef, OperationMethod, get_coordinate_operation};
+use crate::operations::get_coordinate_operation;
 use crate::projections::{Projection, ProjectionParams, ProjectionKind};
 use crate::{
     PreferredOperationPolicy,
-    preferred_operation_code_for_crs_pair_with_policy,
+    preferred_operation_for_crs_pair_with_policy,
     register_coordinate_operation,
 };
 use crate::datum::{ecef_to_geodetic, geodetic_to_ecef};
@@ -24,24 +24,6 @@ fn epsg_code_from_crs_name(name: &str) -> Option<u32> {
     let rest = &name[start..];
     let end = rest.find(')')?;
     rest[..end].parse::<u32>().ok()
-}
-
-fn preferred_operation_def_for_crs_pair_with_policy(
-    source_epsg: u32,
-    target_epsg: u32,
-    policy: PreferredOperationPolicy,
-) -> Option<CoordinateOperationDef> {
-    preferred_operation_code_for_crs_pair_with_policy(source_epsg, target_epsg, policy).map(
-        |operation_code| {
-            CoordinateOperationDef::new(
-                operation_code,
-                source_epsg,
-                target_epsg,
-                OperationMethod::DynamicGridShift,
-            )
-            .preferred(true)
-        },
-    )
 }
 
 fn sample_vertical_offset_with_policy(
@@ -549,7 +531,7 @@ impl Crs {
 
         if let (Some(src), Some(dst)) = (src_code, dst_code) {
             if let Some(op_def) =
-                preferred_operation_def_for_crs_pair_with_policy(src, dst, preferred_op_policy)
+                preferred_operation_for_crs_pair_with_policy(src, dst, preferred_op_policy)
             {
                 register_coordinate_operation(op_def.clone())?;
                 return self.transform_to_with_operation(
@@ -738,7 +720,7 @@ impl Crs {
 
         if let (Some(src), Some(dst)) = (src_code, dst_code) {
             if let Some(op_def) =
-                preferred_operation_def_for_crs_pair_with_policy(src, dst, preferred_op_policy)
+                preferred_operation_for_crs_pair_with_policy(src, dst, preferred_op_policy)
             {
                 register_coordinate_operation(op_def.clone())?;
                 return self.transform_to_3d_with_operation(

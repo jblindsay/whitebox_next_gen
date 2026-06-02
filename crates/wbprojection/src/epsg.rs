@@ -1786,7 +1786,22 @@ pub fn preferred_operation_for_crs_pair(
     source_epsg: u32,
     target_epsg: u32,
 ) -> Option<CoordinateOperationDef> {
-    preferred_operation_code_for_crs_pair(source_epsg, target_epsg).map(|operation_code| {
+    preferred_operation_for_crs_pair_with_policy(
+        source_epsg,
+        target_epsg,
+        PreferredOperationPolicy::default(),
+    )
+}
+
+/// Build a preferred coordinate operation definition for a source/target EPSG pair,
+/// using an explicit US/EU phase-1 preferred-operation policy.
+pub fn preferred_operation_for_crs_pair_with_policy(
+    source_epsg: u32,
+    target_epsg: u32,
+    policy: PreferredOperationPolicy,
+) -> Option<CoordinateOperationDef> {
+    preferred_operation_code_for_crs_pair_with_policy(source_epsg, target_epsg, policy).map(
+        |operation_code| {
         CoordinateOperationDef::new(
             operation_code,
             source_epsg,

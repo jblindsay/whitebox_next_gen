@@ -54,6 +54,8 @@ use wbprojection::{
     epsg_from_srs_reference,
     identify_epsg_from_wkt_with_policy,
     to_ogc_wkt,
+    EpochPolicy,
+    EpochTransformOptions,
     EpsgIdentifyPolicy,
 };
 use wbvector::reproject::{
@@ -5922,7 +5924,13 @@ impl Raster {
         nodata_policy="partial_kernel",
         antimeridian_policy="auto",
         grid_size_policy="expand",
-        destination_footprint="none"
+        destination_footprint="none",
+        coordinate_epoch=None,
+        source_reference_epoch=None,
+        target_reference_epoch=None,
+        operation_code=None,
+        prefer_official_operation=true,
+        epoch_policy="strict"
     ))]
     fn reproject(
         &self,
@@ -5941,6 +5949,12 @@ impl Raster {
         antimeridian_policy: &str,
         grid_size_policy: &str,
         destination_footprint: &str,
+        coordinate_epoch: Option<f64>,
+        source_reference_epoch: Option<f64>,
+        target_reference_epoch: Option<f64>,
+        operation_code: Option<u32>,
+        prefer_official_operation: bool,
+        epoch_policy: &str,
     ) -> PyResult<Raster> {
         emit_callback_event(
             &callback,
@@ -6027,6 +6041,14 @@ impl Raster {
         options.antimeridian_policy = parse_antimeridian_policy(antimeridian_policy)?;
         options.grid_size_policy = parse_grid_size_policy(grid_size_policy)?;
         options.destination_footprint = parse_destination_footprint(destination_footprint)?;
+        options = options.with_epoch_transform_options(build_epoch_transform_options(
+            coordinate_epoch,
+            source_reference_epoch,
+            target_reference_epoch,
+            operation_code,
+            prefer_official_operation,
+            epoch_policy,
+        )?);
 
         emit_callback_event(&callback, json!({"type":"progress","percent":0.0}))?;
 
@@ -6082,6 +6104,12 @@ impl Raster {
             "auto",
             "expand",
             "none",
+            None,
+            None,
+            None,
+            None,
+            true,
+            "strict",
         )
     }
 
@@ -6103,6 +6131,12 @@ impl Raster {
             "auto",
             "expand",
             "none",
+            None,
+            None,
+            None,
+            None,
+            true,
+            "strict",
         )
     }
 
@@ -7824,7 +7858,13 @@ impl Vector {
         failure_policy="error",
         antimeridian_policy="keep",
         max_segment_length=None,
-        topology_policy="none"
+        topology_policy="none",
+        coordinate_epoch=None,
+        source_reference_epoch=None,
+        target_reference_epoch=None,
+        operation_code=None,
+        prefer_official_operation=true,
+        epoch_policy="strict"
     ))]
     fn reproject(
         &self,
@@ -7835,6 +7875,12 @@ impl Vector {
         antimeridian_policy: &str,
         max_segment_length: Option<f64>,
         topology_policy: &str,
+        coordinate_epoch: Option<f64>,
+        source_reference_epoch: Option<f64>,
+        target_reference_epoch: Option<f64>,
+        operation_code: Option<u32>,
+        prefer_official_operation: bool,
+        epoch_policy: &str,
     ) -> PyResult<Vector> {
         emit_callback_event(
             &callback,
@@ -7856,6 +7902,15 @@ impl Vector {
             }
             options = options.with_max_segment_length(v);
         }
+
+        options = options.with_epoch_transform_options(build_epoch_transform_options(
+            coordinate_epoch,
+            source_reference_epoch,
+            target_reference_epoch,
+            operation_code,
+            prefer_official_operation,
+            epoch_policy,
+        )?);
 
         emit_callback_event(&callback, json!({"type":"progress","percent":0.0}))?;
         let out_layer: WbLayer = if callback.is_some() {
@@ -8482,7 +8537,13 @@ impl Lidar {
         output_path=None,
         callback=None,
         use_3d_transform=false,
-        failure_policy="error"
+        failure_policy="error",
+        coordinate_epoch=None,
+        source_reference_epoch=None,
+        target_reference_epoch=None,
+        operation_code=None,
+        prefer_official_operation=true,
+        epoch_policy="strict"
     ))]
     fn reproject(
         &self,
@@ -8491,6 +8552,12 @@ impl Lidar {
         callback: Option<Py<PyAny>>,
         use_3d_transform: bool,
         failure_policy: &str,
+        coordinate_epoch: Option<f64>,
+        source_reference_epoch: Option<f64>,
+        target_reference_epoch: Option<f64>,
+        operation_code: Option<u32>,
+        prefer_official_operation: bool,
+        epoch_policy: &str,
     ) -> PyResult<Lidar> {
         emit_callback_event(
             &callback,
@@ -8501,7 +8568,15 @@ impl Lidar {
 
         let options = LidarReprojectOptions::new()
             .with_3d_transform(use_3d_transform)
-            .with_failure_policy(parse_lidar_failure_policy(failure_policy)?);
+            .with_failure_policy(parse_lidar_failure_policy(failure_policy)?)
+            .with_epoch_transform_options(build_epoch_transform_options(
+                coordinate_epoch,
+                source_reference_epoch,
+                target_reference_epoch,
+                operation_code,
+                prefer_official_operation,
+                epoch_policy,
+            )?);
 
         emit_callback_event(&callback, json!({"type":"progress","percent":0.0}))?;
         let out_cloud = if callback.is_some() {
@@ -9498,6 +9573,53 @@ fn parse_lidar_failure_policy(value: &str) -> PyResult<LidarTransformFailurePoli
             ),
         )),
     }
+}
+
+fn parse_epoch_policy(value: &str) -> PyResult<EpochPolicy> {
+    match value.to_ascii_lowercase().as_str() {
+        "strict" => Ok(EpochPolicy::Strict),
+        "allow_static_fallback" | "allowstaticfallback" => Ok(EpochPolicy::AllowStaticFallback),
+        _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            format!(
+                "invalid epoch_policy '{}'; expected strict|allow_static_fallback",
+                value
+            ),
+        )),
+    }
+}
+
+fn build_epoch_transform_options(
+    coordinate_epoch: Option<f64>,
+    source_reference_epoch: Option<f64>,
+    target_reference_epoch: Option<f64>,
+    operation_code: Option<u32>,
+    prefer_official_operation: bool,
+    epoch_policy: &str,
+) -> PyResult<EpochTransformOptions> {
+    let mut options = EpochTransformOptions::new()
+        .with_preferred_operation(prefer_official_operation)
+        .with_epoch_policy(parse_epoch_policy(epoch_policy)?);
+
+    if let Some(v) = coordinate_epoch {
+        options = options.with_coordinate_epoch(v);
+    }
+    if let Some(v) = source_reference_epoch {
+        options = options.with_source_reference_epoch(v);
+    }
+    if let Some(v) = target_reference_epoch {
+        options = options.with_target_reference_epoch(v);
+    }
+    if let Some(v) = operation_code {
+        options = options.with_operation_code(v);
+    }
+
+    options.validate().map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+            "invalid epoch transform options: {e}"
+        ))
+    })?;
+
+    Ok(options)
 }
 
 /// A Whitebox Environment for simplified tool access.
@@ -10760,7 +10882,13 @@ impl WbEnvironment {
         nodata_policy="partial_kernel",
         antimeridian_policy="auto",
         grid_size_policy="expand",
-        destination_footprint="none"
+        destination_footprint="none",
+        coordinate_epoch=None,
+        source_reference_epoch=None,
+        target_reference_epoch=None,
+        operation_code=None,
+        prefer_official_operation=true,
+        epoch_policy="strict"
     ))]
     fn reproject_raster(
         &self,
@@ -10780,6 +10908,12 @@ impl WbEnvironment {
         antimeridian_policy: &str,
         grid_size_policy: &str,
         destination_footprint: &str,
+        coordinate_epoch: Option<f64>,
+        source_reference_epoch: Option<f64>,
+        target_reference_epoch: Option<f64>,
+        operation_code: Option<u32>,
+        prefer_official_operation: bool,
+        epoch_policy: &str,
     ) -> PyResult<Raster> {
         let out = self.resolve_output_path_for_wd(output_path);
         input.reproject(
@@ -10798,10 +10932,16 @@ impl WbEnvironment {
             antimeridian_policy,
             grid_size_policy,
             destination_footprint,
+            coordinate_epoch,
+            source_reference_epoch,
+            target_reference_epoch,
+            operation_code,
+            prefer_official_operation,
+            epoch_policy,
         )
     }
 
-    #[pyo3(signature = (input, dst_epsg, output_path=None, callback=None, failure_policy="error", antimeridian_policy="keep", max_segment_length=None, topology_policy="none"))]
+    #[pyo3(signature = (input, dst_epsg, output_path=None, callback=None, failure_policy="error", antimeridian_policy="keep", max_segment_length=None, topology_policy="none", coordinate_epoch=None, source_reference_epoch=None, target_reference_epoch=None, operation_code=None, prefer_official_operation=true, epoch_policy="strict"))]
     fn reproject_vector(
         &self,
         input: &Vector,
@@ -10812,6 +10952,12 @@ impl WbEnvironment {
         antimeridian_policy: &str,
         max_segment_length: Option<f64>,
         topology_policy: &str,
+        coordinate_epoch: Option<f64>,
+        source_reference_epoch: Option<f64>,
+        target_reference_epoch: Option<f64>,
+        operation_code: Option<u32>,
+        prefer_official_operation: bool,
+        epoch_policy: &str,
     ) -> PyResult<Vector> {
         let out = self.resolve_output_path_for_wd(output_path);
         input.reproject(
@@ -10822,10 +10968,16 @@ impl WbEnvironment {
             antimeridian_policy,
             max_segment_length,
             topology_policy,
+            coordinate_epoch,
+            source_reference_epoch,
+            target_reference_epoch,
+            operation_code,
+            prefer_official_operation,
+            epoch_policy,
         )
     }
 
-    #[pyo3(signature = (input, dst_epsg, output_path=None, callback=None, use_3d_transform=false, failure_policy="error"))]
+    #[pyo3(signature = (input, dst_epsg, output_path=None, callback=None, use_3d_transform=false, failure_policy="error", coordinate_epoch=None, source_reference_epoch=None, target_reference_epoch=None, operation_code=None, prefer_official_operation=true, epoch_policy="strict"))]
     fn reproject_lidar(
         &self,
         input: &Lidar,
@@ -10834,6 +10986,12 @@ impl WbEnvironment {
         callback: Option<Py<PyAny>>,
         use_3d_transform: bool,
         failure_policy: &str,
+        coordinate_epoch: Option<f64>,
+        source_reference_epoch: Option<f64>,
+        target_reference_epoch: Option<f64>,
+        operation_code: Option<u32>,
+        prefer_official_operation: bool,
+        epoch_policy: &str,
     ) -> PyResult<Lidar> {
         let out = self.resolve_output_path_for_wd(output_path);
         input.reproject(
@@ -10842,6 +11000,12 @@ impl WbEnvironment {
             callback,
             use_3d_transform,
             failure_policy,
+            coordinate_epoch,
+            source_reference_epoch,
+            target_reference_epoch,
+            operation_code,
+            prefer_official_operation,
+            epoch_policy,
         )
     }
 
@@ -10897,7 +11061,7 @@ impl WbEnvironment {
     }
 
     /// Reproject a list of rasters to a target EPSG, writing each to output_dir.
-    #[pyo3(signature = (inputs, dst_epsg, output_dir=None, callback=None, resample="bilinear", nodata_policy="use_nodata", antimeridian_policy="keep", grid_size_policy="match_source", destination_footprint="source"))]
+    #[pyo3(signature = (inputs, dst_epsg, output_dir=None, callback=None, resample="bilinear", nodata_policy="use_nodata", antimeridian_policy="keep", grid_size_policy="match_source", destination_footprint="source", coordinate_epoch=None, source_reference_epoch=None, target_reference_epoch=None, operation_code=None, prefer_official_operation=true, epoch_policy="strict"))]
     fn reproject_rasters(
         &self,
         py: Python<'_>,
@@ -10910,6 +11074,12 @@ impl WbEnvironment {
         antimeridian_policy: &str,
         grid_size_policy: &str,
         destination_footprint: &str,
+        coordinate_epoch: Option<f64>,
+        source_reference_epoch: Option<f64>,
+        target_reference_epoch: Option<f64>,
+        operation_code: Option<u32>,
+        prefer_official_operation: bool,
+        epoch_policy: &str,
     ) -> PyResult<Vec<Raster>> {
         let n = inputs.len();
         if n == 0 {
@@ -10955,6 +11125,12 @@ impl WbEnvironment {
                 antimeridian_policy,
                 grid_size_policy,
                 destination_footprint,
+                coordinate_epoch,
+                source_reference_epoch,
+                target_reference_epoch,
+                operation_code,
+                prefer_official_operation,
+                epoch_policy,
             )?;
             drop(raster_ref);
 
@@ -10966,7 +11142,7 @@ impl WbEnvironment {
     }
 
     /// Reproject a list of vectors to a target EPSG, writing each to output_dir.
-    #[pyo3(signature = (inputs, dst_epsg, output_dir=None, callback=None, failure_policy="error", antimeridian_policy="keep", max_segment_length=None, topology_policy="none"))]
+    #[pyo3(signature = (inputs, dst_epsg, output_dir=None, callback=None, failure_policy="error", antimeridian_policy="keep", max_segment_length=None, topology_policy="none", coordinate_epoch=None, source_reference_epoch=None, target_reference_epoch=None, operation_code=None, prefer_official_operation=true, epoch_policy="strict"))]
     fn reproject_vectors(
         &self,
         py: Python<'_>,
@@ -10978,6 +11154,12 @@ impl WbEnvironment {
         antimeridian_policy: &str,
         max_segment_length: Option<f64>,
         topology_policy: &str,
+        coordinate_epoch: Option<f64>,
+        source_reference_epoch: Option<f64>,
+        target_reference_epoch: Option<f64>,
+        operation_code: Option<u32>,
+        prefer_official_operation: bool,
+        epoch_policy: &str,
     ) -> PyResult<Vec<Vector>> {
         let n = inputs.len();
         if n == 0 {
@@ -11021,6 +11203,12 @@ impl WbEnvironment {
                 antimeridian_policy,
                 max_segment_length,
                 topology_policy,
+                coordinate_epoch,
+                source_reference_epoch,
+                target_reference_epoch,
+                operation_code,
+                prefer_official_operation,
+                epoch_policy,
             )?;
             drop(vec_ref);
 
@@ -11032,7 +11220,7 @@ impl WbEnvironment {
     }
 
     /// Reproject a list of lidar point clouds to a target EPSG, writing each to output_dir.
-    #[pyo3(signature = (inputs, dst_epsg, output_dir=None, callback=None, use_3d_transform=false, failure_policy="error"))]
+    #[pyo3(signature = (inputs, dst_epsg, output_dir=None, callback=None, use_3d_transform=false, failure_policy="error", coordinate_epoch=None, source_reference_epoch=None, target_reference_epoch=None, operation_code=None, prefer_official_operation=true, epoch_policy="strict"))]
     fn reproject_lidars(
         &self,
         py: Python<'_>,
@@ -11042,6 +11230,12 @@ impl WbEnvironment {
         callback: Option<Py<PyAny>>,
         use_3d_transform: bool,
         failure_policy: &str,
+        coordinate_epoch: Option<f64>,
+        source_reference_epoch: Option<f64>,
+        target_reference_epoch: Option<f64>,
+        operation_code: Option<u32>,
+        prefer_official_operation: bool,
+        epoch_policy: &str,
     ) -> PyResult<Vec<Lidar>> {
         let n = inputs.len();
         if n == 0 {
@@ -11083,6 +11277,12 @@ impl WbEnvironment {
                 None,
                 use_3d_transform,
                 failure_policy,
+                coordinate_epoch,
+                source_reference_epoch,
+                target_reference_epoch,
+                operation_code,
+                prefer_official_operation,
+                epoch_policy,
             )?;
             drop(lid_ref);
 

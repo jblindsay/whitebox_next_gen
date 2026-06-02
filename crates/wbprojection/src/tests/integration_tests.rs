@@ -2,14 +2,18 @@
 
 use crate::{
     Crs, CrsTransformPolicy, Datum, Ellipsoid, GridShiftGrid, GridShiftSample, Projection, ProjectionKind,
-    ProjectionParams, get_grid, has_grid, register_grid, register_ntv2_gsb_hierarchy,
+    ProjectionParams, TransformEpochContext, get_grid, has_grid, register_grid,
+    register_ntv2_gsb_hierarchy,
     resolve_ntv2_hierarchy_grid_name, resolve_ntv2_hierarchy_subgrid, unregister_grid,
 };
+use crate::clear_coordinate_operations;
 use crate::datum::DatumTransform;
+use crate::operations::coordinate_operation_test_guard;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const TOL_DEGREES: f64 = 1e-8;    // ~1 mm at equator
+const CSRS_CONFORMANCE_TOLERANCE_M: f64 = 0.001;
 
 fn round_trip(proj: &Projection, lon: f64, lat: f64) {
     let (x, y) = proj.forward(lon, lat).expect("forward failed");
@@ -24,6 +28,88 @@ fn round_trip(proj: &Projection, lon: f64, lat: f64) {
         "lat round-trip failed: {} → {} → {} (Δ={})",
         lat, y, lat2, (lat2 - lat).abs()
     );
+}
+
+fn assert_csrs_preferred_matches_explicit(
+    source_epsg: u32,
+    target_epsg: u32,
+    checkpoints: &[(f64, f64)],
+) {
+    let _guard = coordinate_operation_test_guard();
+    clear_coordinate_operations().unwrap();
+
+    let src = Crs::from_epsg(source_epsg).unwrap();
+    let dst = Crs::from_epsg(target_epsg).unwrap();
+
+    for (x, y) in checkpoints {
+        let via_pref = src
+            .transform_to_with_preferred_operation(
+                *x,
+                *y,
+                &dst,
+                Some(TransformEpochContext::at_epoch(2010.0)),
+            )
+            .unwrap();
+        let via_explicit = src
+            .transform_to_with_operation(
+                *x,
+                *y,
+                &dst,
+                10715,
+                Some(TransformEpochContext::at_epoch(2010.0)),
+            )
+            .unwrap();
+
+        assert!(
+            (via_pref.0 - via_explicit.0).abs() < CSRS_CONFORMANCE_TOLERANCE_M,
+            "x mismatch at ({x}, {y}): pref={}, explicit={}",
+            via_pref.0,
+            via_explicit.0
+        );
+        assert!(
+            (via_pref.1 - via_explicit.1).abs() < CSRS_CONFORMANCE_TOLERANCE_M,
+            "y mismatch at ({x}, {y}): pref={}, explicit={}",
+            via_pref.1,
+            via_explicit.1
+        );
+    }
+}
+
+fn assert_csrs_preferred_matches_baseline(
+    source_epsg: u32,
+    target_epsg: u32,
+    points: &[(f64, f64)],
+) {
+    let _guard = coordinate_operation_test_guard();
+    clear_coordinate_operations().unwrap();
+
+    let src = Crs::from_epsg(source_epsg).unwrap();
+    let dst = Crs::from_epsg(target_epsg).unwrap();
+
+    for (x, y) in points {
+        let via_pref = src
+            .transform_to_with_preferred_operation(
+                *x,
+                *y,
+                &dst,
+                Some(TransformEpochContext::at_epoch(2010.0)),
+            )
+            .unwrap();
+        let baseline = src.transform_to(*x, *y, &dst).unwrap();
+
+        assert!(
+            (via_pref.0 - baseline.0).abs() < CSRS_CONFORMANCE_TOLERANCE_M,
+            "x drifted from baseline at ({x}, {y}): pref={}, base={}",
+            via_pref.0,
+            baseline.0
+        );
+        assert!(
+            (via_pref.1 - baseline.1).abs() < CSRS_CONFORMANCE_TOLERANCE_M,
+            "y drifted from baseline at ({x}, {y}): pref={}, base={}",
+            via_pref.1,
+            baseline.1
+        );
+    }
 }
 
 // ─── UTM ───────────────────────────────────────────────────────────────────
@@ -1249,6 +1335,184 @@ fn crs_nad83_csrs_to_wgs84_round_trip() {
 
     assert!((lon_b - lon0).abs() < 1e-7, "lon_b={lon_b}, lon0={lon0}");
     assert!((lat_b - lat0).abs() < 1e-7, "lat_b={lat_b}, lat0={lat0}");
+}
+
+#[test]
+fn csrs_v3_to_v8_preferred_operation_conformance_zone_17_corridor() {
+    // Reference checkpoints for a CSRS zone 17 corridor.
+    // Current operation 10715 implementation is a deterministic pipeline route,
+    // so preferred and explicit operation paths should align at mm-level tolerance.
+    let checkpoints = [
+        (500_000.0, 5_000_000.0),
+        (550_000.0, 5_150_000.0),
+        (450_000.0, 4_850_000.0),
+    ];
+
+    assert_csrs_preferred_matches_explicit(22317, 22817, &checkpoints);
+}
+
+#[test]
+fn csrs_v3_to_v8_preferred_operation_matches_fallback_baseline_for_now() {
+    let points = [
+        (500_000.0, 5_000_000.0),
+        (520_000.0, 5_080_000.0),
+        (480_000.0, 4_920_000.0),
+    ];
+
+    assert_csrs_preferred_matches_baseline(22317, 22817, &points);
+}
+
+#[test]
+fn csrs_v3_to_v8_preferred_operation_conformance_zone_12_corridor() {
+    let checkpoints = [
+        (500_000.0, 5_900_000.0),
+        (540_000.0, 6_050_000.0),
+        (460_000.0, 5_750_000.0),
+    ];
+
+    assert_csrs_preferred_matches_explicit(22312, 22812, &checkpoints);
+}
+
+#[test]
+fn csrs_v3_to_v8_zone_12_preferred_operation_matches_fallback_baseline_for_now() {
+    let points = [
+        (500_000.0, 5_900_000.0),
+        (520_000.0, 5_980_000.0),
+        (480_000.0, 5_820_000.0),
+    ];
+
+    assert_csrs_preferred_matches_baseline(22312, 22812, &points);
+}
+
+#[test]
+fn csrs_v3_to_v8_preferred_operation_conformance_zone_20_corridor() {
+    let checkpoints = [
+        (500_000.0, 5_300_000.0),
+        (540_000.0, 5_450_000.0),
+        (460_000.0, 5_150_000.0),
+    ];
+
+    assert_csrs_preferred_matches_explicit(22320, 22820, &checkpoints);
+}
+
+#[test]
+fn csrs_v3_to_v8_zone_20_preferred_operation_matches_fallback_baseline_for_now() {
+    let points = [
+        (500_000.0, 5_300_000.0),
+        (520_000.0, 5_380_000.0),
+        (480_000.0, 5_220_000.0),
+    ];
+
+    assert_csrs_preferred_matches_baseline(22320, 22820, &points);
+}
+#[test]
+fn csrs_v3_to_v8_preferred_operation_conformance_zone_7_corridor() {
+    let checkpoints = [
+        (500_000.0, 7_100_000.0),
+        (540_000.0, 7_250_000.0),
+        (460_000.0, 6_950_000.0),
+    ];
+
+    assert_csrs_preferred_matches_explicit(22307, 22807, &checkpoints);
+}
+
+#[test]
+fn csrs_v3_to_v8_zone_7_preferred_operation_matches_fallback_baseline_for_now() {
+    let points = [
+        (500_000.0, 7_100_000.0),
+        (520_000.0, 7_180_000.0),
+        (480_000.0, 7_020_000.0),
+    ];
+
+    assert_csrs_preferred_matches_baseline(22307, 22807, &points);
+}
+
+#[test]
+fn csrs_v3_to_v8_preferred_operation_conformance_zone_22_corridor() {
+    let checkpoints = [
+        (500_000.0, 8_000_000.0),
+        (540_000.0, 8_150_000.0),
+        (460_000.0, 7_850_000.0),
+    ];
+
+    assert_csrs_preferred_matches_explicit(22322, 22822, &checkpoints);
+}
+
+#[test]
+fn csrs_v3_to_v8_zone_22_preferred_operation_matches_fallback_baseline_for_now() {
+    let points = [
+        (500_000.0, 8_000_000.0),
+        (520_000.0, 8_080_000.0),
+        (480_000.0, 7_920_000.0),
+    ];
+
+    assert_csrs_preferred_matches_baseline(22322, 22822, &points);
+}
+
+#[test]
+fn csrs_v3_to_v8_preferred_operation_conformance_zone_15_corridor() {
+    let checkpoints = [
+        (500_000.0, 5_500_000.0),
+        (540_000.0, 5_650_000.0),
+        (460_000.0, 5_350_000.0),
+    ];
+
+    assert_csrs_preferred_matches_explicit(22315, 22815, &checkpoints);
+}
+
+#[test]
+fn csrs_v3_to_v8_zone_15_preferred_operation_matches_fallback_baseline_for_now() {
+    let points = [
+        (500_000.0, 5_500_000.0),
+        (520_000.0, 5_580_000.0),
+        (480_000.0, 5_420_000.0),
+    ];
+
+    assert_csrs_preferred_matches_baseline(22315, 22815, &points);
+}
+
+#[test]
+fn csrs_v6_to_v8_preferred_operation_conformance_zone_17_corridor() {
+    let checkpoints = [
+        (500_000.0, 5_000_000.0),
+        (550_000.0, 5_150_000.0),
+        (450_000.0, 4_850_000.0),
+    ];
+
+    assert_csrs_preferred_matches_explicit(22617, 22817, &checkpoints);
+}
+
+#[test]
+fn csrs_v6_to_v8_preferred_operation_matches_fallback_baseline_for_now() {
+    let points = [
+        (500_000.0, 5_000_000.0),
+        (520_000.0, 5_080_000.0),
+        (480_000.0, 4_920_000.0),
+    ];
+
+    assert_csrs_preferred_matches_baseline(22617, 22817, &points);
+}
+
+#[test]
+fn csrs_v7_to_v8_preferred_operation_conformance_zone_17_corridor() {
+    let checkpoints = [
+        (500_000.0, 5_000_000.0),
+        (550_000.0, 5_150_000.0),
+        (450_000.0, 4_850_000.0),
+    ];
+
+    assert_csrs_preferred_matches_explicit(22717, 22817, &checkpoints);
+}
+
+#[test]
+fn csrs_v7_to_v8_preferred_operation_matches_fallback_baseline_for_now() {
+    let points = [
+        (500_000.0, 5_000_000.0),
+        (520_000.0, 5_080_000.0),
+        (480_000.0, 4_920_000.0),
+    ];
+
+    assert_csrs_preferred_matches_baseline(22717, 22817, &points);
 }
 
 #[test]

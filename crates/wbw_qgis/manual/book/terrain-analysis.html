@@ -367,6 +367,25 @@ repositories.</p>
 })
 </code></pre>
 <hr />
+<h2 id="pro-siting-sweep-diagnostics"><a class="header" href="#pro-siting-sweep-diagnostics">Pro Siting Sweep Diagnostics</a></h2>
+<p>For Pro terrain siting workflows (<code>wind_turbine_siting</code> and
+<code>solar_site_suitability_analysis</code>), providing a sweep specification executes a
+multi-run grid and emits extra diagnostics:</p>
+<ul>
+<li><code>run_matrix_summary</code> (CSV)</li>
+<li><code>sensitivity_report</code> (JSON)</li>
+<li><code>sensitivity_report_html</code> (HTML)</li>
+<li><code>stability_map</code> (GeoTIFF; <code>3=high</code>, <code>2=medium</code>, <code>1=low</code>)</li>
+</ul>
+<p>Inside <code>sensitivity_report</code>, use these fields for quick robustness checks:</p>
+<ul>
+<li><code>metrics.primary_metric</code></li>
+<li><code>metrics.primary_relative_span</code></li>
+<li><code>metrics.stability_class</code> (<code>high</code>, <code>medium</code>, <code>low</code>)</li>
+</ul>
+<p>These outputs are intended for scenario comparison and shortlist stability
+review before field validation.</p>
+<hr />
 <h2 id="common-pitfalls"><a class="header" href="#common-pitfalls">Common Pitfalls</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
 <tr><td>Slope values are unrealistically high (&gt; 85°)</td><td>DEM has interpolation artefacts or NoData spikes</td><td>Run <code>Remove Off-terrain Objects</code> or inspect raw DEM</td></tr>

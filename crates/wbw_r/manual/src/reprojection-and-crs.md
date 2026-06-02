@@ -113,6 +113,48 @@ dem_utm <- wbw_read_raster('dem_utm.tif')
 print(dem_utm$crs_epsg())
 ```
 
+### Example: epoch-aware raster reprojection (advanced)
+
+When transforming between dynamic datums/realizations, optional epoch-routing
+arguments can be supplied directly through the wrapper call.
+
+```r
+library(whiteboxworkflows)
+
+s <- wbw_session()
+wbw_reproject_raster(input = 'dem_csrs_v3.tif',
+  output = 'dem_csrs_v8_epoch2020.tif',
+  epsg = 22818,
+  method = 'bilinear',
+  coordinate_epoch = 2020.0,
+  source_reference_epoch = 2010.0,
+  target_reference_epoch = 2020.0,
+  prefer_official_operation = TRUE,
+  epoch_policy = 'strict')
+```
+
+Supported optional epoch-routing arguments:
+
+- `coordinate_epoch`
+- `source_reference_epoch`
+- `target_reference_epoch`
+- `operation_code`
+- `prefer_official_operation`
+- `epoch_policy` (`strict` or `allow_static_fallback`)
+
+### CSRS operational status (current)
+
+For NAD83(CSRS) realization-routing in current WbW builds:
+
+- Active preferred-operation corridors (zone-matched UTM, zones 7-24):
+  - v3 -> v8 (`223xx -> 228xx`), operation `10715`
+  - v4 -> v8 (`224xx -> 228xx`), operation `10715`
+  - v6 -> v8 (`226xx -> 228xx`), operation `10715`
+  - v7 -> v8 (`227xx -> 228xx`), operation `10715`
+
+For CRS pairs without a registered preferred operation mapping, standard
+reprojection remains available via the baseline transform path.
+
 ### Example: match-grid categorical reprojection
 
 ```r
@@ -170,6 +212,20 @@ roads_utm <- wbw_read_vector('roads_utm.gpkg')
 print(roads_utm$crs_epsg())
 ```
 
+### Example: epoch-aware vector reprojection (advanced)
+
+```r
+library(whiteboxworkflows)
+
+s <- wbw_session()
+wbw_reproject_vector(input = 'stations_csrs_v3.gpkg',
+  output = 'stations_csrs_v8_epoch2020.gpkg',
+  epsg = 22818,
+  coordinate_epoch = 2020.0,
+  prefer_official_operation = TRUE,
+  epoch_policy = 'strict')
+```
+
 ## Lidar Reprojection Pattern
 
 Use this when point-cloud alignment and metric operations require a target CRS.
@@ -182,6 +238,20 @@ wbw_reproject_lidar(input = 'survey.las', output = 'survey_utm.laz', epsg = 3261
 
 survey_utm <- wbw_read_lidar('survey_utm.laz')
 print(survey_utm$crs_epsg())
+```
+
+### Example: epoch-aware lidar reprojection (advanced)
+
+```r
+library(whiteboxworkflows)
+
+s <- wbw_session()
+wbw_reproject_lidar(input = 'survey_csrs_v3.las',
+  output = 'survey_csrs_v8_epoch2020.laz',
+  epsg = 22818,
+  coordinate_epoch = 2020.0,
+  prefer_official_operation = TRUE,
+  epoch_policy = 'strict')
 ```
 
 ## Georeference Raster from Control Points

@@ -3,7 +3,7 @@
 //! This module transforms layer geometries between CRS definitions using EPSG
 //! codes or explicit `wbprojection::Crs` objects.
 
-use wbprojection::{Crs, CrsTransformPolicy};
+use wbprojection::{Crs, CrsTransformPolicy, EpochPolicy, EpochTransformOptions};
 
 use crate::crs;
 use crate::error::{GeoError, Result};
@@ -60,6 +60,8 @@ pub struct VectorReprojectOptions {
     /// Emit non-fatal warnings when sampled source features appear outside the
     /// declared area of use of source and/or destination CRS definitions.
     pub warn_on_area_of_use_mismatch: bool,
+    /// Optional epoch-aware transform routing options.
+    pub epoch_transform: EpochTransformOptions,
 }
 
 impl Default for VectorReprojectOptions {
@@ -70,6 +72,7 @@ impl Default for VectorReprojectOptions {
             max_segment_length: None,
             topology_policy: TopologyPolicy::None,
             warn_on_area_of_use_mismatch: false,
+            epoch_transform: EpochTransformOptions::default(),
         }
     }
 }
@@ -107,6 +110,12 @@ impl VectorReprojectOptions {
     /// Enable/disable non-fatal area-of-use mismatch warnings.
     pub fn with_area_of_use_warning(mut self, enabled: bool) -> Self {
         self.warn_on_area_of_use_mismatch = enabled;
+        self
+    }
+
+    /// Set epoch-aware transform routing options.
+    pub fn with_epoch_transform_options(mut self, epoch_transform: EpochTransformOptions) -> Self {
+        self.epoch_transform = epoch_transform;
         self
     }
 }
@@ -479,6 +488,12 @@ fn validate_options(options: &VectorReprojectOptions) -> Result<()> {
             ));
         }
     }
+
+    options
+        .epoch_transform
+        .validate()
+        .map_err(|e| GeoError::Projection(format!("invalid epoch transform options: {e}")))?;
+
     Ok(())
 }
 
@@ -588,9 +603,39 @@ fn reproject_coord(
         return Err(GeoError::Projection("coordinate transform failed: non-finite coordinate".to_owned()));
     }
 
-    let (mut x, y) = src
-        .transform_to_with_policy(coord.x, coord.y, dst, CrsTransformPolicy::Auto)
-        .map_err(|e| GeoError::Projection(format!("coordinate transform failed: {e}")))?;
+    let ctx = options
+        .epoch_transform
+        .build_context()
+        .map_err(|e| GeoError::Projection(format!("invalid epoch transform options: {e}")))?;
+
+    let dynamic_routing_enabled = ctx.is_some();
+    let routed = if let Some(operation_code) = options.epoch_transform.operation_code {
+        src.transform_to_with_operation(coord.x, coord.y, dst, operation_code, ctx)
+    } else if options.epoch_transform.prefer_official_operation && dynamic_routing_enabled {
+        src.transform_to_with_preferred_operation(coord.x, coord.y, dst, ctx)
+    } else if let Some(epoch_ctx) = ctx {
+        src.transform_to_with_context(coord.x, coord.y, dst, epoch_ctx)
+    } else {
+        src.transform_to_with_policy(coord.x, coord.y, dst, CrsTransformPolicy::Auto)
+    };
+
+    let (mut x, y) = match routed {
+        Ok(v) => v,
+        Err(e) => {
+            if matches!(options.epoch_transform.epoch_policy, EpochPolicy::AllowStaticFallback) {
+                src.transform_to_with_policy(coord.x, coord.y, dst, CrsTransformPolicy::Auto)
+                    .map_err(|fallback_err| {
+                        GeoError::Projection(format!(
+                            "coordinate transform failed (epoch-aware route: {e}; static fallback: {fallback_err})"
+                        ))
+                    })?
+            } else {
+                return Err(GeoError::Projection(format!(
+                    "coordinate transform failed: {e}"
+                )));
+            }
+        }
+    };
 
     if !x.is_finite() || !y.is_finite() {
         return Err(GeoError::Projection("coordinate transform failed: non-finite output".to_owned()));
@@ -1259,6 +1304,26 @@ mod tests {
         let opts = VectorReprojectOptions::new().with_max_segment_length(0.0);
         let err = layer_to_epsg_with_options(&layer, 3857, &opts).unwrap_err();
         assert!(format!("{err}").contains("max_segment_length"));
+    }
+
+    #[test]
+    fn invalid_epoch_transform_options_error() {
+        let layer = sample_point_layer();
+        let opts = VectorReprojectOptions::new().with_epoch_transform_options(
+            EpochTransformOptions::new().with_coordinate_epoch(f64::NAN),
+        );
+        let err = layer_to_epsg_with_options(&layer, 3857, &opts).unwrap_err();
+        assert!(format!("{err}").contains("invalid epoch transform options"));
+    }
+
+    #[test]
+    fn layer_reproject_accepts_coordinate_epoch_option() {
+        let layer = sample_point_layer();
+        let opts = VectorReprojectOptions::new().with_epoch_transform_options(
+            EpochTransformOptions::new().with_coordinate_epoch(2020.0),
+        );
+        let out = layer_to_epsg_with_options(&layer, 3857, &opts).unwrap();
+        assert_eq!(out.crs_epsg(), Some(3857));
     }
 
     #[test]

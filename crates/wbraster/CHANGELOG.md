@@ -7,6 +7,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Changed
+- `ReprojectOptions` now carries shared epoch-aware routing parameters from `wbprojection`, and
+  raster reprojection extent sampling plus per-cell source-coordinate transforms honor those
+  options when provided.
 - Removed entries that belonged to the `wbhdf` crate and consolidated that
   history under `crates/wbhdf/CHANGELOG.md`.
 - Updated malformed multilevel HDF5 URI regression assertions to accept explicit

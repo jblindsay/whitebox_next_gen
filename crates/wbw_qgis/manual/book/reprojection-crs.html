@@ -317,6 +317,59 @@ processing.run('whitebox_workflows:reproject_lidar', {
 })
 </code></pre>
 <hr />
+<h2 id="epoch-aware-reprojection-dynamic-datums"><a class="header" href="#epoch-aware-reprojection-dynamic-datums">Epoch-Aware Reprojection (Dynamic Datums)</a></h2>
+<p>For dynamic datums and realization-to-realization transformations, the
+reprojection tools support optional epoch-routing controls:</p>
+<ul>
+<li><code>coordinate_epoch</code></li>
+<li><code>source_reference_epoch</code></li>
+<li><code>target_reference_epoch</code></li>
+<li><code>operation_code</code></li>
+<li><code>prefer_official_operation</code></li>
+<li><code>epoch_policy</code> (<code>strict</code> or <code>allow_static_fallback</code>)</li>
+</ul>
+<p>These parameters are optional. Use them when you need deterministic routing for
+time-dependent CRS transformations.</p>
+<h3 id="epoch-aware-raster-example"><a class="header" href="#epoch-aware-raster-example">Epoch-aware raster example</a></h3>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:reproject_raster', {
+  'input': '/data/dem_csrs_v3.tif',
+  'epsg': 22818,
+  'resample': 'bilinear',
+  'coordinate_epoch': 2020.0,
+  'source_reference_epoch': 2010.0,
+  'target_reference_epoch': 2020.0,
+  'prefer_official_operation': True,
+  'epoch_policy': 'strict',
+  'output': '/data/dem_csrs_v8_epoch2020.tif',
+})
+</code></pre>
+<h3 id="epoch-aware-vector-example"><a class="header" href="#epoch-aware-vector-example">Epoch-aware vector example</a></h3>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:reproject_vector', {
+  'input': '/data/stations_csrs_v3.gpkg',
+  'epsg': 22818,
+  'coordinate_epoch': 2020.0,
+  'prefer_official_operation': True,
+  'epoch_policy': 'strict',
+  'output': '/data/stations_csrs_v8_epoch2020.gpkg',
+})
+</code></pre>
+<h3 id="epoch-aware-lidar-example"><a class="header" href="#epoch-aware-lidar-example">Epoch-aware LiDAR example</a></h3>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:reproject_lidar', {
+  'input': '/data/survey_csrs_v3.laz',
+  'epsg': 22818,
+  'coordinate_epoch': 2020.0,
+  'prefer_official_operation': True,
+  'epoch_policy': 'strict',
+  'output': '/data/survey_csrs_v8_epoch2020.laz',
+})
+</code></pre>
+<hr />
 <h2 id="assigning-a-missing-crs"><a class="header" href="#assigning-a-missing-crs">Assigning a Missing CRS</a></h2>
 <p>If a file has correct coordinates but missing or wrong CRS metadata (shown
 as "Unknown CRS" in Layer Properties), use one of the three <strong>Assign

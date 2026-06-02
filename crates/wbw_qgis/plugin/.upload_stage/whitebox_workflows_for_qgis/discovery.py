@@ -838,6 +838,45 @@ def _reclassify_broad_categories(catalog: list[dict]) -> list[dict]:
 def _inject_projection_wrapper_tools(catalog: list[dict]) -> list[dict]:
     existing_ids = {str(item.get("id", "")).strip() for item in catalog}
 
+    epoch_params: list[dict] = [
+        {
+            "name": "coordinate_epoch",
+            "description": "Optional coordinate epoch (decimal year), e.g., 2020.0.",
+            "required": False,
+            "schema": {"kind": "scalar", "scalar": "float"},
+        },
+        {
+            "name": "source_reference_epoch",
+            "description": "Optional source reference epoch (decimal year), e.g., 2010.0.",
+            "required": False,
+            "schema": {"kind": "scalar", "scalar": "float"},
+        },
+        {
+            "name": "target_reference_epoch",
+            "description": "Optional target reference epoch (decimal year), e.g., 2020.0.",
+            "required": False,
+            "schema": {"kind": "scalar", "scalar": "float"},
+        },
+        {
+            "name": "operation_code",
+            "description": "Optional explicit operation code override.",
+            "required": False,
+            "schema": {"kind": "scalar", "scalar": "integer"},
+        },
+        {
+            "name": "prefer_official_operation",
+            "description": "Prefer officially mapped operation when available.",
+            "required": False,
+            "schema": {"kind": "bool"},
+        },
+        {
+            "name": "epoch_policy",
+            "description": "Epoch routing policy: strict or allow_static_fallback.",
+            "required": False,
+            "schema": {"kind": "string"},
+        },
+    ]
+
     wrappers: list[dict] = [
         {
             "id": "reproject_raster",
@@ -849,6 +888,7 @@ def _inject_projection_wrapper_tools(catalog: list[dict]) -> list[dict]:
                 {"name": "input", "description": "Input raster layer.", "required": True},
                 {"name": "epsg", "description": "Target EPSG code.", "required": True},
                 {"name": "resample", "description": "Resampling method: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev. Default: bilinear.", "required": False},
+                *epoch_params,
                 {"name": "output", "description": "Output raster destination path.", "required": True},
             ],
             "defaults": {"resample": "bilinear"},
@@ -871,6 +911,7 @@ def _inject_projection_wrapper_tools(catalog: list[dict]) -> list[dict]:
             "params": [
                 {"name": "input", "description": "Input LiDAR file.", "required": True},
                 {"name": "epsg", "description": "Target EPSG code.", "required": True},
+                *epoch_params,
                 {"name": "output", "description": "Output LiDAR destination path.", "required": True},
             ],
             "available": True,
@@ -951,6 +992,26 @@ def _inject_projection_wrapper_tools(catalog: list[dict]) -> list[dict]:
         if tid and tid not in existing_ids:
             out.append(item)
             existing_ids.add(tid)
+
+    # Ensure epoch-aware controls are available for all reprojection variants,
+    # including runtime-provided reproject_vector entries.
+    reprojection_ids = {"reproject_raster", "reproject_vector", "reproject_lidar"}
+    for item in out:
+        tid = str(item.get("id", "")).strip()
+        if tid not in reprojection_ids:
+            continue
+        params = item.get("params")
+        if not isinstance(params, list):
+            continue
+        existing_param_names = {
+            str(p.get("name", "")).strip().lower()
+            for p in params
+            if isinstance(p, dict)
+        }
+        for ep in epoch_params:
+            ep_name = str(ep.get("name", "")).strip().lower()
+            if ep_name and ep_name not in existing_param_names:
+                params.append(dict(ep))
     return out
 
 

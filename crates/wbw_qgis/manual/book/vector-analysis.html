@@ -268,6 +268,42 @@ errors before proceeding.</p>
 <p>Export the selection as <code>priority_parcels.shp</code> using
 <strong>Layer → Export → Save Selected Features As</strong>.</p>
 <hr />
+<h3 id="step-5b--field-calculator-assistant-expression--preview-workflow"><a class="header" href="#step-5b--field-calculator-assistant-expression--preview-workflow">Step 5b — Field Calculator Assistant (Expression + Preview Workflow)</a></h3>
+<p>Use this when you need guided expression authoring for derived attributes
+(for example TYPE-to-SPEED conversion before network impedance analysis).</p>
+<p>Open from the <strong>Whitebox panel</strong> (recommended path):</p>
+<p><strong>Whitebox panel → tool search → <code>field_calculator</code></strong></p>
+<p>The assistant provides:</p>
+<ul>
+<li>expression editor with SQL-style presets/snippets</li>
+<li>geometry token insertion (<code>$area</code>, <code>$length</code>, <code>$perimeter</code>, centroid tokens)</li>
+<li>category and keyword snippet filtering</li>
+<li>preview table driven by backend <code>preview_rows</code> payload</li>
+<li>one-click handoff to the standard processing dialog with prefilled parameters</li>
+</ul>
+<p>Supported expression features include:</p>
+<ul>
+<li><code>CASE WHEN ... THEN ... ELSE ... END</code></li>
+<li>simple <code>CASE field WHEN value THEN ... END</code></li>
+<li>optional <code>UPDATE ... SET ... WHERE ...</code> wrapper syntax</li>
+<li>SQL operators (<code>=</code>, <code>&lt;&gt;</code>, <code>AND</code>, <code>OR</code>, <code>NOT</code>) and null predicates</li>
+<li><code>CAST(... AS integer|float|text|boolean)</code></li>
+</ul>
+<p>Example expression:</p>
+<pre><code class="language-sql">UPDATE roads SET SPEED = CASE
+  WHEN TYPE == 'motorway' THEN 100
+  WHEN TYPE == 'primary' THEN 80
+  WHEN TYPE == 'collector' THEN 60
+  ELSE 40
+END
+</code></pre>
+<p>Notes:</p>
+<ul>
+<li>Launching <code>field_calculator</code> from the Whitebox panel opens the assistant.</li>
+<li>Launching from the generic Processing Toolbox can open the standard dialog
+directly, depending on host/API path.</li>
+</ul>
+<hr />
 <h3 id="step-6--clip-parcels-to-study-area-optional"><a class="header" href="#step-6--clip-parcels-to-study-area-optional">Step 6 — Clip Parcels to Study Area (Optional)</a></h3>
 <p><strong>Processing Toolbox → Whitebox Workflows → Vector Analysis →
 <code>Line Polygon Clip</code></strong> (for lines) or QGIS <strong><code>Clip</code></strong> for polygon-on-polygon.</p>

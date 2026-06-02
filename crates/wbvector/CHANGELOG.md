@@ -22,11 +22,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Added
 - Interoperability-focused datum handling is now the sole vector reprojection
 	mode, routed through `CrsTransformPolicy::Auto`.
+- `VectorReprojectOptions::epoch_transform` plus
+	`VectorReprojectOptions::with_epoch_transform_options(...)` for optional
+	epoch-aware routing controls (coordinate epoch, reference epochs,
+	operation-code override, preferred-operation flag, and epoch policy).
 
 ### Changed
 - Vector coordinate reprojection now routes through
 	`Crs::transform_to_with_policy(..., CrsTransformPolicy::Auto)` by default,
 	eliminating the temporary legacy datum-mode branch.
+- Vector coordinate reprojection can now route through `wbprojection`
+	epoch-aware APIs when epoch transform options are supplied, with explicit
+	static fallback behavior controlled by `EpochPolicy`.
 
 ### Fixed
 - `Schema` now supports replacing an existing field definition by name, allowing tools to upsert Float metadata over stale Integer fields instead of silently ignoring duplicate names.

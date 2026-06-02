@@ -2576,6 +2576,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
 
         projection_wrapper_ids = {
             "reproject_raster",
+            "reproject_vector",
             "reproject_lidar",
             "assign_projection_raster",
             "assign_projection_vector",

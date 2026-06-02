@@ -4,6 +4,26 @@ Date: 2026-06-01
 Scope: `wbprojection` implementation checklist derived from `EPOCH_AWARE_DATUM_TRANSFORM_PLAN.md`
 Style: commit-oriented, additive-first, backward-compatible
 
+Top-level rollout reference:
+- `docs/EPOCH_AWARE_TRANSFORM_ROLLOUT.md`
+
+## Status Snapshot (2026-06-02)
+
+- Completed: Milestones 0 through 4 scaffolding, including epoch context, dynamic grid support, dynamic hierarchy support, datum integration, and context propagation through the CRS pipeline.
+- Completed: Milestone 5 prototype operation-selection layer, including operation definitions, explicit operation-code routing, and initial EPSG preferred-operation lookup.
+- Completed: first Milestone 6 corridor tests for NAD83(CSRS) v3 -> v8 same-zone routing, with millimeter-level consistency checks for the zone 17 corridor.
+- Completed: initial external authoritative fixture ingestion tests for NRCan TRX checkpoints (`src/tests/authoritative_tests.rs`), validating fixture schema and baseline row integrity.
+- Completed: authenticated NRCan epoch-propagation checkpoints (2010 -> 2020, interpolated velocities) captured from user-provided tool results and added to the authoritative fixture suite.
+- In progress: expand preferred-operation coverage beyond the first CSRS corridor and replace prototype mappings with broader authoritative operation metadata.
+- Blocked externally: direct operation-10715 (`NAD83(CSRS) v3 -> v8`) authoritative checkpoints were not obtainable from the explored NRCan web UI because that workflow did not expose explicit v3 -> v8 realization selection.
+- Pending: fuller authoritative conformance coverage where direct source material is actually available, plus final external-facing migration/documentation polish.
+
+## Validation Snapshot (2026-06-02)
+
+- `cargo test -p wbprojection authoritative_tests`: passed (2/2)
+- `cargo test -p wbprojection preferred_operation_conformance`: passed (6/6)
+- `cargo test -p wbprojection authoritative_tests`: passed (4/4) after adding authenticated NRCan epoch-propagation checkpoints
+
 ## Guardrails (Apply To Every Step)
 
 - Keep existing `transform_to*` APIs behavior unchanged.

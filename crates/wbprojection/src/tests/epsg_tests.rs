@@ -28,6 +28,7 @@ use crate::{
     to_esri_wkt,
     to_ogc_wkt,
     to_geotiff_info,
+    preferred_operation_code_for_crs_pair,
     unregister_vertical_offset_grid,
     unregister_epsg_alias,
     vertical_offset_grid_name,
@@ -1198,6 +1199,96 @@ fn epsg_csrs_utm_active_and_realization_codes_roundtrip() {
         assert!((lon - lon_in).abs() < 1e-5, "EPSG:{code} lon");
         assert!((lat - lat_in).abs() < 1e-5, "EPSG:{code} lat");
     }
+}
+
+#[test]
+fn epsg_preferred_operation_csrs_v3_v8_same_zone_maps_to_10715() {
+    for zone in 7_u32..=22_u32 {
+        let src = 22300 + zone;
+        let dst = 22800 + zone;
+        assert_eq!(
+            preferred_operation_code_for_crs_pair(src, dst),
+            Some(10715),
+            "expected preferred op for zone {zone}"
+        );
+    }
+
+    assert_eq!(preferred_operation_code_for_crs_pair(22307, 22808), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(22317, 22818), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(22322, 22821), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(22306, 22806), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(22323, 22823), Some(10715));
+    assert_eq!(preferred_operation_code_for_crs_pair(22324, 22824), Some(10715));
+    assert_eq!(preferred_operation_code_for_crs_pair(22417, 22817), Some(10715));
+    assert_eq!(preferred_operation_code_for_crs_pair(22617, 22817), Some(10715));
+    assert_eq!(preferred_operation_code_for_crs_pair(22717, 22817), Some(10715));
+    assert_eq!(preferred_operation_code_for_crs_pair(22317, 22717), None);
+    // Current projected-v5 family is not wired as a CSRS realization corridor.
+    assert_eq!(preferred_operation_code_for_crs_pair(22521, 22821), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(22321, 22521), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(4326, 3857), None);
+}
+
+#[test]
+fn epsg_preferred_operation_csrs_v4_v8_same_zone_maps_to_10715() {
+    for zone in 7_u32..=24_u32 {
+        let src = 22400 + zone;
+        let dst = 22800 + zone;
+        assert_eq!(
+            preferred_operation_code_for_crs_pair(src, dst),
+            Some(10715),
+            "expected preferred op for zone {zone}"
+        );
+    }
+
+    assert_eq!(preferred_operation_code_for_crs_pair(22407, 22808), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(22417, 22818), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(22424, 22823), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(22406, 22806), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(4326, 3857), None);
+}
+
+#[test]
+fn epsg_preferred_operation_csrs_activation_scaffold_enables_v3_v4_v6_v7_to_v8() {
+    let realization_bases = [22200u32, 22300u32, 22400u32, 22600u32, 22700u32, 22800u32];
+    let zone = 17u32;
+
+    for src_base in realization_bases {
+        for dst_base in realization_bases {
+            let src = src_base + zone;
+            let dst = dst_base + zone;
+            let got = preferred_operation_code_for_crs_pair(src, dst);
+
+            if (src_base == 22300 && dst_base == 22800)
+                || (src_base == 22400 && dst_base == 22800)
+                || (src_base == 22600 && dst_base == 22800)
+                || (src_base == 22700 && dst_base == 22800)
+            {
+                assert_eq!(got, Some(10715), "expected active scaffold mapping for {src}->{dst}");
+            } else {
+                assert_eq!(got, None, "expected pending scaffold mapping for {src}->{dst}");
+            }
+        }
+    }
+}
+
+#[test]
+fn epsg_preferred_operation_csrs_v6_v7_to_v8_same_zone_maps_to_10715() {
+    for zone in 7u32..=24u32 {
+        assert_eq!(
+            preferred_operation_code_for_crs_pair(22600 + zone, 22800 + zone),
+            Some(10715),
+            "expected active v6->v8 zone {zone}"
+        );
+        assert_eq!(
+            preferred_operation_code_for_crs_pair(22700 + zone, 22800 + zone),
+            Some(10715),
+            "expected active v7->v8 zone {zone}"
+        );
+    }
+
+    assert_eq!(preferred_operation_code_for_crs_pair(22617, 22818), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(22717, 22818), None);
 }
 
 #[test]

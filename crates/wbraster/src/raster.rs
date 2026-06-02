@@ -3,7 +3,13 @@
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
-use wbprojection::{from_proj_string, Crs};
+use wbprojection::{
+    from_proj_string,
+    Crs,
+    CrsTransformPolicy,
+    EpochPolicy,
+    EpochTransformOptions,
+};
 use wide::{f64x4, CmpNe};
 
 use crate::error::{Result, RasterError};
@@ -809,6 +815,8 @@ pub struct ReprojectOptions {
     /// Emit non-fatal warnings when sampled source raster points appear outside
     /// the declared area of use of source and/or destination CRS definitions.
     pub warn_on_area_of_use_mismatch: bool,
+    /// Optional epoch-aware transform routing options.
+    pub epoch_transform: EpochTransformOptions,
 }
 
 impl ReprojectOptions {
@@ -829,6 +837,7 @@ impl ReprojectOptions {
             grid_size_policy: GridSizePolicy::Expand,
             destination_footprint: DestinationFootprint::None,
             warn_on_area_of_use_mismatch: false,
+            epoch_transform: EpochTransformOptions::default(),
         }
     }
 
@@ -899,6 +908,12 @@ impl ReprojectOptions {
     /// Enable/disable non-fatal area-of-use mismatch warnings.
     pub fn with_area_of_use_warning(mut self, enabled: bool) -> Self {
         self.warn_on_area_of_use_mismatch = enabled;
+        self
+    }
+
+    /// Set epoch-aware transform routing options.
+    pub fn with_epoch_transform_options(mut self, epoch_transform: EpochTransformOptions) -> Self {
+        self.epoch_transform = epoch_transform;
         self
     }
 }
@@ -2253,6 +2268,7 @@ impl Raster {
             samples_per_edge,
             options.dst_epsg,
             options.antimeridian_policy,
+            &options.epoch_transform,
         )?;
         let out_extent = options.extent.unwrap_or(base_extent);
         let width = out_extent.x_max - out_extent.x_min;
@@ -2379,6 +2395,7 @@ impl Raster {
                 samples_per_edge,
                 options.dst_epsg,
                 options.antimeridian_policy,
+                &options.epoch_transform,
             )?;
             if ring.len() >= 3 {
                 Some(ring)
@@ -2413,25 +2430,57 @@ impl Raster {
                     batch_cols.push(col as usize);
                 }
 
-                // Single batch CRS transform for all eligible pixels in this row.
-                // Successful transforms overwrite batch_coords in-place; errors are
-                // returned as Some(Err(_)) at the corresponding index.
-                let errors = dst_crs.transform_to_batch(&mut batch_coords, src_crs);
+                let epoch_routing_requested = options.epoch_transform.coordinate_epoch_decimal_year.is_some()
+                    || options.epoch_transform.source_reference_epoch_decimal_year.is_some()
+                    || options.epoch_transform.target_reference_epoch_decimal_year.is_some()
+                    || options.epoch_transform.operation_code.is_some()
+                    || !options.epoch_transform.prefer_official_operation
+                    || matches!(options.epoch_transform.epoch_policy, EpochPolicy::AllowStaticFallback);
 
-                for (i, &col) in batch_cols.iter().enumerate() {
-                    if errors[i].is_some() {
-                        continue;
+                if !epoch_routing_requested {
+                    // Single batch CRS transform for all eligible pixels in this row.
+                    // Successful transforms overwrite batch_coords in-place; errors are
+                    // returned as Some(Err(_)) at the corresponding index.
+                    let errors = dst_crs.transform_to_batch(&mut batch_coords, src_crs);
+
+                    for (i, &col) in batch_cols.iter().enumerate() {
+                        if errors[i].is_some() {
+                            continue;
+                        }
+                        let (sx, sy) = batch_coords[i];
+                        for band in 0..out.bands as isize {
+                            if let Some(v) = self.sample_world(
+                                band,
+                                sx,
+                                sy,
+                                options.resample,
+                                options.nodata_policy,
+                            ) {
+                                row_values[band as usize * out.cols + col] = Some(v);
+                            }
+                        }
                     }
-                    let (sx, sy) = batch_coords[i];
-                    for band in 0..out.bands as isize {
-                        if let Some(v) = self.sample_world(
-                            band,
-                            sx,
-                            sy,
-                            options.resample,
-                            options.nodata_policy,
-                        ) {
-                            row_values[band as usize * out.cols + col] = Some(v);
+                } else {
+                    for (i, &col) in batch_cols.iter().enumerate() {
+                        let Ok((sx, sy)) = transform_xy_with_epoch_options(
+                            src_crs,
+                            dst_crs,
+                            batch_coords[i].0,
+                            batch_coords[i].1,
+                            &options.epoch_transform,
+                        ) else {
+                            continue;
+                        };
+                        for band in 0..out.bands as isize {
+                            if let Some(v) = self.sample_world(
+                                band,
+                                sx,
+                                sy,
+                                options.resample,
+                                options.nodata_policy,
+                            ) {
+                                row_values[band as usize * out.cols + col] = Some(v);
+                            }
                         }
                     }
                 }
@@ -4014,6 +4063,7 @@ fn transformed_extent_from_boundary_samples(
     samples_per_edge: usize,
     dst_epsg: u32,
     antimeridian_policy: AntimeridianPolicy,
+    epoch_transform: &EpochTransformOptions,
 ) -> Result<Extent> {
     let points = sample_extent_boundary_points(src_extent, samples_per_edge);
 
@@ -4025,7 +4075,7 @@ fn transformed_extent_from_boundary_samples(
     let mut valid = 0usize;
 
     for (x, y) in points {
-        let Ok((tx, ty)) = src_crs.transform_to(x, y, dst_crs) else {
+        let Ok((tx, ty)) = transform_xy_with_epoch_options(src_crs, dst_crs, x, y, epoch_transform) else {
             continue;
         };
         if !tx.is_finite() || !ty.is_finite() {
@@ -4071,12 +4121,13 @@ fn transformed_boundary_ring_samples(
     samples_per_edge: usize,
     dst_epsg: u32,
     antimeridian_policy: AntimeridianPolicy,
+    epoch_transform: &EpochTransformOptions,
 ) -> Result<Vec<(f64, f64)>> {
     let ring = sample_extent_boundary_ring(src_extent, samples_per_edge);
     let mut transformed = Vec::with_capacity(ring.len());
 
     for (x, y) in ring {
-        let Ok((tx, ty)) = src_crs.transform_to(x, y, dst_crs) else {
+        let Ok((tx, ty)) = transform_xy_with_epoch_options(src_crs, dst_crs, x, y, epoch_transform) else {
             continue;
         };
         if tx.is_finite() && ty.is_finite() {
@@ -4113,6 +4164,51 @@ fn snap_down_to_origin(value: f64, origin: f64, step: f64) -> f64 {
 
 fn snap_up_to_origin(value: f64, origin: f64, step: f64) -> f64 {
     origin + ((value - origin) / step).ceil() * step
+}
+
+fn transform_xy_with_epoch_options(
+    src: &Crs,
+    dst: &Crs,
+    x: f64,
+    y: f64,
+    options: &EpochTransformOptions,
+) -> Result<(f64, f64)> {
+    options.validate().map_err(|e| RasterError::Other(format!("invalid epoch transform options: {e}")))?;
+    let ctx = options.build_context().map_err(|e| RasterError::Other(format!("invalid epoch transform options: {e}")))?;
+    let epoch_routing_requested = options.coordinate_epoch_decimal_year.is_some()
+        || options.source_reference_epoch_decimal_year.is_some()
+        || options.target_reference_epoch_decimal_year.is_some()
+        || options.operation_code.is_some()
+        || !options.prefer_official_operation
+        || matches!(options.epoch_policy, EpochPolicy::AllowStaticFallback);
+
+    if !epoch_routing_requested {
+        return src
+            .transform_to(x, y, dst)
+            .map_err(|err| RasterError::Other(format!("epoch-aware transform failed: {err}")));
+    }
+
+    let result = if let Some(operation_code) = options.operation_code {
+        src.transform_to_with_operation(x, y, dst, operation_code, ctx)
+    } else if options.prefer_official_operation {
+        src.transform_to_with_preferred_operation(x, y, dst, ctx)
+    } else if let Some(epoch_ctx) = ctx {
+        src.transform_to_with_context(x, y, dst, epoch_ctx)
+    } else {
+        src.transform_to_with_policy(x, y, dst, CrsTransformPolicy::Auto)
+    };
+
+    match result {
+        Ok(v) => Ok(v),
+        Err(err) if matches!(options.epoch_policy, EpochPolicy::AllowStaticFallback) => src
+            .transform_to_with_policy(x, y, dst, CrsTransformPolicy::Auto)
+            .map_err(|fallback_err| {
+                RasterError::Other(format!(
+                    "epoch-aware transform failed ({err}); static fallback failed ({fallback_err})"
+                ))
+            }),
+        Err(err) => Err(RasterError::Other(format!("epoch-aware transform failed: {err}"))),
+    }
 }
 
 fn wrap_lon_360(lon: f64) -> f64 {

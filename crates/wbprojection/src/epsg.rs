@@ -25,8 +25,8 @@
 //! - **UTM ETRS89** – EPSG:25801–25860 (zones 1–60 N)
 //! - **UTM ED50** – EPSG:23001–23060 (zones 1–60 N)
 //! - **NAD83(CSRS) / UTM** – EPSG:2955–2962, 3154–3160, 3761, 9709, 9713 (zones 7–24 N; active set)
-//! - **NAD83(CSRS) realizations / UTM** – EPSG:22207–22222 (v2), 22307–22322 (v3), 22407–22422 (v4),
-//!   22607–22622 (v6), 22707–22722 (v7), 22807–22822 (v8)
+//! - **NAD83(CSRS) realizations / UTM** – EPSG:22207–22222 (v2), 22307–22324 (v3), 22407–22424 (v4),
+//!   22607–22624 (v6), 22707–22724 (v7), 22807–22824 (v8)
 //! - **US State Plane (NAD83, meters)** – selected zones
 //! - **UK National Grid** – EPSG:27700
 //! - **German Gauss-Krüger** – EPSG:31466–31469
@@ -60,6 +60,7 @@ use crate::compound_crs::CompoundCrs;
 use crate::datum::{Datum, DatumTransform};
 use crate::ellipsoid::Ellipsoid;
 use crate::error::{ProjectionError, Result};
+use crate::operations::{CoordinateOperationDef, OperationMethod};
 use crate::projections::{ProjectionKind, ProjectionParams};
 use std::collections::HashMap;
 use std::sync::{OnceLock, RwLock};
@@ -1293,6 +1294,152 @@ pub fn epsg_from_srs_reference(s: &str) -> Option<u32> {
     last_digits
 }
 
+/// Return a preferred coordinate operation code for a source/target EPSG pair,
+/// when a known preferred mapping exists in this crate.
+pub fn preferred_operation_code_for_crs_pair(source_epsg: u32, target_epsg: u32) -> Option<u32> {
+    if let Some(operation_code) = preferred_operation_code_for_csrs_realization_pair(source_epsg, target_epsg)
+    {
+        return Some(operation_code);
+    }
+
+    None
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CsrsRealization {
+    V2,
+    V3,
+    V4,
+    V6,
+    V7,
+    V8,
+}
+
+/// Parse supported NAD83(CSRS) realization UTM EPSG code families.
+///
+/// Returns `(realization, zone)` for known realization UTM corridors.
+fn csrs_realization_zone_from_epsg(code: u32) -> Option<(CsrsRealization, u8)> {
+    if (22207..=22222).contains(&code) {
+        return Some((CsrsRealization::V2, (code - 22200) as u8));
+    }
+    if (22307..=22324).contains(&code) {
+        return Some((CsrsRealization::V3, (code - 22300) as u8));
+    }
+    if (22407..=22424).contains(&code) {
+        return Some((CsrsRealization::V4, (code - 22400) as u8));
+    }
+    if (22607..=22624).contains(&code) {
+        return Some((CsrsRealization::V6, (code - 22600) as u8));
+    }
+    if (22707..=22724).contains(&code) {
+        return Some((CsrsRealization::V7, (code - 22700) as u8));
+    }
+    if (22807..=22824).contains(&code) {
+        return Some((CsrsRealization::V8, (code - 22800) as u8));
+    }
+    None
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CsrsPairActivation {
+    /// Pair is recognized but not yet activated with a validated preferred operation.
+    Pending,
+    /// Pair is active with a validated preferred operation code.
+    Active(u32),
+}
+
+/// Active CSRS realization-pair policies.
+///
+/// Keep this table as the single source of truth for pair activations.
+const CSRS_ACTIVE_PAIR_POLICIES: &[(CsrsRealization, CsrsRealization, u32)] = &[
+    // Validated corridor: matched-zone NAD83(CSRS)v3 -> NAD83(CSRS)v8.
+    (CsrsRealization::V3, CsrsRealization::V8, 10715),
+    // Authoritative-inferred corridor from NRCan date-routed evidence + anchor epochs.
+    (CsrsRealization::V4, CsrsRealization::V8, 10715),
+    // Expanded active corridors under current CSRS rollout.
+    (CsrsRealization::V6, CsrsRealization::V8, 10715),
+    (CsrsRealization::V7, CsrsRealization::V8, 10715),
+];
+
+/// Pending CSRS realization-pair policies under current rollout scope.
+const CSRS_PENDING_PAIR_POLICIES: &[(CsrsRealization, CsrsRealization)] = &[];
+
+/// Activation matrix for NAD83(CSRS) realization-to-realization UTM transforms.
+///
+/// This scaffold intentionally recognizes all supported realization pairs while
+/// only activating validated corridors. Adding new support should be a data
+/// update here (Pending -> Active(op_code)) once operation metadata/assets and
+/// checkpoints are validated.
+fn csrs_pair_activation(source: CsrsRealization, target: CsrsRealization) -> CsrsPairActivation {
+    for (src, dst, operation_code) in CSRS_ACTIVE_PAIR_POLICIES {
+        if source == *src && target == *dst {
+            return CsrsPairActivation::Active(*operation_code);
+        }
+    }
+
+    CsrsPairActivation::Pending
+}
+
+/// Pending CSRS realization pairs under current rollout policy.
+fn is_pending_csrs_realization_pair(source: CsrsRealization, target: CsrsRealization) -> bool {
+    CSRS_PENDING_PAIR_POLICIES
+        .iter()
+        .any(|(src, dst)| source == *src && target == *dst)
+}
+
+/// Returns true when a CRS pair is known to be in a pending preferred-operation corridor.
+pub fn is_pending_preferred_operation_crs_pair(source_epsg: u32, target_epsg: u32) -> bool {
+    let Some((src_realization, src_zone)) = csrs_realization_zone_from_epsg(source_epsg) else {
+        return false;
+    };
+    let Some((dst_realization, dst_zone)) = csrs_realization_zone_from_epsg(target_epsg) else {
+        return false;
+    };
+
+    src_zone == dst_zone
+        && (7..=24).contains(&src_zone)
+        && is_pending_csrs_realization_pair(src_realization, dst_realization)
+}
+
+fn preferred_operation_code_for_csrs_realization_pair(
+    source_epsg: u32,
+    target_epsg: u32,
+) -> Option<u32> {
+    let (src_realization, src_zone) = csrs_realization_zone_from_epsg(source_epsg)?;
+    let (dst_realization, dst_zone) = csrs_realization_zone_from_epsg(target_epsg)?;
+
+    // Realization preferred-operation mappings are zone-matched only.
+    if src_zone != dst_zone {
+        return None;
+    }
+
+    if is_pending_preferred_operation_crs_pair(source_epsg, target_epsg) {
+        return None;
+    }
+
+    match csrs_pair_activation(src_realization, dst_realization) {
+        CsrsPairActivation::Active(operation_code) => Some(operation_code),
+        CsrsPairActivation::Pending => None,
+    }
+}
+
+/// Build a preferred coordinate operation definition for a source/target EPSG pair,
+/// when a known preferred mapping exists in this crate.
+pub fn preferred_operation_for_crs_pair(
+    source_epsg: u32,
+    target_epsg: u32,
+) -> Option<CoordinateOperationDef> {
+    preferred_operation_code_for_crs_pair(source_epsg, target_epsg).map(|operation_code| {
+        CoordinateOperationDef::new(
+            operation_code,
+            source_epsg,
+            target_epsg,
+            OperationMethod::DynamicGridShift,
+        )
+        .preferred(true)
+    })
+}
+
 /// Build a [`Crs`] from a WKT string or SRS-style CRS reference that embeds an EPSG code.
 ///
 /// Resolution order:
@@ -1669,19 +1816,19 @@ pub fn known_epsg_codes() -> Vec<u32> {
     for c in 22207u32..=22222 {
         codes.push(c);
     }
-    for c in 22307u32..=22322 {
+    for c in 22307u32..=22324 {
         codes.push(c);
     }
-    for c in 22407u32..=22422 {
+    for c in 22407u32..=22424 {
         codes.push(c);
     }
-    for c in 22607u32..=22622 {
+    for c in 22607u32..=22624 {
         codes.push(c);
     }
-    for c in 22707u32..=22722 {
+    for c in 22707u32..=22724 {
         codes.push(c);
     }
-    for c in 22807u32..=22822 {
+    for c in 22807u32..=22824 {
         codes.push(c);
     }
     // SIRGAS2000 UTM (active EPSG set)
@@ -5374,7 +5521,7 @@ fn get_info(code: u32) -> Option<EpsgInfo> {
             unit: "metre",
         });
     }
-    if (22307..=22322).contains(&code) {
+    if (22307..=22324).contains(&code) {
         return Some(EpsgInfo {
             code,
             name: "NAD83(CSRS)v3 / UTM (northern hemisphere)",
@@ -5382,7 +5529,7 @@ fn get_info(code: u32) -> Option<EpsgInfo> {
             unit: "metre",
         });
     }
-    if (22407..=22422).contains(&code) {
+    if (22407..=22424).contains(&code) {
         return Some(EpsgInfo {
             code,
             name: "NAD83(CSRS)v4 / UTM (northern hemisphere)",
@@ -5390,7 +5537,7 @@ fn get_info(code: u32) -> Option<EpsgInfo> {
             unit: "metre",
         });
     }
-    if (22607..=22622).contains(&code) {
+    if (22607..=22624).contains(&code) {
         return Some(EpsgInfo {
             code,
             name: "NAD83(CSRS)v6 / UTM (northern hemisphere)",
@@ -5398,7 +5545,7 @@ fn get_info(code: u32) -> Option<EpsgInfo> {
             unit: "metre",
         });
     }
-    if (22707..=22722).contains(&code) {
+    if (22707..=22724).contains(&code) {
         return Some(EpsgInfo {
             code,
             name: "NAD83(CSRS)v7 / UTM (northern hemisphere)",
@@ -5406,7 +5553,7 @@ fn get_info(code: u32) -> Option<EpsgInfo> {
             unit: "metre",
         });
     }
-    if (22807..=22822).contains(&code) {
+    if (22807..=22824).contains(&code) {
         return Some(EpsgInfo {
             code,
             name: "NAD83(CSRS)v8 / UTM (northern hemisphere)",
@@ -6295,11 +6442,11 @@ fn build_crs(code: u32) -> Result<Crs> {
         9713 => csrs_utm_crs(24, code),
         // NAD83(CSRS) realization families (v2-v8)
         22207..=22222 => csrs_utm_crs_variant((code - 22200) as u8, code, "v2"),
-        22307..=22322 => csrs_utm_crs_variant((code - 22300) as u8, code, "v3"),
-        22407..=22422 => csrs_utm_crs_variant((code - 22400) as u8, code, "v4"),
-        22607..=22622 => csrs_utm_crs_variant((code - 22600) as u8, code, "v6"),
-        22707..=22722 => csrs_utm_crs_variant((code - 22700) as u8, code, "v7"),
-        22807..=22822 => csrs_utm_crs_variant((code - 22800) as u8, code, "v8"),
+        22307..=22324 => csrs_utm_crs_variant((code - 22300) as u8, code, "v3"),
+        22407..=22424 => csrs_utm_crs_variant((code - 22400) as u8, code, "v4"),
+        22607..=22624 => csrs_utm_crs_variant((code - 22600) as u8, code, "v6"),
+        22707..=22724 => csrs_utm_crs_variant((code - 22700) as u8, code, "v7"),
+        22807..=22824 => csrs_utm_crs_variant((code - 22800) as u8, code, "v8"),
 
         // ── ETRS89 pan-European ──────────────────────────────────────────
         3034 => Ok(Crs {

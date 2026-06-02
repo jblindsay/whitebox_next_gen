@@ -6,6 +6,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Changed
+- Added epoch-aware reprojection guidance and advanced argument examples to the
+  reprojection manual (`manual/src/reprojection-and-crs.md`) for raster,
+  vector, and LiDAR workflows.
+
 ## [2.0.5] - 2026-05-30
 
 ### Added

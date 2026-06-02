@@ -2246,6 +2246,34 @@ dem_utm = dem.reproject(
 
 wbe.write_raster(dem_utm, 'dem_utm_10m.tif')
 </code></pre>
+<h3 id="example-epoch-aware-raster-reprojection-advanced"><a class="header" href="#example-epoch-aware-raster-reprojection-advanced">Example: epoch-aware raster reprojection (advanced)</a></h3>
+<p>Use epoch-aware options when transforming between dynamic datums/realizations.</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+dem = wbe.read_raster('dem_csrs_v3.tif')
+
+dem_v8 = dem.reproject(
+    dst_epsg=22818,
+    resample='bilinear',
+    coordinate_epoch=2020.0,
+    source_reference_epoch=2010.0,
+    target_reference_epoch=2020.0,
+    prefer_official_operation=True,
+    epoch_policy='strict',
+)
+
+wbe.write_raster(dem_v8, 'dem_csrs_v8_epoch2020.tif')
+</code></pre>
+<p>Supported optional epoch-routing arguments in Python reprojection calls:</p>
+<ul>
+<li><code>coordinate_epoch</code></li>
+<li><code>source_reference_epoch</code></li>
+<li><code>target_reference_epoch</code></li>
+<li><code>operation_code</code></li>
+<li><code>prefer_official_operation</code></li>
+<li><code>epoch_policy</code> (<code>strict</code> or <code>allow_static_fallback</code>)</li>
+</ul>
 <h3 id="example-grid-matching-reprojection"><a class="header" href="#example-grid-matching-reprojection">Example: grid-matching reprojection</a></h3>
 <pre><code class="language-python">import whitebox_workflows as wb
 
@@ -2314,6 +2342,21 @@ roads_utm = wbe.projection_georeferencing.general.reproject_vector(
 
 wbe.write_vector(roads_utm, 'roads_utm.gpkg')
 </code></pre>
+<h3 id="example-epoch-aware-vector-reprojection-advanced"><a class="header" href="#example-epoch-aware-vector-reprojection-advanced">Example: epoch-aware vector reprojection (advanced)</a></h3>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+stations = wbe.read_vector('stations_csrs_v3.gpkg')
+
+stations_v8 = stations.reproject(
+    dst_epsg=22818,
+    coordinate_epoch=2020.0,
+    prefer_official_operation=True,
+    epoch_policy='strict',
+)
+
+wbe.write_vector(stations_v8, 'stations_csrs_v8_epoch2020.gpkg')
+</code></pre>
 <h2 id="lidar-reprojection"><a class="header" href="#lidar-reprojection">Lidar Reprojection</a></h2>
 <p>Use explicit lidar reprojection settings to avoid silent dimensional or policy
 defaults.</p>
@@ -2330,6 +2373,21 @@ las_utm = wbe.projection_georeferencing.general.reproject_lidar(
 )
 
 wbe.write_lidar(las_utm, 'survey_utm.copc.laz')
+</code></pre>
+<h3 id="example-epoch-aware-lidar-reprojection-advanced"><a class="header" href="#example-epoch-aware-lidar-reprojection-advanced">Example: epoch-aware lidar reprojection (advanced)</a></h3>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+las = wbe.read_lidar('survey_csrs_v3.las')
+
+las_v8 = las.reproject(
+    dst_epsg=22818,
+    coordinate_epoch=2020.0,
+    prefer_official_operation=True,
+    epoch_policy='strict',
+)
+
+wbe.write_lidar(las_v8, 'survey_csrs_v8_epoch2020.laz')
 </code></pre>
 <h2 id="georeference-raster-from-control-points"><a class="header" href="#georeference-raster-from-control-points">Georeference Raster from Control Points</a></h2>
 <p>Use this tool when an image/raster has no reliable georeferencing and you have

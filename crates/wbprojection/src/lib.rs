@@ -167,6 +167,7 @@ pub mod epsg;
 pub mod error;
 pub mod grid_formats;
 pub mod grid_shift;
+pub mod operations;
 pub mod projections;
 pub(crate) mod proj_string;
 pub mod transform;
@@ -220,18 +221,53 @@ pub use epsg::{
     unregister_epsg_alias,
     vertical_offset_grid_name,
     epsg_area_of_use,
+    is_pending_preferred_operation_crs_pair,
+    preferred_operation_code_for_crs_pair,
+    preferred_operation_for_crs_pair,
 };
 pub use proj_string::{ParsedProjString, ParsedProjUnits};
 pub use error::{ProjectionError, Result};
 pub use grid_formats::{
-    list_ntv2_subgrids, load_nadcon_ascii_pair, load_ntv2_gsb, load_ntv2_gsb_subgrid,
+    DynamicHierarchyItem, list_ntv2_subgrids, load_dynamic_nadcon_ascii_pair,
+    load_nadcon_ascii_pair, load_ntv2_gsb, load_ntv2_gsb_subgrid,
+    register_dynamic_grid_hierarchy, register_dynamic_nadcon_ascii_pair,
     register_nadcon_ascii_pair, register_ntv2_gsb, register_ntv2_gsb_hierarchy,
-    register_ntv2_gsb_subgrid, resolve_ntv2_hierarchy_grid_name,
+    register_ntv2_gsb_subgrid, resolve_dynamic_hierarchy_grid_name,
+    resolve_ntv2_hierarchy_grid_name,
     resolve_ntv2_hierarchy_subgrid,
 };
-pub use grid_shift::{GridShiftGrid, GridShiftSample, get_grid, has_grid, register_grid, unregister_grid};
+pub use grid_shift::{
+    DynamicGridShiftGrid,
+    DynamicGridShiftSample,
+    get_dynamic_grid,
+    get_grid,
+    has_dynamic_grid,
+    has_grid,
+    register_dynamic_grid,
+    register_grid,
+    unregister_dynamic_grid,
+    unregister_grid,
+    GridShiftGrid,
+    GridShiftSample,
+};
 pub use projections::{Projection, ProjectionKind, ProjectionParams};
-pub use transform::{CoordTransform, Point2D, Point3D};
+pub use operations::{
+    CoordinateOperationDef,
+    OperationMethod,
+    clear_coordinate_operations,
+    get_coordinate_operation,
+    has_coordinate_operation,
+    register_coordinate_operation,
+    unregister_coordinate_operation,
+};
+pub use transform::{
+    CoordTransform,
+    EpochPolicy,
+    EpochTransformOptions,
+    Point2D,
+    Point3D,
+    TransformEpochContext,
+};
 pub use vertical_grid::{
     VerticalOffsetGrid,
     get_vertical_offset_grid,

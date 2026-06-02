@@ -827,6 +827,59 @@ processing.run('whitebox_workflows:reproject_lidar', {
 })
 </code></pre>
 <hr />
+<h2 id="epoch-aware-reprojection-dynamic-datums"><a class="header" href="#epoch-aware-reprojection-dynamic-datums">Epoch-Aware Reprojection (Dynamic Datums)</a></h2>
+<p>For dynamic datums and realization-to-realization transformations, the
+reprojection tools support optional epoch-routing controls:</p>
+<ul>
+<li><code>coordinate_epoch</code></li>
+<li><code>source_reference_epoch</code></li>
+<li><code>target_reference_epoch</code></li>
+<li><code>operation_code</code></li>
+<li><code>prefer_official_operation</code></li>
+<li><code>epoch_policy</code> (<code>strict</code> or <code>allow_static_fallback</code>)</li>
+</ul>
+<p>These parameters are optional. Use them when you need deterministic routing for
+time-dependent CRS transformations.</p>
+<h3 id="epoch-aware-raster-example"><a class="header" href="#epoch-aware-raster-example">Epoch-aware raster example</a></h3>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:reproject_raster', {
+  'input': '/data/dem_csrs_v3.tif',
+  'epsg': 22818,
+  'resample': 'bilinear',
+  'coordinate_epoch': 2020.0,
+  'source_reference_epoch': 2010.0,
+  'target_reference_epoch': 2020.0,
+  'prefer_official_operation': True,
+  'epoch_policy': 'strict',
+  'output': '/data/dem_csrs_v8_epoch2020.tif',
+})
+</code></pre>
+<h3 id="epoch-aware-vector-example"><a class="header" href="#epoch-aware-vector-example">Epoch-aware vector example</a></h3>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:reproject_vector', {
+  'input': '/data/stations_csrs_v3.gpkg',
+  'epsg': 22818,
+  'coordinate_epoch': 2020.0,
+  'prefer_official_operation': True,
+  'epoch_policy': 'strict',
+  'output': '/data/stations_csrs_v8_epoch2020.gpkg',
+})
+</code></pre>
+<h3 id="epoch-aware-lidar-example"><a class="header" href="#epoch-aware-lidar-example">Epoch-aware LiDAR example</a></h3>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:reproject_lidar', {
+  'input': '/data/survey_csrs_v3.laz',
+  'epsg': 22818,
+  'coordinate_epoch': 2020.0,
+  'prefer_official_operation': True,
+  'epoch_policy': 'strict',
+  'output': '/data/survey_csrs_v8_epoch2020.laz',
+})
+</code></pre>
+<hr />
 <h2 id="assigning-a-missing-crs"><a class="header" href="#assigning-a-missing-crs">Assigning a Missing CRS</a></h2>
 <p>If a file has correct coordinates but missing or wrong CRS metadata (shown
 as "Unknown CRS" in Layer Properties), use one of the three <strong>Assign
@@ -1209,6 +1262,25 @@ repositories.</p>
     'output': '/data/geomorphons.tif',
 })
 </code></pre>
+<hr />
+<h2 id="pro-siting-sweep-diagnostics"><a class="header" href="#pro-siting-sweep-diagnostics">Pro Siting Sweep Diagnostics</a></h2>
+<p>For Pro terrain siting workflows (<code>wind_turbine_siting</code> and
+<code>solar_site_suitability_analysis</code>), providing a sweep specification executes a
+multi-run grid and emits extra diagnostics:</p>
+<ul>
+<li><code>run_matrix_summary</code> (CSV)</li>
+<li><code>sensitivity_report</code> (JSON)</li>
+<li><code>sensitivity_report_html</code> (HTML)</li>
+<li><code>stability_map</code> (GeoTIFF; <code>3=high</code>, <code>2=medium</code>, <code>1=low</code>)</li>
+</ul>
+<p>Inside <code>sensitivity_report</code>, use these fields for quick robustness checks:</p>
+<ul>
+<li><code>metrics.primary_metric</code></li>
+<li><code>metrics.primary_relative_span</code></li>
+<li><code>metrics.stability_class</code> (<code>high</code>, <code>medium</code>, <code>low</code>)</li>
+</ul>
+<p>These outputs are intended for scenario comparison and shortlist stability
+review before field validation.</p>
 <hr />
 <h2 id="common-pitfalls"><a class="header" href="#common-pitfalls">Common Pitfalls</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
@@ -2171,6 +2243,42 @@ errors before proceeding.</p>
 <p>Export the selection as <code>priority_parcels.shp</code> using
 <strong>Layer → Export → Save Selected Features As</strong>.</p>
 <hr />
+<h3 id="step-5b--field-calculator-assistant-expression--preview-workflow"><a class="header" href="#step-5b--field-calculator-assistant-expression--preview-workflow">Step 5b — Field Calculator Assistant (Expression + Preview Workflow)</a></h3>
+<p>Use this when you need guided expression authoring for derived attributes
+(for example TYPE-to-SPEED conversion before network impedance analysis).</p>
+<p>Open from the <strong>Whitebox panel</strong> (recommended path):</p>
+<p><strong>Whitebox panel → tool search → <code>field_calculator</code></strong></p>
+<p>The assistant provides:</p>
+<ul>
+<li>expression editor with SQL-style presets/snippets</li>
+<li>geometry token insertion (<code>$area</code>, <code>$length</code>, <code>$perimeter</code>, centroid tokens)</li>
+<li>category and keyword snippet filtering</li>
+<li>preview table driven by backend <code>preview_rows</code> payload</li>
+<li>one-click handoff to the standard processing dialog with prefilled parameters</li>
+</ul>
+<p>Supported expression features include:</p>
+<ul>
+<li><code>CASE WHEN ... THEN ... ELSE ... END</code></li>
+<li>simple <code>CASE field WHEN value THEN ... END</code></li>
+<li>optional <code>UPDATE ... SET ... WHERE ...</code> wrapper syntax</li>
+<li>SQL operators (<code>=</code>, <code>&lt;&gt;</code>, <code>AND</code>, <code>OR</code>, <code>NOT</code>) and null predicates</li>
+<li><code>CAST(... AS integer|float|text|boolean)</code></li>
+</ul>
+<p>Example expression:</p>
+<pre><code class="language-sql">UPDATE roads SET SPEED = CASE
+  WHEN TYPE == 'motorway' THEN 100
+  WHEN TYPE == 'primary' THEN 80
+  WHEN TYPE == 'collector' THEN 60
+  ELSE 40
+END
+</code></pre>
+<p>Notes:</p>
+<ul>
+<li>Launching <code>field_calculator</code> from the Whitebox panel opens the assistant.</li>
+<li>Launching from the generic Processing Toolbox can open the standard dialog
+directly, depending on host/API path.</li>
+</ul>
+<hr />
 <h3 id="step-6--clip-parcels-to-study-area-optional"><a class="header" href="#step-6--clip-parcels-to-study-area-optional">Step 6 — Clip Parcels to Study Area (Optional)</a></h3>
 <p><strong>Processing Toolbox → Whitebox Workflows → Vector Analysis →
 <code>Line Polygon Clip</code></strong> (for lines) or QGIS <strong><code>Clip</code></strong> for polygon-on-polygon.</p>
@@ -2362,6 +2470,12 @@ three common tracks:</p>
 <li>OD and nearest-facility analysis</li>
 <li>Stream-network hierarchy and connectivity</li>
 </ul>
+<h3 id="capability-note-open-tier"><a class="header" href="#capability-note-open-tier">Capability Note (Open Tier)</a></h3>
+<p>Whitebox open tier provides advanced network tools directly in the QGIS plugin,
+including shortest path, k-shortest alternatives, service areas, OD matrices,
+closest facility, location-allocation, and multimodal OD/routes. Advanced
+impedance controls include one-way directionality, turn/u-turn penalties,
+optional node-entry costs, and optional temporal cost profiles.</p>
 <hr />
 <h2 id="core-concepts-you-should-know-first-1"><a class="header" href="#core-concepts-you-should-know-first-1">Core Concepts You Should Know First</a></h2>
 <ul>
@@ -2412,7 +2526,8 @@ Add Geometry Attributes</p>
 <li>TIME_MIN (derived)</li>
 <li>ONEWAY (optional directional control)</li>
 </ul>
-<p>Use this prepared layer as the routing network for native QGIS algorithms.</p>
+<p>Use this prepared layer as the routing network for Whitebox network-analysis
+tools in the Processing Toolbox.</p>
 <hr />
 <h3 id="step-25---build-network-topology-and-snap-points-optional"><a class="header" href="#step-25---build-network-topology-and-snap-points-optional">Step 2.5 - Build Network Topology and Snap Points (Optional)</a></h3>
 <p>If your network lacks proper node structure or you need to snap facility/demand points to the network:</p>
@@ -2438,48 +2553,108 @@ Add Geometry Attributes</p>
 <p>Output includes <code>SNAP_DIST</code> (offset to network) for diagnostics.</p>
 <hr />
 <h2 id="workflow-b-routing-service-areas-and-closest-facility"><a class="header" href="#workflow-b-routing-service-areas-and-closest-facility">Workflow B: Routing, Service Areas, and Closest Facility</a></h2>
-<h3 id="step-3---shortest-path"><a class="header" href="#step-3---shortest-path">Step 3 - Shortest Path</a></h3>
-<p>Processing Toolbox -&gt; Network Analysis:</p>
+<h3 id="intersection-delay--node-cost-modeling"><a class="header" href="#intersection-delay--node-cost-modeling">Intersection Delay / Node Cost Modeling</a></h3>
+<p>For Whitebox network tools that support advanced impedance (for example
+service-area and closest-facility workflows), you can include node-entry costs
+to model intersection delay:</p>
 <ul>
-<li>Shortest Path (Point to Point)</li>
-<li>Shortest Path (Layer to Point)</li>
-<li>Shortest Path (Point to Layer)</li>
+<li><code>node_cost_points</code>: point layer of intersection/gate delay observations.</li>
+<li><code>node_cost_field</code>: numeric field in <code>node_cost_points</code> with non-negative
+delay/cost values.</li>
+<li><code>node_cost_snap_distance</code>: optional max assignment distance from each
+node-cost point to a network node.</li>
 </ul>
-<p>Use the prepared cost field (distance or time) consistently.</p>
+<p>Practical pattern:</p>
+<ol>
+<li>Build/snap a clean network first.</li>
+<li>Prepare an intersection delay points layer (signals, crossings, gates).</li>
+<li>Run network tools with both edge impedance and node-cost parameters.</li>
+</ol>
+<p>When node-cost parameters are omitted, routing uses edge impedance only.</p>
+<h3 id="step-3---shortest-path-and-k-shortest-alternatives"><a class="header" href="#step-3---shortest-path-and-k-shortest-alternatives">Step 3 - Shortest Path and K-Shortest Alternatives</a></h3>
+<p>Processing Toolbox -&gt; Whitebox Workflows -&gt; Network Analysis:</p>
+<ul>
+<li><code>Shortest Path Network</code></li>
+<li><code>K Shortest Paths Network</code></li>
+</ul>
+<p>Recommended parameters:</p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Example</th></tr></thead><tbody>
+<tr><td>Input network</td><td>roads_prepared.shp</td></tr>
+<tr><td>Start / End</td><td>route endpoints or point features</td></tr>
+<tr><td>Edge cost field</td><td>TIME_MIN</td></tr>
+<tr><td>One-way field</td><td>ONEWAY</td></tr>
+<tr><td>Turn penalty</td><td>0.3 to 0.8 (minutes)</td></tr>
+<tr><td>U-turn penalty</td><td>2.0 to 4.0 (minutes)</td></tr>
+</tbody></table>
+</div>
+<p>Use k-shortest outputs when teaching resilience, alternate routing, or
+choice-model concepts.</p>
 <hr />
 <h3 id="step-4---service-area-isochrone"><a class="header" href="#step-4---service-area-isochrone">Step 4 - Service Area (Isochrone)</a></h3>
-<p>Processing Toolbox -&gt; Network Analysis -&gt; Service Area (From Layer)</p>
+<p>Processing Toolbox -&gt; Whitebox Workflows -&gt; Network Analysis -&gt;
+<code>Network Service Area</code></p>
 <p>Recommended parameters:</p>
 <div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Example</th></tr></thead><tbody>
 <tr><td>Network layer</td><td>roads_prepared.shp</td></tr>
-<tr><td>Strategy</td><td>Shortest</td></tr>
-<tr><td>Start points</td><td>facilities.shp</td></tr>
-<tr><td>Travel cost</td><td>5.0 (minutes) or 3000 (meters)</td></tr>
+<tr><td>Origins</td><td>facilities.shp</td></tr>
+<tr><td>Max cost</td><td>5.0 (minutes) or 3000 (meters)</td></tr>
+<tr><td>Output mode</td><td>polygon or edges</td></tr>
+<tr><td>Polygon merge origins</td><td>true/false</td></tr>
+<tr><td>Edge cost field</td><td>TIME_MIN</td></tr>
+<tr><td>One-way field</td><td>ONEWAY</td></tr>
 </tbody></table>
 </div>
-<p>Export output lines and optional polygons for reporting.</p>
-<hr />
-<h3 id="step-5---closest-facility-pattern"><a class="header" href="#step-5---closest-facility-pattern">Step 5 - Closest Facility Pattern</a></h3>
-<p>Use Service Area and shortest-path tools together:</p>
+<p>Advanced options (recommended for realistic urban travel times):</p>
 <ul>
-<li>Build candidate facilities</li>
-<li>Route demand points to nearest reachable facilities</li>
-<li>Summarize cost by facility catchment</li>
+<li><code>node_cost_points</code>, <code>node_cost_field</code>, <code>node_cost_snap_distance</code></li>
+<li><code>turn_penalty</code>, <code>u_turn_penalty</code>, <code>forbid_u_turns</code></li>
+<li><code>temporal_cost_profile</code>, <code>departure_time</code>, <code>temporal_mode</code></li>
 </ul>
-<p>For large batches, run model-builder or Python Console loops.</p>
 <hr />
-<h2 id="workflow-c-od-style-batch-analysis-in-qgis"><a class="header" href="#workflow-c-od-style-batch-analysis-in-qgis">Workflow C: OD-Style Batch Analysis in QGIS</a></h2>
-<p>QGIS does not provide a single OD matrix tool equivalent to the Python/R
-chapters, so the standard QGIS pattern is:</p>
+<h3 id="step-5---closest-facility-and-od-matrices"><a class="header" href="#step-5---closest-facility-and-od-matrices">Step 5 - Closest Facility and OD Matrices</a></h3>
+<p>Processing Toolbox -&gt; Whitebox Workflows -&gt; Network Analysis:</p>
 <ul>
-<li>Iterate origins and destinations in batch</li>
-<li>Run shortest path for each pair</li>
-<li>Aggregate travel cost in an output table</li>
+<li><code>Closest Facility Network</code></li>
+<li><code>Network OD Cost Matrix</code></li>
+<li><code>Network Routes From OD</code></li>
 </ul>
-<p>Use this when you need accessibility summaries or assignment baselines directly
-inside QGIS projects.</p>
+<p>Use these for assignment, accessibility summaries, and route materialization.
+OD matrix output is ideal for downstream tabular analysis (Python/R/pandas).</p>
 <hr />
-<h2 id="workflow-d-hydrologic-stream-networks"><a class="header" href="#workflow-d-hydrologic-stream-networks">Workflow D: Hydrologic Stream Networks</a></h2>
+<h2 id="workflow-c-location-allocation-and-accessibility"><a class="header" href="#workflow-c-location-allocation-and-accessibility">Workflow C: Location-Allocation and Accessibility</a></h2>
+<p>Processing Toolbox -&gt; Whitebox Workflows -&gt; Network Analysis:</p>
+<ul>
+<li><code>Location Allocation Network</code></li>
+<li><code>Compute Network Accessibility</code></li>
+</ul>
+<p>Recommended location-allocation pattern:</p>
+<ol>
+<li>Prepare candidate sites and weighted demand points.</li>
+<li>Select solver mode (<code>minimize_impedance</code>, <code>maximize_coverage</code>, or
+<code>maximize_attendance</code>).</li>
+<li>Compare static-cost and peak-period temporal-profile runs.</li>
+</ol>
+<p>Recommended accessibility pattern:</p>
+<ol>
+<li>Provide origins and destination opportunities.</li>
+<li>Set impedance cutoff and decay function.</li>
+<li>Map/compare resulting accessibility scores across scenarios.</li>
+</ol>
+<h2 id="workflow-d-multimodal-network-analysis"><a class="header" href="#workflow-d-multimodal-network-analysis">Workflow D: Multimodal Network Analysis</a></h2>
+<p>Processing Toolbox -&gt; Whitebox Workflows -&gt; Network Analysis:</p>
+<ul>
+<li><code>Multimodal Shortest Path</code></li>
+<li><code>Multimodal OD Cost Matrix</code></li>
+<li><code>Multimodal Routes From OD</code></li>
+</ul>
+<p>Requirements:</p>
+<ul>
+<li>mode field on network edges (e.g., walk/bus/rail)</li>
+<li>allowed-modes and transfer-penalty configuration</li>
+<li>optional temporal profile for schedule/peak scenarios</li>
+</ul>
+<hr />
+<h2 id="workflow-e-hydrologic-stream-networks"><a class="header" href="#workflow-e-hydrologic-stream-networks">Workflow E: Hydrologic Stream Networks</a></h2>
 <p>Hydrologic network tools remain an important part of network analysis and are
 included here as a dedicated sub-workflow rather than the entire chapter.</p>
 <h3 id="step-6---stream-hierarchy"><a class="header" href="#step-6---stream-hierarchy">Step 6 - Stream Hierarchy</a></h3>
@@ -2505,14 +2680,27 @@ processing.run('whitebox_workflows:add_geometry_attributes', {
     'output': '/data/roads_prepared.shp',
 })
 
-# Service area from facilities
-processing.run('native:serviceareafromlayer', {
-    'INPUT': '/data/roads_prepared.shp',
-    'STRATEGY': 0,
-    'START_POINTS': '/data/facilities.shp',
-    'TRAVEL_COST': 5.0,
-    'OUTPUT_LINES': '/data/service_area_lines.shp',
-    'OUTPUT': 'TEMPORARY_OUTPUT',
+# Whitebox network service area
+processing.run('whitebox_workflows:network_service_area', {
+  'input': '/data/roads_prepared.shp',
+  'origins': '/data/facilities.shp',
+  'max_cost': 5.0,
+  'output_mode': 'polygon',
+  'edge_cost_field': 'TIME_MIN',
+  'one_way_field': 'ONEWAY',
+  'turn_penalty': 0.4,
+  'u_turn_penalty': 2.5,
+  'output': '/data/service_area_5min.shp',
+})
+
+# Whitebox OD matrix
+processing.run('whitebox_workflows:network_od_cost_matrix', {
+  'input': '/data/roads_prepared.shp',
+  'origins': '/data/origins.shp',
+  'destinations': '/data/destinations.shp',
+  'edge_cost_field': 'TIME_MIN',
+  'one_way_field': 'ONEWAY',
+  'output': '/data/od_costs.csv',
 })
 
 # Stream order

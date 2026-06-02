@@ -10,7 +10,10 @@ use std::collections::HashMap;
 use std::sync::{OnceLock, RwLock};
 
 use crate::error::{ProjectionError, Result};
-use crate::grid_shift::{GridShiftGrid, GridShiftSample, register_grid};
+use crate::grid_shift::{
+    DynamicGridShiftGrid, DynamicGridShiftSample, GridShiftGrid, GridShiftSample,
+    get_dynamic_grid, register_dynamic_grid, register_grid,
+};
 
 const NTV2_REC_LEN: usize = 16;
 
@@ -260,8 +263,36 @@ fn normalize_subgrid_name(name: &str) -> String {
 static NTV2_HIERARCHY_REGISTRY: OnceLock<RwLock<HashMap<String, Vec<Ntv2HierarchyEntry>>>> =
     OnceLock::new();
 
+#[derive(Debug, Clone)]
+struct DynamicHierarchyEntry {
+    grid_name: String,
+    grid_name_norm: String,
+    parent_name_norm: Option<String>,
+    lon_min_deg: f64,
+    lon_max_deg: f64,
+    lat_min_deg: f64,
+    lat_max_deg: f64,
+    area_deg2: f64,
+}
+
+impl DynamicHierarchyEntry {
+    fn contains(&self, lon_deg: f64, lat_deg: f64) -> bool {
+        lon_deg >= self.lon_min_deg
+            && lon_deg <= self.lon_max_deg
+            && lat_deg >= self.lat_min_deg
+            && lat_deg <= self.lat_max_deg
+    }
+}
+
+static DYNAMIC_HIERARCHY_REGISTRY: OnceLock<RwLock<HashMap<String, Vec<DynamicHierarchyEntry>>>> =
+    OnceLock::new();
+
 fn hierarchy_registry() -> &'static RwLock<HashMap<String, Vec<Ntv2HierarchyEntry>>> {
     NTV2_HIERARCHY_REGISTRY.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn dynamic_hierarchy_registry() -> &'static RwLock<HashMap<String, Vec<DynamicHierarchyEntry>>> {
+    DYNAMIC_HIERARCHY_REGISTRY.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
 fn register_ntv2_hierarchy_entries(dataset_name: &str, entries: Vec<Ntv2HierarchyEntry>) -> Result<()> {
@@ -315,6 +346,142 @@ pub(crate) fn resolve_ntv2_hierarchy_grid(dataset_name: &str, lon_deg: f64, lat_
 
     loop {
         let parent_name = entries[current_idx].subgrid_name_norm.clone();
+        let child = entries
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| {
+                e.parent_name_norm.as_deref() == Some(parent_name.as_str())
+                    && e.contains(lon_deg, lat_deg)
+            })
+            .min_by(|(_, a), (_, b)| {
+                a.area_deg2
+                    .partial_cmp(&b.area_deg2)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|(i, _)| i);
+
+        match child {
+            Some(i) => current_idx = i,
+            None => break,
+        }
+    }
+
+    Ok(Some(entries[current_idx].grid_name.clone()))
+}
+
+/// One dynamic hierarchy registration item.
+///
+/// `parent_grid_name` can be used to define parent-child hierarchy relationships.
+/// Use `None` for root grids.
+#[derive(Debug, Clone)]
+pub struct DynamicHierarchyItem {
+    /// Registered dynamic grid name referenced by this hierarchy node.
+    pub grid_name: String,
+    /// Optional parent grid name; `None` indicates a root hierarchy node.
+    pub parent_grid_name: Option<String>,
+}
+
+/// Register a named dynamic hierarchy dataset from already-registered dynamic grids.
+pub fn register_dynamic_grid_hierarchy(
+    dataset_name: &str,
+    items: &[DynamicHierarchyItem],
+) -> Result<Vec<String>> {
+    if items.is_empty() {
+        return Err(ProjectionError::DatumError(
+            "dynamic hierarchy registration requires at least one item".to_string(),
+        ));
+    }
+
+    let mut entries = Vec::with_capacity(items.len());
+    let mut registered_names = Vec::with_capacity(items.len());
+
+    for item in items {
+        let grid = get_dynamic_grid(&item.grid_name)?.ok_or_else(|| {
+            ProjectionError::DatumError(format!(
+                "dynamic hierarchy grid '{}' is not registered",
+                item.grid_name
+            ))
+        })?;
+
+        let lon_min_deg = grid.lon_min;
+        let lon_max_deg = grid.lon_min + grid.lon_step * (grid.width as f64 - 1.0);
+        let lat_min_deg = grid.lat_min;
+        let lat_max_deg = grid.lat_min + grid.lat_step * (grid.height as f64 - 1.0);
+        let area_deg2 = (lon_max_deg - lon_min_deg).abs() * (lat_max_deg - lat_min_deg).abs();
+
+        let grid_name_norm = normalize_subgrid_name(&item.grid_name);
+        let parent_name_norm = item
+            .parent_grid_name
+            .as_deref()
+            .map(normalize_subgrid_name)
+            .filter(|p| !p.is_empty() && *p != grid_name_norm);
+
+        entries.push(DynamicHierarchyEntry {
+            grid_name: item.grid_name.clone(),
+            grid_name_norm,
+            parent_name_norm,
+            lon_min_deg,
+            lon_max_deg,
+            lat_min_deg,
+            lat_max_deg,
+            area_deg2,
+        });
+        registered_names.push(item.grid_name.clone());
+    }
+
+    let mut m = dynamic_hierarchy_registry().write().map_err(|_| {
+        ProjectionError::DatumError("dynamic hierarchy registry lock poisoned".to_string())
+    })?;
+    m.insert(dataset_name.to_string(), entries);
+
+    Ok(registered_names)
+}
+
+/// Resolve selected dynamic hierarchy grid name for a coordinate in geographic degrees.
+pub fn resolve_dynamic_hierarchy_grid_name(
+    dataset_name: &str,
+    lon_deg: f64,
+    lat_deg: f64,
+) -> Result<Option<String>> {
+    let m = dynamic_hierarchy_registry().read().map_err(|_| {
+        ProjectionError::DatumError("dynamic hierarchy registry lock poisoned".to_string())
+    })?;
+
+    let Some(entries) = m.get(dataset_name) else {
+        return Ok(None);
+    };
+
+    let roots: Vec<usize> = entries
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.parent_name_norm.is_none() && e.contains(lon_deg, lat_deg))
+        .map(|(i, _)| i)
+        .collect();
+
+    if roots.is_empty() {
+        let fallback = entries
+            .iter()
+            .filter(|e| e.contains(lon_deg, lat_deg))
+            .min_by(|a, b| {
+                a.area_deg2
+                    .partial_cmp(&b.area_deg2)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        return Ok(fallback.map(|e| e.grid_name.clone()));
+    }
+
+    let mut current_idx = *roots
+        .iter()
+        .min_by(|&&ia, &&ib| {
+            entries[ia]
+                .area_deg2
+                .partial_cmp(&entries[ib].area_deg2)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .unwrap();
+
+    loop {
+        let parent_name = entries[current_idx].grid_name_norm.clone();
         let child = entries
             .iter()
             .enumerate()
@@ -626,6 +793,98 @@ pub fn load_nadcon_ascii_pair(
     )
 }
 
+/// Load NADCON ASCII base/rate shift grids into one dynamic model.
+///
+/// Each ASCII file uses the same simple format as [`load_nadcon_ascii_pair`]:
+/// first line: `lon_min lat_min lon_step lat_step width height`
+/// remaining lines: `width*height` numeric values.
+pub fn load_dynamic_nadcon_ascii_pair(
+    lon_shift_path: impl AsRef<Path>,
+    lat_shift_path: impl AsRef<Path>,
+    lon_rate_path: impl AsRef<Path>,
+    lat_rate_path: impl AsRef<Path>,
+    reference_epoch_decimal_year: f64,
+    grid_name: impl Into<String>,
+) -> Result<DynamicGridShiftGrid> {
+    let (w1, h1, lon_min1, lat_min1, lon_step1, lat_step1, lon_vals) =
+        parse_nadcon_ascii(lon_shift_path.as_ref())?;
+    let (w2, h2, lon_min2, lat_min2, lon_step2, lat_step2, lat_vals) =
+        parse_nadcon_ascii(lat_shift_path.as_ref())?;
+    let (w3, h3, lon_min3, lat_min3, lon_step3, lat_step3, lon_rate_vals) =
+        parse_nadcon_ascii(lon_rate_path.as_ref())?;
+    let (w4, h4, lon_min4, lat_min4, lon_step4, lat_step4, lat_rate_vals) =
+        parse_nadcon_ascii(lat_rate_path.as_ref())?;
+
+    let aligned = (w1, h1) == (w2, h2)
+        && (w1, h1) == (w3, h3)
+        && (w1, h1) == (w4, h4)
+        && (lon_min1 - lon_min2).abs() <= 1e-12
+        && (lon_min1 - lon_min3).abs() <= 1e-12
+        && (lon_min1 - lon_min4).abs() <= 1e-12
+        && (lat_min1 - lat_min2).abs() <= 1e-12
+        && (lat_min1 - lat_min3).abs() <= 1e-12
+        && (lat_min1 - lat_min4).abs() <= 1e-12
+        && (lon_step1 - lon_step2).abs() <= 1e-12
+        && (lon_step1 - lon_step3).abs() <= 1e-12
+        && (lon_step1 - lon_step4).abs() <= 1e-12
+        && (lat_step1 - lat_step2).abs() <= 1e-12
+        && (lat_step1 - lat_step3).abs() <= 1e-12
+        && (lat_step1 - lat_step4).abs() <= 1e-12;
+
+    if !aligned {
+        return Err(ProjectionError::DatumError(
+            "dynamic NADCON base/rate grids are not aligned".to_string(),
+        ));
+    }
+
+    let mut samples = Vec::with_capacity(w1 * h1);
+    for (((dlon0, dlat0), dlon_rate), dlat_rate) in lon_vals
+        .into_iter()
+        .zip(lat_vals.into_iter())
+        .zip(lon_rate_vals.into_iter())
+        .zip(lat_rate_vals.into_iter())
+    {
+        samples.push(DynamicGridShiftSample::new(
+            dlon0,
+            dlat0,
+            dlon_rate,
+            dlat_rate,
+        ));
+    }
+
+    DynamicGridShiftGrid::new(
+        grid_name,
+        reference_epoch_decimal_year,
+        lon_min1,
+        lat_min1,
+        lon_step1,
+        lat_step1,
+        w1,
+        h1,
+        samples,
+    )
+}
+
+/// Load and register dynamic NADCON ASCII base/rate grids.
+pub fn register_dynamic_nadcon_ascii_pair(
+    lon_shift_path: impl AsRef<Path>,
+    lat_shift_path: impl AsRef<Path>,
+    lon_rate_path: impl AsRef<Path>,
+    lat_rate_path: impl AsRef<Path>,
+    reference_epoch_decimal_year: f64,
+    grid_name: impl Into<String>,
+) -> Result<()> {
+    let grid = load_dynamic_nadcon_ascii_pair(
+        lon_shift_path,
+        lat_shift_path,
+        lon_rate_path,
+        lat_rate_path,
+        reference_epoch_decimal_year,
+        grid_name,
+    )?;
+    register_dynamic_grid(grid)
+}
+
 /// Load and register NADCON ASCII pair grids.
 pub fn register_nadcon_ascii_pair(
     lon_shift_path: impl AsRef<Path>,
@@ -639,8 +898,11 @@ pub fn register_nadcon_ascii_pair(
 #[cfg(test)]
 mod tests {
     use super::{
-        list_ntv2_subgrids, load_nadcon_ascii_pair, load_ntv2_gsb, load_ntv2_gsb_subgrid,
+        DynamicHierarchyItem, list_ntv2_subgrids, load_dynamic_nadcon_ascii_pair,
+        load_nadcon_ascii_pair, load_ntv2_gsb, load_ntv2_gsb_subgrid,
+        register_dynamic_grid_hierarchy, resolve_dynamic_hierarchy_grid_name,
     };
+    use crate::register_dynamic_grid;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -834,5 +1096,97 @@ mod tests {
         assert!((dlat_b - (4.0 / 3600.0)).abs() < 1e-12);
 
         let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn parse_dynamic_nadcon_ascii_pair() {
+        let lon_path = temp_path("dlon_base.asc");
+        let lat_path = temp_path("dlat_base.asc");
+        let lon_rate_path = temp_path("dlon_rate.asc");
+        let lat_rate_path = temp_path("dlat_rate.asc");
+
+        let lon_txt = "0 0 1 1 2 2\n1 1\n1 1\n";
+        let lat_txt = "0 0 1 1 2 2\n-2 -2\n-2 -2\n";
+        let lon_rate_txt = "0 0 1 1 2 2\n0.5 0.5\n0.5 0.5\n";
+        let lat_rate_txt = "0 0 1 1 2 2\n-1 -1\n-1 -1\n";
+
+        fs::write(&lon_path, lon_txt).unwrap();
+        fs::write(&lat_path, lat_txt).unwrap();
+        fs::write(&lon_rate_path, lon_rate_txt).unwrap();
+        fs::write(&lat_rate_path, lat_rate_txt).unwrap();
+
+        let grid = load_dynamic_nadcon_ascii_pair(
+            &lon_path,
+            &lat_path,
+            &lon_rate_path,
+            &lat_rate_path,
+            2020.0,
+            "TEST_DYN_NADCON",
+        )
+        .unwrap();
+
+        // dt = +2 years => dlon = 1 + 2*0.5 = 2 arcsec, dlat = -2 + 2*(-1) = -4 arcsec
+        let (dlon, dlat) = grid.sample_shift_degrees_at_epoch(0.5, 0.5, 2022.0).unwrap();
+        assert!((dlon - (2.0 / 3600.0)).abs() < 1e-12);
+        assert!((dlat - (-4.0 / 3600.0)).abs() < 1e-12);
+
+        let _ = fs::remove_file(&lon_path);
+        let _ = fs::remove_file(&lat_path);
+        let _ = fs::remove_file(&lon_rate_path);
+        let _ = fs::remove_file(&lat_rate_path);
+    }
+
+    #[test]
+    fn dynamic_hierarchy_prefers_child_grid() {
+        let root = crate::DynamicGridShiftGrid::new(
+            "DYN_ROOT",
+            2020.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            3,
+            3,
+            vec![crate::DynamicGridShiftSample::new(0.0, 0.0, 0.0, 0.0); 9],
+        )
+        .unwrap();
+        let child = crate::DynamicGridShiftGrid::new(
+            "DYN_CHILD",
+            2020.0,
+            1.0,
+            1.0,
+            0.5,
+            0.5,
+            3,
+            3,
+            vec![crate::DynamicGridShiftSample::new(0.0, 0.0, 0.0, 0.0); 9],
+        )
+        .unwrap();
+
+        register_dynamic_grid(root).unwrap();
+        register_dynamic_grid(child).unwrap();
+
+        register_dynamic_grid_hierarchy(
+            "DYN_HIER_TEST",
+            &[
+                DynamicHierarchyItem {
+                    grid_name: "DYN_ROOT".to_string(),
+                    parent_grid_name: None,
+                },
+                DynamicHierarchyItem {
+                    grid_name: "DYN_CHILD".to_string(),
+                    parent_grid_name: Some("DYN_ROOT".to_string()),
+                },
+            ],
+        )
+        .unwrap();
+
+        let selected_child =
+            resolve_dynamic_hierarchy_grid_name("DYN_HIER_TEST", 1.25, 1.25).unwrap();
+        assert_eq!(selected_child.as_deref(), Some("DYN_CHILD"));
+
+        let selected_root =
+            resolve_dynamic_hierarchy_grid_name("DYN_HIER_TEST", 0.25, 0.25).unwrap();
+        assert_eq!(selected_root.as_deref(), Some("DYN_ROOT"));
     }
 }

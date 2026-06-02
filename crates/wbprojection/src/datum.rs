@@ -6,8 +6,9 @@
 
 use crate::ellipsoid::Ellipsoid;
 use crate::error::{ProjectionError, Result};
-use crate::grid_shift::get_grid;
-use crate::grid_formats::resolve_ntv2_hierarchy_grid;
+use crate::grid_shift::{get_dynamic_grid, get_grid};
+use crate::grid_formats::{resolve_dynamic_hierarchy_grid_name, resolve_ntv2_hierarchy_grid};
+use crate::transform::TransformEpochContext;
 use wide::f64x4;
 
 /// A geodetic datum.
@@ -46,6 +47,16 @@ pub enum DatumTransform {
     /// NTv2 multi-subgrid hierarchy dataset.
     Ntv2Hierarchy {
         /// Registered NTv2 hierarchy dataset identifier.
+        dataset_name: &'static str,
+    },
+    /// Dynamic grid-shift transform to WGS84 requiring coordinate epoch context.
+    DynamicGridShift {
+        /// Registered dynamic grid dataset name.
+        grid_name: &'static str,
+    },
+    /// Dynamic hierarchy dataset requiring coordinate epoch context.
+    DynamicNtv2Hierarchy {
+        /// Registered dynamic hierarchy dataset identifier.
         dataset_name: &'static str,
     },
 }
@@ -345,6 +356,18 @@ impl Datum {
         self
     }
 
+    /// Return a copy of this datum that uses a named dynamic grid-shift transform.
+    pub fn with_dynamic_grid_shift(mut self, grid_name: &'static str) -> Self {
+        self.transform = DatumTransform::DynamicGridShift { grid_name };
+        self
+    }
+
+    /// Return a copy of this datum that uses a dynamic hierarchy dataset.
+    pub fn with_dynamic_ntv2_hierarchy(mut self, dataset_name: &'static str) -> Self {
+        self.transform = DatumTransform::DynamicNtv2Hierarchy { dataset_name };
+        self
+    }
+
     fn apply_grid_shift_to_wgs84(
         &self,
         lat_rad: f64,
@@ -399,6 +422,60 @@ impl Datum {
         Ok((src_lat.to_radians(), src_lon.to_radians(), h))
     }
 
+    fn apply_dynamic_grid_shift_to_wgs84(
+        &self,
+        lat_rad: f64,
+        lon_rad: f64,
+        h: f64,
+        grid_name: &str,
+        coordinate_epoch_decimal_year: f64,
+    ) -> Result<(f64, f64, f64)> {
+        let grid = get_dynamic_grid(grid_name)?.ok_or_else(|| {
+            ProjectionError::DatumError(format!(
+                "dynamic grid-shift transform '{grid_name}' not registered"
+            ))
+        })?;
+
+        let lon_deg = lon_rad.to_degrees();
+        let lat_deg = lat_rad.to_degrees();
+        let (dlon_deg, dlat_deg) =
+            grid.sample_shift_degrees_at_epoch(lon_deg, lat_deg, coordinate_epoch_decimal_year)?;
+
+        Ok(((lat_deg + dlat_deg).to_radians(), (lon_deg + dlon_deg).to_radians(), h))
+    }
+
+    fn apply_dynamic_grid_shift_from_wgs84(
+        &self,
+        lat_rad: f64,
+        lon_rad: f64,
+        h: f64,
+        grid_name: &str,
+        coordinate_epoch_decimal_year: f64,
+    ) -> Result<(f64, f64, f64)> {
+        let grid = get_dynamic_grid(grid_name)?.ok_or_else(|| {
+            ProjectionError::DatumError(format!(
+                "dynamic grid-shift transform '{grid_name}' not registered"
+            ))
+        })?;
+
+        let target_lon = lon_rad.to_degrees();
+        let target_lat = lat_rad.to_degrees();
+
+        let mut src_lon = target_lon;
+        let mut src_lat = target_lat;
+
+        for _ in 0..8 {
+            let (dlon_deg, dlat_deg) =
+                grid.sample_shift_degrees_at_epoch(src_lon, src_lat, coordinate_epoch_decimal_year)?;
+            let pred_lon = src_lon + dlon_deg;
+            let pred_lat = src_lat + dlat_deg;
+            src_lon += target_lon - pred_lon;
+            src_lat += target_lat - pred_lat;
+        }
+
+        Ok((src_lat.to_radians(), src_lon.to_radians(), h))
+    }
+
     /// Transform geodetic coordinates from this datum to WGS84 with policy control.
     pub fn to_wgs84_geodetic_with_policy(
         &self,
@@ -407,7 +484,26 @@ impl Datum {
         h: f64,
         policy: DatumTransformPolicy,
     ) -> Result<(f64, f64, f64)> {
-        let trace = self.to_wgs84_geodetic_with_policy_and_trace(lat_rad, lon_rad, h, policy)?;
+        let trace = self.to_wgs84_geodetic_with_policy_and_trace(lat_rad, lon_rad, h, policy, None)?;
+        Ok((trace.lat_rad, trace.lon_rad, trace.h))
+    }
+
+    /// Transform geodetic coordinates from this datum to WGS84 with policy and epoch context.
+    pub fn to_wgs84_geodetic_with_policy_and_context(
+        &self,
+        lat_rad: f64,
+        lon_rad: f64,
+        h: f64,
+        policy: DatumTransformPolicy,
+        ctx: TransformEpochContext,
+    ) -> Result<(f64, f64, f64)> {
+        let trace = self.to_wgs84_geodetic_with_policy_and_trace(
+            lat_rad,
+            lon_rad,
+            h,
+            policy,
+            Some(ctx),
+        )?;
         Ok((trace.lat_rad, trace.lon_rad, trace.h))
     }
 
@@ -417,6 +513,7 @@ impl Datum {
         lon_rad: f64,
         h: f64,
         policy: DatumTransformPolicy,
+        ctx: Option<TransformEpochContext>,
     ) -> Result<DatumGeodeticTrace> {
         match &self.transform {
             DatumTransform::None => Ok(DatumGeodeticTrace {
@@ -498,6 +595,77 @@ impl Datum {
                     }
                 }
             }
+            DatumTransform::DynamicNtv2Hierarchy { dataset_name } => {
+                let lon_deg = lon_rad.to_degrees();
+                let lat_deg = lat_rad.to_degrees();
+                let resolved = resolve_dynamic_hierarchy_grid_name(dataset_name, lon_deg, lat_deg)?;
+                let selected_grid = resolved.clone();
+                let shifted = match (resolved, ctx) {
+                    (Some(grid_name), Some(ctx)) => self.apply_dynamic_grid_shift_to_wgs84(
+                        lat_rad,
+                        lon_rad,
+                        h,
+                        &grid_name,
+                        ctx.coordinate_epoch_decimal_year,
+                    ),
+                    (Some(_), None) => Err(ProjectionError::DatumError(format!(
+                        "dynamic hierarchy dataset '{dataset_name}' requires TransformEpochContext"
+                    ))),
+                    (None, _) => Err(ProjectionError::DatumError(format!(
+                        "dynamic hierarchy dataset '{dataset_name}' has no matching subgrid for ({lon_deg}, {lat_deg})"
+                    ))),
+                };
+
+                match (shifted, policy) {
+                    (Ok((lat, lon, hgt)), _) => Ok(DatumGeodeticTrace {
+                        lat_rad: lat,
+                        lon_rad: lon,
+                        h: hgt,
+                        selected_grid,
+                    }),
+                    (Err(e), DatumTransformPolicy::Strict) => Err(e),
+                    (Err(_), DatumTransformPolicy::FallbackToIdentityGridShift) => {
+                        Ok(DatumGeodeticTrace {
+                            lat_rad,
+                            lon_rad,
+                            h,
+                            selected_grid: None,
+                        })
+                    }
+                }
+            }
+            DatumTransform::DynamicGridShift { grid_name } => {
+                let shifted = match ctx {
+                    Some(ctx) => self.apply_dynamic_grid_shift_to_wgs84(
+                        lat_rad,
+                        lon_rad,
+                        h,
+                        grid_name,
+                        ctx.coordinate_epoch_decimal_year,
+                    ),
+                    None => Err(ProjectionError::DatumError(format!(
+                        "dynamic grid-shift transform '{grid_name}' requires TransformEpochContext"
+                    ))),
+                };
+
+                match (shifted, policy) {
+                    (Ok((lat, lon, hgt)), _) => Ok(DatumGeodeticTrace {
+                        lat_rad: lat,
+                        lon_rad: lon,
+                        h: hgt,
+                        selected_grid: Some((*grid_name).to_string()),
+                    }),
+                    (Err(e), DatumTransformPolicy::Strict) => Err(e),
+                    (Err(_), DatumTransformPolicy::FallbackToIdentityGridShift) => {
+                        Ok(DatumGeodeticTrace {
+                            lat_rad,
+                            lon_rad,
+                            h,
+                            selected_grid: None,
+                        })
+                    }
+                }
+            }
         }
     }
 
@@ -509,7 +677,27 @@ impl Datum {
         h: f64,
         policy: DatumTransformPolicy,
     ) -> Result<(f64, f64, f64)> {
-        let trace = self.from_wgs84_geodetic_with_policy_and_trace(lat_rad, lon_rad, h, policy)?;
+        let trace =
+            self.from_wgs84_geodetic_with_policy_and_trace(lat_rad, lon_rad, h, policy, None)?;
+        Ok((trace.lat_rad, trace.lon_rad, trace.h))
+    }
+
+    /// Transform geodetic coordinates from WGS84 into this datum with policy and epoch context.
+    pub fn from_wgs84_geodetic_with_policy_and_context(
+        &self,
+        lat_rad: f64,
+        lon_rad: f64,
+        h: f64,
+        policy: DatumTransformPolicy,
+        ctx: TransformEpochContext,
+    ) -> Result<(f64, f64, f64)> {
+        let trace = self.from_wgs84_geodetic_with_policy_and_trace(
+            lat_rad,
+            lon_rad,
+            h,
+            policy,
+            Some(ctx),
+        )?;
         Ok((trace.lat_rad, trace.lon_rad, trace.h))
     }
 
@@ -519,6 +707,7 @@ impl Datum {
         lon_rad: f64,
         h: f64,
         policy: DatumTransformPolicy,
+        ctx: Option<TransformEpochContext>,
     ) -> Result<DatumGeodeticTrace> {
         match &self.transform {
             DatumTransform::None => Ok(DatumGeodeticTrace {
@@ -601,6 +790,77 @@ impl Datum {
                     }
                 }
             }
+            DatumTransform::DynamicNtv2Hierarchy { dataset_name } => {
+                let lon_deg = lon_rad.to_degrees();
+                let lat_deg = lat_rad.to_degrees();
+                let resolved = resolve_dynamic_hierarchy_grid_name(dataset_name, lon_deg, lat_deg)?;
+                let selected_grid = resolved.clone();
+                let shifted = match (resolved, ctx) {
+                    (Some(grid_name), Some(ctx)) => self.apply_dynamic_grid_shift_from_wgs84(
+                        lat_rad,
+                        lon_rad,
+                        h,
+                        &grid_name,
+                        ctx.coordinate_epoch_decimal_year,
+                    ),
+                    (Some(_), None) => Err(ProjectionError::DatumError(format!(
+                        "dynamic hierarchy dataset '{dataset_name}' requires TransformEpochContext"
+                    ))),
+                    (None, _) => Err(ProjectionError::DatumError(format!(
+                        "dynamic hierarchy dataset '{dataset_name}' has no matching subgrid for ({lon_deg}, {lat_deg})"
+                    ))),
+                };
+
+                match (shifted, policy) {
+                    (Ok((lat, lon, hgt)), _) => Ok(DatumGeodeticTrace {
+                        lat_rad: lat,
+                        lon_rad: lon,
+                        h: hgt,
+                        selected_grid,
+                    }),
+                    (Err(e), DatumTransformPolicy::Strict) => Err(e),
+                    (Err(_), DatumTransformPolicy::FallbackToIdentityGridShift) => {
+                        Ok(DatumGeodeticTrace {
+                            lat_rad,
+                            lon_rad,
+                            h,
+                            selected_grid: None,
+                        })
+                    }
+                }
+            }
+            DatumTransform::DynamicGridShift { grid_name } => {
+                let shifted = match ctx {
+                    Some(ctx) => self.apply_dynamic_grid_shift_from_wgs84(
+                        lat_rad,
+                        lon_rad,
+                        h,
+                        grid_name,
+                        ctx.coordinate_epoch_decimal_year,
+                    ),
+                    None => Err(ProjectionError::DatumError(format!(
+                        "dynamic grid-shift transform '{grid_name}' requires TransformEpochContext"
+                    ))),
+                };
+
+                match (shifted, policy) {
+                    (Ok((lat, lon, hgt)), _) => Ok(DatumGeodeticTrace {
+                        lat_rad: lat,
+                        lon_rad: lon,
+                        h: hgt,
+                        selected_grid: Some((*grid_name).to_string()),
+                    }),
+                    (Err(e), DatumTransformPolicy::Strict) => Err(e),
+                    (Err(_), DatumTransformPolicy::FallbackToIdentityGridShift) => {
+                        Ok(DatumGeodeticTrace {
+                            lat_rad,
+                            lon_rad,
+                            h,
+                            selected_grid: None,
+                        })
+                    }
+                }
+            }
         }
     }
 
@@ -637,7 +897,10 @@ impl Datum {
                 let (lat2, lon2, h2) = self.to_wgs84_geodetic(lat, lon, h)?;
                 Ok(geodetic_to_ecef(lat2, lon2, h2, &Ellipsoid::WGS84))
             }
-            DatumTransform::GridShift { grid_name } | DatumTransform::Ntv2Hierarchy { dataset_name: grid_name } => Err(ProjectionError::DatumError(
+            DatumTransform::GridShift { grid_name }
+            | DatumTransform::Ntv2Hierarchy { dataset_name: grid_name }
+            | DatumTransform::DynamicGridShift { grid_name }
+            | DatumTransform::DynamicNtv2Hierarchy { dataset_name: grid_name } => Err(ProjectionError::DatumError(
                 format!("grid-shift transform '{grid_name}' not implemented"),
             )),
         }
@@ -649,7 +912,9 @@ impl Datum {
             DatumTransform::None => self.ellipsoid == Ellipsoid::WGS84,
             DatumTransform::Molodensky(_)
             | DatumTransform::GridShift { .. }
-            | DatumTransform::Ntv2Hierarchy { .. } => false,
+            | DatumTransform::Ntv2Hierarchy { .. }
+            | DatumTransform::DynamicGridShift { .. }
+            | DatumTransform::DynamicNtv2Hierarchy { .. } => false,
         }
     }
 
@@ -672,6 +937,10 @@ impl Datum {
             DatumTransform::GridShift { grid_name }
             | DatumTransform::Ntv2Hierarchy {
                 dataset_name: grid_name,
+            }
+            | DatumTransform::DynamicGridShift { grid_name }
+            | DatumTransform::DynamicNtv2Hierarchy {
+                dataset_name: grid_name,
             } => Err(ProjectionError::DatumError(format!(
                 "grid-shift transform '{grid_name}' not implemented"
             ))),
@@ -691,7 +960,10 @@ impl Datum {
                 let (lat2, lon2, h2) = self.from_wgs84_geodetic(lat, lon, h)?;
                 Ok(geodetic_to_ecef(lat2, lon2, h2, &self.ellipsoid))
             }
-            DatumTransform::GridShift { grid_name } | DatumTransform::Ntv2Hierarchy { dataset_name: grid_name } => Err(ProjectionError::DatumError(
+            DatumTransform::GridShift { grid_name }
+            | DatumTransform::Ntv2Hierarchy { dataset_name: grid_name }
+            | DatumTransform::DynamicGridShift { grid_name }
+            | DatumTransform::DynamicNtv2Hierarchy { dataset_name: grid_name } => Err(ProjectionError::DatumError(
                 format!("grid-shift transform '{grid_name}' not implemented"),
             )),
         }
@@ -715,6 +987,10 @@ impl Datum {
             }
             DatumTransform::GridShift { grid_name }
             | DatumTransform::Ntv2Hierarchy {
+                dataset_name: grid_name,
+            }
+            | DatumTransform::DynamicGridShift { grid_name }
+            | DatumTransform::DynamicNtv2Hierarchy {
                 dataset_name: grid_name,
             } => Err(ProjectionError::DatumError(format!(
                 "grid-shift transform '{grid_name}' not implemented"
@@ -1248,6 +1524,8 @@ impl std::fmt::Display for Datum {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{register_dynamic_grid, unregister_dynamic_grid, DynamicGridShiftGrid, DynamicGridShiftSample};
+    use crate::transform::TransformEpochContext;
     use std::f64::consts::PI;
 
     fn deg(d: f64) -> f64 {
@@ -1282,7 +1560,13 @@ mod tests {
 
         // Forward: ED50 → WGS84
         let trace_fwd = ed50_mol
-            .to_wgs84_geodetic_with_policy_and_trace(lat_src, lon_src, h_src, DatumTransformPolicy::Strict)
+            .to_wgs84_geodetic_with_policy_and_trace(
+                lat_src,
+                lon_src,
+                h_src,
+                DatumTransformPolicy::Strict,
+                None,
+            )
             .expect("forward Molodensky should succeed");
 
         // Inverse: WGS84 → ED50
@@ -1292,6 +1576,7 @@ mod tests {
                 trace_fwd.lon_rad,
                 trace_fwd.h,
                 DatumTransformPolicy::Strict,
+                None,
             )
             .expect("inverse Molodensky should succeed");
 
@@ -1325,7 +1610,13 @@ mod tests {
         let h = 0.0_f64;
 
         let trace = ed50_mol
-            .to_wgs84_geodetic_with_policy_and_trace(lat, lon, h, DatumTransformPolicy::Strict)
+            .to_wgs84_geodetic_with_policy_and_trace(
+                lat,
+                lon,
+                h,
+                DatumTransformPolicy::Strict,
+                None,
+            )
             .unwrap();
 
         let d_lat_sec = rad_to_deg(trace.lat_rad - lat) * 3600.0;
@@ -1388,6 +1679,7 @@ mod tests {
                 lon,
                 h,
                 DatumTransformPolicy::Strict,
+                None,
             )
             .unwrap();
 
@@ -1399,5 +1691,84 @@ mod tests {
         assert!((lat2 - geo.lat_rad).abs() < 1.0e-10, "ECEF vs geodetic lat mismatch");
         assert!((lon2 - geo.lon_rad).abs() < 1.0e-10, "ECEF vs geodetic lon mismatch");
         assert!((h2 - geo.h).abs() < 1.0e-4, "ECEF vs geodetic h mismatch");
+    }
+
+    #[test]
+    fn dynamic_grid_shift_requires_context_in_strict_mode() {
+        let grid = DynamicGridShiftGrid::new(
+            "DYN_DATUM_TEST",
+            2020.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            2,
+            2,
+            vec![DynamicGridShiftSample::new(1.0, -2.0, 0.5, -1.0); 4],
+        )
+        .unwrap();
+        register_dynamic_grid(grid).unwrap();
+
+        let datum = Datum {
+            name: "dynamic-test",
+            ellipsoid: Ellipsoid::WGS84,
+            transform: DatumTransform::DynamicGridShift {
+                grid_name: "DYN_DATUM_TEST",
+            },
+        };
+
+        let err = datum
+            .to_wgs84_geodetic_with_policy(deg(0.5), deg(0.5), 0.0, DatumTransformPolicy::Strict)
+            .unwrap_err();
+
+        assert!(
+            format!("{err}").to_ascii_lowercase().contains("requires transformepochcontext")
+        );
+
+        let _ = unregister_dynamic_grid("DYN_DATUM_TEST");
+    }
+
+    #[test]
+    fn dynamic_grid_shift_applies_epoch_rate_with_context() {
+        let grid = DynamicGridShiftGrid::new(
+            "DYN_DATUM_TEST_CTX",
+            2020.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            2,
+            2,
+            vec![DynamicGridShiftSample::new(1.0, -2.0, 0.5, -1.0); 4],
+        )
+        .unwrap();
+        register_dynamic_grid(grid).unwrap();
+
+        let datum = Datum {
+            name: "dynamic-test-ctx",
+            ellipsoid: Ellipsoid::WGS84,
+            transform: DatumTransform::DynamicGridShift {
+                grid_name: "DYN_DATUM_TEST_CTX",
+            },
+        };
+
+        let ctx = TransformEpochContext::at_epoch(2022.0); // dt=+2 => dlon=2, dlat=-4 arcsec
+        let (lat2, lon2, _) = datum
+            .to_wgs84_geodetic_with_policy_and_context(
+                deg(0.5),
+                deg(0.5),
+                0.0,
+                DatumTransformPolicy::Strict,
+                ctx,
+            )
+            .unwrap();
+
+        let dlat_sec = (rad_to_deg(lat2) - 0.5) * 3600.0;
+        let dlon_sec = (rad_to_deg(lon2) - 0.5) * 3600.0;
+
+        assert!((dlat_sec - (-4.0)).abs() < 1e-9);
+        assert!((dlon_sec - 2.0).abs() < 1e-9);
+
+        let _ = unregister_dynamic_grid("DYN_DATUM_TEST_CTX");
     }
 }

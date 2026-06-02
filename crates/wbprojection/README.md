@@ -20,6 +20,7 @@ A map projection library for Rust, inspired by [PROJ](https://proj.org/), and in
 - [CRS-to-CRS Transformation](#crs-to-crs-transformation)
 - [Batch Transformation](#batch-transformation)
 - [Grid-Shift Datum Workflow (NTv2 / NADCON)](#grid-shift-datum-workflow-ntv2--nadcon)
+- [Epoch-Aware Datum Prototype](#epoch-aware-datum-prototype)
 - [Supported Projections](#supported-projections)
 - [Error Handling](#error-handling)
 - [Compilation Features](#compilation-features)
@@ -79,6 +80,7 @@ No. `wbprojection` is developed primarily to support Whitebox, but it is not res
 - **UTM convenience constructor** for all 60 zones, N and S
 - **Datum transformations** across 28 built-in datums (Helmert + Molodensky + grid-shift capable)
 - **Grid-shift datum support** with NTv2 (`.gsb`) and NADCON ASCII pair loaders
+- **Epoch-aware prototype APIs** for transform contexts, dynamic grids, and preferred-operation routing
 - **Area-of-use API** — `Crs::area_of_use()` and `epsg_area_of_use(code)` provide geographic validity bounds
 - **Compound CRS support** — `CompoundCrs::from_epsg(...)` and `compound_from_wkt(...)` for common horizontal+vertical systems
 - **CRS-to-CRS pipelines**: transform directly between any two supported coordinate reference systems
@@ -115,7 +117,7 @@ wbprojection = { path = "../wbprojection" }
 
 ## Using EPSG Codes
 
-The easiest way to create a projection is by EPSG code. The built-in registry currently covers **5594 EPSG codes** (**5597 total CRS/projection codes**, including ESRI 54008, 54009, 54030) and requires no external database or network access.
+The easiest way to create a projection is by EPSG code. The built-in registry currently covers **5604 EPSG codes** (**5607 total CRS/projection codes**, including ESRI 54008, 54009, 54030) and requires no external database or network access.
 
 ```rust
 use wbprojection::Crs;
@@ -1122,6 +1124,42 @@ Before using a grid-shift transform in production, verify:
 
 ---
 
+## Epoch-Aware Datum Prototype
+
+`wbprojection` now includes an additive prototype path for epoch-aware datum workflows. The long-standing `transform_to*` APIs are unchanged; the new APIs are opt-in and intended to support dynamic grids and explicit operation routing without changing the static fast path.
+
+Current prototype surface:
+
+- `TransformEpochContext` for decimal-year coordinate epoch input.
+- `transform_to_with_context(...)` and `transform_to_3d_with_context(...)` for context-aware CRS transforms.
+- Dynamic grid registry and sampling support for velocity-style grid models.
+- `transform_to_with_operation(...)` and `transform_to_3d_with_operation(...)` for explicit operation-code routing.
+- `transform_to_with_preferred_operation(...)` and `transform_to_3d_with_preferred_operation(...)` for preferred EPSG operation lookup with fallback to the normal transform path.
+
+```rust
+use wbprojection::{Crs, TransformEpochContext};
+
+let src = Crs::from_epsg(22317)?; // NAD83(CSRS)v3 / UTM zone 17N
+let dst = Crs::from_epsg(22817)?; // NAD83(CSRS)v8 / UTM zone 17N
+let ctx = TransformEpochContext::at_epoch(2010.0);
+
+let (x2, y2) = src.transform_to_with_preferred_operation(
+    500_000.0,
+    5_000_000.0,
+    &dst,
+    Some(ctx),
+)?;
+
+println!("{x2}, {y2}");
+```
+
+Current prototype notes:
+
+- The first preferred-operation mapping implemented is same-zone NAD83(CSRS)v3 -> NAD83(CSRS)v8 UTM routing via operation `10715`.
+- Dynamic transform variants are strict about missing epoch context and return an error instead of silently degrading.
+- Initial conformance coverage exists for a CSRS zone 17 corridor and currently verifies deterministic routing consistency at a millimeter-level tolerance.
+- This is still a staged implementation, not yet a full EPSG operation catalog or full deformation-model engine.
+
 
 ## Supported Projections
 
@@ -1295,6 +1333,7 @@ The core projection and datum logic, EPSG registry, WKT export/import, and SIMD 
 - Coverage is broad but not exhaustive; some exotic projection methods, datum models, or regional CRS variants may not be supported.
 - `from_wkt` and `compound_from_wkt` handle the most common WKT patterns but are not a complete OGC/EPSG WKT standards engine; unsupported method names or uncommon unit models return `UnsupportedProjection`.
 - Grid-shift datum transforms (NTv2, NADCON) require externally supplied grid files; `wbprojection` does not bundle or download grids.
+- Epoch-aware and preferred-operation support is currently prototype-level, with conformance coverage focused first on NAD83(CSRS) v3/v8 same-zone routing.
 - Adaptive EPSG identification (`identify_epsg_from_wkt`) searches the full registry on each call; prefer cached or explicitly known EPSG codes in performance-sensitive paths.
 - `transform_to_3d` is strict about valid horizontal/vertical CRS component combinations; mixing unsupported combinations returns an error rather than silently degrading.
 - The SIMD Helmert batch path accelerates datum-transformation kernels but does not yet vectorize the full CRS-to-CRS pipeline end-to-end.

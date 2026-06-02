@@ -6,6 +6,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- `TransformEpochContext` and additive context-aware CRS transform APIs for epoch-aware routing.
+- Dynamic grid registry/sampling support and dynamic datum transform variants for prototype velocity-style workflows.
+- Coordinate operation definition/registry support, explicit operation-code transform APIs, and preferred EPSG operation lookup helpers.
+- Initial CSRS preferred-operation conformance-style tests for same-zone NAD83(CSRS) v3 -> v8 routing.
+- Shared `EpochTransformOptions` + `EpochPolicy` types for higher-level platform integrations to carry epoch context, routing preferences, and explicit operation-code overrides consistently.
+
+### Changed
+- Documented the epoch-aware prototype path, strict missing-context behavior for dynamic transforms, and current CSRS corridor coverage.
+- Expanded the prototype NAD83(CSRS) v3 -> v8 matched-zone corridor mapping and EPSG
+  registry coverage through UTM zones 23 and 24.
+
 ## [0.2.0] - 2026-05-21
 
 ### Added

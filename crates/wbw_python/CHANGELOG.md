@@ -6,6 +6,14 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Changed
+- Added epoch-aware reprojection parameters to Python-facing raster/vector/lidar
+  reprojection methods, including `coordinate_epoch`, optional source/target
+  reference epochs, explicit `operation_code`, `prefer_official_operation`, and
+  `epoch_policy` routing control.
+- Updated `whitebox_workflows.pyi` reprojection signatures (single and batch)
+  to include the new epoch-aware parameters.
+
 ## [2.0.3] - 2026-05-30
 
 ### Added

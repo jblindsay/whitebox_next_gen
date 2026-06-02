@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows Semantic Versioning while in pre-1.0 development.
 
 ## [Unreleased]
+### Changed
+- `LidarReprojectOptions` now carries shared epoch-aware routing parameters from `wbprojection`,
+  and point reprojection helpers route through the epoch-aware CRS APIs when those options are
+  supplied.
 ### Fixed
 - `default_las_config` (used by all `PointCloud::write` / `write_las` / `write_laz` paths) now
   auto-computes `x_offset`, `y_offset`, `z_offset` from `floor(min)` of the point cloud's

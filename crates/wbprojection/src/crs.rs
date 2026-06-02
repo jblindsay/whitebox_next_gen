@@ -6,8 +6,11 @@
 use crate::datum::{Datum, DatumTransformPolicy};
 use crate::epsg::EpsgResolutionPolicy;
 use crate::error::{ProjectionError, Result};
+use crate::operations::get_coordinate_operation;
 use crate::projections::{Projection, ProjectionParams, ProjectionKind};
+use crate::{is_pending_preferred_operation_crs_pair, preferred_operation_for_crs_pair, register_coordinate_operation};
 use crate::datum::{ecef_to_geodetic, geodetic_to_ecef};
+use crate::transform::TransformEpochContext;
 use crate::vertical_grid::get_vertical_offset_grid;
 use crate::{to_degrees, to_radians};
 
@@ -422,6 +425,109 @@ impl Crs {
         self.transform_to_with_policy(x, y, target, CrsTransformPolicy::Strict)
     }
 
+    /// Transform a point from this CRS into the target CRS using epoch context.
+    ///
+    /// Current behavior is intentionally identical to [`Crs::transform_to`].
+    /// The epoch context is accepted as additive API scaffolding for future
+    /// dynamic-datum workflows.
+    pub fn transform_to_with_context(
+        &self,
+        x: f64,
+        y: f64,
+        target: &Crs,
+        ctx: TransformEpochContext,
+    ) -> Result<(f64, f64)> {
+        let trace = self.transform_to_with_trace_and_context(
+            x,
+            y,
+            target,
+            CrsTransformPolicy::Strict,
+            Some(ctx),
+        )?;
+        Ok((trace.x, trace.y))
+    }
+
+    /// Transform a point using an explicit operation code, with optional epoch context.
+    ///
+    /// This API validates registered operation metadata for source/target CRS
+    /// compatibility, then delegates to the existing CRS transform pipeline.
+    pub fn transform_to_with_operation(
+        &self,
+        x: f64,
+        y: f64,
+        target: &Crs,
+        operation_code: u32,
+        ctx: Option<TransformEpochContext>,
+    ) -> Result<(f64, f64)> {
+        let op = get_coordinate_operation(operation_code)?.ok_or_else(|| {
+            ProjectionError::DatumError(format!(
+                "coordinate operation {operation_code} is not registered"
+            ))
+        })?;
+
+        if let Some(src_code) = epsg_code_from_crs_name(&self.name) {
+            if src_code != op.source_crs_code {
+                return Err(ProjectionError::DatumError(format!(
+                    "operation {operation_code} source CRS mismatch: expected {}, got {}",
+                    op.source_crs_code, src_code
+                )));
+            }
+        }
+
+        if let Some(dst_code) = epsg_code_from_crs_name(&target.name) {
+            if dst_code != op.target_crs_code {
+                return Err(ProjectionError::DatumError(format!(
+                    "operation {operation_code} target CRS mismatch: expected {}, got {}",
+                    op.target_crs_code, dst_code
+                )));
+            }
+        }
+
+        match ctx {
+            Some(ctx) => self.transform_to_with_context(x, y, target, ctx),
+            None => self.transform_to(x, y, target),
+        }
+    }
+
+    /// Transform a point using a preferred operation for the CRS pair when available.
+    ///
+    /// Fallback behavior: when no preferred operation mapping is available, this
+    /// delegates to the standard transform path.
+    pub fn transform_to_with_preferred_operation(
+        &self,
+        x: f64,
+        y: f64,
+        target: &Crs,
+        ctx: Option<TransformEpochContext>,
+    ) -> Result<(f64, f64)> {
+        let src_code = epsg_code_from_crs_name(&self.name);
+        let dst_code = epsg_code_from_crs_name(&target.name);
+
+        if let (Some(src), Some(dst)) = (src_code, dst_code) {
+            if is_pending_preferred_operation_crs_pair(src, dst) {
+                return Err(ProjectionError::DatumError(format!(
+                    "preferred operation for EPSG:{src} -> EPSG:{dst} is pending authoritative activation"
+                )));
+            }
+
+            if let Some(op_def) = preferred_operation_for_crs_pair(src, dst) {
+                register_coordinate_operation(op_def.clone())?;
+                return self.transform_to_with_operation(
+                    x,
+                    y,
+                    target,
+                    op_def.operation_code,
+                    ctx,
+                );
+            }
+        }
+
+        match ctx {
+            Some(ctx) => self.transform_to_with_context(x, y, target, ctx),
+            None => self.transform_to(x, y, target),
+        }
+    }
+
     /// Forward-project a batch of (lon, lat) pairs in degrees to (x, y) in this CRS.
     ///
     /// Results are returned in the same order as `points`. Each entry is
@@ -478,7 +584,118 @@ impl Crs {
     /// For projected/geographic CRSes, `z` is treated as ellipsoidal height.
     /// For geocentric CRS, inputs/outputs are ECEF XYZ meters.
     pub fn transform_to_3d(&self, x: f64, y: f64, z: f64, target: &Crs) -> Result<(f64, f64, f64)> {
-        self.transform_to_3d_with_policy(x, y, z, target, CrsTransformPolicy::Strict)
+        self.transform_to_3d_with_policy_and_context(
+            x,
+            y,
+            z,
+            target,
+            CrsTransformPolicy::Strict,
+            None,
+        )
+    }
+
+    /// Transform a 3D point from this CRS into the target CRS using epoch context.
+    ///
+    /// Current behavior is intentionally identical to [`Crs::transform_to_3d`].
+    /// The epoch context is accepted as additive API scaffolding for future
+    /// dynamic-datum workflows.
+    pub fn transform_to_3d_with_context(
+        &self,
+        x: f64,
+        y: f64,
+        z: f64,
+        target: &Crs,
+        ctx: TransformEpochContext,
+    ) -> Result<(f64, f64, f64)> {
+        self.transform_to_3d_with_policy_and_context(
+            x,
+            y,
+            z,
+            target,
+            CrsTransformPolicy::Strict,
+            Some(ctx),
+        )
+    }
+
+    /// Transform a 3D point using an explicit operation code, with optional epoch context.
+    pub fn transform_to_3d_with_operation(
+        &self,
+        x: f64,
+        y: f64,
+        z: f64,
+        target: &Crs,
+        operation_code: u32,
+        ctx: Option<TransformEpochContext>,
+    ) -> Result<(f64, f64, f64)> {
+        let op = get_coordinate_operation(operation_code)?.ok_or_else(|| {
+            ProjectionError::DatumError(format!(
+                "coordinate operation {operation_code} is not registered"
+            ))
+        })?;
+
+        if let Some(src_code) = epsg_code_from_crs_name(&self.name) {
+            if src_code != op.source_crs_code {
+                return Err(ProjectionError::DatumError(format!(
+                    "operation {operation_code} source CRS mismatch: expected {}, got {}",
+                    op.source_crs_code, src_code
+                )));
+            }
+        }
+
+        if let Some(dst_code) = epsg_code_from_crs_name(&target.name) {
+            if dst_code != op.target_crs_code {
+                return Err(ProjectionError::DatumError(format!(
+                    "operation {operation_code} target CRS mismatch: expected {}, got {}",
+                    op.target_crs_code, dst_code
+                )));
+            }
+        }
+
+        match ctx {
+            Some(ctx) => self.transform_to_3d_with_context(x, y, z, target, ctx),
+            None => self.transform_to_3d(x, y, z, target),
+        }
+    }
+
+    /// Transform a 3D point using a preferred operation for the CRS pair when available.
+    ///
+    /// Fallback behavior: when no preferred operation mapping is available, this
+    /// delegates to the standard 3D transform path.
+    pub fn transform_to_3d_with_preferred_operation(
+        &self,
+        x: f64,
+        y: f64,
+        z: f64,
+        target: &Crs,
+        ctx: Option<TransformEpochContext>,
+    ) -> Result<(f64, f64, f64)> {
+        let src_code = epsg_code_from_crs_name(&self.name);
+        let dst_code = epsg_code_from_crs_name(&target.name);
+
+        if let (Some(src), Some(dst)) = (src_code, dst_code) {
+            if is_pending_preferred_operation_crs_pair(src, dst) {
+                return Err(ProjectionError::DatumError(format!(
+                    "preferred operation for EPSG:{src} -> EPSG:{dst} is pending authoritative activation"
+                )));
+            }
+
+            if let Some(op_def) = preferred_operation_for_crs_pair(src, dst) {
+                register_coordinate_operation(op_def.clone())?;
+                return self.transform_to_3d_with_operation(
+                    x,
+                    y,
+                    z,
+                    target,
+                    op_def.operation_code,
+                    ctx,
+                );
+            }
+        }
+
+        match ctx {
+            Some(ctx) => self.transform_to_3d_with_context(x, y, z, target, ctx),
+            None => self.transform_to_3d(x, y, z, target),
+        }
     }
 
     /// Transform a 3D point while explicitly preserving horizontal context in mixed
@@ -642,6 +859,18 @@ impl Crs {
         target: &Crs,
         policy: CrsTransformPolicy,
     ) -> Result<(f64, f64, f64)> {
+        self.transform_to_3d_with_policy_and_context(x, y, z, target, policy, None)
+    }
+
+    fn transform_to_3d_with_policy_and_context(
+        &self,
+        x: f64,
+        y: f64,
+        z: f64,
+        target: &Crs,
+        policy: CrsTransformPolicy,
+        ctx: Option<TransformEpochContext>,
+    ) -> Result<(f64, f64, f64)> {
         let datum_policy = match policy {
             CrsTransformPolicy::Strict => DatumTransformPolicy::Strict,
             CrsTransformPolicy::Auto => DatumTransformPolicy::Strict,
@@ -715,14 +944,32 @@ impl Crs {
         }
 
         // Step 2: source datum geodetic -> WGS84 geodetic
-        let (wgs_lat, wgs_lon, wgs_h) = self
-            .datum
-            .to_wgs84_geodetic_with_policy(src_lat_rad, src_lon_rad, src_h, datum_policy)?;
+        let (wgs_lat, wgs_lon, wgs_h) = match ctx {
+            Some(ctx) => self.datum.to_wgs84_geodetic_with_policy_and_context(
+                src_lat_rad,
+                src_lon_rad,
+                src_h,
+                datum_policy,
+                ctx,
+            )?,
+            None => self
+                .datum
+                .to_wgs84_geodetic_with_policy(src_lat_rad, src_lon_rad, src_h, datum_policy)?,
+        };
 
         // Step 3: WGS84 geodetic -> target datum geodetic
-        let (dst_lat, dst_lon, dst_h) = target
-            .datum
-            .from_wgs84_geodetic_with_policy(wgs_lat, wgs_lon, wgs_h, datum_policy)?;
+        let (dst_lat, dst_lon, dst_h) = match ctx {
+            Some(ctx) => target.datum.from_wgs84_geodetic_with_policy_and_context(
+                wgs_lat,
+                wgs_lon,
+                wgs_h,
+                datum_policy,
+                ctx,
+            )?,
+            None => target
+                .datum
+                .from_wgs84_geodetic_with_policy(wgs_lat, wgs_lon, wgs_h, datum_policy)?,
+        };
 
         // Step 4: target datum geodetic -> target CRS coordinates
         match target.projection.params().kind {
@@ -744,7 +991,7 @@ impl Crs {
         target: &Crs,
         policy: CrsTransformPolicy,
     ) -> Result<(f64, f64)> {
-        let trace = self.transform_to_with_trace(x, y, target, policy)?;
+        let trace = self.transform_to_with_trace_and_context(x, y, target, policy, None)?;
         Ok((trace.x, trace.y))
     }
 
@@ -755,6 +1002,17 @@ impl Crs {
         y: f64,
         target: &Crs,
         policy: CrsTransformPolicy,
+    ) -> Result<CrsTransformTrace> {
+        self.transform_to_with_trace_and_context(x, y, target, policy, None)
+    }
+
+    fn transform_to_with_trace_and_context(
+        &self,
+        x: f64,
+        y: f64,
+        target: &Crs,
+        policy: CrsTransformPolicy,
+        ctx: Option<TransformEpochContext>,
     ) -> Result<CrsTransformTrace> {
         let datum_policy = match policy {
             CrsTransformPolicy::Strict => DatumTransformPolicy::Strict,
@@ -784,7 +1042,7 @@ impl Crs {
         // Step 2: source datum geodetic → WGS84 geodetic
         let src_trace = self
             .datum
-            .to_wgs84_geodetic_with_policy_and_trace(lat, lon, 0.0, datum_policy)?;
+            .to_wgs84_geodetic_with_policy_and_trace(lat, lon, 0.0, datum_policy, ctx)?;
 
         // Step 3: WGS84 geodetic → target datum geodetic
         let dst_trace = target
@@ -794,6 +1052,7 @@ impl Crs {
                 src_trace.lon_rad,
                 src_trace.h,
                 datum_policy,
+                ctx,
             )?;
 
         // Step 4: forward project in target CRS
@@ -1150,7 +1409,17 @@ impl std::fmt::Debug for Crs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Datum, Ellipsoid, Projection, ProjectionParams};
+    use crate::operations::coordinate_operation_test_guard;
+    use crate::{
+        CoordinateOperationDef,
+        Datum, DynamicGridShiftGrid, DynamicGridShiftSample, Ellipsoid, Projection,
+        OperationMethod,
+        ProjectionParams, TransformEpochContext, clear_coordinate_operations,
+        preferred_operation_code_for_crs_pair,
+        register_coordinate_operation, register_dynamic_grid, unregister_dynamic_grid,
+        unregister_coordinate_operation,
+    };
+    use crate::datum::DatumTransform;
 
     fn wgs84_geocentric() -> Crs {
         Crs {
@@ -1292,5 +1561,273 @@ mod tests {
             assert!((expected.0 - actual.0).abs() < 0.1);
             assert!((expected.1 - actual.1).abs() < 0.1);
         }
+    }
+
+    #[test]
+    fn transform_to_with_context_matches_transform_to() {
+        let source = Crs::from_epsg(4230).expect("ED50 geographic load failed");
+        let target = Crs::from_epsg(4326).expect("WGS84 geographic load failed");
+        let ctx = TransformEpochContext::at_epoch(2024.5);
+
+        let (x_base, y_base) = source.transform_to(-3.7038, 40.4168, &target).unwrap();
+        let (x_ctx, y_ctx) = source
+            .transform_to_with_context(-3.7038, 40.4168, &target, ctx)
+            .unwrap();
+
+        assert!((x_base - x_ctx).abs() < 1e-12);
+        assert!((y_base - y_ctx).abs() < 1e-12);
+    }
+
+    #[test]
+    fn transform_to_3d_with_context_matches_transform_to_3d() {
+        let source = Crs::from_epsg(4326).expect("WGS84 geographic load failed");
+        let target = wgs84_geocentric();
+        let ctx = TransformEpochContext::new(2024.5, Some(2010.0), Some(2020.0));
+
+        let base = source.transform_to_3d(-75.0, 45.0, 123.4, &target).unwrap();
+        let with_ctx = source
+            .transform_to_3d_with_context(-75.0, 45.0, 123.4, &target, ctx)
+            .unwrap();
+
+        assert!((base.0 - with_ctx.0).abs() < 1e-9);
+        assert!((base.1 - with_ctx.1).abs() < 1e-9);
+        assert!((base.2 - with_ctx.2).abs() < 1e-6);
+    }
+
+    #[test]
+    fn transform_to_with_context_dynamic_datum_requires_context() {
+        let grid = DynamicGridShiftGrid::new(
+            "CRS_DYN_GRID",
+            2020.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            2,
+            2,
+            vec![DynamicGridShiftSample::new(1.0, -2.0, 0.5, -1.0); 4],
+        )
+        .unwrap();
+        register_dynamic_grid(grid).unwrap();
+
+        let src = Crs {
+            name: "Dynamic source CRS".to_string(),
+            datum: Datum {
+                name: "dynamic-src",
+                ellipsoid: Ellipsoid::WGS84,
+                transform: DatumTransform::DynamicGridShift {
+                    grid_name: "CRS_DYN_GRID",
+                },
+            },
+            projection: Projection::new(ProjectionParams::new(ProjectionKind::Geographic)).unwrap(),
+        };
+        let dst = Crs {
+            name: "WGS84 target CRS".to_string(),
+            datum: Datum::WGS84,
+            projection: Projection::new(ProjectionParams::new(ProjectionKind::Geographic)).unwrap(),
+        };
+
+        let err = src.transform_to(0.5, 0.5, &dst).unwrap_err();
+        assert!(
+            format!("{err}").to_ascii_lowercase().contains("requires transformepochcontext")
+        );
+
+        let _ = unregister_dynamic_grid("CRS_DYN_GRID");
+    }
+
+    #[test]
+    fn transform_to_with_context_dynamic_datum_applies_epoch_shift() {
+        let grid = DynamicGridShiftGrid::new(
+            "CRS_DYN_GRID_CTX",
+            2020.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            2,
+            2,
+            vec![DynamicGridShiftSample::new(1.0, -2.0, 0.5, -1.0); 4],
+        )
+        .unwrap();
+        register_dynamic_grid(grid).unwrap();
+
+        let src = Crs {
+            name: "Dynamic source CRS".to_string(),
+            datum: Datum {
+                name: "dynamic-src",
+                ellipsoid: Ellipsoid::WGS84,
+                transform: DatumTransform::DynamicGridShift {
+                    grid_name: "CRS_DYN_GRID_CTX",
+                },
+            },
+            projection: Projection::new(ProjectionParams::new(ProjectionKind::Geographic)).unwrap(),
+        };
+        let dst = Crs {
+            name: "WGS84 target CRS".to_string(),
+            datum: Datum::WGS84,
+            projection: Projection::new(ProjectionParams::new(ProjectionKind::Geographic)).unwrap(),
+        };
+
+        let ctx = TransformEpochContext::at_epoch(2022.0); // dt=+2 => dlon +2", dlat -4"
+        let (lon_out, lat_out) = src
+            .transform_to_with_context(0.5, 0.5, &dst, ctx)
+            .unwrap();
+
+        let dlon_sec = (lon_out - 0.5) * 3600.0;
+        let dlat_sec = (lat_out - 0.5) * 3600.0;
+        assert!((dlon_sec - 2.0).abs() < 1e-9);
+        assert!((dlat_sec - (-4.0)).abs() < 1e-9);
+
+        let _ = unregister_dynamic_grid("CRS_DYN_GRID_CTX");
+    }
+
+    #[test]
+    fn transform_to_with_operation_validates_codes_and_routes() {
+        clear_coordinate_operations().unwrap();
+
+        let src = Crs::from_epsg(4326).unwrap();
+        let dst = Crs::from_epsg(3857).unwrap();
+        register_coordinate_operation(
+            CoordinateOperationDef::new(999001, 4326, 3857, OperationMethod::DatumPipeline),
+        )
+        .unwrap();
+
+        let via_op = src
+            .transform_to_with_operation(10.0, 45.0, &dst, 999001, None)
+            .unwrap();
+        let base = src.transform_to(10.0, 45.0, &dst).unwrap();
+
+        assert!((via_op.0 - base.0).abs() < 1e-9);
+        assert!((via_op.1 - base.1).abs() < 1e-9);
+
+        let _ = unregister_coordinate_operation(999001);
+    }
+
+    #[test]
+    fn transform_to_with_operation_rejects_crs_mismatch() {
+        clear_coordinate_operations().unwrap();
+
+        let src = Crs::from_epsg(4326).unwrap();
+        let dst = Crs::from_epsg(3857).unwrap();
+        register_coordinate_operation(
+            CoordinateOperationDef::new(999002, 4258, 3857, OperationMethod::DatumPipeline),
+        )
+        .unwrap();
+
+        let err = src
+            .transform_to_with_operation(10.0, 45.0, &dst, 999002, None)
+            .unwrap_err();
+        assert!(
+            format!("{err}")
+                .to_ascii_lowercase()
+                .contains("source crs mismatch")
+        );
+
+        let _ = unregister_coordinate_operation(999002);
+    }
+
+    #[test]
+    fn preferred_operation_mapping_exists_for_csrs_v3_to_v8_pair() {
+        assert_eq!(preferred_operation_code_for_crs_pair(22317, 22817), Some(10715));
+        assert_eq!(preferred_operation_code_for_crs_pair(22318, 22817), None);
+    }
+
+    #[test]
+    fn transform_to_with_preferred_operation_falls_back_when_no_mapping() {
+        let src = Crs::from_epsg(4326).unwrap();
+        let dst = Crs::from_epsg(3857).unwrap();
+
+        let via_pref = src
+            .transform_to_with_preferred_operation(10.0, 45.0, &dst, None)
+            .unwrap();
+        let base = src.transform_to(10.0, 45.0, &dst).unwrap();
+
+        assert!((via_pref.0 - base.0).abs() < 1e-9);
+        assert!((via_pref.1 - base.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn transform_to_with_preferred_operation_uses_registered_mapping() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let src = Crs::from_epsg(22317).unwrap();
+        let dst = Crs::from_epsg(22817).unwrap();
+
+        let via_pref = src
+            .transform_to_with_preferred_operation(500_000.0, 5_500_000.0, &dst, None)
+            .unwrap();
+        let base = src.transform_to(500_000.0, 5_500_000.0, &dst).unwrap();
+
+        assert!((via_pref.0 - base.0).abs() < 1e-9);
+        assert!((via_pref.1 - base.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn transform_to_with_preferred_operation_uses_registered_mapping_for_v6_v8() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let src = Crs::from_epsg(22617).unwrap();
+        let dst = Crs::from_epsg(22817).unwrap();
+
+        let via_pref = src
+            .transform_to_with_preferred_operation(500_000.0, 5_500_000.0, &dst, None)
+            .unwrap();
+        let base = src.transform_to(500_000.0, 5_500_000.0, &dst).unwrap();
+
+        assert!((via_pref.0 - base.0).abs() < 1e-9);
+        assert!((via_pref.1 - base.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn transform_to_3d_with_preferred_operation_falls_back_when_no_mapping() {
+        let src = Crs::from_epsg(4326).unwrap();
+        let dst = Crs::from_epsg(3857).unwrap();
+
+        let via_pref = src
+            .transform_to_3d_with_preferred_operation(10.0, 45.0, 123.4, &dst, None)
+            .unwrap();
+        let base = src.transform_to_3d(10.0, 45.0, 123.4, &dst).unwrap();
+
+        assert!((via_pref.0 - base.0).abs() < 1e-9);
+        assert!((via_pref.1 - base.1).abs() < 1e-9);
+        assert!((via_pref.2 - base.2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn transform_to_3d_with_preferred_operation_uses_registered_mapping() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let src = Crs::from_epsg(22317).unwrap();
+        let dst = Crs::from_epsg(22817).unwrap();
+
+        let via_pref = src
+            .transform_to_3d_with_preferred_operation(500_000.0, 5_500_000.0, 50.0, &dst, None)
+            .unwrap();
+        let base = src.transform_to_3d(500_000.0, 5_500_000.0, 50.0, &dst).unwrap();
+
+        assert!((via_pref.0 - base.0).abs() < 1e-9);
+        assert!((via_pref.1 - base.1).abs() < 1e-9);
+        assert!((via_pref.2 - base.2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn transform_to_3d_with_preferred_operation_uses_registered_mapping_for_v7_v8() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let src = Crs::from_epsg(22717).unwrap();
+        let dst = Crs::from_epsg(22817).unwrap();
+
+        let via_pref = src
+            .transform_to_3d_with_preferred_operation(500_000.0, 5_500_000.0, 10.0, &dst, None)
+            .unwrap();
+        let base = src.transform_to_3d(500_000.0, 5_500_000.0, 10.0, &dst).unwrap();
+
+        assert!((via_pref.0 - base.0).abs() < 1e-9);
+        assert!((via_pref.1 - base.1).abs() < 1e-9);
+        assert!((via_pref.2 - base.2).abs() < 1e-9);
     }
 }

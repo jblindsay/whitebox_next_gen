@@ -1,6 +1,9 @@
 //! Point-cloud reprojection helpers powered by `wbprojection`.
 
-use wbprojection::Crs as ProjCrs;
+use wbprojection::{
+    Crs as ProjCrs,
+    EpochTransformOptions,
+};
 
 use crate::crs::Crs;
 use crate::error::{Error, Result};
@@ -24,6 +27,8 @@ pub struct LidarReprojectOptions {
     pub failure_policy: TransformFailurePolicy,
     /// When `true`, use 3D reprojection and update `z` values.
     pub use_3d_transform: bool,
+    /// Optional epoch-aware transform routing options.
+    pub epoch_transform: EpochTransformOptions,
 }
 
 impl Default for LidarReprojectOptions {
@@ -31,6 +36,7 @@ impl Default for LidarReprojectOptions {
         Self {
             failure_policy: TransformFailurePolicy::Error,
             use_3d_transform: false,
+            epoch_transform: EpochTransformOptions::default(),
         }
     }
 }
@@ -52,6 +58,12 @@ impl LidarReprojectOptions {
     /// Uses `wbprojection`'s preserve-horizontal 3D transform behavior.
     pub fn with_3d_transform(mut self, enabled: bool) -> Self {
         self.use_3d_transform = enabled;
+        self
+    }
+
+    /// Set epoch-aware transform routing options.
+    pub fn with_epoch_transform_options(mut self, epoch_transform: EpochTransformOptions) -> Self {
+        self.epoch_transform = epoch_transform;
         self
     }
 }
@@ -186,13 +198,59 @@ fn points_with_crs_options_internal(
     options: &LidarReprojectOptions,
     progress: Option<&(dyn Fn(f64) + Send + Sync)>,
 ) -> Result<Vec<PointRecord>> {
+    options
+        .epoch_transform
+        .validate()
+        .map_err(|e| Error::Projection(format!("invalid epoch transform options: {e}")))?;
+
+    let epoch_context = options.epoch_transform.build_context().map_err(|e| {
+        Error::Projection(format!("invalid epoch transform options: {e}"))
+    })?;
+    let epoch_routing_requested = options.epoch_transform.coordinate_epoch_decimal_year.is_some()
+        || options.epoch_transform.source_reference_epoch_decimal_year.is_some()
+        || options.epoch_transform.target_reference_epoch_decimal_year.is_some()
+        || options.epoch_transform.operation_code.is_some()
+        || !options.epoch_transform.prefer_official_operation
+        || matches!(options.epoch_transform.epoch_policy, wbprojection::EpochPolicy::AllowStaticFallback);
+
     let mut out = Vec::with_capacity(points.len());
     let total_points = points.len();
 
     for (index, p) in points.iter().enumerate() {
-        let transformed = if options.use_3d_transform {
-            src.transform_to_3d_preserve_horizontal(p.x, p.y, p.z, dst)
-                .map(|(x, y, z)| (x, y, Some(z)))
+        let transformed = if !epoch_routing_requested {
+            if options.use_3d_transform {
+                src.transform_to_3d_preserve_horizontal(p.x, p.y, p.z, dst)
+                    .map(|(x, y, z)| (x, y, Some(z)))
+            } else {
+                src.transform_to(p.x, p.y, dst).map(|(x, y)| (x, y, None))
+            }
+        } else if let Some(operation_code) = options.epoch_transform.operation_code {
+            if options.use_3d_transform {
+                src.transform_to_3d_with_operation(p.x, p.y, p.z, dst, operation_code, epoch_context)
+                    .map(|(x, y, z)| (x, y, Some(z)))
+            } else {
+                src.transform_to_with_operation(p.x, p.y, dst, operation_code, epoch_context)
+                    .map(|(x, y)| (x, y, None))
+            }
+        } else if options.epoch_transform.prefer_official_operation {
+            if options.use_3d_transform {
+                src.transform_to_3d_with_preferred_operation(p.x, p.y, p.z, dst, epoch_context)
+                    .map(|(x, y, z)| (x, y, Some(z)))
+            } else {
+                src.transform_to_with_preferred_operation(p.x, p.y, dst, epoch_context)
+                    .map(|(x, y)| (x, y, None))
+            }
+        } else if options.use_3d_transform {
+            if let Some(epoch_ctx) = epoch_context {
+                src.transform_to_3d_with_context(p.x, p.y, p.z, dst, epoch_ctx)
+                    .map(|(x, y, z)| (x, y, Some(z)))
+            } else {
+                src.transform_to_3d(p.x, p.y, p.z, dst)
+                    .map(|(x, y, z)| (x, y, Some(z)))
+            }
+        } else if let Some(epoch_ctx) = epoch_context {
+            src.transform_to_with_context(p.x, p.y, dst, epoch_ctx)
+                .map(|(x, y)| (x, y, None))
         } else {
             src.transform_to(p.x, p.y, dst)
                 .map(|(x, y)| (x, y, None))
@@ -282,17 +340,63 @@ pub fn points_in_place_to_epsg_with_options(
     let src = source_proj_crs(src_crs, "points_in_place_to_epsg")?;
     let dst = ProjCrs::from_epsg(dst_epsg)
         .map_err(|e| Error::Projection(format!("invalid destination EPSG {dst_epsg}: {e}")))?;
+    options
+        .epoch_transform
+        .validate()
+        .map_err(|e| Error::Projection(format!("invalid epoch transform options: {e}")))?;
+
+    let epoch_context = options.epoch_transform.build_context().map_err(|e| {
+        Error::Projection(format!("invalid epoch transform options: {e}"))
+    })?;
+    let epoch_routing_requested = options.epoch_transform.coordinate_epoch_decimal_year.is_some()
+        || options.epoch_transform.source_reference_epoch_decimal_year.is_some()
+        || options.epoch_transform.target_reference_epoch_decimal_year.is_some()
+        || options.epoch_transform.operation_code.is_some()
+        || !options.epoch_transform.prefer_official_operation
+        || matches!(options.epoch_transform.epoch_policy, wbprojection::EpochPolicy::AllowStaticFallback);
 
     for p in points.iter_mut() {
-        let (x, y, z_opt) = if options.use_3d_transform {
-            src.transform_to_3d_preserve_horizontal(p.x, p.y, p.z, &dst)
-                .map(|(x, y, z)| (x, y, Some(z)))
-                .map_err(|e| Error::Projection(format!("point reprojection failed: {e}")))?
+        let transformed = if !epoch_routing_requested {
+            if options.use_3d_transform {
+                src.transform_to_3d_preserve_horizontal(p.x, p.y, p.z, &dst)
+                    .map(|(x, y, z)| (x, y, Some(z)))
+            } else {
+                src.transform_to(p.x, p.y, &dst)
+                    .map(|(x, y)| (x, y, None))
+            }
+        } else if let Some(operation_code) = options.epoch_transform.operation_code {
+            if options.use_3d_transform {
+                src.transform_to_3d_with_operation(p.x, p.y, p.z, &dst, operation_code, epoch_context)
+                    .map(|(x, y, z)| (x, y, Some(z)))
+            } else {
+                src.transform_to_with_operation(p.x, p.y, &dst, operation_code, epoch_context)
+                    .map(|(x, y)| (x, y, None))
+            }
+        } else if options.epoch_transform.prefer_official_operation {
+            if options.use_3d_transform {
+                src.transform_to_3d_with_preferred_operation(p.x, p.y, p.z, &dst, epoch_context)
+                    .map(|(x, y, z)| (x, y, Some(z)))
+            } else {
+                src.transform_to_with_preferred_operation(p.x, p.y, &dst, epoch_context)
+                    .map(|(x, y)| (x, y, None))
+            }
+        } else if options.use_3d_transform {
+            if let Some(epoch_ctx) = epoch_context {
+                src.transform_to_3d_with_context(p.x, p.y, p.z, &dst, epoch_ctx)
+                    .map(|(x, y, z)| (x, y, Some(z)))
+            } else {
+                src.transform_to_3d(p.x, p.y, p.z, &dst)
+                    .map(|(x, y, z)| (x, y, Some(z)))
+            }
+        } else if let Some(epoch_ctx) = epoch_context {
+            src.transform_to_with_context(p.x, p.y, &dst, epoch_ctx)
+                .map(|(x, y)| (x, y, None))
         } else {
             src.transform_to(p.x, p.y, &dst)
                 .map(|(x, y)| (x, y, None))
-                .map_err(|e| Error::Projection(format!("point reprojection failed: {e}")))?
         };
+        let (x, y, z_opt) = transformed
+            .map_err(|e| Error::Projection(format!("point reprojection failed: {e}")))?;
         p.x = x;
         p.y = y;
         if let Some(z) = z_opt {

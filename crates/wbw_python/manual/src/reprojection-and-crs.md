@@ -128,6 +128,51 @@ dem_utm = dem.reproject(
 wbe.write_raster(dem_utm, 'dem_utm_10m.tif')
 ```
 
+### Example: epoch-aware raster reprojection (advanced)
+
+Use epoch-aware options when transforming between dynamic datums/realizations.
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+dem = wbe.read_raster('dem_csrs_v3.tif')
+
+dem_v8 = dem.reproject(
+    dst_epsg=22818,
+    resample='bilinear',
+    coordinate_epoch=2020.0,
+    source_reference_epoch=2010.0,
+    target_reference_epoch=2020.0,
+    prefer_official_operation=True,
+    epoch_policy='strict',
+)
+
+wbe.write_raster(dem_v8, 'dem_csrs_v8_epoch2020.tif')
+```
+
+Supported optional epoch-routing arguments in Python reprojection calls:
+
+- `coordinate_epoch`
+- `source_reference_epoch`
+- `target_reference_epoch`
+- `operation_code`
+- `prefer_official_operation`
+- `epoch_policy` (`strict` or `allow_static_fallback`)
+
+### CSRS operational status (current)
+
+For NAD83(CSRS) realization-routing in current WbW builds:
+
+- Active preferred-operation corridors (zone-matched UTM, zones 7-24):
+    - v3 -> v8 (`223xx -> 228xx`), operation `10715`
+    - v4 -> v8 (`224xx -> 228xx`), operation `10715`
+    - v6 -> v8 (`226xx -> 228xx`), operation `10715`
+    - v7 -> v8 (`227xx -> 228xx`), operation `10715`
+
+For CRS pairs without a registered preferred operation mapping, standard
+reprojection remains available via the baseline transform path.
+
 ### Example: grid-matching reprojection
 
 ```python
@@ -205,6 +250,24 @@ roads_utm = wbe.projection_georeferencing.general.reproject_vector(
 wbe.write_vector(roads_utm, 'roads_utm.gpkg')
 ```
 
+### Example: epoch-aware vector reprojection (advanced)
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+stations = wbe.read_vector('stations_csrs_v3.gpkg')
+
+stations_v8 = stations.reproject(
+    dst_epsg=22818,
+    coordinate_epoch=2020.0,
+    prefer_official_operation=True,
+    epoch_policy='strict',
+)
+
+wbe.write_vector(stations_v8, 'stations_csrs_v8_epoch2020.gpkg')
+```
+
 ## Lidar Reprojection
 
 Use explicit lidar reprojection settings to avoid silent dimensional or policy
@@ -224,6 +287,24 @@ las_utm = wbe.projection_georeferencing.general.reproject_lidar(
 )
 
 wbe.write_lidar(las_utm, 'survey_utm.copc.laz')
+```
+
+### Example: epoch-aware lidar reprojection (advanced)
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+las = wbe.read_lidar('survey_csrs_v3.las')
+
+las_v8 = las.reproject(
+    dst_epsg=22818,
+    coordinate_epoch=2020.0,
+    prefer_official_operation=True,
+    epoch_policy='strict',
+)
+
+wbe.write_lidar(las_v8, 'survey_csrs_v8_epoch2020.laz')
 ```
 
 ## Georeference Raster from Control Points

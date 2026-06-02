@@ -1,0 +1,12 @@
+# Source: NRCan Coordinate Transformations tool (signed-in user workflow)
+# URL: https://webapp.csrs-scrs.nrcan-rncan.gc.ca/geod/data-donnees/transformations.php
+# Captured: 2026-06-02
+# Workflow: Single Calculation, Epoch Transformation enabled, Interpolate Velocities enabled,
+#           Origin frame NAD83(CSRS), Destination frame NAD83(CSRS), Geographic coordinates,
+#           Origin epoch 2010-01-01, Destination epoch 2020-01-01, Longitude Positive West.
+# Capture source: user-provided screenshots from authenticated NRCan session.
+# Note: longitudes below are stored as positive-west values exactly as entered/displayed by the tool.
+station,input_lat_deg,input_lon_positive_west_deg,input_h_m,origin_epoch_iso,destination_epoch_iso,output_lat_deg,output_lon_positive_west_deg,output_h_m,vphi_mm_per_yr,vlambda_mm_per_yr,vh_mm_per_yr
+waterloo,43.5448,80.2482,334.000,2010-01-01,2020-01-01,43.54479989,80.24819976,333.986,-1.22,1.97,-1.44
+vancouver,49.2827,123.1207,10.000,2010-01-01,2020-01-01,49.28270037,123.12069909,9.991,4.15,6.61,-0.89
+sample2,65.9250,85.4500,101.000,2010-01-01,2020-01-01,65.92499988,85.44999944,101.092,-1.32,2.56,9.19

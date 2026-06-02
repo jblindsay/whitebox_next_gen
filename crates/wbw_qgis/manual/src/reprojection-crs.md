@@ -176,6 +176,84 @@ processing.run('whitebox_workflows:reproject_lidar', {
 
 ---
 
+## Epoch-Aware Reprojection (Dynamic Datums)
+
+For dynamic datums and realization-to-realization transformations, the
+reprojection tools support optional epoch-routing controls:
+
+- `coordinate_epoch`
+- `source_reference_epoch`
+- `target_reference_epoch`
+- `operation_code`
+- `prefer_official_operation`
+- `epoch_policy` (`strict` or `allow_static_fallback`)
+
+These parameters are optional. Use them when you need deterministic routing for
+time-dependent CRS transformations.
+
+### CSRS operational status (current)
+
+For NAD83(CSRS) realization-routing in current WbW builds:
+
+- Active preferred-operation corridors (zone-matched UTM, zones 7-24):
+  - v3 -> v8 (`223xx -> 228xx`), operation `10715`
+  - v4 -> v8 (`224xx -> 228xx`), operation `10715`
+  - v6 -> v8 (`226xx -> 228xx`), operation `10715`
+  - v7 -> v8 (`227xx -> 228xx`), operation `10715`
+
+For CRS pairs without a registered preferred operation mapping, standard
+reprojection remains available via the baseline transform path.
+
+### Epoch-aware raster example
+
+```python
+import processing
+
+processing.run('whitebox_workflows:reproject_raster', {
+  'input': '/data/dem_csrs_v3.tif',
+  'epsg': 22818,
+  'resample': 'bilinear',
+  'coordinate_epoch': 2020.0,
+  'source_reference_epoch': 2010.0,
+  'target_reference_epoch': 2020.0,
+  'prefer_official_operation': True,
+  'epoch_policy': 'strict',
+  'output': '/data/dem_csrs_v8_epoch2020.tif',
+})
+```
+
+### Epoch-aware vector example
+
+```python
+import processing
+
+processing.run('whitebox_workflows:reproject_vector', {
+  'input': '/data/stations_csrs_v3.gpkg',
+  'epsg': 22818,
+  'coordinate_epoch': 2020.0,
+  'prefer_official_operation': True,
+  'epoch_policy': 'strict',
+  'output': '/data/stations_csrs_v8_epoch2020.gpkg',
+})
+```
+
+### Epoch-aware LiDAR example
+
+```python
+import processing
+
+processing.run('whitebox_workflows:reproject_lidar', {
+  'input': '/data/survey_csrs_v3.laz',
+  'epsg': 22818,
+  'coordinate_epoch': 2020.0,
+  'prefer_official_operation': True,
+  'epoch_policy': 'strict',
+  'output': '/data/survey_csrs_v8_epoch2020.laz',
+})
+```
+
+---
+
 ## Assigning a Missing CRS
 
 If a file has correct coordinates but missing or wrong CRS metadata (shown

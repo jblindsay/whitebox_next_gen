@@ -285,17 +285,79 @@ class ExternalRuntimeSession:
             "    tool_id = str(p.get('tool_id', ''))\n"
             "    args = json.loads(str(p.get('args_json', '{}')))\n"
             "    wbe = wbw.WbEnvironment()\n"
+            "    def _to_optional_bool(v):\n"
+            "        if v is None:\n"
+            "            return None\n"
+            "        if isinstance(v, bool):\n"
+            "            return v\n"
+            "        if isinstance(v, str):\n"
+            "            t = v.strip().lower()\n"
+            "            if t in ('true', '1', 'yes', 'y', 'on'):\n"
+            "                return True\n"
+            "            if t in ('false', '0', 'no', 'n', 'off'):\n"
+            "                return False\n"
+            "            return None\n"
+            "        return bool(v)\n"
             "    epsg = int(args.get('epsg'))\n"
             "    in_path = str(args.get('input', ''))\n"
             "    out_path = str(args.get('output', ''))\n"
+            "    coordinate_epoch = args.get('coordinate_epoch', None)\n"
+            "    source_reference_epoch = args.get('source_reference_epoch', None)\n"
+            "    target_reference_epoch = args.get('target_reference_epoch', None)\n"
+            "    operation_code = args.get('operation_code', None)\n"
+            "    prefer_official_operation = _to_optional_bool(args.get('prefer_official_operation', None))\n"
+            "    epoch_policy = args.get('epoch_policy', None)\n"
             "    if tool_id == 'reproject_raster':\n"
             "        resample = str(args.get('resample', 'bilinear')).strip() or 'bilinear'\n"
             "        src = wbe.read_raster(in_path)\n"
-            "        out_obj = wbe.reproject_raster(src, dst_epsg=epsg, resample=resample)\n"
+            "        kwargs = {'dst_epsg': epsg, 'resample': resample}\n"
+            "        if coordinate_epoch is not None:\n"
+            "            kwargs['coordinate_epoch'] = float(coordinate_epoch)\n"
+            "        if source_reference_epoch is not None:\n"
+            "            kwargs['source_reference_epoch'] = float(source_reference_epoch)\n"
+            "        if target_reference_epoch is not None:\n"
+            "            kwargs['target_reference_epoch'] = float(target_reference_epoch)\n"
+            "        if operation_code is not None:\n"
+            "            kwargs['operation_code'] = int(operation_code)\n"
+            "        if prefer_official_operation is not None:\n"
+            "            kwargs['prefer_official_operation'] = prefer_official_operation\n"
+            "        if epoch_policy is not None and str(epoch_policy).strip():\n"
+            "            kwargs['epoch_policy'] = str(epoch_policy)\n"
+            "        out_obj = wbe.reproject_raster(src, **kwargs)\n"
             "        wbe.write_raster(out_obj, out_path)\n"
+            "    elif tool_id == 'reproject_vector':\n"
+            "        src = wbe.read_vector(in_path)\n"
+            "        kwargs = {'dst_epsg': epsg}\n"
+            "        if coordinate_epoch is not None:\n"
+            "            kwargs['coordinate_epoch'] = float(coordinate_epoch)\n"
+            "        if source_reference_epoch is not None:\n"
+            "            kwargs['source_reference_epoch'] = float(source_reference_epoch)\n"
+            "        if target_reference_epoch is not None:\n"
+            "            kwargs['target_reference_epoch'] = float(target_reference_epoch)\n"
+            "        if operation_code is not None:\n"
+            "            kwargs['operation_code'] = int(operation_code)\n"
+            "        if prefer_official_operation is not None:\n"
+            "            kwargs['prefer_official_operation'] = prefer_official_operation\n"
+            "        if epoch_policy is not None and str(epoch_policy).strip():\n"
+            "            kwargs['epoch_policy'] = str(epoch_policy)\n"
+            "        out_obj = wbe.reproject_vector(src, **kwargs)\n"
+            "        wbe.write_vector(out_obj, out_path)\n"
             "    elif tool_id == 'reproject_lidar':\n"
             "        src = wbe.read_lidar(in_path)\n"
-            "        out_obj = wbe.reproject_lidar(src, dst_epsg=epsg)\n"
+            "        kwargs = {'dst_epsg': epsg}\n"
+            "        if coordinate_epoch is not None:\n"
+            "            kwargs['coordinate_epoch'] = float(coordinate_epoch)\n"
+            "        if source_reference_epoch is not None:\n"
+            "            kwargs['source_reference_epoch'] = float(source_reference_epoch)\n"
+            "        if target_reference_epoch is not None:\n"
+            "            kwargs['target_reference_epoch'] = float(target_reference_epoch)\n"
+            "        if operation_code is not None:\n"
+            "            kwargs['operation_code'] = int(operation_code)\n"
+            "        if prefer_official_operation is not None:\n"
+            "            kwargs['prefer_official_operation'] = prefer_official_operation\n"
+            "        if epoch_policy is not None and str(epoch_policy).strip():\n"
+            "            kwargs['epoch_policy'] = str(epoch_policy)\n"
+            "        out_obj = wbe.reproject_lidar(src, **kwargs)\n"
             "        wbe.write_lidar(out_obj, out_path)\n"
             "    elif tool_id == 'assign_projection_raster':\n"
             "        src = wbe.read_raster(in_path)\n"
@@ -1140,15 +1202,66 @@ def run_projection_wrapper(
 
     wbw = load_whitebox_workflows()
     wbe = wbw.WbEnvironment()
+
+    def _to_optional_bool(v):
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            t = v.strip().lower()
+            if t in {"true", "1", "yes", "y", "on"}:
+                return True
+            if t in {"false", "0", "no", "n", "off"}:
+                return False
+            return None
+        return bool(v)
+
     epsg = int(args.get("epsg"))
     in_path = str(args.get("input", ""))
     out_path = str(args.get("output", ""))
+    coordinate_epoch = args.get("coordinate_epoch", None)
+    source_reference_epoch = args.get("source_reference_epoch", None)
+    target_reference_epoch = args.get("target_reference_epoch", None)
+    operation_code = args.get("operation_code", None)
+    prefer_official_operation = _to_optional_bool(args.get("prefer_official_operation", None))
+    epoch_policy = args.get("epoch_policy", None)
 
     if tool_id == "reproject_raster":
         resample = str(args.get("resample", "bilinear")).strip() or "bilinear"
         src = wbe.read_raster(in_path)
-        out_obj = wbe.reproject_raster(src, dst_epsg=epsg, resample=resample)
+        kwargs = {"dst_epsg": epsg, "resample": resample}
+        if coordinate_epoch is not None:
+            kwargs["coordinate_epoch"] = float(coordinate_epoch)
+        if source_reference_epoch is not None:
+            kwargs["source_reference_epoch"] = float(source_reference_epoch)
+        if target_reference_epoch is not None:
+            kwargs["target_reference_epoch"] = float(target_reference_epoch)
+        if operation_code is not None:
+            kwargs["operation_code"] = int(operation_code)
+        if prefer_official_operation is not None:
+            kwargs["prefer_official_operation"] = prefer_official_operation
+        if epoch_policy is not None and str(epoch_policy).strip():
+            kwargs["epoch_policy"] = str(epoch_policy)
+        out_obj = wbe.reproject_raster(src, **kwargs)
         wbe.write_raster(out_obj, out_path)
+    elif tool_id == "reproject_vector":
+        src = wbe.read_vector(in_path)
+        kwargs = {"dst_epsg": epsg}
+        if coordinate_epoch is not None:
+            kwargs["coordinate_epoch"] = float(coordinate_epoch)
+        if source_reference_epoch is not None:
+            kwargs["source_reference_epoch"] = float(source_reference_epoch)
+        if target_reference_epoch is not None:
+            kwargs["target_reference_epoch"] = float(target_reference_epoch)
+        if operation_code is not None:
+            kwargs["operation_code"] = int(operation_code)
+        if prefer_official_operation is not None:
+            kwargs["prefer_official_operation"] = prefer_official_operation
+        if epoch_policy is not None and str(epoch_policy).strip():
+            kwargs["epoch_policy"] = str(epoch_policy)
+        out_obj = wbe.reproject_vector(src, **kwargs)
+        wbe.write_vector(out_obj, out_path)
     elif tool_id == "georeference_raster_from_control_points":
         resample = str(args.get("resample", "bilinear")).strip() or "bilinear"
         src = wbe.read_raster(in_path)
@@ -1163,7 +1276,20 @@ def run_projection_wrapper(
         )
     elif tool_id == "reproject_lidar":
         src = wbe.read_lidar(in_path)
-        out_obj = wbe.reproject_lidar(src, dst_epsg=epsg)
+        kwargs = {"dst_epsg": epsg}
+        if coordinate_epoch is not None:
+            kwargs["coordinate_epoch"] = float(coordinate_epoch)
+        if source_reference_epoch is not None:
+            kwargs["source_reference_epoch"] = float(source_reference_epoch)
+        if target_reference_epoch is not None:
+            kwargs["target_reference_epoch"] = float(target_reference_epoch)
+        if operation_code is not None:
+            kwargs["operation_code"] = int(operation_code)
+        if prefer_official_operation is not None:
+            kwargs["prefer_official_operation"] = prefer_official_operation
+        if epoch_policy is not None and str(epoch_policy).strip():
+            kwargs["epoch_policy"] = str(epoch_policy)
+        out_obj = wbe.reproject_lidar(src, **kwargs)
         wbe.write_lidar(out_obj, out_path)
     elif tool_id == "assign_projection_raster":
         src = wbe.read_raster(in_path)

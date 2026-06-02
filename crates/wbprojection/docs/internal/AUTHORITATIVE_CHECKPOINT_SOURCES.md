@@ -203,6 +203,10 @@ Phase-1 strict fill rules (enforced by tests when rows are present):
    - 4258 -> 4258
    - 25832 -> 3035
 - For both templates, each filled row must include `operation_code`.
+- For both templates, each filled row must keep `epoch_decimal_year` in [1980, 2100].
+- For both templates, each filled row `source_reference` must:
+   - Be non-empty and not a placeholder token (`tbd`, `todo`, `pending`, `n/a`, etc.).
+   - Include either a namespaced code (`EPSG:...`) or a URL-style path.
 
 ## EPSG Anchor-Epoch Notes (Realization Metadata)
 

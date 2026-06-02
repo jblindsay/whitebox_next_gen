@@ -359,6 +359,43 @@ fn parse_csrs_pair_template_fixture(csv: &str) -> Result<Vec<CsrsPairTemplateChe
     Ok(rows)
 }
 
+fn assert_phase1_metadata_conventions(row: &CsrsPairTemplateCheckpoint, region: &str) {
+    assert!(
+        (1980.0..=2100.0).contains(&row.epoch_decimal_year),
+        "phase-1 {region} template row must have epoch_decimal_year within [1980, 2100]"
+    );
+
+    let source_reference = row.source_reference.trim();
+    let source_reference_lower = source_reference.to_ascii_lowercase();
+    let placeholder_tokens = [
+        "tbd",
+        "todo",
+        "pending",
+        "n/a",
+        "na",
+        "template",
+        "placeholder",
+        "fill-me",
+        "fillme",
+        "unknown",
+    ];
+
+    assert!(
+        !source_reference.is_empty(),
+        "phase-1 {region} template row must include source_reference"
+    );
+    assert!(
+        !placeholder_tokens
+            .iter()
+            .any(|token| source_reference_lower == *token),
+        "phase-1 {region} template row source_reference must not be a placeholder token"
+    );
+    assert!(
+        source_reference.contains(':') || source_reference.contains('/'),
+        "phase-1 {region} template row source_reference must include a namespaced code or URL"
+    );
+}
+
 #[test]
 fn nrcan_trx_authoritative_fixture_parses_and_is_well_formed() {
     let rows = parse_nrcan_trx_fixture(NRCAN_TRX_FIXTURE)
@@ -908,6 +945,7 @@ fn us_nsrs2007_to_nad83_2011_template_phase1_pairs_are_allowlisted() {
             row.operation_code.is_some(),
             "phase-1 US template rows must include operation_code"
         );
+        assert_phase1_metadata_conventions(row, "US");
     }
 }
 
@@ -933,6 +971,7 @@ fn europe_etrs89_realization_template_phase1_pairs_are_allowlisted() {
             row.operation_code.is_some(),
             "phase-1 Europe template rows must include operation_code"
         );
+        assert_phase1_metadata_conventions(row, "Europe");
     }
 }
 

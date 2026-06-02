@@ -1900,6 +1900,9 @@ pub fn known_epsg_codes() -> Vec<u32> {
     for c in 22407u32..=22424 {
         codes.push(c);
     }
+    for c in 22507u32..=22524 {
+        codes.push(c);
+    }
     for c in 22607u32..=22624 {
         codes.push(c);
     }
@@ -5615,6 +5618,14 @@ fn get_info(code: u32) -> Option<EpsgInfo> {
             unit: "metre",
         });
     }
+    if (22507..=22524).contains(&code) {
+        return Some(EpsgInfo {
+            code,
+            name: "NAD83(CSRS)v5 / UTM (northern hemisphere)",
+            area_of_use: "Canada",
+            unit: "metre",
+        });
+    }
     if (22607..=22624).contains(&code) {
         return Some(EpsgInfo {
             code,
@@ -6522,6 +6533,7 @@ fn build_crs(code: u32) -> Result<Crs> {
         22207..=22222 => csrs_utm_crs_variant((code - 22200) as u8, code, "v2"),
         22307..=22324 => csrs_utm_crs_variant((code - 22300) as u8, code, "v3"),
         22407..=22424 => csrs_utm_crs_variant((code - 22400) as u8, code, "v4"),
+        22507..=22524 => csrs_utm_crs_variant((code - 22500) as u8, code, "v5"),
         22607..=22624 => csrs_utm_crs_variant((code - 22600) as u8, code, "v6"),
         22707..=22724 => csrs_utm_crs_variant((code - 22700) as u8, code, "v7"),
         22807..=22824 => csrs_utm_crs_variant((code - 22800) as u8, code, "v8"),

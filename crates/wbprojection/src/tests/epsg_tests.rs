@@ -1341,6 +1341,23 @@ fn epsg_preferred_operation_csrs_v6_v7_to_v8_same_zone_maps_to_10715() {
 }
 
 #[test]
+fn epsg_csrs_v5_utm_codes_build_and_roundtrip() {
+    let checks = [
+        (22507u32, -141.0, 64.0),
+        (22517u32, -81.0, 45.0),
+        (22524u32, -39.0, 58.0),
+    ];
+
+    for (code, lon_in, lat_in) in checks {
+        let crs = Crs::from_epsg(code).unwrap();
+        let (e, n) = crs.forward(lon_in, lat_in).unwrap();
+        let (lon, lat) = crs.inverse(e, n).unwrap();
+        assert!((lon - lon_in).abs() < 1e-5, "EPSG:{code} lon");
+        assert!((lat - lat_in).abs() < 1e-5, "EPSG:{code} lat");
+    }
+}
+
+#[test]
 fn epsg_csrs_support_snapshot_reports_active_and_pending_pairs() {
     let snapshot = csrs_preferred_operation_support_snapshot();
 

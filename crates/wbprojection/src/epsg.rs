@@ -1378,6 +1378,123 @@ pub struct CsrsPreferredOperationSupportSnapshot {
     pub pairs: Vec<CsrsPreferredOperationPairSupport>,
 }
 
+/// Status of a US NSRS2007->NAD83(2011) phase-1 preferred-operation corridor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UsPreferredOperationStatus {
+    /// Pair is active with a preferred operation code.
+    Active,
+    /// Pair is defined but awaiting authoritative checkpoint activation.
+    Pending,
+}
+
+/// Preferred-operation support details for a US phase-1 corridor pair.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UsPreferredOperationPairSupport {
+    /// Source CRS EPSG code.
+    pub source_crs_epsg: u32,
+    /// Target CRS EPSG code.
+    pub target_crs_epsg: u32,
+    /// Pair activation status.
+    pub status: UsPreferredOperationStatus,
+    /// Preferred operation code when status is active.
+    pub preferred_operation_code: Option<u32>,
+}
+
+/// Snapshot of US phase-1 preferred-operation support in the current build.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UsPreferredOperationSupportSnapshot {
+    /// Phase label used for governance and rollout docs.
+    pub phase_label: &'static str,
+    /// Corridor-pair support entries.
+    pub pairs: Vec<UsPreferredOperationPairSupport>,
+}
+
+/// Status of a Europe ETRS89 phase-1 preferred-operation corridor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EuropePreferredOperationStatus {
+    /// Pair is active with a preferred operation code.
+    Active,
+    /// Pair is defined but awaiting authoritative checkpoint activation.
+    Pending,
+}
+
+/// Preferred-operation support details for a Europe phase-1 corridor pair.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EuropePreferredOperationPairSupport {
+    /// Source CRS EPSG code.
+    pub source_crs_epsg: u32,
+    /// Target CRS EPSG code.
+    pub target_crs_epsg: u32,
+    /// Pair activation status.
+    pub status: EuropePreferredOperationStatus,
+    /// Preferred operation code when status is active.
+    pub preferred_operation_code: Option<u32>,
+}
+
+/// Snapshot of Europe phase-1 preferred-operation support in the current build.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EuropePreferredOperationSupportSnapshot {
+    /// Phase label used for governance and rollout docs.
+    pub phase_label: &'static str,
+    /// Corridor-pair support entries.
+    pub pairs: Vec<EuropePreferredOperationPairSupport>,
+}
+
+const US_PHASE1_LABEL: &str = "phase-1";
+const EUROPE_PHASE1_LABEL: &str = "phase-1";
+
+const US_PHASE1_CORRIDOR_SEEDS: &[(u32, u32)] = &[(3582, 6487), (3600, 6568)];
+const EUROPE_PHASE1_CORRIDOR_SEEDS: &[(u32, u32)] = &[(4258, 4258), (25832, 3035)];
+
+/// Return a snapshot of US NSRS2007->NAD83(2011) phase-1 preferred-operation support.
+pub fn us_phase1_preferred_operation_support_snapshot() -> UsPreferredOperationSupportSnapshot {
+    let mut pairs = Vec::with_capacity(US_PHASE1_CORRIDOR_SEEDS.len());
+
+    for (source_crs_epsg, target_crs_epsg) in US_PHASE1_CORRIDOR_SEEDS {
+        // Phase-1 US corridors remain pending until authoritative checkpoint
+        // evidence enables an explicit operation-code activation.
+        let status = UsPreferredOperationStatus::Pending;
+        let preferred_operation_code = None;
+
+        pairs.push(UsPreferredOperationPairSupport {
+            source_crs_epsg: *source_crs_epsg,
+            target_crs_epsg: *target_crs_epsg,
+            status,
+            preferred_operation_code,
+        });
+    }
+
+    UsPreferredOperationSupportSnapshot {
+        phase_label: US_PHASE1_LABEL,
+        pairs,
+    }
+}
+
+/// Return a snapshot of Europe ETRS89 phase-1 preferred-operation support.
+pub fn europe_phase1_preferred_operation_support_snapshot(
+) -> EuropePreferredOperationSupportSnapshot {
+    let mut pairs = Vec::with_capacity(EUROPE_PHASE1_CORRIDOR_SEEDS.len());
+
+    for (source_crs_epsg, target_crs_epsg) in EUROPE_PHASE1_CORRIDOR_SEEDS {
+        // Phase-1 Europe corridors remain pending until authoritative checkpoint
+        // evidence enables an explicit operation-code activation.
+        let status = EuropePreferredOperationStatus::Pending;
+        let preferred_operation_code = None;
+
+        pairs.push(EuropePreferredOperationPairSupport {
+            source_crs_epsg: *source_crs_epsg,
+            target_crs_epsg: *target_crs_epsg,
+            status,
+            preferred_operation_code,
+        });
+    }
+
+    EuropePreferredOperationSupportSnapshot {
+        phase_label: EUROPE_PHASE1_LABEL,
+        pairs,
+    }
+}
+
 /// Parse supported NAD83(CSRS) realization UTM EPSG code families.
 ///
 /// Returns `(realization, zone)` for known realization UTM corridors.

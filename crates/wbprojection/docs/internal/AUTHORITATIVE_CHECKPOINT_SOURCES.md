@@ -208,6 +208,13 @@ Phase-1 strict fill rules (enforced by tests when rows are present):
    - Be non-empty and not a placeholder token (`tbd`, `todo`, `pending`, `n/a`, etc.).
    - Include either a namespaced code (`EPSG:...`) or a URL-style path.
 
+Runtime scaffolding note:
+
+- `wbprojection` now exposes phase-1 US and Europe support snapshots for these
+   seeded corridor pairs.
+- Snapshot entries are intentionally `Pending` with no preferred operation code
+   until the corresponding authoritative checkpoint rows are filled and validated.
+
 ## EPSG Anchor-Epoch Notes (Realization Metadata)
 
 Observed in EPSG WKT content used during this rollout:

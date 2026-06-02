@@ -32,8 +32,12 @@ use crate::{
     to_geotiff_info,
     preferred_operation_code_for_crs_pair,
     CsrsPreferredOperationStatus,
+    EuropePreferredOperationStatus,
+    europe_phase1_preferred_operation_support_snapshot,
     unregister_vertical_offset_grid,
     unregister_epsg_alias,
+    us_phase1_preferred_operation_support_snapshot,
+    UsPreferredOperationStatus,
     vertical_offset_grid_name,
 };
 use crate::epsg::{epsg_info, known_epsg_codes};
@@ -1424,6 +1428,42 @@ fn epsg_csrs_support_snapshot_reports_active_and_pending_pairs() {
         }
         assert_eq!(entry.zone_min, 7);
         assert_eq!(entry.zone_max, 24);
+    }
+}
+
+#[test]
+fn epsg_us_phase1_support_snapshot_tracks_pending_seed_corridors() {
+    let snapshot = us_phase1_preferred_operation_support_snapshot();
+    assert_eq!(snapshot.phase_label, "phase-1");
+    assert_eq!(snapshot.pairs.len(), 2);
+
+    let expected = [(3582u32, 6487u32), (3600u32, 6568u32)];
+    for (source_crs_epsg, target_crs_epsg) in expected {
+        let pair = snapshot
+            .pairs
+            .iter()
+            .find(|p| p.source_crs_epsg == source_crs_epsg && p.target_crs_epsg == target_crs_epsg)
+            .expect("expected US phase-1 pair in snapshot");
+        assert_eq!(pair.status, UsPreferredOperationStatus::Pending);
+        assert_eq!(pair.preferred_operation_code, None);
+    }
+}
+
+#[test]
+fn epsg_europe_phase1_support_snapshot_tracks_pending_seed_corridors() {
+    let snapshot = europe_phase1_preferred_operation_support_snapshot();
+    assert_eq!(snapshot.phase_label, "phase-1");
+    assert_eq!(snapshot.pairs.len(), 2);
+
+    let expected = [(4258u32, 4258u32), (25832u32, 3035u32)];
+    for (source_crs_epsg, target_crs_epsg) in expected {
+        let pair = snapshot
+            .pairs
+            .iter()
+            .find(|p| p.source_crs_epsg == source_crs_epsg && p.target_crs_epsg == target_crs_epsg)
+            .expect("expected Europe phase-1 pair in snapshot");
+        assert_eq!(pair.status, EuropePreferredOperationStatus::Pending);
+        assert_eq!(pair.preferred_operation_code, None);
     }
 }
 

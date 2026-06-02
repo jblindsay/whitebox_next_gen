@@ -224,6 +224,8 @@ Runtime scaffolding note:
    inventories directly.
 - If a corridor has no authoritative operation code yet, lookup intentionally
    returns no preferred code (fallback-safe behavior).
+- Callers can opt into policy-default operation codes for active corridors via
+   the policy-aware lookup API without changing the corridor inventory itself.
 
 ## EPSG Anchor-Epoch Notes (Realization Metadata)
 

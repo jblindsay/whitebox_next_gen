@@ -235,7 +235,9 @@ pub use epsg::{
     epsg_area_of_use,
     is_pending_preferred_operation_crs_pair,
     preferred_operation_code_for_crs_pair,
+    preferred_operation_code_for_crs_pair_with_policy,
     preferred_operation_for_crs_pair,
+    PreferredOperationPolicy,
 };
 pub use proj_string::{ParsedProjString, ParsedProjUnits};
 pub use error::{ProjectionError, Result};

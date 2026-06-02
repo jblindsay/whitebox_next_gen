@@ -1297,16 +1297,56 @@ pub fn epsg_from_srs_reference(s: &str) -> Option<u32> {
 /// Return a preferred coordinate operation code for a source/target EPSG pair,
 /// when a known preferred mapping exists in this crate.
 pub fn preferred_operation_code_for_crs_pair(source_epsg: u32, target_epsg: u32) -> Option<u32> {
+    preferred_operation_code_for_crs_pair_with_policy(
+        source_epsg,
+        target_epsg,
+        PreferredOperationPolicy::default(),
+    )
+}
+
+/// Policy used when resolving preferred operation codes for active US/EU corridors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PreferredOperationPolicy {
+    /// Optional default code to emit for matched US phase-1 corridors.
+    pub us_phase1_default_operation_code: Option<u32>,
+    /// Optional default code to emit for matched Europe phase-1 corridors.
+    pub europe_phase1_default_operation_code: Option<u32>,
+}
+
+impl Default for PreferredOperationPolicy {
+    fn default() -> Self {
+        Self {
+            us_phase1_default_operation_code: None,
+            europe_phase1_default_operation_code: None,
+        }
+    }
+}
+
+/// Return a preferred coordinate operation code for a source/target EPSG pair,
+/// using an explicit US/EU phase-1 policy.
+pub fn preferred_operation_code_for_crs_pair_with_policy(
+    source_epsg: u32,
+    target_epsg: u32,
+    policy: PreferredOperationPolicy,
+) -> Option<u32> {
     if let Some(operation_code) = preferred_operation_code_for_csrs_realization_pair(source_epsg, target_epsg)
     {
         return Some(operation_code);
     }
 
-    if let Some(operation_code) = preferred_operation_code_for_us_phase1_pair(source_epsg, target_epsg) {
+    if let Some(operation_code) = preferred_operation_code_for_us_phase1_pair(
+        source_epsg,
+        target_epsg,
+        policy.us_phase1_default_operation_code,
+    ) {
         return Some(operation_code);
     }
 
-    if let Some(operation_code) = preferred_operation_code_for_europe_phase1_pair(source_epsg, target_epsg) {
+    if let Some(operation_code) = preferred_operation_code_for_europe_phase1_pair(
+        source_epsg,
+        target_epsg,
+        policy.europe_phase1_default_operation_code,
+    ) {
         return Some(operation_code);
     }
 
@@ -1581,26 +1621,38 @@ pub fn europe_phase1_preferred_operation_support_snapshot(
     }
 }
 
-fn preferred_operation_code_for_us_phase1_pair(source_epsg: u32, target_epsg: u32) -> Option<u32> {
+fn preferred_operation_code_for_us_phase1_pair(
+    source_epsg: u32,
+    target_epsg: u32,
+    default_operation_code: Option<u32>,
+) -> Option<u32> {
     let snapshot = us_phase1_preferred_operation_support_snapshot();
     snapshot
         .pairs
         .iter()
         .find(|pair| pair.source_crs_epsg == source_epsg && pair.target_crs_epsg == target_epsg)
         .and_then(|pair| match pair.status {
-            UsPreferredOperationStatus::Active => pair.preferred_operation_code,
+            UsPreferredOperationStatus::Active => {
+                pair.preferred_operation_code.or(default_operation_code)
+            }
             UsPreferredOperationStatus::Pending => None,
         })
 }
 
-fn preferred_operation_code_for_europe_phase1_pair(source_epsg: u32, target_epsg: u32) -> Option<u32> {
+fn preferred_operation_code_for_europe_phase1_pair(
+    source_epsg: u32,
+    target_epsg: u32,
+    default_operation_code: Option<u32>,
+) -> Option<u32> {
     let snapshot = europe_phase1_preferred_operation_support_snapshot();
     snapshot
         .pairs
         .iter()
         .find(|pair| pair.source_crs_epsg == source_epsg && pair.target_crs_epsg == target_epsg)
         .and_then(|pair| match pair.status {
-            EuropePreferredOperationStatus::Active => pair.preferred_operation_code,
+            EuropePreferredOperationStatus::Active => {
+                pair.preferred_operation_code.or(default_operation_code)
+            }
             EuropePreferredOperationStatus::Pending => None,
         })
 }

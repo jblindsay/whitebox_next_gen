@@ -31,6 +31,8 @@ use crate::{
     to_ogc_wkt,
     to_geotiff_info,
     preferred_operation_code_for_crs_pair,
+    preferred_operation_code_for_crs_pair_with_policy,
+    PreferredOperationPolicy,
     CsrsPreferredOperationStatus,
     EuropePreferredOperationStatus,
     europe_phase1_preferred_operation_support_snapshot,
@@ -1513,6 +1515,31 @@ fn epsg_preferred_operation_us_europe_active_corridors_fallback_to_none_without_
     assert_eq!(preferred_operation_code_for_crs_pair(25832, 3035), None);
     assert_eq!(preferred_operation_code_for_crs_pair(25801, 3035), None);
     assert_eq!(preferred_operation_code_for_crs_pair(25860, 3035), None);
+}
+
+#[test]
+fn epsg_preferred_operation_us_europe_active_corridors_can_use_policy_default_codes() {
+    let policy = PreferredOperationPolicy {
+        us_phase1_default_operation_code: Some(10715),
+        europe_phase1_default_operation_code: Some(10715),
+    };
+
+    assert_eq!(
+        preferred_operation_code_for_crs_pair_with_policy(3582, 6487, policy),
+        Some(10715)
+    );
+    assert_eq!(
+        preferred_operation_code_for_crs_pair_with_policy(3600, 6568, policy),
+        Some(10715)
+    );
+    assert_eq!(
+        preferred_operation_code_for_crs_pair_with_policy(25832, 3035, policy),
+        Some(10715)
+    );
+    assert_eq!(
+        preferred_operation_code_for_crs_pair_with_policy(25860, 3035, policy),
+        Some(10715)
+    );
 }
 
 #[test]

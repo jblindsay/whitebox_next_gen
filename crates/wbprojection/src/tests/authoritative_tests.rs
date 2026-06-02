@@ -3,9 +3,15 @@
 use crate::{
     csrs_preferred_operation_support_snapshot,
     europe_phase1_preferred_operation_support_snapshot,
+    preferred_operation_code_for_crs_pair,
+    preferred_operation_code_for_crs_pair_with_policy,
+    preferred_operation_for_crs_pair,
+    preferred_operation_for_crs_pair_with_policy,
     us_phase1_preferred_operation_support_snapshot,
     CsrsPreferredOperationStatus,
     EuropePreferredOperationStatus,
+    OperationMethod,
+    PreferredOperationPolicy,
     UsPreferredOperationStatus,
 };
 use std::collections::HashSet;
@@ -1089,5 +1095,163 @@ fn europe_phase1_snapshot_includes_reverse_seed_corridors_as_active() {
             .find(|p| p.source_crs_epsg == src && p.target_crs_epsg == dst)
             .expect("expected Europe phase-1 seed corridor to be present");
         assert_eq!(pair.status, EuropePreferredOperationStatus::Active);
+    }
+}
+
+#[test]
+fn us_phase1_allowlisted_corridors_follow_policy_default_contract() {
+    let allowlisted = [
+        (3582u32, 6487u32),
+        (6487u32, 3582u32),
+        (3600u32, 6568u32),
+        (6568u32, 3600u32),
+    ];
+    let policy = PreferredOperationPolicy {
+        us_phase1_default_operation_code: Some(10715),
+        europe_phase1_default_operation_code: None,
+    };
+
+    for (src, dst) in allowlisted {
+        assert_eq!(
+            preferred_operation_code_for_crs_pair(src, dst),
+            None,
+            "US allowlisted corridor should remain strict fallback-safe without policy defaults"
+        );
+        assert_eq!(
+            preferred_operation_code_for_crs_pair_with_policy(src, dst, policy),
+            Some(10715),
+            "US allowlisted corridor should use policy default operation code when provided"
+        );
+    }
+}
+
+#[test]
+fn europe_phase1_allowlisted_corridors_follow_policy_default_contract() {
+    let allowlisted = [
+        (4258u32, 4258u32),
+        (25801u32, 3035u32),
+        (25832u32, 3035u32),
+        (3035u32, 25801u32),
+        (3035u32, 25832u32),
+    ];
+    let policy = PreferredOperationPolicy {
+        us_phase1_default_operation_code: None,
+        europe_phase1_default_operation_code: Some(10715),
+    };
+
+    for (src, dst) in allowlisted {
+        assert_eq!(
+            preferred_operation_code_for_crs_pair(src, dst),
+            None,
+            "Europe allowlisted corridor should remain strict fallback-safe without policy defaults"
+        );
+        assert_eq!(
+            preferred_operation_code_for_crs_pair_with_policy(src, dst, policy),
+            Some(10715),
+            "Europe allowlisted corridor should use policy default operation code when provided"
+        );
+    }
+}
+
+#[test]
+fn us_phase1_allowlisted_corridors_follow_definition_policy_contract() {
+    let allowlisted = [
+        (3582u32, 6487u32),
+        (6487u32, 3582u32),
+        (3600u32, 6568u32),
+        (6568u32, 3600u32),
+    ];
+    let policy = PreferredOperationPolicy {
+        us_phase1_default_operation_code: Some(10715),
+        europe_phase1_default_operation_code: None,
+    };
+
+    for (src, dst) in allowlisted {
+        assert_eq!(
+            preferred_operation_for_crs_pair(src, dst),
+            None,
+            "US allowlisted corridor should remain strict fallback-safe without policy defaults"
+        );
+
+        let op = preferred_operation_for_crs_pair_with_policy(src, dst, policy)
+            .expect("US allowlisted corridor should build a preferred op under policy defaults");
+        assert_eq!(op.operation_code, 10715);
+        assert_eq!(op.source_crs_code, src);
+        assert_eq!(op.target_crs_code, dst);
+        assert_eq!(op.method, OperationMethod::DynamicGridShift);
+        assert!(op.preferred);
+    }
+}
+
+#[test]
+fn europe_phase1_allowlisted_corridors_follow_definition_policy_contract() {
+    let allowlisted = [
+        (4258u32, 4258u32),
+        (25801u32, 3035u32),
+        (25832u32, 3035u32),
+        (3035u32, 25801u32),
+        (3035u32, 25832u32),
+    ];
+    let policy = PreferredOperationPolicy {
+        us_phase1_default_operation_code: None,
+        europe_phase1_default_operation_code: Some(10715),
+    };
+
+    for (src, dst) in allowlisted {
+        assert_eq!(
+            preferred_operation_for_crs_pair(src, dst),
+            None,
+            "Europe allowlisted corridor should remain strict fallback-safe without policy defaults"
+        );
+
+        let op = preferred_operation_for_crs_pair_with_policy(src, dst, policy)
+            .expect("Europe allowlisted corridor should build a preferred op under policy defaults");
+        assert_eq!(op.operation_code, 10715);
+        assert_eq!(op.source_crs_code, src);
+        assert_eq!(op.target_crs_code, dst);
+        assert_eq!(op.method, OperationMethod::DynamicGridShift);
+        assert!(op.preferred);
+    }
+}
+
+#[test]
+fn us_phase1_policy_defaults_do_not_apply_outside_active_corridors() {
+    let policy = PreferredOperationPolicy {
+        us_phase1_default_operation_code: Some(10715),
+        europe_phase1_default_operation_code: None,
+    };
+
+    // Different zones or unrelated CRS pairs must not receive US phase-1 defaults.
+    let out_of_scope_pairs = [
+        (3582u32, 6568u32),
+        (6568u32, 3582u32),
+        (6487u32, 3600u32),
+        (4326u32, 3857u32),
+    ];
+
+    for (src, dst) in out_of_scope_pairs {
+        assert_eq!(preferred_operation_code_for_crs_pair_with_policy(src, dst, policy), None);
+        assert_eq!(preferred_operation_for_crs_pair_with_policy(src, dst, policy), None);
+    }
+}
+
+#[test]
+fn europe_phase1_policy_defaults_do_not_apply_outside_active_corridors() {
+    let policy = PreferredOperationPolicy {
+        us_phase1_default_operation_code: None,
+        europe_phase1_default_operation_code: Some(10715),
+    };
+
+    // Corridors not represented in broad Europe phase-1 inventory must remain strict fallback-safe.
+    let out_of_scope_pairs = [
+        (3035u32, 26917u32),
+        (25861u32, 3035u32),
+        (3035u32, 25861u32),
+        (4326u32, 3857u32),
+    ];
+
+    for (src, dst) in out_of_scope_pairs {
+        assert_eq!(preferred_operation_code_for_crs_pair_with_policy(src, dst, policy), None);
+        assert_eq!(preferred_operation_for_crs_pair_with_policy(src, dst, policy), None);
     }
 }

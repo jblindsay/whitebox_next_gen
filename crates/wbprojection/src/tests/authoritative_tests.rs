@@ -838,6 +838,18 @@ fn us_nsrs2007_to_nad83_2011_template_fixture_is_parseable() {
             !row.source_reference.is_empty(),
             "source_reference should be non-empty"
         );
+
+        // Filled rows must point to resolvable CRS entries and expected families.
+        let src = crate::from_epsg(row.source_crs_epsg).expect("source EPSG should resolve");
+        let dst = crate::from_epsg(row.target_crs_epsg).expect("target EPSG should resolve");
+        assert!(
+            src.name.contains("NSRS2007"),
+            "source CRS name should indicate NSRS2007 family"
+        );
+        assert!(
+            dst.name.contains("2011"),
+            "target CRS name should indicate NAD83(2011) family"
+        );
     }
 }
 
@@ -865,6 +877,12 @@ fn europe_etrs89_realization_template_fixture_is_parseable() {
             !row.source_reference.is_empty(),
             "source_reference should be non-empty"
         );
+
+        // Filled rows should stay within ETRS89-centered realization corridors.
+        let src = crate::from_epsg(row.source_crs_epsg).expect("source EPSG should resolve");
+        let dst = crate::from_epsg(row.target_crs_epsg).expect("target EPSG should resolve");
+        assert_eq!(src.datum.name, "ETRS 89", "source datum should be ETRS89 family");
+        assert_eq!(dst.datum.name, "ETRS 89", "target datum should be ETRS89 family");
     }
 }
 

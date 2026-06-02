@@ -194,6 +194,16 @@ Notes for these new templates:
 - Empty templates are valid until authoritative checkpoints are captured.
 - Immediate priority order for fill-in is US first, then Europe.
 
+Phase-1 strict fill rules (enforced by tests when rows are present):
+
+- US template allowlist corridors:
+   - 3582 -> 6487
+   - 3600 -> 6568
+- Europe template allowlist corridors:
+   - 4258 -> 4258
+   - 25832 -> 3035
+- For both templates, each filled row must include `operation_code`.
+
 ## EPSG Anchor-Epoch Notes (Realization Metadata)
 
 Observed in EPSG WKT content used during this rollout:

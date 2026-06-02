@@ -887,6 +887,56 @@ fn europe_etrs89_realization_template_fixture_is_parseable() {
 }
 
 #[test]
+fn us_nsrs2007_to_nad83_2011_template_phase1_pairs_are_allowlisted() {
+    let rows = parse_csrs_pair_template_fixture(US_NSRS2007_TO_NAD83_2011_TEMPLATE)
+        .expect("US NSRS2007->NAD83(2011) template fixture should parse");
+
+    // Phase-1 US seed corridors for first authoritative captures.
+    let allowlist: HashSet<(u32, u32)> = [
+        (3582u32, 6487u32),
+        (3600u32, 6568u32),
+    ]
+    .into_iter()
+    .collect();
+
+    for row in &rows {
+        assert!(
+            allowlist.contains(&(row.source_crs_epsg, row.target_crs_epsg)),
+            "phase-1 US template row must use an allowlisted corridor"
+        );
+        assert!(
+            row.operation_code.is_some(),
+            "phase-1 US template rows must include operation_code"
+        );
+    }
+}
+
+#[test]
+fn europe_etrs89_realization_template_phase1_pairs_are_allowlisted() {
+    let rows = parse_csrs_pair_template_fixture(EUROPE_ETRS89_REALIZATION_TEMPLATE)
+        .expect("Europe ETRS89 realization template fixture should parse");
+
+    // Phase-1 Europe seed corridors for first authoritative captures.
+    let allowlist: HashSet<(u32, u32)> = [
+        (4258u32, 4258u32),
+        (25832u32, 3035u32),
+    ]
+    .into_iter()
+    .collect();
+
+    for row in &rows {
+        assert!(
+            allowlist.contains(&(row.source_crs_epsg, row.target_crs_epsg)),
+            "phase-1 Europe template row must use an allowlisted corridor"
+        );
+        assert!(
+            row.operation_code.is_some(),
+            "phase-1 Europe template rows must include operation_code"
+        );
+    }
+}
+
+#[test]
 fn csrs_template_fixture_scope_matches_current_corridor_policy() {
     let snapshot = csrs_preferred_operation_support_snapshot();
     let expected_pairs = [

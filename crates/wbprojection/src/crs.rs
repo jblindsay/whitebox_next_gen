@@ -2353,4 +2353,56 @@ mod tests {
         assert!((via_default_api.1 - via_default_policy.1).abs() < 1e-9);
         assert!((via_default_api.2 - via_default_policy.2).abs() < 1e-9);
     }
+
+    #[test]
+    fn transform_to_with_preferred_operation_matches_explicit_default_policy_for_reverse_europe() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let src = Crs::from_epsg(3035).unwrap();
+        let dst = Crs::from_epsg(25801).unwrap();
+
+        let via_default_api = src
+            .transform_to_with_preferred_operation(500_000.0, 5_500_000.0, &dst, None)
+            .unwrap();
+        let via_default_policy = src
+            .transform_to_with_preferred_operation_and_policy(
+                500_000.0,
+                5_500_000.0,
+                &dst,
+                None,
+                PreferredOperationPolicy::default(),
+            )
+            .unwrap();
+
+        assert!((via_default_api.0 - via_default_policy.0).abs() < 1e-9);
+        assert!((via_default_api.1 - via_default_policy.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn transform_to_3d_with_preferred_operation_matches_explicit_default_policy_for_reverse_us_secondary_seed() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let src = Crs::from_epsg(6568).unwrap();
+        let dst = Crs::from_epsg(3600).unwrap();
+
+        let via_default_api = src
+            .transform_to_3d_with_preferred_operation(500_000.0, 5_500_000.0, 42.0, &dst, None)
+            .unwrap();
+        let via_default_policy = src
+            .transform_to_3d_with_preferred_operation_and_policy(
+                500_000.0,
+                5_500_000.0,
+                42.0,
+                &dst,
+                None,
+                PreferredOperationPolicy::default(),
+            )
+            .unwrap();
+
+        assert!((via_default_api.0 - via_default_policy.0).abs() < 1e-9);
+        assert!((via_default_api.1 - via_default_policy.1).abs() < 1e-9);
+        assert!((via_default_api.2 - via_default_policy.2).abs() < 1e-9);
+    }
 }

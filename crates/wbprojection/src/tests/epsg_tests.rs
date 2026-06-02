@@ -1634,6 +1634,8 @@ fn epsg_preferred_operation_definition_with_policy_falls_back_without_defaults()
 fn epsg_preferred_operation_definition_default_api_remains_fallback_safe() {
     assert_eq!(preferred_operation_for_crs_pair(3582, 6487), None);
     assert_eq!(preferred_operation_for_crs_pair(25832, 3035), None);
+    assert_eq!(preferred_operation_for_crs_pair(6568, 3600), None);
+    assert_eq!(preferred_operation_for_crs_pair(3035, 25801), None);
 }
 
 #[test]
@@ -1652,6 +1654,14 @@ fn epsg_preferred_operation_code_default_api_matches_default_policy_api() {
         preferred_operation_code_for_crs_pair(25832, 3035),
         preferred_operation_code_for_crs_pair_with_policy(25832, 3035, policy)
     );
+    assert_eq!(
+        preferred_operation_code_for_crs_pair(6568, 3600),
+        preferred_operation_code_for_crs_pair_with_policy(6568, 3600, policy)
+    );
+    assert_eq!(
+        preferred_operation_code_for_crs_pair(3035, 25801),
+        preferred_operation_code_for_crs_pair_with_policy(3035, 25801, policy)
+    );
 }
 
 #[test]
@@ -1669,6 +1679,14 @@ fn epsg_preferred_operation_definition_default_api_matches_default_policy_api() 
     assert_eq!(
         preferred_operation_for_crs_pair(25832, 3035),
         preferred_operation_for_crs_pair_with_policy(25832, 3035, policy)
+    );
+    assert_eq!(
+        preferred_operation_for_crs_pair(6568, 3600),
+        preferred_operation_for_crs_pair_with_policy(6568, 3600, policy)
+    );
+    assert_eq!(
+        preferred_operation_for_crs_pair(3035, 25801),
+        preferred_operation_for_crs_pair_with_policy(3035, 25801, policy)
     );
 }
 

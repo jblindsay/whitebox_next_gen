@@ -1440,11 +1440,16 @@ fn epsg_us_phase1_support_snapshot_tracks_active_seed_corridors() {
     let snapshot = us_phase1_preferred_operation_support_snapshot();
     assert_eq!(snapshot.phase_label, "phase-1");
     assert!(
-        snapshot.pairs.len() >= 2,
+        snapshot.pairs.len() >= 4,
         "US phase-1 corridor inventory should include at least seed pairs"
     );
 
-    let expected = [(3582u32, 6487u32), (3600u32, 6568u32)];
+    let expected = [
+        (3582u32, 6487u32),
+        (6487u32, 3582u32),
+        (3600u32, 6568u32),
+        (6568u32, 3600u32),
+    ];
     for (source_crs_epsg, target_crs_epsg) in expected {
         let pair = snapshot
             .pairs
@@ -1470,7 +1475,7 @@ fn epsg_europe_phase1_support_snapshot_tracks_active_seed_corridors() {
         "Europe phase-1 corridor inventory should expand beyond seed pairs"
     );
 
-    let expected = [(4258u32, 4258u32), (25832u32, 3035u32)];
+    let expected = [(4258u32, 4258u32), (25832u32, 3035u32), (3035u32, 25832u32)];
     for (source_crs_epsg, target_crs_epsg) in expected {
         let pair = snapshot
             .pairs
@@ -1492,8 +1497,22 @@ fn epsg_europe_phase1_support_snapshot_tracks_active_seed_corridors() {
         snapshot
             .pairs
             .iter()
+            .any(|p| p.source_crs_epsg == 3035 && p.target_crs_epsg == 25801),
+        "expected broad reverse ETRS89 3035->UTM coverage"
+    );
+    assert!(
+        snapshot
+            .pairs
+            .iter()
             .any(|p| p.source_crs_epsg == 25860 && p.target_crs_epsg == 3035),
         "expected broad ETRS89 UTM->3035 coverage"
+    );
+    assert!(
+        snapshot
+            .pairs
+            .iter()
+            .any(|p| p.source_crs_epsg == 3035 && p.target_crs_epsg == 25860),
+        "expected broad reverse ETRS89 3035->UTM coverage"
     );
     assert!(
         snapshot
@@ -1509,7 +1528,9 @@ fn epsg_preferred_operation_us_europe_active_corridors_fallback_to_none_without_
     // US phase-1 active corridor entries are now surfaced through preferred-op
     // lookup; without authoritative operation codes they intentionally fallback.
     assert_eq!(preferred_operation_code_for_crs_pair(3582, 6487), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(6487, 3582), None);
     assert_eq!(preferred_operation_code_for_crs_pair(3600, 6568), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(6568, 3600), None);
 
     // Europe broad rollout corridors are likewise visible to lookup and
     // fallback safely until operation-code evidence is assigned.
@@ -1517,6 +1538,7 @@ fn epsg_preferred_operation_us_europe_active_corridors_fallback_to_none_without_
     assert_eq!(preferred_operation_code_for_crs_pair(25832, 3035), None);
     assert_eq!(preferred_operation_code_for_crs_pair(3035, 25832), None);
     assert_eq!(preferred_operation_code_for_crs_pair(25801, 3035), None);
+    assert_eq!(preferred_operation_code_for_crs_pair(3035, 25801), None);
     assert_eq!(preferred_operation_code_for_crs_pair(25860, 3035), None);
     assert_eq!(preferred_operation_code_for_crs_pair(3035, 25860), None);
 }
@@ -1537,11 +1559,19 @@ fn epsg_preferred_operation_us_europe_active_corridors_can_use_policy_default_co
         Some(10715)
     );
     assert_eq!(
+        preferred_operation_code_for_crs_pair_with_policy(6568, 3600, policy),
+        Some(10715)
+    );
+    assert_eq!(
         preferred_operation_code_for_crs_pair_with_policy(25832, 3035, policy),
         Some(10715)
     );
     assert_eq!(
         preferred_operation_code_for_crs_pair_with_policy(3035, 25832, policy),
+        Some(10715)
+    );
+    assert_eq!(
+        preferred_operation_code_for_crs_pair_with_policy(3035, 25801, policy),
         Some(10715)
     );
     assert_eq!(

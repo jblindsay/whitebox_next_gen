@@ -2249,6 +2249,60 @@ mod tests {
     }
 
     #[test]
+    fn transform_to_3d_with_preferred_operation_and_policy_falls_back_for_reverse_us_secondary_seed_when_default_unset() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let src = Crs::from_epsg(6568).unwrap();
+        let dst = Crs::from_epsg(3600).unwrap();
+        let policy = PreferredOperationPolicy {
+            us_phase1_default_operation_code: None,
+            europe_phase1_default_operation_code: None,
+        };
+
+        let via_pref = src
+            .transform_to_3d_with_preferred_operation_and_policy(
+                500_000.0,
+                5_500_000.0,
+                42.0,
+                &dst,
+                None,
+                policy,
+            )
+            .unwrap();
+        let base = src.transform_to_3d(500_000.0, 5_500_000.0, 42.0, &dst).unwrap();
+        assert!((via_pref.0 - base.0).abs() < 1e-9);
+        assert!((via_pref.1 - base.1).abs() < 1e-9);
+        assert!((via_pref.2 - base.2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn transform_to_with_preferred_operation_and_policy_falls_back_for_reverse_europe_broad_when_default_unset() {
+        let _guard = coordinate_operation_test_guard();
+        clear_coordinate_operations().unwrap();
+
+        let src = Crs::from_epsg(3035).unwrap();
+        let dst = Crs::from_epsg(25801).unwrap();
+        let policy = PreferredOperationPolicy {
+            us_phase1_default_operation_code: None,
+            europe_phase1_default_operation_code: None,
+        };
+
+        let via_pref = src
+            .transform_to_with_preferred_operation_and_policy(
+                500_000.0,
+                5_500_000.0,
+                &dst,
+                None,
+                policy,
+            )
+            .unwrap();
+        let base = src.transform_to(500_000.0, 5_500_000.0, &dst).unwrap();
+        assert!((via_pref.0 - base.0).abs() < 1e-9);
+        assert!((via_pref.1 - base.1).abs() < 1e-9);
+    }
+
+    #[test]
     fn transform_to_with_preferred_operation_matches_explicit_default_policy() {
         let _guard = coordinate_operation_test_guard();
         clear_coordinate_operations().unwrap();

@@ -55,53 +55,23 @@ Projected-v5 note:
 - Projected NAD83(CSRS)v5 UTM corridors participate in the same matched-zone
 	preferred-operation routing rule as other realization families.
 
+Current policy rule in code:
+
+- For any matched-zone pair where `source_realization != target_realization`, status is **Active** with preferred operation **10715**.
+- For same-realization pairs (`v2->v2`, `v3->v3`, ..., `v8->v8`), status is **Pending** because no preferred operation is needed (baseline/no-op semantics).
+
+Representative matrix rows:
+
 | Source realization | Target realization | Status | Preferred operation |
 |---|---|---|---:|
 | v2 | v2 | Pending | - |
-| v2 | v3 | Pending | - |
-| v2 | v4 | Pending | - |
-| v2 | v6 | Pending | - |
-| v2 | v7 | Pending | - |
-| v2 | v8 | Pending | - |
-| v3 | v2 | Pending | - |
-| v3 | v3 | Pending | - |
-| v3 | v4 | Pending | - |
-| v3 | v6 | Pending | - |
-| v3 | v7 | Pending | - |
-| v3 | v8 | Active | 10715 |
-| v4 | v2 | Pending | - |
-| v4 | v3 | Pending | - |
-| v4 | v4 | Pending | - |
-| v4 | v6 | Pending | - |
-| v4 | v7 | Pending | - |
-| v4 | v8 | Active | 10715 |
-| v5 | v2 | Pending | - |
-| v5 | v3 | Pending | - |
-| v5 | v4 | Pending | - |
-| v5 | v5 | Pending | - |
-| v5 | v6 | Pending | - |
-| v5 | v7 | Pending | - |
-| v5 | v8 | Pending | - |
-| v6 | v2 | Pending | - |
-| v6 | v3 | Pending | - |
-| v6 | v4 | Pending | - |
-| v6 | v5 | Pending | - |
-| v6 | v6 | Pending | - |
-| v6 | v7 | Pending | - |
-| v6 | v8 | Active | 10715 |
-| v7 | v2 | Pending | - |
-| v7 | v3 | Pending | - |
-| v7 | v4 | Pending | - |
-| v7 | v5 | Pending | - |
-| v7 | v6 | Pending | - |
-| v7 | v7 | Pending | - |
-| v7 | v8 | Active | 10715 |
-| v8 | v2 | Pending | - |
-| v8 | v3 | Pending | - |
-| v8 | v4 | Pending | - |
-| v8 | v5 | Pending | - |
-| v8 | v6 | Pending | - |
-| v8 | v7 | Pending | - |
+| v2 | v8 | Active | 10715 |
+| v3 | v4 | Active | 10715 |
+| v4 | v6 | Active | 10715 |
+| v5 | v8 | Active | 10715 |
+| v6 | v7 | Active | 10715 |
+| v7 | v3 | Active | 10715 |
+| v8 | v5 | Active | 10715 |
 | v8 | v8 | Pending | - |
 
 ## Current Assertions
@@ -116,8 +86,8 @@ For matched-zone v5 corridors in scoped zones (7-24):
 
 ## Next Expansion Targets
 
-1. Keep zone-matched coverage at 7-24 for all active forward-to-v8 corridors and add explicit checkpoints for every active zone.
-2. Define reverse-direction corridor strategy once operation metadata for reverse preference is finalized.
+1. Keep zone-matched coverage at 7-24 for all active realization corridors and add explicit checkpoints for every active zone.
+2. Expand direct external checkpoint inventory for non-v8 target families under the same active matched-zone policy.
 3. Introduce authoritative external reference checkpoints by corridor with approved tolerance bands.
 4. Split tolerance matrix by transform class where needed (horizontal only vs 3D).
 
@@ -152,12 +122,12 @@ Notes:
 
 Tier A (Pair-Activation Grade):
 - Explicit source/target realization metadata or explicit EPSG pair is present.
-- Eligible to activate Pending realization-pair corridors.
+- Eligible to validate active realization-pair corridors and their preferred-operation mapping.
 
 Tier B (Date-Routed Authoritative Grade):
 - Authoritative tool outputs are reproducible and run settings are preserved, but realization labels are not explicit in output.
 - Eligible for epoch-routing validation and regression checks.
-- Not eligible by itself to activate Pending realization-pair corridors.
+- Not eligible by itself to alter preferred-operation mapping policy.
 
 Current status for the NRCan date-based captures in this repo:
 - Classified as Tier B for general date-routed conformance.

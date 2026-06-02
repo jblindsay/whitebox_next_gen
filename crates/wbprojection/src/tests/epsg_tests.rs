@@ -1358,6 +1358,55 @@ fn epsg_csrs_v5_utm_codes_build_and_roundtrip() {
 }
 
 #[test]
+fn epsg_csrs_registry_families_resolve_globally() {
+    let csrs_geographic_codes = [
+        4617u32, 4954, 4955,
+        8230, 8231, 8232,
+        8233, 8235, 8237,
+        8238, 8239, 8240,
+        8242, 8244, 8246,
+        8247, 8248, 8249,
+        8250, 8251, 8252,
+        8253, 8254, 8255,
+        10413, 10414,
+    ];
+
+    for code in csrs_geographic_codes {
+        assert!(from_epsg(code).is_ok(), "CSRS geographic EPSG:{code} should resolve");
+    }
+
+    for code in [
+        2955u32, 2956, 2957, 2958, 2959, 2960, 2961, 2962,
+        3154, 3155, 3156, 3157, 3158, 3159, 3160,
+        3761, 9709, 9713,
+    ] {
+        assert!(from_epsg(code).is_ok(), "CSRS v1 UTM EPSG:{code} should resolve");
+    }
+
+    for code in 22207u32..=22222 {
+        assert!(from_epsg(code).is_ok(), "CSRS v2 UTM EPSG:{code} should resolve");
+    }
+    for code in 22307u32..=22324 {
+        assert!(from_epsg(code).is_ok(), "CSRS v3 UTM EPSG:{code} should resolve");
+    }
+    for code in 22407u32..=22424 {
+        assert!(from_epsg(code).is_ok(), "CSRS v4 UTM EPSG:{code} should resolve");
+    }
+    for code in 22507u32..=22524 {
+        assert!(from_epsg(code).is_ok(), "CSRS v5 UTM EPSG:{code} should resolve");
+    }
+    for code in 22607u32..=22624 {
+        assert!(from_epsg(code).is_ok(), "CSRS v6 UTM EPSG:{code} should resolve");
+    }
+    for code in 22707u32..=22724 {
+        assert!(from_epsg(code).is_ok(), "CSRS v7 UTM EPSG:{code} should resolve");
+    }
+    for code in 22807u32..=22824 {
+        assert!(from_epsg(code).is_ok(), "CSRS v8 UTM EPSG:{code} should resolve");
+    }
+}
+
+#[test]
 fn epsg_csrs_support_snapshot_reports_active_and_pending_pairs() {
     let snapshot = csrs_preferred_operation_support_snapshot();
 

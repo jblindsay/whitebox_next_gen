@@ -26,7 +26,7 @@
 //! - **UTM ED50** – EPSG:23001–23060 (zones 1–60 N)
 //! - **NAD83(CSRS) / UTM** – EPSG:2955–2962, 3154–3160, 3761, 9709, 9713 (zones 7–24 N; active set)
 //! - **NAD83(CSRS) realizations / UTM** – EPSG:22207–22222 (v2), 22307–22324 (v3), 22407–22424 (v4),
-//!   22607–22624 (v6), 22707–22724 (v7), 22807–22824 (v8)
+//!   22507–22524 (v5), 22607–22624 (v6), 22707–22724 (v7), 22807–22824 (v8)
 //! - **US State Plane (NAD83, meters)** – selected zones
 //! - **UK National Grid** – EPSG:27700
 //! - **German Gauss-Krüger** – EPSG:31466–31469

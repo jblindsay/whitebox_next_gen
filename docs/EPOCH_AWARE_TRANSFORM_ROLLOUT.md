@@ -12,7 +12,7 @@ Completed in this phase:
   (excluding same-realization no-op pairs).
 - `wbprojection` now exposes a programmatic CSRS support snapshot surface
   (`csrs_preferred_operation_support_snapshot`) so callers can query active vs
-  pending realization pairs and scoped zone bounds without reading internal docs.
+  same-realization no-op pairs and scoped zone bounds without reading internal docs.
 - CSRS preferred-operation routing now uses a matrix-based helper in `wbprojection` (catalog-style scaffold) rather than a single hardcoded conditional, enabling phased realization-pair expansion.
 - CSRS activation/pending policy is now data-driven (table-based) rather than
   hand-enumerated per zone pair.
@@ -78,6 +78,9 @@ mathematically-driven corridor policy:
   operation 10715 for zones 7-24 (same-realization pairs remain no-op/baseline).
 - This routing uses an internal realization-pair matrix scaffold (catalog-style)
   covering v2-v8 families.
+
+In other words, every non-identical matched-zone realization pair in v2..v8 is
+active under preferred routing today.
 
 This does not yet cover the broader active NAD83(CSRS) UTM family in the registry
 (`2955–2962`, `3154–3160`, `3761`, `9709`, `9713`), which spans zones 7-24.

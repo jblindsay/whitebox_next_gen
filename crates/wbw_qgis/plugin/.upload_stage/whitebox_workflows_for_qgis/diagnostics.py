@@ -72,7 +72,7 @@ def diagnostics_text(payload: dict[str, Any]) -> str:
             if isinstance(pairs, list):
                 active_pairs = []
                 pending_count = 0
-                pending_corridors = []
+                pending_noop_pairs = []
                 for pair in pairs:
                     if not isinstance(pair, dict):
                         continue
@@ -84,17 +84,16 @@ def diagnostics_text(payload: dict[str, Any]) -> str:
                         active_pairs.append((src, dst, op_code))
                     elif status == "pending":
                         pending_count += 1
-                        if src == "v8" or dst == "v8":
-                            pending_corridors.append((src, dst))
+                        pending_noop_pairs.append((src, dst))
 
                 if active_pairs:
                     lines.append("  active_pairs:")
                     for src, dst, op_code in active_pairs:
                         lines.append(f"    {src} -> {dst}: op={op_code}")
                 lines.append(f"  pending_pair_count: {pending_count}")
-                if pending_corridors:
-                    lines.append("  pending_corridors_v8_family:")
-                    for src, dst in sorted(set(pending_corridors)):
+                if pending_noop_pairs:
+                    lines.append("  pending_noop_pairs:")
+                    for src, dst in sorted(set(pending_noop_pairs)):
                         lines.append(f"    {src} -> {dst}")
 
     lines.extend(["", "json:", json.dumps(payload, indent=2, sort_keys=True)])

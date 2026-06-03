@@ -7,6 +7,16 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Promoted VIIRS and generic HDF5 URI support-matrix wording in
+	`docs/SUPPORTED_HDF_PRODUCT_LAYOUTS.md` from staged/partial to bounded
+	validated scope where current evidence now includes real multilevel chunk-index
+	traversal coverage (including VNP21 geolocation URI reads in `wbraster`).
+- Expanded the same support-matrix bounded-validation wording to include
+	selected VNP21 science-field URI materialization evidence in `wbraster`
+	(`LST` and `LST_err`) alongside geolocation paths.
+- Expanded the same support-matrix bounded-validation wording to include
+	real VNP13 vegetation-field URI materialization evidence in `wbraster`
+	(`NDVI`, `EVI`, and `EVI2`) via bounded multilevel chunk traversal.
 - Explicit CRS responsibility-boundary documentation in `docs/DESIGN.md` and
 	roadmap notes: `wbhdf` stays projection-engine agnostic (no `wbprojection`
 	dependency), while CRS interpretation/reprojection is owned by downstream

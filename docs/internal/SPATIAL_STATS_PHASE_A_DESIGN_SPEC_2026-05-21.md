@@ -168,15 +168,48 @@ This schema is used by wrappers and QGIS plugin preview/report panes.
 
 ---
 
-## 5. Neighborhood / Weights Design
+## 5. Report-Style Output Contract
 
-### 5.1 Phase A weight builders
+For tools that do not primarily emit spatial layer outputs, output formatting should follow a deterministic, automation-friendly contract.
+
+1. **Primary output: structured JSON payload (default)**
+- Every run writes or returns the shared statistical output schema in machine-readable form.
+- This is the source of truth for wrappers, reproducibility, and regression checks.
+
+2. **Secondary output: concise CLI summary**
+- Print a compact human-readable summary to stdout/stderr.
+- Summary must be derived from the same JSON payload fields.
+
+3. **Optional artifact: formatted HTML report**
+- HTML is supported as an optional teaching/presentation artifact.
+- HTML is not the canonical output and should not be required for automation.
+
+4. **Optional artifact: CSV tables**
+- CSV is optional for summary/per-feature tables used in grading or spreadsheets.
+
+### 5.1 Recommended output arguments
+
+- `output_json`: preferred structured result path (required or strongly recommended default)
+- `output_html`: optional formatted report path
+- `output_csv`: optional tabular export path
+
+### 5.2 Design rationale
+
+- JSON-first preserves deterministic API contracts and testability.
+- Optional HTML improves teaching usability without coupling compute logic to presentation formatting.
+- Optional CSV supports workflow interoperability without replacing the structured schema.
+
+---
+
+## 6. Neighborhood / Weights Design
+
+### 6.1 Phase A weight builders
 
 - Contiguity (queen/rook) for polygon support
 - k-nearest for point and centroid-derived polygon workflows
 - distance-band
 
-### 5.2 Diagnostics requirements
+### 6.2 Diagnostics requirements
 
 Always emit:
 
@@ -185,7 +218,7 @@ Always emit:
 - whether row standardization applied
 - connected-component count in neighbor graph
 
-### 5.3 Island policy
+### 6.3 Island policy
 
 Configurable policy (default `drop_with_warning`):
 
@@ -195,7 +228,7 @@ Configurable policy (default `drop_with_warning`):
 
 ---
 
-## 6. Numerical and Performance Requirements
+## 7. Numerical and Performance Requirements
 
 1. Use stable accumulation for sum-of-products terms.
 2. Parallelize neighbourhood evaluation where safe.
@@ -204,7 +237,7 @@ Configurable policy (default `drop_with_warning`):
 
 ---
 
-## 7. Wrapper and UI Parity Plan
+## 8. Wrapper and UI Parity Plan
 
 ### Python
 - Add typed methods under a nested stats namespace.
@@ -221,7 +254,7 @@ Configurable policy (default `drop_with_warning`):
 
 ---
 
-## 8. QA and Validation Plan
+## 9. QA and Validation Plan
 
 1. **Known-answer tests**
 - small synthetic datasets with analytically verifiable outputs
@@ -241,7 +274,7 @@ Configurable policy (default `drop_with_warning`):
 
 ---
 
-## 9. Teaching Deliverables (Required)
+## 10. Teaching Deliverables (Required)
 
 1. Intro lab: global Moran's I and interpretation.
 2. Intermediate lab: LISA + Gi* with multiple-testing discussion.
@@ -250,7 +283,7 @@ Configurable policy (default `drop_with_warning`):
 
 ---
 
-## 10. Out-of-Scope for Phase A
+## 11. Out-of-Scope for Phase A
 
 - Kriging (moved to Phase B)
 - Spatial regression/GWR (moved to Phase C)
@@ -258,10 +291,48 @@ Configurable policy (default `drop_with_warning`):
 
 ---
 
-## 11. Immediate Engineering Next Steps
+## 12. Immediate Engineering Next Steps
 
 1. Create `spatial_stats` module in open-tier tools with shared weight builders.
 2. Implement `global_morans_i` first and finalize shared schema from real output.
 3. Implement `local_morans_i_lisa` and `getis_ord_gi_star` using same core weights stack.
 4. Implement point-pattern tools (`nearest_neighbour_index`, `quadrat_count_test`).
 5. Wire wrappers/manual examples in Python/R/QGIS in lockstep.
+
+---
+
+## 13. Status Snapshot (June 3, 2026)
+
+### Checked Off
+
+1. Core Phase A tools implemented and registered in open-tier runtime:
+- `global_morans_i`
+- `local_morans_i_lisa`
+- `getis_ord_gi_star`
+- `nearest_neighbour_index`
+- `quadrat_count_test`
+
+2. Core runtime tests in place for:
+- registry presence/wiring
+- output-field expectations for LISA and Gi/Gi*
+- branded optional HTML report generation
+- real-world smoke runs (attribute-rich points + polygon sample when available)
+
+3. Explicit permutation-mode guardrails are implemented and regression-tested:
+- all three autocorrelation tools currently reject `inference=permutation` with clear validation errors
+
+4. Core runtime output-schema harmonization is implemented across all five Phase A tools:
+- each tool now emits both `report` and `summary` keys
+- shared contract keys are present (`statistic`, `p_value`, observation counts, diagnostics/warnings, runtime metadata)
+
+### Remaining For Phase A Closeout
+
+1. Wrapper/UI parity completion:
+- verify argument/output exposure and help parity for Python, R, and QGIS surfaces
+- ensure optional report outputs and diagnostics are consistently surfaced
+
+2. Additional known-answer numeric QA:
+- extend beyond sign-level assertions to fixed-value tolerance checks against benchmark references
+
+3. End-user documentation parity:
+- add/update concise user-facing notes that permutation inference is intentionally deferred in Phase A and currently asymptotic-only

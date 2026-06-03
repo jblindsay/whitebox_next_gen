@@ -9,6 +9,16 @@ Call pattern:
 
 Total tools: 747
 
+Phase A spatial-statistics call paths:
+
+- `wbw_global_morans_i(args = list(...), session = s)`
+- `wbw_local_morans_i_lisa(args = list(...), session = s)`
+- `wbw_getis_ord_gi_star(args = list(...), session = s)`
+- `wbw_nearest_neighbour_index(args = list(...), session = s)`
+- `wbw_quadrat_count_test(args = list(...), session = s)`
+
+Inference note: these tools currently support `inference = "asymptotic"`; `permutation` is deferred in Phase A.
+
 | Tool ID | Category | Subcategory | Wrapper Call | Generic Call | Return Type | Output Summary |
 |---|---|---|---|---|---|---|
 | `abs` | `raster` | `general` | `s$abs(...)` | `wbw_run_tool("abs", args = list(...), session = s)` | `Raster` | Raster output |

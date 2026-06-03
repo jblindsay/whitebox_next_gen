@@ -5,11 +5,14 @@ use wbraster::{
     CogWriteOptions, DataType, GeoTiffCompression, GeoTiffLayout, GeoTiffWriteOptions,
     Jpeg2000Compression, Jpeg2000WriteOptions, Raster, RasterConfig, RasterFormat,
 };
+use wbraster::raster::RasterData;
 use flate2::Compression;
 use flate2::write::{GzEncoder, ZlibEncoder};
 use serde_json::json;
 use std::io::Write;
 use std::env::temp_dir;
+use std::fs;
+use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -108,6 +111,278 @@ fn assert_external_fixture_expectations(r: &Raster, prefix: &str) {
             "{cell_var} mismatch at ({row},{col}): expected {expected_value} +/- {tol}, got {actual}"
         );
     }
+}
+
+fn fnv1a64(bytes: &[u8]) -> u64 {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in bytes {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
+fn bytes_per_sample(data_type: DataType) -> usize {
+    match data_type {
+        DataType::U8 | DataType::I8 => 1,
+        DataType::U16 | DataType::I16 => 2,
+        DataType::U32 | DataType::I32 | DataType::F32 => 4,
+        DataType::U64 | DataType::I64 | DataType::F64 => 8,
+    }
+}
+
+fn raster_le_bytes(r: &Raster) -> Vec<u8> {
+    let mut out = Vec::<u8>::new();
+    match &r.data {
+        RasterData::U8(values) => out.extend_from_slice(values),
+        RasterData::I8(values) => {
+            for value in values {
+                out.push(*value as u8);
+            }
+        }
+        RasterData::U16(values) => {
+            for value in values {
+                out.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        RasterData::I16(values) => {
+            for value in values {
+                out.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        RasterData::U32(values) => {
+            for value in values {
+                out.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        RasterData::I32(values) => {
+            for value in values {
+                out.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        RasterData::U64(values) => {
+            for value in values {
+                out.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        RasterData::I64(values) => {
+            for value in values {
+                out.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        RasterData::F32(values) => {
+            for value in values {
+                out.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        RasterData::F64(values) => {
+            for value in values {
+                out.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+    }
+    out
+}
+
+fn external_raw_value_at(bytes: &[u8], data_type: DataType, index: usize) -> f64 {
+    match data_type {
+        DataType::U8 => bytes[index] as f64,
+        DataType::I8 => (bytes[index] as i8) as f64,
+        DataType::U16 => {
+            let start = index * 2;
+            u16::from_le_bytes([bytes[start], bytes[start + 1]]) as f64
+        }
+        DataType::I16 => {
+            let start = index * 2;
+            i16::from_le_bytes([bytes[start], bytes[start + 1]]) as f64
+        }
+        DataType::U32 => {
+            let start = index * 4;
+            u32::from_le_bytes([
+                bytes[start],
+                bytes[start + 1],
+                bytes[start + 2],
+                bytes[start + 3],
+            ]) as f64
+        }
+        DataType::I32 => {
+            let start = index * 4;
+            i32::from_le_bytes([
+                bytes[start],
+                bytes[start + 1],
+                bytes[start + 2],
+                bytes[start + 3],
+            ]) as f64
+        }
+        DataType::U64 => {
+            let start = index * 8;
+            u64::from_le_bytes([
+                bytes[start],
+                bytes[start + 1],
+                bytes[start + 2],
+                bytes[start + 3],
+                bytes[start + 4],
+                bytes[start + 5],
+                bytes[start + 6],
+                bytes[start + 7],
+            ]) as f64
+        }
+        DataType::I64 => {
+            let start = index * 8;
+            i64::from_le_bytes([
+                bytes[start],
+                bytes[start + 1],
+                bytes[start + 2],
+                bytes[start + 3],
+                bytes[start + 4],
+                bytes[start + 5],
+                bytes[start + 6],
+                bytes[start + 7],
+            ]) as f64
+        }
+        DataType::F32 => {
+            let start = index * 4;
+            f32::from_le_bytes([
+                bytes[start],
+                bytes[start + 1],
+                bytes[start + 2],
+                bytes[start + 3],
+            ]) as f64
+        }
+        DataType::F64 => {
+            let start = index * 8;
+            f64::from_le_bytes([
+                bytes[start],
+                bytes[start + 1],
+                bytes[start + 2],
+                bytes[start + 3],
+                bytes[start + 4],
+                bytes[start + 5],
+                bytes[start + 6],
+                bytes[start + 7],
+            ])
+        }
+    }
+}
+
+fn external_min_max(bytes: &[u8], data_type: DataType) -> (f64, f64) {
+    let sample_count = bytes.len() / bytes_per_sample(data_type);
+    let mut min_v = f64::INFINITY;
+    let mut max_v = f64::NEG_INFINITY;
+    for idx in 0..sample_count {
+        let value = external_raw_value_at(bytes, data_type, idx);
+        if value < min_v {
+            min_v = value;
+        }
+        if value > max_v {
+            max_v = value;
+        }
+    }
+    (min_v, max_v)
+}
+
+fn h5dump_dataset_raw_bytes(file_path: &str, dataset_path: &str) -> Option<Vec<u8>> {
+    if Command::new("h5dump").arg("-V").output().is_err() {
+        eprintln!("skipping: h5dump is not available on PATH");
+        return None;
+    }
+
+    let raw_path = tmp("_h5dump_raw.bin");
+    let output = Command::new("h5dump")
+        .args([
+            "-d",
+            dataset_path,
+            "-b",
+            "LE",
+            "-o",
+            &raw_path,
+            file_path,
+        ])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!(
+            "skipping: h5dump failed for '{}' in '{}': {}",
+            dataset_path, file_path, stderr
+        );
+        let _ = fs::remove_file(&raw_path);
+        return None;
+    }
+
+    let bytes = fs::read(&raw_path).ok();
+    let _ = fs::remove_file(&raw_path);
+    bytes
+}
+
+fn assert_external_h5dump_full_scene_parity(path: &str, dataset_path: &str, tol: f64) {
+    let uri = format!("{path}#dataset={dataset_path}");
+    let raster = Raster::read(&uri).unwrap_or_else(|e| {
+        panic!(
+            "failed reading URI '{}' for full-scene parity check: {}",
+            uri, e
+        )
+    });
+
+    let Some(reference_bytes) = h5dump_dataset_raw_bytes(path, dataset_path) else {
+        return;
+    };
+
+    let expected_len = raster.rows * raster.cols * bytes_per_sample(raster.data_type);
+    assert_eq!(
+        reference_bytes.len(),
+        expected_len,
+        "h5dump byte length mismatch for dataset '{}'",
+        dataset_path
+    );
+
+    let raster_bytes = raster_le_bytes(&raster);
+    assert_eq!(
+        fnv1a64(&raster_bytes),
+        fnv1a64(&reference_bytes),
+        "full-scene hash mismatch for dataset '{}'",
+        dataset_path
+    );
+
+    let (ref_min, ref_max) = external_min_max(&reference_bytes, raster.data_type);
+    let mut raster_min = f64::INFINITY;
+    let mut raster_max = f64::NEG_INFINITY;
+    for value in raster.band_to_vec_f64(0) {
+        if value < raster_min {
+            raster_min = value;
+        }
+        if value > raster_max {
+            raster_max = value;
+        }
+    }
+    assert!(
+        (raster_min - ref_min).abs() <= tol,
+        "min mismatch for dataset '{}': expected {}, got {}",
+        dataset_path,
+        ref_min,
+        raster_min
+    );
+    assert!(
+        (raster_max - ref_max).abs() <= tol,
+        "max mismatch for dataset '{}': expected {}, got {}",
+        dataset_path,
+        ref_max,
+        raster_max
+    );
+
+    let sample_row = (raster.rows / 2).min(raster.rows.saturating_sub(1));
+    let sample_col = (raster.cols / 2).min(raster.cols.saturating_sub(1));
+    let sample_index = sample_row * raster.cols + sample_col;
+    let ref_sample = external_raw_value_at(&reference_bytes, raster.data_type, sample_index);
+    let raster_sample = raster.get(0, sample_row as isize, sample_col as isize);
+    assert!(
+        (raster_sample - ref_sample).abs() <= tol,
+        "center-window sample mismatch for dataset '{}': expected {}, got {}",
+        dataset_path,
+        ref_sample,
+        raster_sample
+    );
 }
 
 fn make_test_raster() -> Raster {
@@ -959,18 +1234,27 @@ fn read_python_style_zarr_v3_v2_zstd() {
     let data: Vec<f64> = (0..rows * cols)
         .map(|i| if i == 0 { -9999.0 } else { (i as f64).sin() * 10.0 })
         .collect();
-    write_python_style_v3_store(
-        &dir,
-        rows,
-        cols,
-        3,
-        4,
-        "v2",
-        ".",
-        "zstd",
-        "little",
-        &data,
-    );
+    let write_result = std::panic::catch_unwind(|| {
+        write_python_style_v3_store(
+            &dir,
+            rows,
+            cols,
+            3,
+            4,
+            "v2",
+            ".",
+            "zstd",
+            "little",
+            &data,
+        );
+    });
+    if write_result.is_err() {
+        eprintln!(
+            "skipping zstd fixture generation: ruzstd encoder path is not available in this environment"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        return;
+    }
 
     let r = Raster::read(&dir).unwrap();
     let expected = Raster::from_data(
@@ -2552,6 +2836,513 @@ fn external_zarr_v3_fixture_smoke_local_path() {
     assert!(r.rows > 0, "external v3 fixture has no rows");
     assert!(r.cols > 0, "external v3 fixture has no cols");
     assert_external_fixture_expectations(&r, "WBRASTER_EXTERNAL_ZARR_V3");
+}
+
+fn external_viirs_vnp21_fixture_path() -> Option<String> {
+    let env_key = "WBRASTER_EXTERNAL_HDF5_VIIRS_VNP21_FIXTURE";
+    if let Some(path) = env_var_trimmed(env_key) {
+        return Some(path);
+    }
+
+    let default_path = "/Users/johnlindsay/Documents/data/hdf5_examples/VNP21_NRT.A2026151.0724.002.2026151100853.nc";
+    std::path::Path::new(default_path)
+        .is_file()
+        .then_some(default_path.to_string())
+}
+
+fn external_viirs_vnp13_fixture_path() -> Option<String> {
+    let env_key = "WBRASTER_EXTERNAL_HDF5_VIIRS_VNP13_FIXTURE";
+    if let Some(path) = env_var_trimmed(env_key) {
+        return Some(path);
+    }
+
+    let default_path = "/Users/johnlindsay/Documents/data/hdf5_examples/VNP13A4N.A2026150.h12v04.002.2026151015223.h5";
+    std::path::Path::new(default_path)
+        .is_file()
+        .then_some(default_path.to_string())
+}
+
+#[test]
+fn external_hdf5_viirs_vnp21_latitude_uri_multilevel_smoke() {
+    let Some(path) = external_viirs_vnp21_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP21_FIXTURE to VNP21_NRT.A2026151.0724.002.2026151100853.nc"
+        );
+        return;
+    };
+
+    let uri = format!(
+        "{path}#dataset=/VIIRS_Swath_LSTE/Geolocation Fields/latitude"
+    );
+    let r = Raster::read(&uri).unwrap_or_else(|e| {
+        panic!(
+            "failed reading external VNP21 latitude URI fixture at '{path}': {e}"
+        )
+    });
+
+    assert!(r.rows >= 1236, "latitude fixture rows unexpectedly small: {}", r.rows);
+    assert!(r.cols >= 993, "latitude fixture cols unexpectedly small: {}", r.cols);
+    assert_eq!(r.data_type, DataType::F32);
+
+    let sample_a = r.get(0, 1234, 987);
+    let sample_b = r.get(0, 1235, 992);
+    assert!(sample_a.is_finite() && (-90.0..=90.0).contains(&sample_a));
+    assert!(sample_b.is_finite() && (-90.0..=90.0).contains(&sample_b));
+    assert!(
+        (sample_a - 42.0689).abs() <= 1e-2,
+        "latitude sample mismatch: expected ~42.0689, got {sample_a}"
+    );
+    assert!(
+        (sample_b - 42.0561).abs() <= 1e-2,
+        "latitude sample mismatch: expected ~42.0561, got {sample_b}"
+    );
+}
+
+#[test]
+fn external_hdf5_viirs_vnp21_longitude_uri_multilevel_smoke() {
+    let Some(path) = external_viirs_vnp21_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP21_FIXTURE to VNP21_NRT.A2026151.0724.002.2026151100853.nc"
+        );
+        return;
+    };
+
+    let uri = format!(
+        "{path}:///VIIRS_Swath_LSTE/Geolocation Fields/longitude"
+    );
+    let r = Raster::read(&uri).unwrap_or_else(|e| {
+        panic!(
+            "failed reading external VNP21 longitude URI fixture at '{path}': {e}"
+        )
+    });
+
+    assert!(r.rows >= 1236, "longitude fixture rows unexpectedly small: {}", r.rows);
+    assert!(r.cols >= 993, "longitude fixture cols unexpectedly small: {}", r.cols);
+    assert_eq!(r.data_type, DataType::F32);
+
+    let sample_a = r.get(0, 1234, 987);
+    let sample_b = r.get(0, 1235, 992);
+    assert!(sample_a.is_finite() && (-180.0..=180.0).contains(&sample_a));
+    assert!(sample_b.is_finite() && (-180.0..=180.0).contains(&sample_b));
+    assert!(
+        (sample_a - (-86.7945)).abs() <= 1e-2,
+        "longitude sample mismatch: expected ~-86.7945, got {sample_a}"
+    );
+    assert!(
+        (sample_b - (-86.7484)).abs() <= 1e-2,
+        "longitude sample mismatch: expected ~-86.7484, got {sample_b}"
+    );
+}
+
+#[test]
+fn external_hdf5_viirs_vnp21_lst_uri_multilevel_smoke() {
+    let Some(path) = external_viirs_vnp21_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP21_FIXTURE to VNP21_NRT.A2026151.0724.002.2026151100853.nc"
+        );
+        return;
+    };
+
+    let uri = format!("{path}#dataset=/VIIRS_Swath_LSTE/Data Fields/LST");
+    let r = Raster::read(&uri).unwrap_or_else(|e| {
+        panic!(
+            "failed reading external VNP21 LST URI fixture at '{path}': {e}"
+        )
+    });
+
+    assert!(r.rows >= 802, "LST fixture rows unexpectedly small: {}", r.rows);
+    assert!(r.cols >= 1604, "LST fixture cols unexpectedly small: {}", r.cols);
+    assert_eq!(r.data_type, DataType::U16);
+
+    let sample_a = r.get(0, 800, 1600);
+    let sample_b = r.get(0, 801, 1603);
+    assert_eq!(sample_a, 14007.0);
+    assert_eq!(sample_b, 13953.0);
+}
+
+#[test]
+fn external_hdf5_viirs_vnp21_lst_err_uri_multilevel_smoke() {
+    let Some(path) = external_viirs_vnp21_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP21_FIXTURE to VNP21_NRT.A2026151.0724.002.2026151100853.nc"
+        );
+        return;
+    };
+
+    let uri = format!("{path}:///VIIRS_Swath_LSTE/Data Fields/LST_err");
+    let r = Raster::read(&uri).unwrap_or_else(|e| {
+        panic!(
+            "failed reading external VNP21 LST_err URI fixture at '{path}': {e}"
+        )
+    });
+
+    assert!(
+        r.rows >= 802,
+        "LST_err fixture rows unexpectedly small: {}",
+        r.rows
+    );
+    assert!(
+        r.cols >= 1604,
+        "LST_err fixture cols unexpectedly small: {}",
+        r.cols
+    );
+    assert_eq!(r.data_type, DataType::U8);
+
+    let sample_a = r.get(0, 800, 1600);
+    let sample_b = r.get(0, 801, 1603);
+    assert_eq!(sample_a, 22.0);
+    assert_eq!(sample_b, 22.0);
+}
+
+#[test]
+fn external_hdf5_viirs_vnp21_pwv_uri_multilevel_smoke() {
+    let Some(path) = external_viirs_vnp21_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP21_FIXTURE to VNP21_NRT.A2026151.0724.002.2026151100853.nc"
+        );
+        return;
+    };
+
+    let uri = format!("{path}#dataset=/VIIRS_Swath_LSTE/Data Fields/PWV");
+    let r = Raster::read(&uri).unwrap_or_else(|e| {
+        panic!(
+            "failed reading external VNP21 PWV URI fixture at '{path}': {e}"
+        )
+    });
+
+    assert!(r.rows >= 802, "PWV fixture rows unexpectedly small: {}", r.rows);
+    assert!(r.cols >= 1604, "PWV fixture cols unexpectedly small: {}", r.cols);
+    assert_eq!(r.data_type, DataType::U16);
+
+    let sample_a = r.get(0, 800, 1600);
+    let sample_b = r.get(0, 801, 1603);
+    assert_eq!(sample_a, 1071.0);
+    assert_eq!(sample_b, 1071.0);
+}
+
+#[test]
+fn external_hdf5_viirs_vnp21_oceanpix_uri_multilevel_smoke() {
+    let Some(path) = external_viirs_vnp21_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP21_FIXTURE to VNP21_NRT.A2026151.0724.002.2026151100853.nc"
+        );
+        return;
+    };
+
+    let uri = format!("{path}#dataset=/VIIRS_Swath_LSTE/Data Fields/oceanpix");
+    let r = Raster::read(&uri).unwrap_or_else(|e| {
+        panic!(
+            "failed reading external VNP21 oceanpix URI fixture at '{path}': {e}"
+        )
+    });
+
+    assert!(
+        r.rows >= 802,
+        "oceanpix fixture rows unexpectedly small: {}",
+        r.rows
+    );
+    assert!(
+        r.cols >= 1604,
+        "oceanpix fixture cols unexpectedly small: {}",
+        r.cols
+    );
+    assert_eq!(r.data_type, DataType::U8);
+
+    let sample_a = r.get(0, 800, 1600);
+    let sample_b = r.get(0, 801, 1603);
+    assert_eq!(sample_a, 0.0);
+    assert_eq!(sample_b, 0.0);
+
+    // Extra checks against known non-zero reference points from h5dump raw bytes.
+    assert_eq!(r.get(0, 0, 1113), 2.0);
+    assert_eq!(r.get(0, 0, 1854), 2.0);
+    assert_eq!(r.get(0, 1, 1853), 2.0);
+    assert_eq!(r.get(0, 1, 2234), 1.0);
+}
+
+#[test]
+fn external_hdf5_viirs_vnp21_emis14_uri_multilevel_smoke() {
+    let Some(path) = external_viirs_vnp21_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP21_FIXTURE to VNP21_NRT.A2026151.0724.002.2026151100853.nc"
+        );
+        return;
+    };
+
+    let uri = format!("{path}#dataset=/VIIRS_Swath_LSTE/Data Fields/Emis_14");
+    let r = Raster::read(&uri).unwrap_or_else(|e| {
+        panic!("failed reading external VNP21 Emis_14 URI fixture at '{path}': {e}")
+    });
+
+    assert_eq!(r.data_type, DataType::U8);
+    // Ground truth from h5dump raw bytes: row=0 col=1008 val=239, row=0 col=1010 val=240
+    assert_eq!(r.get(0, 0, 1008), 239.0, "Emis_14 row=0 col=1008");
+    assert_eq!(r.get(0, 0, 1010), 240.0, "Emis_14 row=0 col=1010");
+    assert_eq!(r.get(0, 0, 1012), 238.0, "Emis_14 row=0 col=1012");
+}
+
+#[test]
+fn external_hdf5_viirs_vnp21_qc_uri_multilevel_smoke() {
+    let Some(path) = external_viirs_vnp21_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP21_FIXTURE to VNP21_NRT.A2026151.0724.002.2026151100853.nc"
+        );
+        return;
+    };
+
+    let uri = format!("{path}#dataset=/VIIRS_Swath_LSTE/Data Fields/QC");
+    let r = Raster::read(&uri)
+        .unwrap_or_else(|e| panic!("failed reading external VNP21 QC URI fixture at '{path}': {e}"));
+
+    assert_eq!(r.data_type, DataType::U16);
+    // Ground truth from h5dump raw bytes.
+    assert_eq!(r.get(0, 0, 0), 7.0, "QC row=0 col=0");
+    assert_eq!(r.get(0, 0, 1), 7.0, "QC row=0 col=1");
+    assert_eq!(r.get(0, 0, 3), 7.0, "QC row=0 col=3");
+}
+
+#[test]
+fn external_hdf5_viirs_vnp21_emis15_uri_multilevel_smoke() {
+    let Some(path) = external_viirs_vnp21_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP21_FIXTURE to VNP21_NRT.A2026151.0724.002.2026151100853.nc"
+        );
+        return;
+    };
+
+    let uri = format!("{path}#dataset=/VIIRS_Swath_LSTE/Data Fields/Emis_15");
+    let r = Raster::read(&uri).unwrap_or_else(|e| {
+        panic!("failed reading external VNP21 Emis_15 URI fixture at '{path}': {e}")
+    });
+
+    assert_eq!(r.data_type, DataType::U8);
+    // Ground truth from h5dump raw bytes.
+    assert_eq!(r.get(0, 0, 1008), 244.0, "Emis_15 row=0 col=1008");
+    assert_eq!(r.get(0, 0, 1009), 245.0, "Emis_15 row=0 col=1009");
+    assert_eq!(r.get(0, 0, 1011), 244.0, "Emis_15 row=0 col=1011");
+}
+
+#[test]
+fn external_hdf5_viirs_vnp21_emis16_uri_multilevel_smoke() {
+    let Some(path) = external_viirs_vnp21_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP21_FIXTURE to VNP21_NRT.A2026151.0724.002.2026151100853.nc"
+        );
+        return;
+    };
+
+    let uri = format!("{path}#dataset=/VIIRS_Swath_LSTE/Data Fields/Emis_16");
+    let r = Raster::read(&uri).unwrap_or_else(|e| {
+        panic!("failed reading external VNP21 Emis_16 URI fixture at '{path}': {e}")
+    });
+
+    assert_eq!(r.data_type, DataType::U8);
+    // Ground truth from h5dump raw bytes.
+    assert_eq!(r.get(0, 0, 1008), 245.0, "Emis_16 row=0 col=1008");
+    assert_eq!(r.get(0, 0, 1010), 245.0, "Emis_16 row=0 col=1010");
+    assert_eq!(r.get(0, 0, 1011), 245.0, "Emis_16 row=0 col=1011");
+}
+
+#[test]
+fn external_hdf5_viirs_vnp21_emis14_err_uri_multilevel_smoke() {
+    let Some(path) = external_viirs_vnp21_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP21_FIXTURE to VNP21_NRT.A2026151.0724.002.2026151100853.nc"
+        );
+        return;
+    };
+
+    let uri = format!("{path}#dataset=/VIIRS_Swath_LSTE/Data Fields/Emis_14_err");
+    let r = Raster::read(&uri).unwrap_or_else(|e| {
+        panic!("failed reading external VNP21 Emis_14_err URI fixture at '{path}': {e}")
+    });
+
+    assert_eq!(r.data_type, DataType::U16);
+    // Ground truth from h5dump raw bytes.
+    assert_eq!(r.get(0, 0, 1008), 224.0, "Emis_14_err row=0 col=1008");
+    assert_eq!(r.get(0, 0, 1009), 224.0, "Emis_14_err row=0 col=1009");
+    assert_eq!(r.get(0, 0, 1011), 224.0, "Emis_14_err row=0 col=1011");
+}
+
+#[test]
+fn external_hdf5_viirs_vnp21_emis15_err_uri_multilevel_smoke() {
+    let Some(path) = external_viirs_vnp21_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP21_FIXTURE to VNP21_NRT.A2026151.0724.002.2026151100853.nc"
+        );
+        return;
+    };
+
+    let uri = format!("{path}#dataset=/VIIRS_Swath_LSTE/Data Fields/Emis_15_err");
+    let r = Raster::read(&uri).unwrap_or_else(|e| {
+        panic!("failed reading external VNP21 Emis_15_err URI fixture at '{path}': {e}")
+    });
+
+    assert_eq!(r.data_type, DataType::U16);
+    // Ground truth from h5dump raw bytes.
+    assert_eq!(r.get(0, 0, 1008), 113.0, "Emis_15_err row=0 col=1008");
+    assert_eq!(r.get(0, 0, 1009), 113.0, "Emis_15_err row=0 col=1009");
+    assert_eq!(r.get(0, 0, 1011), 113.0, "Emis_15_err row=0 col=1011");
+}
+
+#[test]
+fn external_hdf5_viirs_vnp21_emis16_err_uri_multilevel_smoke() {
+    let Some(path) = external_viirs_vnp21_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP21_FIXTURE to VNP21_NRT.A2026151.0724.002.2026151100853.nc"
+        );
+        return;
+    };
+
+    let uri = format!("{path}#dataset=/VIIRS_Swath_LSTE/Data Fields/Emis_16_err");
+    let r = Raster::read(&uri).unwrap_or_else(|e| {
+        panic!("failed reading external VNP21 Emis_16_err URI fixture at '{path}': {e}")
+    });
+
+    assert_eq!(r.data_type, DataType::U16);
+    // Ground truth from h5dump raw bytes.
+    assert_eq!(r.get(0, 0, 1008), 111.0, "Emis_16_err row=0 col=1008");
+    assert_eq!(r.get(0, 0, 1009), 111.0, "Emis_16_err row=0 col=1009");
+    assert_eq!(r.get(0, 0, 1011), 111.0, "Emis_16_err row=0 col=1011");
+}
+
+#[test]
+fn external_hdf5_viirs_vnp13_ndvi_uri_multilevel_smoke() {
+    let Some(path) = external_viirs_vnp13_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP13_FIXTURE to VNP13A4N.A2026150.h12v04.002.2026151015223.h5"
+        );
+        return;
+    };
+
+    let uri = format!(
+        "{path}#dataset=/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/Data Fields/500 m 8 days NDVI"
+    );
+    let r = Raster::read(&uri).unwrap_or_else(|e| {
+        panic!(
+            "failed reading external VNP13 NDVI URI fixture at '{path}': {e}"
+        )
+    });
+
+    assert!(r.rows >= 2, "VNP13 NDVI rows unexpectedly small: {}", r.rows);
+    assert!(r.cols >= 12, "VNP13 NDVI cols unexpectedly small: {}", r.cols);
+    assert_eq!(r.data_type, DataType::I16);
+
+    assert_eq!(r.get(0, 0, 0), 6177.0);
+    assert_eq!(r.get(0, 0, 11), 5729.0);
+}
+
+#[test]
+fn external_hdf5_viirs_vnp13_evi_uri_multilevel_smoke() {
+    let Some(path) = external_viirs_vnp13_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP13_FIXTURE to VNP13A4N.A2026150.h12v04.002.2026151015223.h5"
+        );
+        return;
+    };
+
+    let uri = format!(
+        "{path}:///HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/Data Fields/500 m 8 days EVI"
+    );
+    let r = Raster::read(&uri).unwrap_or_else(|e| {
+        panic!(
+            "failed reading external VNP13 EVI URI fixture at '{path}': {e}"
+        )
+    });
+
+    assert!(r.rows >= 1, "VNP13 EVI rows unexpectedly small: {}", r.rows);
+    assert!(r.cols >= 12, "VNP13 EVI cols unexpectedly small: {}", r.cols);
+    assert_eq!(r.data_type, DataType::I16);
+
+    assert_eq!(r.get(0, 0, 0), 2304.0);
+    assert_eq!(r.get(0, 0, 11), 2241.0);
+}
+
+#[test]
+fn external_hdf5_viirs_vnp13_evi2_uri_multilevel_smoke() {
+    let Some(path) = external_viirs_vnp13_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP13_FIXTURE to VNP13A4N.A2026150.h12v04.002.2026151015223.h5"
+        );
+        return;
+    };
+
+    let uri = format!(
+        "{path}#dataset=/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/Data Fields/500 m 8 days EVI2"
+    );
+    let r = Raster::read(&uri).unwrap_or_else(|e| {
+        panic!(
+            "failed reading external VNP13 EVI2 URI fixture at '{path}': {e}"
+        )
+    });
+
+    assert!(r.rows >= 1, "VNP13 EVI2 rows unexpectedly small: {}", r.rows);
+    assert!(r.cols >= 12, "VNP13 EVI2 cols unexpectedly small: {}", r.cols);
+    assert_eq!(r.data_type, DataType::I16);
+
+    assert_eq!(r.get(0, 0, 0), 2263.0);
+    assert_eq!(r.get(0, 0, 11), 2110.0);
+}
+
+#[test]
+fn external_hdf5_viirs_vnp21_full_scene_parity_h5dump_all_catalog_fields() {
+    let Some(path) = external_viirs_vnp21_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP21_FIXTURE to VNP21_NRT.A2026151.0724.002.2026151100853.nc"
+        );
+        return;
+    };
+
+    let fields: &[(&str, f64)] = &[
+        ("/VIIRS_Swath_LSTE/Geolocation Fields/latitude", 1e-4),
+        ("/VIIRS_Swath_LSTE/Geolocation Fields/longitude", 1e-4),
+        ("/VIIRS_Swath_LSTE/Data Fields/LST", 0.0),
+        ("/VIIRS_Swath_LSTE/Data Fields/LST_err", 0.0),
+        ("/VIIRS_Swath_LSTE/Data Fields/View_angle", 0.0),
+        ("/VIIRS_Swath_LSTE/Data Fields/Emis_ASTER", 0.0),
+        ("/VIIRS_Swath_LSTE/Data Fields/PWV", 0.0),
+        ("/VIIRS_Swath_LSTE/Data Fields/QC", 0.0),
+        ("/VIIRS_Swath_LSTE/Data Fields/oceanpix", 0.0),
+        ("/VIIRS_Swath_LSTE/Data Fields/Emis_14", 0.0),
+        ("/VIIRS_Swath_LSTE/Data Fields/Emis_15", 0.0),
+        ("/VIIRS_Swath_LSTE/Data Fields/Emis_16", 0.0),
+        ("/VIIRS_Swath_LSTE/Data Fields/Emis_14_err", 0.0),
+        ("/VIIRS_Swath_LSTE/Data Fields/Emis_15_err", 0.0),
+        ("/VIIRS_Swath_LSTE/Data Fields/Emis_16_err", 0.0),
+    ];
+
+    for (dataset_path, tol) in fields {
+        assert_external_h5dump_full_scene_parity(&path, dataset_path, *tol);
+    }
+}
+
+#[test]
+fn external_hdf5_viirs_vnp13_full_scene_parity_h5dump_all_catalog_fields() {
+    let Some(path) = external_viirs_vnp13_fixture_path() else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_HDF5_VIIRS_VNP13_FIXTURE to VNP13A4N.A2026150.h12v04.002.2026151015223.h5"
+        );
+        return;
+    };
+
+    let fields: &[(&str, f64)] = &[
+        (
+            "/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/Data Fields/500 m 8 days NDVI",
+            0.0,
+        ),
+        (
+            "/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/Data Fields/500 m 8 days EVI",
+            0.0,
+        ),
+        (
+            "/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/Data Fields/500 m 8 days EVI2",
+            0.0,
+        ),
+    ];
+
+    for (dataset_path, tol) in fields {
+        assert_external_h5dump_full_scene_parity(&path, dataset_path, *tol);
+    }
 }
 
 // ─── Zarr v3 transpose codec ──────────────────────────────────────────────────

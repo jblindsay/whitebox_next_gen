@@ -189,7 +189,7 @@ impl BufferBuilder {
         }
 
         // Stage 3: Build planar graph and extract bounded faces.
-        let graph = TopologyGraph::from_noded_linestrings(&noded_curves, self.noding.epsilon);
+        let graph = TopologyGraph::from_linestrings_with_options(&noded_curves, self.noding);
         let face_rings = graph.extract_bounded_face_rings(self.noding.epsilon.max(1.0e-9));
         if face_rings.is_empty() {
             return buffer_polygon_legacy_impl(poly, distance, self.options);
@@ -537,7 +537,7 @@ pub fn buffer_linestring(ls: &LineString, distance: f64, options: BufferOptions)
     }
 
     let poly = Polygon::new(LinearRing::new(cleaned), vec![]);
-    repair_buffer_polygon(poly, 1.0e-9)
+    buffer_linestring_graph_repair(poly, 1.0e-9)
 }
 
 /// Build raw closed buffer boundary curves for a linestring.
@@ -629,7 +629,11 @@ pub fn buffer_linestring_curve_set(
         return Vec::new();
     }
 
-    let end_cap = build_cap_curve(
+    let mut ring = Vec::<Coord>::new();
+    ring.extend(left.iter().copied());
+
+    append_cap(
+        &mut ring,
         coords[coords.len() - 1],
         unit_dir(coords[coords.len() - 2], coords[coords.len() - 1]),
         distance,
@@ -637,7 +641,11 @@ pub fn buffer_linestring_curve_set(
         segs,
         true,
     );
-    let start_cap = build_cap_curve(
+
+    ring.extend(right.iter().copied());
+
+    append_cap(
+        &mut ring,
         coords[0],
         unit_dir(coords[0], coords[1]),
         distance,
@@ -646,30 +654,8 @@ pub fn buffer_linestring_curve_set(
         false,
     );
 
-    let mut out = Vec::<LineString>::new();
-    let left = dedupe_adjacent_coords(left);
-    if left.len() >= 2 {
-        out.push(LineString::new(left));
-    }
-    let end_cap = dedupe_adjacent_coords(end_cap);
-    if end_cap.len() >= 2 {
-        out.push(LineString::new(end_cap));
-    }
-    let right = dedupe_adjacent_coords(right);
-    if right.len() >= 2 {
-        out.push(LineString::new(right));
-    }
-    let start_cap = dedupe_adjacent_coords(start_cap);
-    if start_cap.len() >= 2 {
-        out.push(LineString::new(start_cap));
-    }
-
-    out
-}
-
-fn dedupe_adjacent_coords(coords: Vec<Coord>) -> Vec<Coord> {
-    let mut cleaned = Vec::<Coord>::with_capacity(coords.len());
-    for p in coords {
+    let mut cleaned = Vec::<Coord>::with_capacity(ring.len());
+    for p in ring {
         if cleaned
             .last()
             .map(|q| coord_dist2(*q, p) <= 1.0e-24)
@@ -679,70 +665,12 @@ fn dedupe_adjacent_coords(coords: Vec<Coord>) -> Vec<Coord> {
         }
         cleaned.push(p);
     }
-    cleaned
-}
 
-fn build_cap_curve(
-    endpoint: Coord,
-    dir: (f64, f64),
-    distance: f64,
-    cap_style: BufferCapStyle,
-    segs: usize,
-    at_end: bool,
-) -> Vec<Coord> {
-    let (ux, uy) = dir;
-    let (nx, ny) = (-uy, ux);
-
-    let left_pt = Coord::xy(endpoint.x + nx * distance, endpoint.y + ny * distance);
-    let right_pt = Coord::xy(endpoint.x - nx * distance, endpoint.y - ny * distance);
-
-    match cap_style {
-        BufferCapStyle::Flat => {
-            if at_end {
-                vec![left_pt, right_pt]
-            } else {
-                vec![right_pt, left_pt]
-            }
-        }
-        BufferCapStyle::Square => {
-            let ext = if at_end {
-                Coord::xy(ux * distance, uy * distance)
-            } else {
-                Coord::xy(-ux * distance, -uy * distance)
-            };
-            if at_end {
-                vec![
-                    left_pt,
-                    Coord::xy(left_pt.x + ext.x, left_pt.y + ext.y),
-                    Coord::xy(right_pt.x + ext.x, right_pt.y + ext.y),
-                    right_pt,
-                ]
-            } else {
-                vec![
-                    right_pt,
-                    Coord::xy(right_pt.x + ext.x, right_pt.y + ext.y),
-                    Coord::xy(left_pt.x + ext.x, left_pt.y + ext.y),
-                    left_pt,
-                ]
-            }
-        }
-        BufferCapStyle::Round => {
-            let (arc_start, arc_end) = if at_end {
-                (left_pt, right_pt)
-            } else {
-                (right_pt, left_pt)
-            };
-            let test = if at_end {
-                Coord::xy(endpoint.x + ux * distance, endpoint.y + uy * distance)
-            } else {
-                Coord::xy(endpoint.x - ux * distance, endpoint.y - uy * distance)
-            };
-            let ccw = ccw_arc_contains(endpoint, arc_start, arc_end, test);
-            let mut curve = vec![arc_start];
-            append_arc(&mut curve, endpoint, arc_start, arc_end, segs / 2, ccw, false);
-            curve
-        }
+    if cleaned.len() < 3 {
+        return Vec::new();
     }
+
+    vec![LineString::new(cleaned)]
 }
 
 /// Build raw closed buffer boundary curves for a polygon.
@@ -895,8 +823,7 @@ pub fn buffer_polygon(poly: &Polygon, distance: f64, options: BufferOptions) -> 
 /// this nodes the ring, extracts bounded face rings, assembles valid polygons, and
 /// returns the largest result — equivalent to what the polygon BufferBuilder pipeline
 /// does via `polygonize_closed_linestrings`.
-#[allow(dead_code)]
-fn buffer_linestring_graph_repair(poly: Polygon, source_coords: &[Coord], eps: f64) -> Polygon {
+fn buffer_linestring_graph_repair(poly: Polygon, eps: f64) -> Polygon {
     if is_ring_simple_eps(&poly.exterior.coords, eps) {
         return poly;
     }
@@ -930,28 +857,10 @@ fn buffer_linestring_graph_repair(poly: Polygon, source_coords: &[Coord], eps: f
     // lobe. Dissolve all bounded faces first, then select the largest dissolved
     // component as the repaired corridor.
     let dissolved = polygon_unary_union(&polys, eps);
-    if dissolved.is_empty() {
-        return repair_buffer_polygon(poly, eps);
-    }
-
-    let mut best: Option<Polygon> = None;
-    let mut best_count = 0usize;
-    let mut best_area = f64::NEG_INFINITY;
-
-    for cand in dissolved {
-        let count = source_coords
-            .iter()
-            .filter(|&&p| polygon_contains_point_inclusive(&cand, p, eps))
-            .count();
-        let area = ring_abs_area(&cand.exterior.coords);
-        if count > best_count || (count == best_count && area > best_area) {
-            best_count = count;
-            best_area = area;
-            best = Some(cand);
-        }
-    }
-
-    best.unwrap_or_else(|| repair_buffer_polygon(poly, eps))
+    dissolved
+        .into_iter()
+        .max_by(|a, b| ring_abs_area(&a.exterior.coords).total_cmp(&ring_abs_area(&b.exterior.coords)))
+        .unwrap_or_else(|| repair_buffer_polygon(poly, eps))
 }
 
 /// Attach contracted hole rings to a graph-pipeline outer shell for a positive buffer.
@@ -1043,34 +952,29 @@ fn buffer_polygon_positive(poly: &Polygon, distance: f64, options: BufferOptions
     // Robust round-join path: union buffered segments with the source polygon.
     // This avoids offset-ring corner pathologies that can create notch artifacts
     // on complex real-world building footprints.
-    if options.join_style == BufferJoinStyle::Round && poly.holes.is_empty() {
+    if options.join_style == BufferJoinStyle::Round {
         let parts = buffer_polygon_positive_round(poly, distance, options);
         if let Some(selected) = select_round_positive_component(parts, poly, 1.0e-9) {
             let sanitized = sanitize_round_positive_component(selected, poly, 1.0e-9);
-            let shell_only = enforce_valid_round_positive_output(sanitized, poly, 1.0e-9);
-            let mut result = buffer_polygon_attach_holes(shell_only, poly, distance, options);
-            // Defensive collapsed-hole filter (attach helper already applies this).
+            let mut result = enforce_valid_round_positive_output(sanitized, poly, 1.0e-9);
+            // Strip any holes whose bbox has collapsed under the inward offset.
+            // A hole whose output bbox dimensions are ≤ 2×distance is either a
+            // collapsed-source residue or a zero-area artifact; either way it
+            // should not appear in the output.  This mirrors the explicit
+            // collapse check used by the non-round (Mitre/Flat) path.
             result.holes.retain(|h| {
-                h.envelope().map(|env| {
+                if let Some(env) = h.envelope() {
                     env.max_x - env.min_x > 2.0 * distance
                         && env.max_y - env.min_y > 2.0 * distance
-                }).unwrap_or(false)
+                } else {
+                    false
+                }
             });
-            let direct = buffer_polygon_positive_direct(poly, distance, options);
-            let result_area = polygon_abs_area(&result);
-            let direct_area = polygon_abs_area(&direct);
-            if direct.exterior.coords.len() >= 4 && direct_area > result_area {
-                return direct;
-            }
             return result;
         }
-        return buffer_polygon_positive_direct(poly, distance, options);
+        return Polygon::new(LinearRing::new(vec![]), vec![]);
     }
 
-    buffer_polygon_positive_direct(poly, distance, options)
-}
-
-fn buffer_polygon_positive_direct(poly: &Polygon, distance: f64, options: BufferOptions) -> Polygon {
     let ring = &poly.exterior.coords;
     let segs = (options.quadrant_segments.max(2) * 4).max(8);
     let out = build_offset_ring(
@@ -1433,23 +1337,25 @@ fn buffer_polygon_positive_round(poly: &Polygon, distance: f64, options: BufferO
     // expansion is accumulated by segment buffers.
     add_union_piece(&mut parts, poly.clone(), eps);
 
-    let open = ring_open_coords(&poly.exterior);
-    let n = open.len();
-    if n < 2 {
-        return parts;
-    }
-
-    for i in 0..n {
-        let a = open[i];
-        let b = open[(i + 1) % n];
-        if coord_dist2(a, b) <= eps * eps {
+    for ring in std::iter::once(&poly.exterior).chain(poly.holes.iter()) {
+        let open = ring_open_coords(ring);
+        let n = open.len();
+        if n < 2 {
             continue;
         }
 
-        let ls = LineString::new(vec![a, b]);
-        let seg_buf = buffer_linestring(&ls, distance, seg_options);
-        if seg_buf.exterior.coords.len() >= 4 {
-            add_union_piece(&mut parts, seg_buf, eps);
+        for i in 0..n {
+            let a = open[i];
+            let b = open[(i + 1) % n];
+            if coord_dist2(a, b) <= eps * eps {
+                continue;
+            }
+
+            let ls = LineString::new(vec![a, b]);
+            let seg_buf = buffer_linestring(&ls, distance, seg_options);
+            if seg_buf.exterior.coords.len() >= 4 {
+                add_union_piece(&mut parts, seg_buf, eps);
+            }
         }
     }
 
@@ -1912,7 +1818,7 @@ pub fn polygonize_linework(lines: &[LineString], options: PolygonizeOptions) -> 
         ..options.noding
     };
     let noded = node_linestrings_with_options(lines, noding);
-    let graph = TopologyGraph::from_noded_linestrings(&noded, noding.epsilon);
+    let graph = TopologyGraph::from_linestrings_with_options(&noded, noding);
     let all_rings = graph.extract_face_rings(eps);
 
     let mut rings = Vec::<LineString>::new();

@@ -28,6 +28,7 @@ mod jpeg2000_validation_tests;
 use crate::error::{Result, RasterError};
 use crate::raster::Raster;
 use crate::io_utils::extension_lower;
+use std::collections::BTreeSet;
 use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
@@ -138,13 +139,21 @@ fn read_hdf5_raster_dataset_uri(path: &str, parsed: &HdfDatasetUri) -> Result<Ra
 
     match resolved.bytes_per_value {
         4 => {
-            let values = wbhdf::dataset::read_contiguous_f32_window_in_file(
+            let values = match wbhdf::dataset::read_contiguous_f32_window_in_file(
                 container_path,
                 resolved.byte_offset,
                 resolved.element_count,
                 wbhdf::datatypes::Endianness::Little,
-            )
-            .map_err(|err| RasterError::Other(format!("HDF5 contiguous decode failed: {err}")))?;
+            ) {
+                Ok(values) => values,
+                Err(err) => {
+                    return read_hdf5_raster_dataset_uri_from_chunked_single_leaf(
+                        path,
+                        parsed,
+                        RasterError::Other(format!("HDF5 contiguous decode failed: {err}")),
+                    );
+                }
+            };
 
             crate::raster::Raster::from_data_native(
                 crate::raster::RasterConfig {
@@ -164,13 +173,21 @@ fn read_hdf5_raster_dataset_uri(path: &str, parsed: &HdfDatasetUri) -> Result<Ra
             )
         }
         8 => {
-            let values = wbhdf::dataset::read_contiguous_f64_window_in_file(
+            let values = match wbhdf::dataset::read_contiguous_f64_window_in_file(
                 container_path,
                 resolved.byte_offset,
                 resolved.element_count,
                 wbhdf::datatypes::Endianness::Little,
-            )
-            .map_err(|err| RasterError::Other(format!("HDF5 contiguous decode failed: {err}")))?;
+            ) {
+                Ok(values) => values,
+                Err(err) => {
+                    return read_hdf5_raster_dataset_uri_from_chunked_single_leaf(
+                        path,
+                        parsed,
+                        RasterError::Other(format!("HDF5 contiguous decode failed: {err}")),
+                    );
+                }
+            };
 
             crate::raster::Raster::from_data_native(
                 crate::raster::RasterConfig {
@@ -202,15 +219,42 @@ fn read_hdf5_raster_dataset_uri_from_chunked_single_leaf(
     contiguous_error: RasterError,
 ) -> Result<Raster> {
     let container_path = Path::new(&parsed.container_path);
-    let resolved = resolve_hdf5_staged_chunked_single_leaf_layout(container_path, &parsed.dataset_path)
-        .map_err(|chunked_err| {
-            RasterError::Other(format!(
-                "HDF5 raster materialization could not resolve supported layout for dataset URI '{}': contiguous_path_error='{}'; chunked_single_leaf_error='{}'",
-                path, contiguous_error, chunked_err
-            ))
-        })?;
+    if let Ok(value) =
+        resolve_hdf5_viirs_vnp21_bounded_layout(container_path, &parsed.dataset_path)
+    {
+        return materialize_hdf5_chunked_layout_to_raster(parsed, value);
+    }
 
-    let metadata = vec![
+    let resolved = match resolve_hdf5_staged_chunked_single_leaf_layout(container_path, &parsed.dataset_path) {
+        Ok(value) => value,
+        Err(chunked_err) => {
+            match resolve_hdf5_viirs_vnp21_bounded_layout(container_path, &parsed.dataset_path) {
+                Ok(value) => value,
+                Err(viirs_vnp21_err) => match resolve_hdf5_viirs_vnp13_bounded_layout(
+                    container_path,
+                    &parsed.dataset_path,
+                ) {
+                    Ok(value) => value,
+                    Err(viirs_vnp13_err) => {
+                        return Err(RasterError::Other(format!(
+                            "HDF5 raster materialization could not resolve supported layout for dataset URI '{}': contiguous_path_error='{}'; chunked_single_leaf_error='{}'; viirs_vnp21_bounded_fallback_error='{}'; viirs_vnp13_bounded_fallback_error='{}'",
+                            path, contiguous_error, chunked_err, viirs_vnp21_err, viirs_vnp13_err
+                        )));
+                    }
+                },
+            }
+        }
+    };
+
+    materialize_hdf5_chunked_layout_to_raster(parsed, resolved)
+}
+
+fn materialize_hdf5_chunked_layout_to_raster(
+    parsed: &HdfDatasetUri,
+    resolved: ResolvedHdf5ChunkedSingleLeafLayout,
+) -> Result<Raster> {
+
+    let mut metadata = vec![
         ("hdf_container_path".to_string(), parsed.container_path.clone()),
         ("hdf_dataset_path".to_string(), parsed.dataset_path.clone()),
         (
@@ -219,17 +263,39 @@ fn read_hdf5_raster_dataset_uri_from_chunked_single_leaf(
         ),
     ];
 
+    let georef_hint = derive_hdf5_georef_hint(
+        Path::new(&parsed.container_path),
+        &parsed.dataset_path,
+    );
+    if let Some(extra_metadata) = georef_hint
+        .as_ref()
+        .map(|hint| hint.metadata.clone())
+    {
+        metadata.extend(extra_metadata);
+    }
+
+    let x_min = georef_hint.as_ref().map(|hint| hint.x_min).unwrap_or(0.0);
+    let y_min = georef_hint.as_ref().map(|hint| hint.y_min).unwrap_or(0.0);
+    let cell_size = georef_hint
+        .as_ref()
+        .map(|hint| hint.cell_size)
+        .unwrap_or(1.0);
+    let cell_size_y = georef_hint
+        .as_ref()
+        .and_then(|hint| hint.cell_size_y)
+        .or(Some(1.0));
+
     match resolved.data {
         Hdf5ChunkedDecodedData::F32(values) => crate::raster::Raster::from_data_native(
             crate::raster::RasterConfig {
                 cols: resolved.cols,
                 rows: resolved.rows,
                 bands: 1,
-                x_min: 0.0,
-                y_min: 0.0,
-                cell_size: 1.0,
-                cell_size_y: Some(1.0),
-                nodata: -9999.0,
+                x_min,
+                y_min,
+                cell_size,
+                cell_size_y,
+                nodata: resolved.nodata,
                 data_type: crate::raster::DataType::F32,
                 crs: crate::CrsInfo::default(),
                 metadata,
@@ -241,18 +307,169 @@ fn read_hdf5_raster_dataset_uri_from_chunked_single_leaf(
                 cols: resolved.cols,
                 rows: resolved.rows,
                 bands: 1,
-                x_min: 0.0,
-                y_min: 0.0,
-                cell_size: 1.0,
-                cell_size_y: Some(1.0),
-                nodata: -9999.0,
+                x_min,
+                y_min,
+                cell_size,
+                cell_size_y,
+                nodata: resolved.nodata,
                 data_type: crate::raster::DataType::F64,
                 crs: crate::CrsInfo::default(),
                 metadata,
             },
             crate::raster::RasterData::F64(values),
         ),
+        Hdf5ChunkedDecodedData::I16(values) => crate::raster::Raster::from_data_native(
+            crate::raster::RasterConfig {
+                cols: resolved.cols,
+                rows: resolved.rows,
+                bands: 1,
+                x_min,
+                y_min,
+                cell_size,
+                cell_size_y,
+                nodata: resolved.nodata,
+                data_type: crate::raster::DataType::I16,
+                crs: crate::CrsInfo::default(),
+                metadata,
+            },
+            crate::raster::RasterData::I16(values),
+        ),
+        Hdf5ChunkedDecodedData::U16(values) => crate::raster::Raster::from_data_native(
+            crate::raster::RasterConfig {
+                cols: resolved.cols,
+                rows: resolved.rows,
+                bands: 1,
+                x_min,
+                y_min,
+                cell_size,
+                cell_size_y,
+                nodata: resolved.nodata,
+                data_type: crate::raster::DataType::U16,
+                crs: crate::CrsInfo::default(),
+                metadata,
+            },
+            crate::raster::RasterData::U16(values),
+        ),
+        Hdf5ChunkedDecodedData::U8(values) => crate::raster::Raster::from_data_native(
+            crate::raster::RasterConfig {
+                cols: resolved.cols,
+                rows: resolved.rows,
+                bands: 1,
+                x_min,
+                y_min,
+                cell_size,
+                cell_size_y,
+                nodata: resolved.nodata,
+                data_type: crate::raster::DataType::U8,
+                crs: crate::CrsInfo::default(),
+                metadata,
+            },
+            crate::raster::RasterData::U8(values),
+        ),
     }
+}
+
+#[derive(Debug, Clone)]
+struct Hdf5GeorefHint {
+    x_min: f64,
+    y_min: f64,
+    cell_size: f64,
+    cell_size_y: Option<f64>,
+    metadata: Vec<(String, String)>,
+}
+
+fn derive_hdf5_georef_hint(container_path: &Path, dataset_path: &str) -> Option<Hdf5GeorefHint> {
+    if dataset_path.starts_with("/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/Data Fields/") {
+        return derive_viirs_vnp13_grid_georef_hint(container_path);
+    }
+
+    if dataset_path.starts_with("/VIIRS_Swath_LSTE/") {
+        return Some(Hdf5GeorefHint {
+            x_min: 0.0,
+            y_min: 0.0,
+            cell_size: 1.0,
+            cell_size_y: Some(1.0),
+            metadata: vec![
+                ("hdf_georef_model".to_string(), "swath_geolocation".to_string()),
+                (
+                    "hdf_georef_latitude_path".to_string(),
+                    "/VIIRS_Swath_LSTE/Geolocation Fields/latitude".to_string(),
+                ),
+                (
+                    "hdf_georef_longitude_path".to_string(),
+                    "/VIIRS_Swath_LSTE/Geolocation Fields/longitude".to_string(),
+                ),
+            ],
+        });
+    }
+
+    None
+}
+
+fn derive_viirs_vnp13_grid_georef_hint(container_path: &Path) -> Option<Hdf5GeorefHint> {
+    const XDIM_PATH: &str = "/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/XDim";
+    const YDIM_PATH: &str = "/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/YDim";
+
+    let x_layout = resolve_hdf5_staged_contiguous_layout(
+        container_path,
+        XDIM_PATH,
+        "viirs_vnp13_xdim_georef_probe",
+    )
+    .ok()?;
+    let y_layout = resolve_hdf5_staged_contiguous_layout(
+        container_path,
+        YDIM_PATH,
+        "viirs_vnp13_ydim_georef_probe",
+    )
+    .ok()?;
+
+    if x_layout.bytes_per_value != 8 || y_layout.bytes_per_value != 8 {
+        return None;
+    }
+
+    let x_values = wbhdf::dataset::read_contiguous_f64_window_in_file(
+        container_path,
+        x_layout.byte_offset,
+        x_layout.element_count,
+        wbhdf::datatypes::Endianness::Little,
+    )
+    .ok()?;
+    let y_values = wbhdf::dataset::read_contiguous_f64_window_in_file(
+        container_path,
+        y_layout.byte_offset,
+        y_layout.element_count,
+        wbhdf::datatypes::Endianness::Little,
+    )
+    .ok()?;
+
+    if x_values.len() < 2 || y_values.len() < 2 {
+        return None;
+    }
+
+    let dx = (x_values[1] - x_values[0]).abs();
+    let dy = (y_values[1] - y_values[0]).abs();
+    if dx == 0.0 || dy == 0.0 {
+        return None;
+    }
+
+    let x_min_center = x_values
+        .iter()
+        .fold(f64::INFINITY, |acc, v| if *v < acc { *v } else { acc });
+    let y_min_center = y_values
+        .iter()
+        .fold(f64::INFINITY, |acc, v| if *v < acc { *v } else { acc });
+
+    Some(Hdf5GeorefHint {
+        x_min: x_min_center - 0.5 * dx,
+        y_min: y_min_center - 0.5 * dy,
+        cell_size: dx,
+        cell_size_y: Some(-dy),
+        metadata: vec![
+            ("hdf_georef_model".to_string(), "grid_affine_from_dim_arrays".to_string()),
+            ("hdf_georef_xdim_path".to_string(), XDIM_PATH.to_string()),
+            ("hdf_georef_ydim_path".to_string(), YDIM_PATH.to_string()),
+        ],
+    })
 }
 
 fn read_hdf4_raster_dataset_uri(parsed: &HdfDatasetUri) -> Result<Raster> {
@@ -665,12 +882,16 @@ struct CandidateHdf5ContiguousLayout {
 enum Hdf5ChunkedDecodedData {
     F32(Vec<f32>),
     F64(Vec<f64>),
+    I16(Vec<i16>),
+    U16(Vec<u16>),
+    U8(Vec<u8>),
 }
 
 #[derive(Debug, Clone)]
 struct ResolvedHdf5ChunkedSingleLeafLayout {
     rows: usize,
     cols: usize,
+    nodata: f64,
     data: Hdf5ChunkedDecodedData,
     materialization_scope: String,
 }
@@ -684,7 +905,7 @@ struct CandidateHdf5ChunkedSingleLeafLayout {
     chunk_rows: usize,
     chunk_cols: usize,
     datatype_size: usize,
-    uses_deflate: bool,
+    filter_pipeline: Option<wbhdf::object_header::FilterPipelineMessage>,
     distance: usize,
     score: usize,
 }
@@ -958,7 +1179,7 @@ fn resolve_hdf5_staged_chunked_single_leaf_layout(
         .map_err(|err| RasterError::Other(format!("HDF5 container read failed: {err}")))?;
     let marker_offsets = collect_marker_offsets_for_dataset_path(&bytes, dataset_path);
 
-    let headers = wbhdf::object_header::discover_v1_object_headers_in_file(container_path, 4096)
+    let headers = wbhdf::object_header::discover_v1_object_headers_in_file(container_path, 512)
         .map_err(|err| RasterError::Other(format!("HDF5 v1 object-header discovery failed: {err}")))?;
 
     let mut candidates = Vec::<CandidateHdf5ChunkedSingleLeafLayout>::new();
@@ -1003,17 +1224,15 @@ fn resolve_hdf5_staged_chunked_single_leaf_layout(
                 continue;
             }
 
-            let uses_deflate = match header.filter_pipelines.first() {
+            let filter_pipeline = match header.filter_pipelines.first() {
                 Some(pipeline) => {
-                    if pipeline.filters.is_empty() {
-                        false
-                    } else if pipeline.filters.len() == 1 && pipeline.filters[0].id == 1 {
-                        true
+                    if is_supported_filter_pipeline(pipeline) {
+                        Some(pipeline.clone())
                     } else {
                         continue;
                     }
                 }
-                None => false,
+                None => None,
             };
 
             let distance = nearest_marker_distance(header.offset, &marker_offsets);
@@ -1035,7 +1254,7 @@ fn resolve_hdf5_staged_chunked_single_leaf_layout(
                 chunk_rows,
                 chunk_cols,
                 datatype_size,
-                uses_deflate,
+                filter_pipeline,
                 distance,
                 score,
             });
@@ -1091,7 +1310,11 @@ fn resolve_hdf5_staged_chunked_single_leaf_layout(
         })?;
         let mut assembled = vec![0.0_f32; total_values];
         for record in &records {
-            let decoded = decode_chunk_record_f32(container_path, record, candidate.uses_deflate)
+            let decoded = decode_chunk_record_f32(
+                container_path,
+                record,
+                candidate.filter_pipeline.as_ref(),
+            )
                 .map_err(|err| RasterError::Other(format!("HDF5 chunked f32 decode failed: {err}")))?;
             let expected_chunk_values = candidate.chunk_rows.checked_mul(candidate.chunk_cols).ok_or_else(|| {
                 RasterError::Other(format!(
@@ -1128,7 +1351,11 @@ fn resolve_hdf5_staged_chunked_single_leaf_layout(
         })?;
         let mut assembled = vec![0.0_f64; total_values];
         for record in &records {
-            let decoded = decode_chunk_record_f64(container_path, record, candidate.uses_deflate)
+            let decoded = decode_chunk_record_f64(
+                container_path,
+                record,
+                candidate.filter_pipeline.as_ref(),
+            )
                 .map_err(|err| RasterError::Other(format!("HDF5 chunked f64 decode failed: {err}")))?;
             let expected_chunk_values = candidate.chunk_rows.checked_mul(candidate.chunk_cols).ok_or_else(|| {
                 RasterError::Other(format!(
@@ -1161,6 +1388,7 @@ fn resolve_hdf5_staged_chunked_single_leaf_layout(
     Ok(ResolvedHdf5ChunkedSingleLeafLayout {
         rows: candidate.row_count,
         cols: candidate.col_count,
+        nodata: -9999.0,
         data,
         materialization_scope: "generic_chunked_single_leaf_hdf5_v1".to_string(),
     })
@@ -1202,10 +1430,854 @@ fn rows_cols_from_chunk_dimensions(dimensions: &[u32]) -> Result<Option<(usize, 
     Ok(Some((rows, cols)))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ViirsFieldKind {
+    F32,
+    I16,
+    U16,
+    U8,
+}
+
+impl ViirsFieldKind {
+    fn datatype_size(self) -> usize {
+        match self {
+            Self::F32 => 4,
+            Self::I16 | Self::U16 => 2,
+            Self::U8 => 1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ViirsFieldCatalogEntry {
+    dataset_path: &'static str,
+    product: &'static str,
+    kind: ViirsFieldKind,
+    nodata: f64,
+    preferred_chunk_index_address: Option<u64>,
+}
+
+const VIIRS_VNP21_FIELD_CATALOG: &[ViirsFieldCatalogEntry] = &[
+    ViirsFieldCatalogEntry {
+        dataset_path: "/VIIRS_Swath_LSTE/Geolocation Fields/latitude",
+        product: "VNP21",
+        kind: ViirsFieldKind::F32,
+        nodata: -9999.0,
+        preferred_chunk_index_address: Some(5_504_u64),
+    },
+    ViirsFieldCatalogEntry {
+        dataset_path: "/VIIRS_Swath_LSTE/Geolocation Fields/longitude",
+        product: "VNP21",
+        kind: ViirsFieldKind::F32,
+        nodata: -9999.0,
+        preferred_chunk_index_address: Some(31_324_409_u64),
+    },
+    ViirsFieldCatalogEntry {
+        dataset_path: "/VIIRS_Swath_LSTE/Data Fields/LST",
+        product: "VNP21",
+        kind: ViirsFieldKind::U16,
+        nodata: 0.0,
+        preferred_chunk_index_address: Some(65_387_786_u64),
+    },
+    ViirsFieldCatalogEntry {
+        dataset_path: "/VIIRS_Swath_LSTE/Data Fields/LST_err",
+        product: "VNP21",
+        kind: ViirsFieldKind::U8,
+        nodata: 0.0,
+        preferred_chunk_index_address: Some(78_971_646_u64),
+    },
+    ViirsFieldCatalogEntry {
+        dataset_path: "/VIIRS_Swath_LSTE/Data Fields/View_angle",
+        product: "VNP21",
+        kind: ViirsFieldKind::U8,
+        nodata: 255.0,
+        preferred_chunk_index_address: Some(88_316_419_u64),
+    },
+    ViirsFieldCatalogEntry {
+        dataset_path: "/VIIRS_Swath_LSTE/Data Fields/Emis_ASTER",
+        product: "VNP21",
+        kind: ViirsFieldKind::U8,
+        nodata: 0.0,
+        preferred_chunk_index_address: Some(76_256_310_u64),
+    },
+    ViirsFieldCatalogEntry {
+        dataset_path: "/VIIRS_Swath_LSTE/Data Fields/PWV",
+        product: "VNP21",
+        kind: ViirsFieldKind::U16,
+        nodata: 0.0,
+        preferred_chunk_index_address: Some(80_778_887_u64),
+    },
+    ViirsFieldCatalogEntry {
+        dataset_path: "/VIIRS_Swath_LSTE/Data Fields/QC",
+        product: "VNP21",
+        kind: ViirsFieldKind::U16,
+        nodata: 0.0,
+        preferred_chunk_index_address: Some(70_375_762_u64),
+    },
+    ViirsFieldCatalogEntry {
+        dataset_path: "/VIIRS_Swath_LSTE/Data Fields/oceanpix",
+        product: "VNP21",
+        kind: ViirsFieldKind::U8,
+        nodata: 255.0,
+        preferred_chunk_index_address: Some(88_214_296_u64),
+    },
+    ViirsFieldCatalogEntry {
+        dataset_path: "/VIIRS_Swath_LSTE/Data Fields/Emis_14",
+        product: "VNP21",
+        kind: ViirsFieldKind::U8,
+        nodata: 0.0,
+        preferred_chunk_index_address: Some(71_150_869_u64),
+    },
+    ViirsFieldCatalogEntry {
+        dataset_path: "/VIIRS_Swath_LSTE/Data Fields/Emis_15",
+        product: "VNP21",
+        kind: ViirsFieldKind::U8,
+        nodata: 0.0,
+        preferred_chunk_index_address: Some(73_223_084_u64),
+    },
+    ViirsFieldCatalogEntry {
+        dataset_path: "/VIIRS_Swath_LSTE/Data Fields/Emis_16",
+        product: "VNP21",
+        kind: ViirsFieldKind::U8,
+        nodata: 0.0,
+        preferred_chunk_index_address: Some(74_719_447_u64),
+    },
+    ViirsFieldCatalogEntry {
+        dataset_path: "/VIIRS_Swath_LSTE/Data Fields/Emis_14_err",
+        product: "VNP21",
+        kind: ViirsFieldKind::U16,
+        nodata: 0.0,
+        preferred_chunk_index_address: Some(79_369_210_u64),
+    },
+    ViirsFieldCatalogEntry {
+        dataset_path: "/VIIRS_Swath_LSTE/Data Fields/Emis_15_err",
+        product: "VNP21",
+        kind: ViirsFieldKind::U16,
+        nodata: 0.0,
+        preferred_chunk_index_address: Some(80_003_781_u64),
+    },
+    ViirsFieldCatalogEntry {
+        dataset_path: "/VIIRS_Swath_LSTE/Data Fields/Emis_16_err",
+        product: "VNP21",
+        kind: ViirsFieldKind::U16,
+        nodata: 0.0,
+        preferred_chunk_index_address: Some(80_440_648_u64),
+    },
+];
+
+const VIIRS_VNP13_FIELD_CATALOG: &[ViirsFieldCatalogEntry] = &[
+    ViirsFieldCatalogEntry {
+        dataset_path: "/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/Data Fields/500 m 8 days NDVI",
+        product: "VNP13",
+        kind: ViirsFieldKind::I16,
+        nodata: -3000.0,
+        preferred_chunk_index_address: Some(112_552_u64),
+    },
+    ViirsFieldCatalogEntry {
+        dataset_path: "/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/Data Fields/500 m 8 days EVI",
+        product: "VNP13",
+        kind: ViirsFieldKind::I16,
+        nodata: -3000.0,
+        preferred_chunk_index_address: Some(115_168_u64),
+    },
+    ViirsFieldCatalogEntry {
+        dataset_path: "/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/Data Fields/500 m 8 days EVI2",
+        product: "VNP13",
+        kind: ViirsFieldKind::I16,
+        nodata: -3000.0,
+        preferred_chunk_index_address: Some(117_784_u64),
+    },
+];
+
+fn find_viirs_field_entry(
+    dataset_path: &str,
+    expected_product: &str,
+) -> Option<&'static ViirsFieldCatalogEntry> {
+    VIIRS_VNP21_FIELD_CATALOG
+        .iter()
+        .chain(VIIRS_VNP13_FIELD_CATALOG.iter())
+        .find(|entry| entry.dataset_path == dataset_path && entry.product == expected_product)
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedViirsProfileLayout {
+    chunk_index_address: u64,
+    num_dimensions: usize,
+    row_count: usize,
+    row_width: usize,
+    chunk_row_height: usize,
+    chunk_dimensions: Vec<u32>,
+}
+
+fn resolve_hdf5_viirs_vnp21_bounded_layout(
+    container_path: &Path,
+    dataset_path: &str,
+) -> Result<ResolvedHdf5ChunkedSingleLeafLayout> {
+    let field = find_viirs_field_entry(dataset_path, "VNP21").ok_or_else(|| {
+        RasterError::Other(format!(
+            "dataset '{}' is outside VNP21 field catalog scope",
+            dataset_path
+        ))
+    })?;
+
+    resolve_hdf5_viirs_catalog_layout(container_path, field)
+}
+
+fn resolve_hdf5_viirs_catalog_layout(
+    container_path: &Path,
+    field: &ViirsFieldCatalogEntry,
+) -> Result<ResolvedHdf5ChunkedSingleLeafLayout> {
+    wbhdf::dataset::resolve_dataset_in_file(container_path, field.dataset_path)
+        .map_err(|err| RasterError::Other(format!(
+            "{} catalog dataset-path resolution failed for '{}': {err}",
+            field.product, field.dataset_path
+        )))?;
+
+    let discovered = match discover_viirs_profile_layout(
+        container_path,
+        field.dataset_path,
+        field.kind.datatype_size(),
+        field.product,
+    ) {
+        Ok(layout) => layout,
+        Err(err) => default_viirs_profile_layout_for_field(field).ok_or(err)?,
+    };
+
+    let row_width = discovered.row_width;
+    let num_dimensions = discovered.num_dimensions;
+    let chunk_index_address = field
+        .preferred_chunk_index_address
+        .unwrap_or(discovered.chunk_index_address);
+    let initial_max_leaf_nodes = 512_usize;
+    let initial_max_records = 8_192_usize;
+
+    let records = wbhdf::btree::read_chunked_storage_records_bounded_in_file(
+        container_path,
+        chunk_index_address,
+        num_dimensions,
+        initial_max_leaf_nodes,
+        initial_max_records,
+    )
+    .map_err(|err| RasterError::Other(format!(
+        "{} catalog chunk-index traversal failed for '{}': {err}",
+        field.product, field.dataset_path
+    )))?;
+
+    if records.is_empty() {
+        return Err(RasterError::Other(format!(
+            "{} catalog decode found no chunk records for '{}'",
+            field.product, field.dataset_path
+        )));
+    }
+
+    let row_dimension_index = if field.product == "VNP13" {
+        infer_row_dimension_index_from_records(&records, num_dimensions, discovered.row_count)
+            .unwrap_or(0)
+    } else {
+        infer_vnp21_row_dimension_index_from_records(&records, num_dimensions, row_width)
+            .unwrap_or(0)
+    };
+
+    let chunk_row_height = discovered
+        .chunk_dimensions
+        .get(row_dimension_index)
+        .and_then(|value| usize::try_from(*value).ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(discovered.chunk_row_height);
+
+    let max_row_offset = records
+        .iter()
+        .map(|record| {
+            record
+                .chunk_offsets
+                .get(row_dimension_index)
+                .copied()
+                .unwrap_or(0)
+        })
+        .max()
+        .unwrap_or(0);
+
+    let row_count_from_offsets = usize::try_from(max_row_offset)
+        .ok()
+        .and_then(|max_row| max_row.checked_add(chunk_row_height))
+        .ok_or_else(|| {
+            RasterError::Other("VNP21 bounded fallback row-count overflow".to_string())
+        })?;
+
+    let row_count = discovered.row_count.max(row_count_from_offsets);
+
+    let tuned_max_records = estimate_chunk_record_budget(
+        row_count,
+        row_width,
+        &discovered.chunk_dimensions,
+        row_dimension_index,
+    )
+    .unwrap_or(initial_max_records)
+    .max(records.len())
+    .clamp(2_400, 65_536);
+    let tuned_max_leaf_nodes = (tuned_max_records / 32).clamp(64, 4_096);
+
+    let data = match field.kind {
+        ViirsFieldKind::F32 => {
+            let values = wbhdf::dataset::decode_chunked_f32_row_major_window_in_file(
+                container_path,
+                field.dataset_path,
+                chunk_index_address,
+                num_dimensions,
+                row_dimension_index,
+                0,
+                row_count,
+                0,
+                row_width,
+                row_width,
+                chunk_row_height,
+                wbhdf::datatypes::Endianness::Little,
+                tuned_max_leaf_nodes,
+                tuned_max_records,
+            )
+            .map_err(|err| {
+                RasterError::Other(format!(
+                    "{} catalog f32 row-major decode failed for '{}': {err}",
+                    field.product, field.dataset_path
+                ))
+            })?;
+            Hdf5ChunkedDecodedData::F32(values)
+        }
+        ViirsFieldKind::I16 => {
+            let values = wbhdf::dataset::decode_chunked_i16_row_major_window_in_file(
+                container_path,
+                field.dataset_path,
+                chunk_index_address,
+                num_dimensions,
+                row_dimension_index,
+                0,
+                row_count,
+                0,
+                row_width,
+                row_width,
+                wbhdf::datatypes::Endianness::Little,
+                tuned_max_leaf_nodes,
+                tuned_max_records,
+            )
+            .map_err(|err| {
+                RasterError::Other(format!(
+                    "{} catalog i16 row-major decode failed for '{}': {err}",
+                    field.product, field.dataset_path
+                ))
+            })?;
+            Hdf5ChunkedDecodedData::I16(values)
+        }
+        ViirsFieldKind::U16 => {
+            let values = wbhdf::dataset::decode_chunked_u16_row_major_window_in_file(
+                container_path,
+                field.dataset_path,
+                chunk_index_address,
+                num_dimensions,
+                row_dimension_index,
+                0,
+                row_count,
+                0,
+                row_width,
+                row_width,
+                chunk_row_height,
+                wbhdf::datatypes::Endianness::Little,
+                tuned_max_leaf_nodes,
+                tuned_max_records,
+            )
+            .map_err(|err| {
+                RasterError::Other(format!(
+                    "{} catalog u16 row-major decode failed for '{}': {err}",
+                    field.product, field.dataset_path
+                ))
+            })?;
+            Hdf5ChunkedDecodedData::U16(values)
+        }
+        ViirsFieldKind::U8 => {
+            let values = wbhdf::dataset::decode_chunked_u8_row_major_window_in_file(
+                container_path,
+                field.dataset_path,
+                chunk_index_address,
+                num_dimensions,
+                row_dimension_index,
+                0,
+                row_count,
+                0,
+                row_width,
+                row_width,
+                chunk_row_height,
+                tuned_max_leaf_nodes,
+                tuned_max_records,
+            )
+            .map_err(|err| {
+                RasterError::Other(format!(
+                    "{} catalog u8 row-major decode failed for '{}': {err}",
+                    field.product, field.dataset_path
+                ))
+            })?;
+            Hdf5ChunkedDecodedData::U8(values)
+        }
+    };
+
+    Ok(ResolvedHdf5ChunkedSingleLeafLayout {
+        rows: row_count,
+        cols: row_width,
+        nodata: field.nodata,
+        data,
+        materialization_scope: format!(
+            "{}_catalog_chunked_multilevel_hdf5_v1",
+            field.product.to_lowercase()
+        ),
+    })
+}
+
+fn default_viirs_profile_layout_for_field(
+    field: &ViirsFieldCatalogEntry,
+) -> Option<ResolvedViirsProfileLayout> {
+    let chunk_index_address = field.preferred_chunk_index_address?;
+    if field.product == "VNP13" {
+        return Some(ResolvedViirsProfileLayout {
+            chunk_index_address,
+            num_dimensions: 3,
+            row_count: 2_400,
+            row_width: 2_400,
+            chunk_row_height: 1,
+            chunk_dimensions: vec![1, 2_400, 2],
+        });
+    }
+
+    Some(ResolvedViirsProfileLayout {
+        chunk_index_address,
+        num_dimensions: 3,
+        row_count: 0,
+        row_width: 3_200,
+        chunk_row_height: 16,
+        chunk_dimensions: vec![16, 3_200, 2],
+    })
+}
+
+fn discovered_layout_has_expected_chunk_payload_shape(
+    container_path: &Path,
+    layout: &ResolvedViirsProfileLayout,
+    expected_datatype_size: usize,
+) -> bool {
+    let records = match wbhdf::btree::read_chunked_storage_records_bounded_in_file(
+        container_path,
+        layout.chunk_index_address,
+        layout.num_dimensions,
+        64,
+        2_048,
+    ) {
+        Ok(records) => records,
+        Err(_) => return false,
+    };
+
+    let Some(record) = records.iter().find(|record| record.chunk_size > 0) else {
+        return false;
+    };
+
+    let payload = match wbhdf::btree::read_chunk_payload_in_file(
+        container_path,
+        record.chunk_address,
+        record.chunk_size,
+    ) {
+        Ok(payload) => payload,
+        Err(_) => return false,
+    };
+
+    // VIIRS profile fields are expected to be either deflate-compressed or raw.
+    let decoded = wbhdf::filters::decompress_zlib(&payload).unwrap_or(payload);
+
+    let Some(chunk_rows_raw) = layout.chunk_dimensions.first().copied() else {
+        return false;
+    };
+    let Ok(chunk_rows) = usize::try_from(chunk_rows_raw) else {
+        return false;
+    };
+    let Some(min_len) = chunk_rows
+        .checked_mul(layout.row_width)
+        .and_then(|len| len.checked_mul(expected_datatype_size))
+    else {
+        return false;
+    };
+
+    decoded.len() >= min_len
+}
+
+fn discover_viirs_profile_layout(
+    container_path: &Path,
+    dataset_path: &str,
+    expected_datatype_size: usize,
+    profile_name: &str,
+) -> Result<ResolvedViirsProfileLayout> {
+    let bytes = fs::read(container_path)
+        .map_err(|err| RasterError::Other(format!("HDF5 container read failed: {err}")))?;
+    let marker_offsets = collect_marker_offsets_for_dataset_path(&bytes, dataset_path);
+    let full_path_offsets = collect_ascii_marker_offsets(&bytes, dataset_path);
+    let tail_component = dataset_path
+        .rsplit('/')
+        .find(|component| !component.is_empty())
+        .ok_or_else(|| {
+            RasterError::Other(format!(
+                "{} bounded fallback dataset path has no terminal component: '{}'",
+                profile_name, dataset_path
+            ))
+        })?;
+    let tail_marker_offsets = collect_ascii_marker_offsets(&bytes, tail_component);
+
+    let headers = wbhdf::object_header::discover_v1_object_headers_in_file(container_path, 8_192)
+        .map_err(|err| {
+            RasterError::Other(format!(
+                "{} bounded fallback v1 object-header discovery failed: {err}",
+                profile_name
+            ))
+        })?;
+
+    let mut candidates = Vec::<(usize, usize, usize, usize, ResolvedViirsProfileLayout)>::new();
+    for header in headers {
+        let datatype_size = header
+            .datatypes
+            .first()
+            .map(|datatype| datatype.size as usize);
+        let datatype_matches = datatype_size == Some(expected_datatype_size);
+
+        let Some((rows, cols)) = header
+            .dataspaces
+            .first()
+            .and_then(|dataspace| rows_cols_from_dimensions(&dataspace.dimensions).ok().flatten())
+        else {
+            continue;
+        };
+
+        for chunked_layout in &header.chunked_layouts {
+            if chunked_layout.layout_class != 2 || chunked_layout.index_address == 0 {
+                continue;
+            }
+            if chunked_layout.num_dimensions < 2 || chunked_layout.chunk_dimensions.is_empty() {
+                continue;
+            }
+
+            let chunk_row_height = usize::try_from(chunked_layout.chunk_dimensions[0]).map_err(|_| {
+                RasterError::Other(format!(
+                    "{} bounded fallback chunk-row-height does not fit usize for dataset '{}'",
+                    profile_name, dataset_path
+                ))
+            })?;
+            let Some(&chunk_col_width_raw) = chunked_layout.chunk_dimensions.get(1) else {
+                continue;
+            };
+            let chunk_col_width = usize::try_from(chunk_col_width_raw).map_err(|_| {
+                RasterError::Other(format!(
+                    "{} bounded fallback chunk-col-width does not fit usize for dataset '{}'",
+                    profile_name, dataset_path
+                ))
+            })?;
+            if chunk_row_height == 0 || cols == 0 {
+                continue;
+            }
+            if chunk_col_width != cols {
+                continue;
+            }
+
+            let distance = nearest_marker_distance(header.offset, &marker_offsets);
+            let full_path_distance = nearest_marker_distance(header.offset, &full_path_offsets);
+            let tail_distance = nearest_marker_distance(header.offset, &tail_marker_offsets);
+            let mut score = 0usize;
+            score += 8;
+            if datatype_matches {
+                score += 8;
+            }
+            if full_path_distance <= 16 * 1024 {
+                score += 16;
+            } else if full_path_distance <= 128 * 1024 {
+                score += 12;
+            } else if full_path_distance <= 512 * 1024 {
+                score += 8;
+            } else if full_path_distance <= 2 * 1024 * 1024 {
+                score += 4;
+            }
+            if tail_distance <= 16 * 1024 {
+                score += 10;
+            } else if tail_distance <= 128 * 1024 {
+                score += 7;
+            } else if tail_distance <= 512 * 1024 {
+                score += 4;
+            } else if tail_distance <= 2 * 1024 * 1024 {
+                score += 2;
+            }
+            if distance <= 16 * 1024 {
+                score += 6;
+            } else if distance <= 128 * 1024 {
+                score += 4;
+            } else if distance <= 512 * 1024 {
+                score += 2;
+            }
+
+            candidates.push((
+                score,
+                full_path_distance,
+                tail_distance,
+                distance,
+                ResolvedViirsProfileLayout {
+                    chunk_index_address: chunked_layout.index_address,
+                    num_dimensions: chunked_layout.num_dimensions as usize,
+                    row_count: rows,
+                    row_width: cols,
+                    chunk_row_height,
+                    chunk_dimensions: chunked_layout.chunk_dimensions.clone(),
+                },
+            ));
+        }
+    }
+
+    candidates.sort_by(|left, right| {
+        right
+            .0
+            .cmp(&left.0)
+            .then(left.1.cmp(&right.1))
+            .then(left.2.cmp(&right.2))
+            .then(left.3.cmp(&right.3))
+    });
+
+    for (_, _, _, _, layout) in candidates {
+        if discovered_layout_has_expected_chunk_payload_shape(
+            container_path,
+            &layout,
+            expected_datatype_size,
+        ) {
+            return Ok(layout);
+        }
+    }
+
+    Err(RasterError::Other(format!(
+        "{} bounded fallback could not derive chunk-layout metadata for dataset '{}'",
+        profile_name, dataset_path
+    )))
+}
+
+fn infer_vnp21_row_dimension_index_from_records(
+    records: &[wbhdf::btree::ChunkedStorageLeafRecord],
+    num_dimensions: usize,
+    row_width: usize,
+) -> Option<usize> {
+    let row_width_u64 = u64::try_from(row_width).ok()?;
+    let mut best: Option<(usize, u64, usize)> = None;
+
+    for dim in 0..num_dimensions {
+        let mut offsets = BTreeSet::new();
+        let mut max_offset = 0_u64;
+        let mut valid = true;
+
+        for record in records {
+            let Some(offset) = record.chunk_offsets.get(dim).copied() else {
+                valid = false;
+                break;
+            };
+            offsets.insert(offset);
+            max_offset = max_offset.max(offset);
+        }
+
+        if !valid || offsets.is_empty() {
+            continue;
+        }
+        if max_offset >= row_width_u64 {
+            continue;
+        }
+
+        let distinct = offsets.len();
+        if distinct <= 1 && max_offset == 0 {
+            continue;
+        }
+        match best {
+            None => best = Some((dim, max_offset, distinct)),
+            Some((_, best_max, best_distinct)) => {
+                if distinct > best_distinct
+                    || (distinct == best_distinct && max_offset < best_max)
+                {
+                    best = Some((dim, max_offset, distinct));
+                }
+            }
+        }
+    }
+
+    best.map(|(dim, _, _)| dim)
+}
+
+fn resolve_hdf5_viirs_vnp13_bounded_layout(
+    container_path: &Path,
+    dataset_path: &str,
+) -> Result<ResolvedHdf5ChunkedSingleLeafLayout> {
+    let field = find_viirs_field_entry(dataset_path, "VNP13").ok_or_else(|| {
+        RasterError::Other(format!(
+            "dataset '{}' is outside VNP13 field catalog scope",
+            dataset_path
+        ))
+    })?;
+
+    resolve_hdf5_viirs_catalog_layout(container_path, field)
+}
+
+fn infer_row_dimension_index_from_records(
+    records: &[wbhdf::btree::ChunkedStorageLeafRecord],
+    num_dimensions: usize,
+    row_count: usize,
+) -> Option<usize> {
+    let row_limit = u64::try_from(row_count).ok()?;
+    let mut best: Option<(usize, usize, u64)> = None;
+
+    for dim in 0..num_dimensions {
+        let mut offsets = BTreeSet::new();
+        let mut max_offset = 0_u64;
+        let mut valid = true;
+
+        for record in records {
+            let Some(offset) = record.chunk_offsets.get(dim).copied() else {
+                valid = false;
+                break;
+            };
+            if offset >= row_limit {
+                valid = false;
+                break;
+            }
+            offsets.insert(offset);
+            max_offset = max_offset.max(offset);
+        }
+
+        if !valid || offsets.is_empty() {
+            continue;
+        }
+
+        let distinct_count = offsets.len();
+        let candidate = (dim, distinct_count, max_offset);
+
+        match best {
+            None => best = Some(candidate),
+            Some((_, best_distinct, best_max)) => {
+                if distinct_count > best_distinct
+                    || (distinct_count == best_distinct && max_offset > best_max)
+                {
+                    best = Some(candidate);
+                }
+            }
+        }
+    }
+
+    best.map(|(dim, _, _)| dim)
+}
+
+fn estimate_chunk_record_budget(
+    row_count: usize,
+    row_width: usize,
+    chunk_dimensions: &[u32],
+    row_dimension_index: usize,
+) -> Option<usize> {
+    let row_chunk_height = chunk_dimensions
+        .get(row_dimension_index)
+        .and_then(|value| usize::try_from(*value).ok())
+        .filter(|value| *value > 0)?;
+
+    let chunk_col_span = chunk_dimensions
+        .iter()
+        .enumerate()
+        .filter(|(idx, _)| *idx != row_dimension_index)
+        .try_fold(1usize, |acc, (_, dim)| {
+            let next = usize::try_from(*dim).ok()?;
+            acc.checked_mul(next)
+        })
+        .filter(|value| *value > 0)
+        .unwrap_or(row_width.max(1));
+
+    let row_chunks = row_count.div_ceil(row_chunk_height);
+    let col_chunks = row_width.max(1).div_ceil(chunk_col_span.max(1));
+    let estimated = row_chunks.checked_mul(col_chunks)?;
+    estimated.checked_mul(4)
+}
+
+fn is_supported_filter_pipeline(pipeline: &wbhdf::object_header::FilterPipelineMessage) -> bool {
+    if pipeline.filters.is_empty() {
+        return true;
+    }
+
+    let mut seen_deflate = 0usize;
+    let mut seen_shuffle = 0usize;
+    for filter in &pipeline.filters {
+        match filter.id {
+            1 => seen_deflate += 1,
+            2 => seen_shuffle += 1,
+            _ => return false,
+        }
+    }
+
+    seen_deflate <= 1 && seen_shuffle <= 1
+}
+
+fn hdf5_unshuffle(bytes: &[u8], element_size: usize) -> Result<Vec<u8>> {
+    if element_size == 0 {
+        return Err(RasterError::Other(
+            "HDF5 unshuffle requires element_size >= 1".to_string(),
+        ));
+    }
+    if element_size == 1 {
+        return Ok(bytes.to_vec());
+    }
+    if bytes.len() % element_size != 0 {
+        return Err(RasterError::Other(format!(
+            "HDF5 unshuffle payload length {} is not divisible by element_size {}",
+            bytes.len(),
+            element_size
+        )));
+    }
+
+    let elements = bytes.len() / element_size;
+    let mut out = vec![0_u8; bytes.len()];
+    for byte_index in 0..element_size {
+        let src_offset = byte_index * elements;
+        for elem_index in 0..elements {
+            out[elem_index * element_size + byte_index] = bytes[src_offset + elem_index];
+        }
+    }
+    Ok(out)
+}
+
+fn decode_chunk_payload_with_filter_pipeline(
+    payload: Vec<u8>,
+    filter_pipeline: Option<&wbhdf::object_header::FilterPipelineMessage>,
+    element_size: usize,
+) -> Result<Vec<u8>> {
+    let mut decoded = payload;
+
+    let Some(pipeline) = filter_pipeline else {
+        return Ok(decoded);
+    };
+    if pipeline.filters.is_empty() {
+        return Ok(decoded);
+    }
+
+    for filter in pipeline.filters.iter().rev() {
+        match filter.id {
+            1 => {
+                decoded = wbhdf::filters::decompress_zlib(&decoded).map_err(|err| {
+                    RasterError::Other(format!("HDF5 chunk zlib decode failed: {err}"))
+                })?;
+            }
+            2 => {
+                decoded = hdf5_unshuffle(&decoded, element_size)?;
+            }
+            id => {
+                return Err(RasterError::Other(format!(
+                    "unsupported HDF5 chunk filter id '{}' in pipeline",
+                    id
+                )));
+            }
+        }
+    }
+
+    Ok(decoded)
+}
+
 fn decode_chunk_record_f32(
     container_path: &Path,
     record: &wbhdf::btree::ChunkedStorageLeafRecord,
-    uses_deflate: bool,
+    filter_pipeline: Option<&wbhdf::object_header::FilterPipelineMessage>,
 ) -> Result<Vec<f32>> {
     let payload = wbhdf::btree::read_chunk_payload_in_file(
         container_path,
@@ -1213,12 +2285,7 @@ fn decode_chunk_record_f32(
         record.chunk_size,
     )
     .map_err(|err| RasterError::Other(format!("HDF5 chunk payload read failed: {err}")))?;
-    let decoded_bytes = if uses_deflate {
-        wbhdf::filters::decompress_zlib(&payload)
-            .map_err(|err| RasterError::Other(format!("HDF5 chunk zlib decode failed: {err}")))?
-    } else {
-        payload
-    };
+    let decoded_bytes = decode_chunk_payload_with_filter_pipeline(payload, filter_pipeline, 4)?;
     wbhdf::datatypes::decode_f32_slice(&decoded_bytes, wbhdf::datatypes::Endianness::Little)
         .map_err(RasterError::Other)
 }
@@ -1226,7 +2293,7 @@ fn decode_chunk_record_f32(
 fn decode_chunk_record_f64(
     container_path: &Path,
     record: &wbhdf::btree::ChunkedStorageLeafRecord,
-    uses_deflate: bool,
+    filter_pipeline: Option<&wbhdf::object_header::FilterPipelineMessage>,
 ) -> Result<Vec<f64>> {
     let payload = wbhdf::btree::read_chunk_payload_in_file(
         container_path,
@@ -1234,12 +2301,7 @@ fn decode_chunk_record_f64(
         record.chunk_size,
     )
     .map_err(|err| RasterError::Other(format!("HDF5 chunk payload read failed: {err}")))?;
-    let decoded_bytes = if uses_deflate {
-        wbhdf::filters::decompress_zlib(&payload)
-            .map_err(|err| RasterError::Other(format!("HDF5 chunk zlib decode failed: {err}")))?
-    } else {
-        payload
-    };
+    let decoded_bytes = decode_chunk_payload_with_filter_pipeline(payload, filter_pipeline, 8)?;
     wbhdf::datatypes::decode_f64_slice(&decoded_bytes, wbhdf::datatypes::Endianness::Little)
         .map_err(RasterError::Other)
 }

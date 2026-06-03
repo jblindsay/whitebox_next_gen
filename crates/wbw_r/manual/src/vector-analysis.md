@@ -21,6 +21,23 @@ Vector analysis depends on understanding these core concepts:
 
 ---
 
+## Phase A Spatial Statistics Status
+
+Phase A vector spatial-statistics tools are available through direct wrappers:
+
+- `wbw_global_morans_i(...)`
+- `wbw_local_morans_i_lisa(...)`
+- `wbw_getis_ord_gi_star(...)`
+- `wbw_nearest_neighbour_index(...)`
+- `wbw_quadrat_count_test(...)`
+
+Current inference support note:
+
+- `inference = "asymptotic"` is supported.
+- `inference = "permutation"` is intentionally deferred for Phase A and currently returns a validation error.
+
+---
+
 ## Session Setup
 
 ```r

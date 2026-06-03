@@ -7,6 +7,49 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Changed
+- Added external real-fixture HDF5 URI smoke coverage for multilevel VIIRS
+  chunk-tree reads (`VNP21` geolocation latitude/longitude) in
+  `tests/integration.rs`, validating both canonical
+  `#dataset=/...` and legacy `:///...` URI selectors on bounded scalar
+  chunked traversal paths.
+- HDF5 URI raster materialization now includes a bounded VIIRS VNP21 geolocation
+  fallback path for latitude/longitude dataset URIs when generic object-header
+  layout discovery cannot resolve a chunked candidate, using real fixture-backed
+  multilevel chunk-index traversal and row-major `f32` assembly.
+- The bounded VIIRS VNP21 fallback path now also covers selected science fields
+  (`/VIIRS_Swath_LSTE/Data Fields/LST`, `LST_err`, `View_angle`, `Emis_ASTER`)
+  with typed row-major materialization (`u16`/`u8`) through bounded multilevel
+  chunk-index traversal.
+- Added bounded VIIRS VNP13 fallback coverage for selected vegetation fields
+  (`/HDFEOS/GRIDS/VIIRS_Grid_8Day_VI_500m/Data Fields/500 m 8 days NDVI`,
+  `...EVI`, `...EVI2`) with typed row-major `i16` URI materialization via
+  bounded multilevel chunk-index traversal.
+- VNP13 bounded fallback resolution now attempts metadata-first v1 object-header
+  layout discovery (chunk index + dimensions) and falls back to validated
+  constants when discovery does not produce a usable candidate.
+- VNP13 bounded fallback row-dimension selection now uses deterministic
+  chunk-record offset inference instead of trial decode probes.
+- VNP13 bounded fallback traversal budgets (`max_records`, `max_leaf_nodes`)
+  are now derived from discovered dataspace/chunk geometry with bounded clamps
+  instead of fixed constants.
+- VNP21 and VNP13 metadata discovery now share a common VIIRS profile-layout
+  discovery path (marker-proximity scoring + v1 chunk-layout extraction),
+  reducing duplicate fallback-selection logic.
+- VNP21 bounded fallback resolution is now metadata-first for selected science
+  fields (derives chunk-layout candidates from discovered v1 object headers)
+  with compatibility fallback to validated bounded constants when discovery does
+  not surface a candidate in very large containers; geolocation latitude/
+  longitude paths remain deterministic bounded constants.
+- HDF5 URI chunked materialization now prioritizes the bounded VNP21 resolver
+  before generic staged chunked candidate selection for VNP21 in-scope dataset
+  paths, adding a deterministic guardrail against occasional geolocation
+  mis-binding during parallel integration runs.
+- VNP21 bounded fallback now derives row-dimension index from observed chunk
+  offsets and uses discovered chunk-dimension metadata for chunk-row-height
+  selection, reducing fixed-dimension assumptions in row-major URI decoding.
+- Zarr v3 `v2+zstd` integration fixture generation now skips gracefully when the
+  local `ruzstd` encoder path panics as unimplemented, preventing unrelated
+  environment-specific encoder limitations from failing the full integration suite.
 - `ReprojectOptions` now carries shared epoch-aware routing parameters from `wbprojection`, and
   raster reprojection extent sampling plus per-cell source-coordinate transforms honor those
   options when provided.

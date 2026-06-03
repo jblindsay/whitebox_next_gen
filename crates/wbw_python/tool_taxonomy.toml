@@ -449,6 +449,17 @@ tools = [
 
 [[mapping]]
 category = "vector"
+subcategory = "spatial_statistics"
+tools = [
+  "global_morans_i",
+  "getis_ord_gi_star",
+  "local_morans_i_lisa",
+  "nearest_neighbour_index",
+  "quadrat_count_test",
+]
+
+[[mapping]]
+category = "vector"
 subcategory = "sampling_gridding"
 tools = [
   "construct_vector_tin",

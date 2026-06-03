@@ -146,7 +146,77 @@ Upper-level GIS and GIScience courses commonly require a spatial statistics bloc
 
 ---
 
-## 5. Curriculum Readiness Matrix (Open Tier)
+## 5. Phase A Execution Order (Risk- and Performance-First)
+
+This is the recommended implementation order to maximize early value, minimize algorithmic risk, and avoid expensive rework.
+
+### Step 0: Shared weights and diagnostics core (required first)
+
+- Build one shared neighborhood/weights module used by all Phase A tools.
+- Include contiguity (queen/rook), k-nearest, and distance-band in one place.
+- Ship diagnostics from day one: island counts, degree min/mean/max, connected components, row-standardization flag.
+
+### Step 1: Global Moran's I (first production stat tool)
+
+- Lowest implementation risk with high curriculum value.
+- Validates shared weights, inference schema, and deterministic diagnostics contract.
+- Adds immediate utility for spatial autocorrelation teaching labs.
+
+### Step 2: Point-pattern pair (NNI and quadrat)
+
+- Implement nearest-neighbour index and quadrat count test next.
+- Keeps algorithmic complexity moderate while expanding beyond lattice autocorrelation.
+- Surfaces study-area and edge-policy decisions early, before local-cluster tools.
+
+### Step 3: Local Moran's I (LISA)
+
+- Reuses weights core but introduces per-feature inference and multiple-testing complexity.
+- Add class outputs and adjusted p-values only after Steps 0-2 are stable.
+
+### Step 4: Getis-Ord Gi/Gi*
+
+- Implement after LISA because many per-feature output and correction pathways are shared.
+- Keep hot/cold classification and adjusted significance fully aligned with LISA conventions.
+
+### Step 5: Binding and manual parity hardening
+
+- Wire Python/R/QGIS wrappers only after core tool outputs are stable.
+- Freeze output key names and diagnostics schema before broad documentation rollout.
+
+### Why this order
+
+- Early steps create reusable infrastructure and lower-risk wins.
+- Later steps consume that infrastructure rather than duplicating neighborhood logic.
+- Prevents jumping into local-statistics complexity before deterministic core behaviors are proven.
+
+---
+
+## 6. Performance Policy (First-Order Requirement)
+
+Performance is a design constraint, not a post-hoc optimization task.
+
+### Mandatory implementation rules
+
+1. Every new Phase A tool must declare expected time complexity and memory footprint before implementation.
+2. Shared neighbor graph/weights construction should be reused across tools in a run when possible.
+3. Avoid repeated spatial-index rebuilds inside per-feature loops.
+4. Use numerically stable accumulation paths that are also cache-friendly.
+5. Parallelize only after deterministic single-thread correctness is established, then preserve reproducibility.
+
+### Mandatory validation rules
+
+1. Add a lightweight performance sanity check per tool (small, medium, large synthetic workloads).
+2. Track runtime envelopes in docs for classroom-scale datasets.
+3. Treat major regressions as release blockers for spatial-statistics milestones.
+
+### Practical target envelope (Phase A)
+
+- A default classroom/lab machine should run 10k-50k features interactively.
+- 100k-250k features should remain practical for batch workflows with clear runtime guidance.
+
+---
+
+## 7. Curriculum Readiness Matrix (Open Tier)
 
 ### Introductory GIS (current)
 - **Status:** Strong
@@ -166,17 +236,18 @@ Upper-level GIS and GIScience courses commonly require a spatial statistics bloc
 
 ---
 
-## 6. Immediate Next Actions
+## 8. Immediate Next Actions
 
 1. Publish an explicit open-tier capability note clarifying advanced network support.
-2. Start Phase A spatial-statistics design spec (inputs, outputs, diagnostics, significance policy).
-3. Define shared statistical output schema used across Python/R/QGIS bindings.
-4. Create classroom benchmark dataset pack and known-answer validation suite.
+2. Implement the shared weights/diagnostics core as the first engineering milestone.
+3. Implement `global_morans_i` as the first production Phase A tool.
+4. Add lightweight performance sanity checks and runtime envelopes for each new tool.
 5. Track parity progress in Python, R, and QGIS manuals as each tool lands.
 
 ---
 
-## 7. Relationship to Existing Roadmaps
+## 9. Relationship to Existing Roadmaps
 
 - Complements [docs/internal/VECTOR_platform_improvements_2026-05-20.md](docs/internal/VECTOR_platform_improvements_2026-05-20.md) by focusing specifically on spatial-statistics and curriculum readiness gaps.
 - Should be treated as the primary planning document for statistics and inference-focused platform expansion.
+- Also see [/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/docs/internal/SPATIAL_STATS_PHASE_A_DESIGN_SPEC_2026-05-21.md](/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/docs/internal/SPATIAL_STATS_PHASE_A_DESIGN_SPEC_2026-05-21.md).

@@ -9,6 +9,13 @@ pub use nibble_sieve::{NibbleTool, SieveTool};
 mod osm_download;
 pub use osm_download::DownloadOsmVectorTool;
 
+mod spatial_stats;
+pub use spatial_stats::GlobalMoransITool;
+pub use spatial_stats::GetisOrdGiStarTool;
+pub use spatial_stats::LocalMoransILisaTool;
+pub use spatial_stats::NearestNeighbourIndexTool;
+pub use spatial_stats::QuadratCountTestTool;
+
 
 fn max_distance_squared(
     (x1, y1): (f64, f64),
@@ -264,6 +271,119 @@ pub fn gis_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolPara
             ("input", ToolParamSchema::input_vector_any()),
             ("epsg", ToolParamSchema::scalar_integer()),
             ("output", ToolParamSchema::output_vector_any()),
+        ])),
+        "global_morans_i" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("field", ToolParamSchema::string()),
+            (
+                "weights_mode",
+                ToolParamSchema::enum_values(&["queen", "rook", "k_nearest", "distance_band"]),
+            ),
+            ("k", ToolParamSchema::scalar_integer()),
+            ("distance", ToolParamSchema::scalar_float()),
+            ("row_standardize", ToolParamSchema::bool()),
+            (
+                "inference",
+                ToolParamSchema::enum_values(&["asymptotic", "permutation"]),
+            ),
+            (
+                "island_policy",
+                ToolParamSchema::enum_values(&["drop_with_warning", "keep_zero_weight", "error"]),
+            ),
+            ("output_json", ToolParamSchema::string()),
+            ("output_html", ToolParamSchema::string()),
+            ("output_csv", ToolParamSchema::string()),
+        ])),
+        "local_morans_i_lisa" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("field", ToolParamSchema::string()),
+            (
+                "weights_mode",
+                ToolParamSchema::enum_values(&["queen", "rook", "k_nearest", "distance_band"]),
+            ),
+            ("k", ToolParamSchema::scalar_integer()),
+            ("distance", ToolParamSchema::scalar_float()),
+            ("row_standardize", ToolParamSchema::bool()),
+            (
+                "inference",
+                ToolParamSchema::enum_values(&["asymptotic", "permutation"]),
+            ),
+            (
+                "island_policy",
+                ToolParamSchema::enum_values(&["drop_with_warning", "keep_zero_weight", "error"]),
+            ),
+            ("alpha", ToolParamSchema::scalar_float()),
+            (
+                "multiple_testing",
+                ToolParamSchema::enum_values(&["none", "fdr_bh", "bonferroni"]),
+            ),
+            ("output", ToolParamSchema::output_vector_any()),
+            ("output_html", ToolParamSchema::string()),
+        ])),
+        "getis_ord_gi_star" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector_any()),
+            ("field", ToolParamSchema::string()),
+            (
+                "weights_mode",
+                ToolParamSchema::enum_values(&["queen", "rook", "k_nearest", "distance_band"]),
+            ),
+            ("k", ToolParamSchema::scalar_integer()),
+            ("distance", ToolParamSchema::scalar_float()),
+            ("row_standardize", ToolParamSchema::bool()),
+            (
+                "variant",
+                ToolParamSchema::enum_values(&["gi", "gi_star"]),
+            ),
+            (
+                "inference",
+                ToolParamSchema::enum_values(&["asymptotic", "permutation"]),
+            ),
+            (
+                "island_policy",
+                ToolParamSchema::enum_values(&["drop_with_warning", "keep_zero_weight", "error"]),
+            ),
+            ("alpha", ToolParamSchema::scalar_float()),
+            (
+                "multiple_testing",
+                ToolParamSchema::enum_values(&["none", "fdr_bh", "bonferroni"]),
+            ),
+            ("output", ToolParamSchema::output_vector_any()),
+            ("output_html", ToolParamSchema::string()),
+        ])),
+        "nearest_neighbour_index" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            (
+                "study_area_mode",
+                ToolParamSchema::enum_values(&["hull", "envelope", "polygon_layer"]),
+            ),
+            ("study_area_polygon", ToolParamSchema::string()),
+            ("output_json", ToolParamSchema::string()),
+            ("output_html", ToolParamSchema::string()),
+            ("output_csv", ToolParamSchema::string()),
+        ])),
+        "quadrat_count_test" => Some(param_schema_map(&[
+            ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
+            (
+                "grid_mode",
+                ToolParamSchema::enum_values(&["rows_cols", "cell_size"]),
+            ),
+            ("rows", ToolParamSchema::scalar_integer()),
+            ("cols", ToolParamSchema::scalar_integer()),
+            ("cell_size", ToolParamSchema::scalar_float()),
+            (
+                "study_area_mode",
+                ToolParamSchema::enum_values(&["hull", "envelope", "polygon_layer"]),
+            ),
+            ("study_area_polygon", ToolParamSchema::string()),
+            (
+                "output_grid",
+                ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {
+                    geometry: ToolVectorGeometry::Polygon,
+                }),
+            ),
+            ("output_json", ToolParamSchema::string()),
+            ("output_html", ToolParamSchema::string()),
+            ("output_csv", ToolParamSchema::string()),
         ])),
         "near" => Some(param_schema_map(&[
             ("input", ToolParamSchema::input_vector_any()),

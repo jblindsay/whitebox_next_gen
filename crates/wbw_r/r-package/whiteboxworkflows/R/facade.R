@@ -3571,6 +3571,31 @@ wbw_run_tool <- function(tool_id,
 }
 
 #' @export
+wbw_global_morans_i <- function(args = list(), session = NULL, ...) {
+  wbw_run_tool("global_morans_i", args = args, session = session, ...)
+}
+
+#' @export
+wbw_local_morans_i_lisa <- function(args = list(), session = NULL, ...) {
+  wbw_run_tool("local_morans_i_lisa", args = args, session = session, ...)
+}
+
+#' @export
+wbw_getis_ord_gi_star <- function(args = list(), session = NULL, ...) {
+  wbw_run_tool("getis_ord_gi_star", args = args, session = session, ...)
+}
+
+#' @export
+wbw_nearest_neighbour_index <- function(args = list(), session = NULL, ...) {
+  wbw_run_tool("nearest_neighbour_index", args = args, session = session, ...)
+}
+
+#' @export
+wbw_quadrat_count_test <- function(args = list(), session = NULL, ...) {
+  wbw_run_tool("quadrat_count_test", args = args, session = session, ...)
+}
+
+#' @export
 wbw_run_tool_with_progress <- function(tool_id,
                                        args = list(),
                                        session = NULL,

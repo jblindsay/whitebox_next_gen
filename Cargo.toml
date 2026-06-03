@@ -9,6 +9,7 @@ members = [
   "crates/wbtopology",
   "crates/wbcore",
   "crates/wblicense_core",
+  "crates/wbgeostats",
   "crates/wbtools_oss",
   "crates/wbtools_pro_shim",
   "crates/wbw_python",

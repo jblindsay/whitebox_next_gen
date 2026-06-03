@@ -21,6 +21,23 @@ Vector analysis depends on understanding these core concepts:
 
 ---
 
+## Phase A Spatial Statistics Status
+
+The five Phase A vector spatial-statistics tools are available in the nested namespace:
+
+- `wbe.vector.spatial_statistics.global_morans_i(...)`
+- `wbe.vector.spatial_statistics.local_morans_i_lisa(...)`
+- `wbe.vector.spatial_statistics.getis_ord_gi_star(...)`
+- `wbe.vector.spatial_statistics.nearest_neighbour_index(...)`
+- `wbe.vector.spatial_statistics.quadrat_count_test(...)`
+
+Current inference support note:
+
+- `inference="asymptotic"` is supported.
+- `inference="permutation"` is intentionally deferred for Phase A and currently returns a validation error.
+
+---
+
 ## Reading and Writing Vectors
 
 ```python

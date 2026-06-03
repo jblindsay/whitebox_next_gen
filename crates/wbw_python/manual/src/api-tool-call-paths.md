@@ -10,6 +10,16 @@ Call pattern:
 
 Total tools: 747
 
+Phase A spatial-statistics call paths:
+
+- `wbe.vector.spatial_statistics.global_morans_i(...)`
+- `wbe.vector.spatial_statistics.local_morans_i_lisa(...)`
+- `wbe.vector.spatial_statistics.getis_ord_gi_star(...)`
+- `wbe.vector.spatial_statistics.nearest_neighbour_index(...)`
+- `wbe.vector.spatial_statistics.quadrat_count_test(...)`
+
+Inference note: these tools currently support `inference="asymptotic"`; `permutation` is deferred in Phase A.
+
 | Tool ID | Category | Subcategory | Preferred Call | Return Type | Output Summary |
 |---|---|---|---|---|---|
 | `abs` | `raster` | `general` | `wbe.raster.abs(...)` | `Raster` | Raster output |

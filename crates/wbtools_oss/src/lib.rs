@@ -358,6 +358,11 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::ErasePolygonFromRasterTool));
     registry.register(Box::new(tools::ExtendVectorLinesTool));
     registry.register(Box::new(tools::ExtractByAttributeTool));
+    registry.register(Box::new(tools::GlobalMoransITool));
+    registry.register(Box::new(tools::GetisOrdGiStarTool));
+    registry.register(Box::new(tools::LocalMoransILisaTool));
+    registry.register(Box::new(tools::NearestNeighbourIndexTool));
+    registry.register(Box::new(tools::QuadratCountTestTool));
     registry.register(Box::new(tools::SelectByLocationTool));
     registry.register(Box::new(tools::SpatialJoinTool));
     registry.register(Box::new(tools::NearTool));

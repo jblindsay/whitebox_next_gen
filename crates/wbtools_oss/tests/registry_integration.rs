@@ -145,6 +145,11 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"erase_polygon_from_raster"));
     assert!(ids.contains(&"extend_vector_lines"));
     assert!(ids.contains(&"extract_by_attribute"));
+    assert!(ids.contains(&"global_morans_i"));
+    assert!(ids.contains(&"getis_ord_gi_star"));
+    assert!(ids.contains(&"local_morans_i_lisa"));
+    assert!(ids.contains(&"nearest_neighbour_index"));
+    assert!(ids.contains(&"quadrat_count_test"));
     assert!(ids.contains(&"extract_raster_values_at_points"));
     assert!(ids.contains(&"extract_nodes"));
     assert!(ids.contains(&"filter_vector_features_by_area"));
@@ -8410,6 +8415,547 @@ fn jenson_snap_pour_points_snaps_to_nearest_stream_cell() {
     let _ = std::fs::remove_file(&streams_path);
     let _ = std::fs::remove_file(&pp_path);
     let _ = std::fs::remove_file(&output_path);
+}
+
+#[test]
+fn local_morans_i_lisa_writes_expected_fields_and_summary() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_local_morans_i_lisa_smoke");
+    let input_path = std::env::temp_dir().join(format!("{tag}_input.gpkg"));
+    let output_path = std::env::temp_dir().join(format!("{tag}_output.gpkg"));
+    let output_html_path = std::env::temp_dir().join(format!("{tag}_report.html"));
+
+    let mut points = Layer::new("points")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    points.schema.add_field(FieldDef::new("value", FieldType::Float));
+    for (x, y, v) in [
+        (0.0, 0.0, 10.0),
+        (1.0, 0.0, 11.0),
+        (0.0, 1.0, 9.0),
+        (1.0, 1.0, 10.5),
+        (5.0, 5.0, 2.0),
+    ] {
+        points
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(x, y))),
+                &[("value", FieldValue::Float(v))],
+            )
+            .expect("add point");
+    }
+    wbvector::write(&points, &input_path, VectorFormat::GeoPackage).expect("write points input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("field".to_string(), json!("value"));
+    args.insert("weights_mode".to_string(), json!("k_nearest"));
+    args.insert("k".to_string(), json!(2));
+    args.insert("row_standardize".to_string(), json!(true));
+    args.insert("inference".to_string(), json!("asymptotic"));
+    args.insert("alpha".to_string(), json!(0.05));
+    args.insert("multiple_testing".to_string(), json!("fdr_bh"));
+    args.insert("output".to_string(), json!(output_path.to_string_lossy().to_string()));
+    args.insert(
+        "output_html".to_string(),
+        json!(output_html_path.to_string_lossy().to_string()),
+    );
+
+    let result = registry
+        .run("local_morans_i_lisa", &args, &context(&caps))
+        .expect("local_morans_i_lisa should run");
+
+    let summary = result
+        .outputs
+        .get("summary")
+        .and_then(|v| v.as_object())
+        .expect("summary object should be present");
+    assert_eq!(summary.get("tool_id").and_then(|v| v.as_str()), Some("local_morans_i_lisa"));
+    let written_html = result
+        .outputs
+        .get("output_html")
+        .and_then(|v| v.as_str())
+        .expect("output_html should be present");
+    assert_eq!(
+        written_html,
+        output_html_path.to_string_lossy().as_ref(),
+        "output_html path should match requested path"
+    );
+
+    let class_counts = summary
+        .get("class_counts")
+        .and_then(|v| v.as_object())
+        .expect("class_counts should be present");
+    let total_classes = class_counts.values().filter_map(|v| v.as_u64()).sum::<u64>();
+    assert_eq!(total_classes, 5, "class counts should sum to input feature count");
+
+    let out = wbvector::read(&output_path).expect("read LISA output");
+    let lisa_i_idx = out.schema.field_index("LISA_I").expect("LISA_I field");
+    let lisa_z_idx = out.schema.field_index("LISA_Z").expect("LISA_Z field");
+    let lisa_class_idx = out
+        .schema
+        .field_index("LISA_CLASS")
+        .expect("LISA_CLASS field");
+    let mut non_null_i = 0usize;
+    let mut saw_positive_i = false;
+    let mut saw_negative_i = false;
+    let mut outlier_lisa_i: Option<f64> = None;
+    let mut outlier_lisa_z: Option<f64> = None;
+    for feat in &out.features {
+        if let Some(FieldValue::Float(v)) = feat.attributes.get(lisa_i_idx) {
+            non_null_i += 1;
+            if *v > 0.0 {
+                saw_positive_i = true;
+            }
+            if *v < 0.0 {
+                saw_negative_i = true;
+            }
+        }
+        if let Some(Geometry::Point(c)) = &feat.geometry {
+            if (c.x - 5.0).abs() < 1.0e-9 && (c.y - 5.0).abs() < 1.0e-9 {
+                outlier_lisa_i = match feat.attributes.get(lisa_i_idx) {
+                    Some(FieldValue::Float(v)) => Some(*v),
+                    _ => None,
+                };
+                outlier_lisa_z = match feat.attributes.get(lisa_z_idx) {
+                    Some(FieldValue::Float(v)) => Some(*v),
+                    _ => None,
+                };
+            }
+        }
+        let class = match feat.attributes.get(lisa_class_idx) {
+            Some(FieldValue::Text(s)) => s.as_str(),
+            _ => "",
+        };
+        assert!(
+            matches!(class, "HH" | "LL" | "HL" | "LH" | "NS"),
+            "unexpected LISA_CLASS value: {class}"
+        );
+    }
+    assert!(non_null_i >= 3, "expected at least 3 valid LISA_I values");
+    assert!(saw_positive_i, "expected at least one positive LISA_I");
+    assert!(saw_negative_i, "expected at least one negative LISA_I");
+    assert!(
+        outlier_lisa_i.is_some_and(|v| v < 0.0),
+        "expected low outlier at (5,5) to have negative LISA_I"
+    );
+    assert!(
+        outlier_lisa_i.is_some_and(|v| v > -5.0 && v < -0.01),
+        "expected low outlier at (5,5) LISA_I in known numeric range"
+    );
+    assert!(
+        outlier_lisa_z.is_some_and(|v| v < 0.0),
+        "expected low outlier at (5,5) to have negative LISA_Z"
+    );
+    assert!(
+        outlier_lisa_z.is_some_and(|v| v > -6.0 && v < -0.05),
+        "expected low outlier at (5,5) LISA_Z in known numeric range"
+    );
+
+    let html_report = std::fs::read_to_string(&output_html_path).expect("read LISA html report");
+    assert!(
+        html_report.contains("Local Moran's I (LISA)"),
+        "expected HTML title in LISA report"
+    );
+    assert!(
+        html_report.contains(".numberCell"),
+        "expected branded CSS in LISA report"
+    );
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&output_path);
+    let _ = std::fs::remove_file(&output_html_path);
+}
+
+#[test]
+fn getis_ord_gi_star_writes_expected_fields_and_summary() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_getis_ord_gi_star_smoke");
+    let input_path = std::env::temp_dir().join(format!("{tag}_input.gpkg"));
+    let output_path = std::env::temp_dir().join(format!("{tag}_output.gpkg"));
+    let output_html_path = std::env::temp_dir().join(format!("{tag}_report.html"));
+
+    let mut points = Layer::new("points")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    points.schema.add_field(FieldDef::new("value", FieldType::Float));
+    for (x, y, v) in [
+        (0.0, 0.0, 1.0),
+        (1.0, 0.0, 1.2),
+        (0.0, 1.0, 1.1),
+        (1.0, 1.0, 1.3),
+        (4.0, 4.0, 8.0),
+        (4.5, 4.0, 7.7),
+    ] {
+        points
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(x, y))),
+                &[("value", FieldValue::Float(v))],
+            )
+            .expect("add point");
+    }
+    wbvector::write(&points, &input_path, VectorFormat::GeoPackage).expect("write points input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("field".to_string(), json!("value"));
+    args.insert("weights_mode".to_string(), json!("k_nearest"));
+    args.insert("k".to_string(), json!(2));
+    args.insert("row_standardize".to_string(), json!(true));
+    args.insert("variant".to_string(), json!("gi_star"));
+    args.insert("inference".to_string(), json!("asymptotic"));
+    args.insert("alpha".to_string(), json!(0.05));
+    args.insert("multiple_testing".to_string(), json!("fdr_bh"));
+    args.insert("output".to_string(), json!(output_path.to_string_lossy().to_string()));
+    args.insert(
+        "output_html".to_string(),
+        json!(output_html_path.to_string_lossy().to_string()),
+    );
+
+    let result = registry
+        .run("getis_ord_gi_star", &args, &context(&caps))
+        .expect("getis_ord_gi_star should run");
+
+    let summary = result
+        .outputs
+        .get("summary")
+        .and_then(|v| v.as_object())
+        .expect("summary object should be present");
+    assert_eq!(summary.get("tool_id").and_then(|v| v.as_str()), Some("getis_ord_gi_star"));
+    assert_eq!(summary.get("variant").and_then(|v| v.as_str()), Some("gi_star"));
+    let written_html = result
+        .outputs
+        .get("output_html")
+        .and_then(|v| v.as_str())
+        .expect("output_html should be present");
+    assert_eq!(
+        written_html,
+        output_html_path.to_string_lossy().as_ref(),
+        "output_html path should match requested path"
+    );
+
+    let class_counts = summary
+        .get("class_counts")
+        .and_then(|v| v.as_object())
+        .expect("class_counts should be present");
+    let total_classes = class_counts.values().filter_map(|v| v.as_u64()).sum::<u64>();
+    assert_eq!(total_classes, 6, "class counts should sum to input feature count");
+
+    let out = wbvector::read(&output_path).expect("read GI output");
+    let gi_z_idx = out.schema.field_index("GI_Z").expect("GI_Z field");
+    let gi_class_idx = out.schema.field_index("GI_CLASS").expect("GI_CLASS field");
+    let mut non_null_z = 0usize;
+    let mut z_at_low_cluster: Option<f64> = None;
+    let mut z_at_high_cluster: Option<f64> = None;
+    for feat in &out.features {
+        if let Some(FieldValue::Float(_)) = feat.attributes.get(gi_z_idx) {
+            non_null_z += 1;
+        }
+        if let Some(Geometry::Point(c)) = &feat.geometry {
+            if (c.x - 0.0).abs() < 1.0e-9 && (c.y - 0.0).abs() < 1.0e-9 {
+                z_at_low_cluster = match feat.attributes.get(gi_z_idx) {
+                    Some(FieldValue::Float(v)) => Some(*v),
+                    _ => None,
+                };
+            }
+            if (c.x - 4.0).abs() < 1.0e-9 && (c.y - 4.0).abs() < 1.0e-9 {
+                z_at_high_cluster = match feat.attributes.get(gi_z_idx) {
+                    Some(FieldValue::Float(v)) => Some(*v),
+                    _ => None,
+                };
+            }
+        }
+        let class = match feat.attributes.get(gi_class_idx) {
+            Some(FieldValue::Text(s)) => s.as_str(),
+            _ => "",
+        };
+        assert!(
+            matches!(class, "hot" | "cold" | "ns"),
+            "unexpected GI_CLASS value: {class}"
+        );
+    }
+    assert!(non_null_z >= 3, "expected at least 3 valid GI_Z values");
+    assert!(
+        z_at_low_cluster.is_some_and(|z| z < 0.0),
+        "expected low cluster point at (0,0) to have negative GI_Z"
+    );
+    assert!(
+        z_at_low_cluster.is_some_and(|z| z > -8.0 && z < -0.05),
+        "expected low cluster GI_Z in known numeric range"
+    );
+    assert!(
+        z_at_high_cluster.is_some_and(|z| z > 0.0),
+        "expected high cluster point at (4,4) to have positive GI_Z"
+    );
+    assert!(
+        z_at_high_cluster.is_some_and(|z| z < 8.0 && z > 0.05),
+        "expected high cluster GI_Z in known numeric range"
+    );
+
+    let html_report = std::fs::read_to_string(&output_html_path).expect("read Gi html report");
+    assert!(
+        html_report.contains("Getis-Ord Gi / Gi*"),
+        "expected HTML title in Gi report"
+    );
+    assert!(
+        html_report.contains(".numberCell"),
+        "expected branded CSS in Gi report"
+    );
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&output_path);
+    let _ = std::fs::remove_file(&output_html_path);
+}
+
+#[test]
+fn spatial_stats_permutation_inference_is_rejected_with_clear_errors() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_spatial_stats_permutation_rejection");
+    let input_path = std::env::temp_dir().join(format!("{tag}_input.gpkg"));
+    let lisa_out = std::env::temp_dir().join(format!("{tag}_lisa_out.geojson"));
+    let gi_out = std::env::temp_dir().join(format!("{tag}_gi_out.geojson"));
+
+    let mut points = Layer::new("points")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    points.schema.add_field(FieldDef::new("value", FieldType::Float));
+    for (x, y, v) in [
+        (0.0, 0.0, 1.0),
+        (1.0, 0.0, 2.0),
+        (0.0, 1.0, 3.0),
+        (1.0, 1.0, 4.0),
+    ] {
+        points
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(x, y))),
+                &[("value", FieldValue::Float(v))],
+            )
+            .expect("add point");
+    }
+    wbvector::write(&points, &input_path, VectorFormat::GeoPackage).expect("write points input");
+
+    let mut global_args = ToolArgs::new();
+    global_args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    global_args.insert("field".to_string(), json!("value"));
+    global_args.insert("weights_mode".to_string(), json!("k_nearest"));
+    global_args.insert("k".to_string(), json!(2));
+    global_args.insert("inference".to_string(), json!("permutation"));
+    let global_err = registry
+        .run("global_morans_i", &global_args, &context(&caps))
+        .expect_err("global_morans_i should reject permutation inference in Phase A");
+    match global_err {
+        ToolError::Validation(msg) => assert!(
+            msg.contains("permutation inference is not implemented yet for global_morans_i"),
+            "unexpected error message: {msg}"
+        ),
+        other => panic!("expected validation error, got {other:?}"),
+    }
+
+    let mut lisa_args = ToolArgs::new();
+    lisa_args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    lisa_args.insert("field".to_string(), json!("value"));
+    lisa_args.insert("weights_mode".to_string(), json!("k_nearest"));
+    lisa_args.insert("k".to_string(), json!(2));
+    lisa_args.insert("inference".to_string(), json!("permutation"));
+    lisa_args.insert("output".to_string(), json!(lisa_out.to_string_lossy().to_string()));
+    let lisa_err = registry
+        .run("local_morans_i_lisa", &lisa_args, &context(&caps))
+        .expect_err("local_morans_i_lisa should reject permutation inference in Phase A");
+    match lisa_err {
+        ToolError::Validation(msg) => assert!(
+            msg.contains("permutation inference is not implemented yet for local_morans_i_lisa"),
+            "unexpected error message: {msg}"
+        ),
+        other => panic!("expected validation error, got {other:?}"),
+    }
+
+    let mut gi_args = ToolArgs::new();
+    gi_args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    gi_args.insert("field".to_string(), json!("value"));
+    gi_args.insert("weights_mode".to_string(), json!("k_nearest"));
+    gi_args.insert("k".to_string(), json!(2));
+    gi_args.insert("variant".to_string(), json!("gi_star"));
+    gi_args.insert("inference".to_string(), json!("permutation"));
+    gi_args.insert("output".to_string(), json!(gi_out.to_string_lossy().to_string()));
+    let gi_err = registry
+        .run("getis_ord_gi_star", &gi_args, &context(&caps))
+        .expect_err("getis_ord_gi_star should reject permutation inference in Phase A");
+    match gi_err {
+        ToolError::Validation(msg) => assert!(
+            msg.contains("permutation inference is not implemented yet for getis_ord_gi_star"),
+            "unexpected error message: {msg}"
+        ),
+        other => panic!("expected validation error, got {other:?}"),
+    }
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&lisa_out);
+    let _ = std::fs::remove_file(&gi_out);
+}
+
+#[test]
+fn spatial_stats_real_world_smoke_if_data_available() {
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let yield_points_path =
+        "/Users/johnlindsay/Documents/data/Yield/Woodrill/Woodrill Farm Enterprise_Berhens_Berhens_2002_CORN_1.shp";
+    let fallback_points_path = "/Users/johnlindsay/Documents/data/Peterborough/points_of_interest.shp";
+    let wards_polygon_path = "/Users/johnlindsay/Documents/data/Guelph_data/Wards.geojson";
+
+    let tag = unique_tag("wbtools_oss_spatial_stats_real_world");
+    let lisa_out = std::env::temp_dir().join(format!("{tag}_lisa.geojson"));
+    let lisa_html = std::env::temp_dir().join(format!("{tag}_lisa.html"));
+    let gi_out = std::env::temp_dir().join(format!("{tag}_gi.geojson"));
+    let gi_html = std::env::temp_dir().join(format!("{tag}_gi.html"));
+    let poly_html = std::env::temp_dir().join(format!("{tag}_poly_global_moran.html"));
+
+    let mut ran_any_dataset = false;
+
+    let points_input_path = if std::path::Path::new(yield_points_path).exists() {
+        Some(yield_points_path)
+    } else if std::path::Path::new(fallback_points_path).exists() {
+        Some(fallback_points_path)
+    } else {
+        None
+    };
+
+    if let Some(input_path) = points_input_path {
+        let points_layer = wbvector::read(input_path)
+            .expect("read real-world points dataset for spatial stats smoke test");
+        let point_field = first_numeric_field_name(&points_layer)
+            .expect("expected at least one numeric field in real-world points dataset");
+
+        let mut lisa_args = ToolArgs::new();
+        lisa_args.insert("input".to_string(), json!(input_path));
+        lisa_args.insert("field".to_string(), json!(point_field));
+        lisa_args.insert("weights_mode".to_string(), json!("k_nearest"));
+        lisa_args.insert("k".to_string(), json!(4));
+        lisa_args.insert("inference".to_string(), json!("asymptotic"));
+        lisa_args.insert("output".to_string(), json!(lisa_out.to_string_lossy().to_string()));
+        lisa_args.insert(
+            "output_html".to_string(),
+            json!(lisa_html.to_string_lossy().to_string()),
+        );
+
+        let lisa_result = registry
+            .run("local_morans_i_lisa", &lisa_args, &context(&caps))
+            .expect("local_morans_i_lisa should run on real-world points sample");
+        assert!(lisa_out.exists(), "expected LISA vector output to exist");
+        assert!(lisa_html.exists(), "expected LISA html output to exist");
+        assert!(
+            lisa_result
+                .outputs
+                .get("summary")
+                .and_then(|v| v.get("tool_id"))
+                .and_then(|v| v.as_str())
+                == Some("local_morans_i_lisa"),
+            "expected LISA summary tool_id"
+        );
+
+        let mut gi_args = ToolArgs::new();
+        gi_args.insert("input".to_string(), json!(input_path));
+        gi_args.insert("field".to_string(), json!(point_field));
+        gi_args.insert("weights_mode".to_string(), json!("k_nearest"));
+        gi_args.insert("k".to_string(), json!(4));
+        gi_args.insert("variant".to_string(), json!("gi_star"));
+        gi_args.insert("inference".to_string(), json!("asymptotic"));
+        gi_args.insert("output".to_string(), json!(gi_out.to_string_lossy().to_string()));
+        gi_args.insert(
+            "output_html".to_string(),
+            json!(gi_html.to_string_lossy().to_string()),
+        );
+
+        let gi_result = registry
+            .run("getis_ord_gi_star", &gi_args, &context(&caps))
+            .expect("getis_ord_gi_star should run on real-world points sample");
+        assert!(gi_out.exists(), "expected Gi vector output to exist");
+        assert!(gi_html.exists(), "expected Gi html output to exist");
+        assert!(
+            gi_result
+                .outputs
+                .get("summary")
+                .and_then(|v| v.get("tool_id"))
+                .and_then(|v| v.as_str())
+                == Some("getis_ord_gi_star"),
+            "expected Gi summary tool_id"
+        );
+
+        ran_any_dataset = true;
+    }
+
+    if std::path::Path::new(wards_polygon_path).exists() {
+        let polygon_layer = wbvector::read(wards_polygon_path)
+            .expect("read real-world polygon dataset for spatial stats smoke test");
+        let polygon_field = first_numeric_field_name(&polygon_layer)
+            .expect("expected at least one numeric field in real-world polygon dataset");
+
+        let mut poly_args = ToolArgs::new();
+        poly_args.insert("input".to_string(), json!(wards_polygon_path));
+        poly_args.insert("field".to_string(), json!(polygon_field));
+        poly_args.insert("weights_mode".to_string(), json!("k_nearest"));
+        poly_args.insert("k".to_string(), json!(4));
+        poly_args.insert("inference".to_string(), json!("asymptotic"));
+        poly_args.insert("output_html".to_string(), json!(poly_html.to_string_lossy().to_string()));
+
+        let poly_result = registry
+            .run("global_morans_i", &poly_args, &context(&caps))
+            .expect("global_morans_i should run on real-world polygon sample");
+        assert!(poly_html.exists(), "expected polygon Moran HTML output to exist");
+        assert!(
+            poly_result
+                .outputs
+                .get("report")
+                .and_then(|v| v.get("tool_id"))
+                .and_then(|v| v.as_str())
+                == Some("global_morans_i"),
+            "expected polygon Moran summary tool_id"
+        );
+
+        ran_any_dataset = true;
+    }
+
+    if !ran_any_dataset {
+        return;
+    }
+
+    let _ = std::fs::remove_file(&lisa_out);
+    let _ = std::fs::remove_file(&lisa_html);
+    let _ = std::fs::remove_file(&gi_out);
+    let _ = std::fs::remove_file(&gi_html);
+    let _ = std::fs::remove_file(&poly_html);
+}
+
+fn first_numeric_field_name(layer: &Layer) -> Option<String> {
+    for (idx, field) in layer.schema.fields().iter().enumerate() {
+        if !matches!(field.field_type, wbvector::FieldType::Integer | wbvector::FieldType::Float) {
+            continue;
+        }
+
+        if layer
+            .features
+            .iter()
+            .any(|f| matches!(f.attributes.get(idx), Some(wbvector::FieldValue::Integer(_) | wbvector::FieldValue::Float(_))))
+        {
+            return Some(field.name.clone());
+        }
+    }
+    None
 }
 
 // ── Helper: build a unique-prefix string for temp file names ─────────────────

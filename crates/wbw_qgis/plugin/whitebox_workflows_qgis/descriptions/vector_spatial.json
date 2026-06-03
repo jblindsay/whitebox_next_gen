@@ -139,5 +139,50 @@
         "tooltip": "For polygon clips with holes: when enabled, preserves holes from clip boundary; when disabled, fills them. Rarely needed."
       }
     }
+  },
+  "global_morans_i": {
+    "description": "Compute global Moran's I for vector attributes with neighborhood diagnostics and optional report outputs.",
+    "parameters": {
+      "inference": {
+        "label": "Inference mode (Phase A: asymptotic only)",
+        "tooltip": "Use inference='asymptotic'. permutation is intentionally deferred in Phase A and currently returns a validation error."
+      }
+    }
+  },
+  "local_morans_i_lisa": {
+    "description": "Compute per-feature LISA statistics and cluster classes (HH, LL, HL, LH, NS) for vector attributes.",
+    "parameters": {
+      "inference": {
+        "label": "Inference mode (Phase A: asymptotic only)",
+        "tooltip": "Use inference='asymptotic'. permutation is intentionally deferred in Phase A and currently returns a validation error."
+      }
+    }
+  },
+  "getis_ord_gi_star": {
+    "description": "Compute local Gi/Gi* hot-spot statistics and significance classes for vector attributes.",
+    "parameters": {
+      "inference": {
+        "label": "Inference mode (Phase A: asymptotic only)",
+        "tooltip": "Use inference='asymptotic'. permutation is intentionally deferred in Phase A and currently returns a validation error."
+      }
+    }
+  },
+  "nearest_neighbour_index": {
+    "description": "Evaluate point-pattern clustering or dispersion using the Nearest Neighbour Index (NNI).",
+    "parameters": {
+      "inference": {
+        "label": "Inference mode",
+        "tooltip": "Nearest Neighbour Index uses asymptotic inference in Phase A."
+      }
+    }
+  },
+  "quadrat_count_test": {
+    "description": "Run quadrat-based chi-square randomness tests for point-pattern analysis.",
+    "parameters": {
+      "inference": {
+        "label": "Inference mode",
+        "tooltip": "Quadrat Count Test uses asymptotic inference in Phase A."
+      }
+    }
   }
 }

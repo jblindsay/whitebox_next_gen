@@ -1196,6 +1196,7 @@ Operational rule:
   Evidence (2026-05-31): checklist reviewed against current Week 3 outcomes (Tier 1 paths validated, diagnostics in place, bounded-memory safeguards present, and `wbraster` non-HDF regression smoke checks passing).
 - [x] Verify CI/local test matrix includes Tier 1 smoke coverage and non-HDF5 regression coverage.
   Evidence (2026-05-31): local matrix now includes targeted Tier 1/HDF dispatch checks (`cargo check -p wbraster`, `cargo test -p wbraster raster_read_hdf -- --nocapture`) plus representative non-HDF regressions (`cargo test -p wbraster raster::tests::get_set -- --nocapture`, `cargo test -p wbraster raster::tests::statistics -- --nocapture`, `cargo test -p wbraster --test integration roundtrip_esri_ascii -- --nocapture`, `cargo test -p wbraster --test integration roundtrip_geotiff -- --nocapture`).
+  Follow-up evidence (2026-06-02): smoke matrix expanded with explicit scalar API contract coverage (`cargo test -p wbraster --test scalar_api_contract -- --nocapture`), now included in `crates/wbhdf/scripts/run_default_enable_smoke.sh`.
   Follow-up evidence (2026-06-01): added repeatable local smoke runner
   `crates/wbhdf/scripts/run_default_enable_smoke.sh` covering the same Tier 1/non-HDF matrix
   plus core `wbhdf` multilevel regressions (`multilevel_internal_fanout`, `budget_exhaustion`),
@@ -1217,7 +1218,7 @@ Operational rule:
 - [ ] `wblidar` Tier 1 ingestion is reliable for supported layouts with actionable diagnostics.
 - [ ] `wbraster` HDF5 raster-like reads are stable and non-regressive.
 - [x] A documented readiness decision exists for default integration enablement.
-- [ ] Existing scalar `wbraster` API contracts remain unchanged.
+- [x] Existing scalar `wbraster` API contracts remain unchanged.
 
 ### Default Integration Enablement Gate (Decision Checklist)
 
@@ -1246,7 +1247,8 @@ Enable default integration only when all items below are true:
   Evidence (2026-06-01): repeatable smoke matrix passed via
   `./crates/wbhdf/scripts/run_default_enable_smoke.sh`, including
   `raster::tests::get_set`, `raster::tests::statistics`,
-  `roundtrip_esri_ascii`, and `roundtrip_geotiff` coverage.
+  `roundtrip_esri_ascii`, `roundtrip_geotiff`, and
+  `scalar_api_contract` coverage.
 - [x] Fresh smoke matrix passes after latest cross-crate API changes.
   Evidence (2026-06-02): after adding `epoch_transform: EpochTransformOptions::default()`
   to the stale `ReprojectOptions` test initializer in `crates/wbraster/src/raster.rs:6431`,

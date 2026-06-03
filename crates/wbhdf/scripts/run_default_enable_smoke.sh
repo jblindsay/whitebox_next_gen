@@ -11,6 +11,7 @@ cargo test -p wbraster raster_read_hdf -- --nocapture
 # Representative non-HDF regressions
 cargo test -p wbraster raster::tests::get_set -- --nocapture
 cargo test -p wbraster raster::tests::statistics -- --nocapture
+cargo test -p wbraster --test scalar_api_contract -- --nocapture
 cargo test -p wbraster --test integration roundtrip_esri_ascii -- --nocapture
 cargo test -p wbraster --test integration roundtrip_geotiff -- --nocapture
 

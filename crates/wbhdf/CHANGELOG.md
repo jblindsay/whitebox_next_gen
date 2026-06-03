@@ -7,6 +7,12 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Backend-convention README normalization for the now-published `wbhdf` crate,
+	aligning section structure and usage guidance with other published Whitebox
+	backend crates.
+- Expanded default-enable smoke matrix in
+	`scripts/run_default_enable_smoke.sh` to include explicit scalar API contract
+	regression coverage (`cargo test -p wbraster --test scalar_api_contract -- --nocapture`).
 - Reference-tolerance formalization artifacts:
 	- `wbhdf::compare` now includes `compare_f64_exact` and
 	  `compare_f64_with_tolerance` with unit coverage,

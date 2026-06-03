@@ -914,6 +914,9 @@ mapping used in real-fixture validation paths.
 
 Progress note (2026-06-02): adapter and dispatch paths are in place for current supported
 layouts; default-enable readiness remains gated by broader stability and regression confidence.
+CRS boundary note (2026-06-02): `wbhdf` remains projection-engine agnostic by design;
+CRS normalization/reprojection responsibilities stay in downstream `wbraster`/`wblidar`
+integration layers that already depend on `wbprojection`.
 
 **Validation:**
 - `wblidar` can ingest Tier 1 GEDI/ICESat-2 inputs directly (no pre-conversion)

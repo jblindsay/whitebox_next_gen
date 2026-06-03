@@ -112,6 +112,20 @@ The stack emphasizes deterministic, actionable failure modes:
 - `wblidar` owns lidar product ingestion semantics.
 - `wbraster` owns raster-like dataset materialization only.
 
+### CRS responsibility boundary
+
+- `wbhdf` must remain projection-engine agnostic and should not depend on
+	`wbprojection`.
+- `wbhdf` may parse and expose CRS-relevant metadata tokens (for example WKT,
+	EPSG hints, grid georeferencing fields), but must not perform CRS
+	normalization, transform selection, or reprojection.
+- CRS interpretation and coordinate transformation policy belong to downstream
+	consumers (`wbraster` and `wblidar`), which already integrate with
+	`wbprojection`.
+- This boundary keeps `wbhdf` focused on deterministic container/layout decode,
+	reduces coupling, and avoids projection-policy drift inside low-level HDF
+	decode paths.
+
 ## 7) What Is Deliberately Not Claimed
 
 - Not a full HDF5 spec implementation.

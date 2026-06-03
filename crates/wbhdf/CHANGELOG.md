@@ -7,6 +7,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Explicit CRS responsibility-boundary documentation in `docs/DESIGN.md` and
+	roadmap notes: `wbhdf` stays projection-engine agnostic (no `wbprojection`
+	dependency), while CRS interpretation/reprojection is owned by downstream
+	`wbraster`/`wblidar` layers.
 - Backend-convention README normalization for the now-published `wbhdf` crate,
 	aligning section structure and usage guidance with other published Whitebox
 	backend crates.

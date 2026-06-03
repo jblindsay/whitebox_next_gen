@@ -1247,11 +1247,10 @@ Enable default integration only when all items below are true:
   `./crates/wbhdf/scripts/run_default_enable_smoke.sh`, including
   `raster::tests::get_set`, `raster::tests::statistics`,
   `roundtrip_esri_ascii`, and `roundtrip_geotiff` coverage.
-- [ ] Fresh smoke matrix passes after latest cross-crate API changes.
-  Evidence (2026-06-02): `./crates/wbhdf/scripts/run_default_enable_smoke.sh` currently fails
-  in `wbraster` tests with `error[E0063]: missing field 'epoch_transform' in initializer of
-  raster::ReprojectOptions` (`crates/wbraster/src/raster.rs:6431`).
-  This is treated as a release-gate blocker before any default-enable decision flip.
+- [x] Fresh smoke matrix passes after latest cross-crate API changes.
+  Evidence (2026-06-02): after adding `epoch_transform: EpochTransformOptions::default()`
+  to the stale `ReprojectOptions` test initializer in `crates/wbraster/src/raster.rs:6431`,
+  `./crates/wbhdf/scripts/run_default_enable_smoke.sh` passes end-to-end again.
 - [x] `wblidar` workflows demonstrate no required pre-conversion for validated Tier 1 paths.
   Evidence (2026-06-01): validated direct `wblidar` adapter paths for GEDI canopy-style
   contiguous reads and ATL08 canopy chunked reads with fixture-backed tests and explicit

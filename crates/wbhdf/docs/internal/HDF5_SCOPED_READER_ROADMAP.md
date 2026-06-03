@@ -874,10 +874,14 @@ wbhdf/
 ### Phase 2: B-tree v1 Chunk Indexing (~2 weeks, HIGH COMPLEXITY)
 
 **Deliverables:**
-- [ ] B-tree v1 node parsing (internal and leaf nodes)
-- [ ] Chunk address lookup by dataset coordinates
-- [ ] Handling of non-leaf B-tree traversal
-- [ ] Validation against known chunk layouts from GEDI/ICESat-2 samples
+- [x] B-tree v1 node parsing (internal and leaf nodes)
+- [x] Chunk address lookup by dataset coordinates
+- [x] Handling of non-leaf B-tree traversal
+- [x] Validation against known chunk layouts from GEDI/ICESat-2 samples
+
+Progress note (2026-06-02): these Phase 2 items are implemented and validated by bounded
+chunk-index traversal in `wbhdf::btree`/`wbhdf::dataset`, including non-leaf traversal,
+cycle/invalid-address safeguards, and real-fixture ATL08/VIIRS chunk-record probes.
 
 **Validation:**
 - Correctly locate all chunks for a 2D dataset
@@ -886,10 +890,14 @@ wbhdf/
 ### Phase 3: Dataset Reading + GZIP Decompression (~1 week)
 
 **Deliverables:**
-- [ ] Chunk assembly (variable chunk size handling)
-- [ ] GZIP filter invocation (via `miniz_oxide::deflate`)
-- [ ] F32/F64/I16 endianness conversion (big-endian HDF5 standard)
-- [ ] Nodata handling (HDF5 fill values)
+- [x] Chunk assembly (variable chunk size handling)
+- [x] GZIP filter invocation (via `miniz_oxide::deflate`)
+- [x] F32/F64/I16 endianness conversion (big-endian HDF5 standard)
+- [x] Nodata handling (HDF5 fill values)
+
+Progress note (2026-06-02): implemented for current bounded scalar paths, including
+chunk payload assembly/deflate decode, typed endianness helpers, and dataset-level fill
+mapping used in real-fixture validation paths.
 
 **Validation:**
 - Read a complete 2D float32 array from GEDI L2B
@@ -898,11 +906,14 @@ wbhdf/
 ### Phase 4: Integration with `wbraster` and `wblidar` (~3-5 days)
 
 **Deliverables:**
-- [ ] `wblidar` dataset adapters for Tier 1 GEDI/ICESat-2 products (primary Tier 1 integration)
-- [ ] `wbraster` dispatch layer for HDF5-backed raster datasets
-- [ ] `Raster` construction from HDF5 datasets where raster semantics are valid
+- [x] `wblidar` dataset adapters for Tier 1 GEDI/ICESat-2 products (primary Tier 1 integration)
+- [x] `wbraster` dispatch layer for HDF5-backed raster datasets
+- [x] `Raster` construction from HDF5 datasets where raster semantics are valid
 - [ ] GIS metadata propagation (CRS from attributes, georeferencing from dataset layouts)
 - [ ] Standard integration path in crate defaults after stabilization (no long-term user-facing gate)
+
+Progress note (2026-06-02): adapter and dispatch paths are in place for current supported
+layouts; default-enable readiness remains gated by broader stability and regression confidence.
 
 **Validation:**
 - `wblidar` can ingest Tier 1 GEDI/ICESat-2 inputs directly (no pre-conversion)
@@ -1205,7 +1216,7 @@ Operational rule:
 - [ ] Two Tier 1 product paths are validated end-to-end.
 - [ ] `wblidar` Tier 1 ingestion is reliable for supported layouts with actionable diagnostics.
 - [ ] `wbraster` HDF5 raster-like reads are stable and non-regressive.
-- [ ] A documented readiness decision exists for default integration enablement.
+- [x] A documented readiness decision exists for default integration enablement.
 - [ ] Existing scalar `wbraster` API contracts remain unchanged.
 
 ### Default Integration Enablement Gate (Decision Checklist)
@@ -1236,6 +1247,11 @@ Enable default integration only when all items below are true:
   `./crates/wbhdf/scripts/run_default_enable_smoke.sh`, including
   `raster::tests::get_set`, `raster::tests::statistics`,
   `roundtrip_esri_ascii`, and `roundtrip_geotiff` coverage.
+- [ ] Fresh smoke matrix passes after latest cross-crate API changes.
+  Evidence (2026-06-02): `./crates/wbhdf/scripts/run_default_enable_smoke.sh` currently fails
+  in `wbraster` tests with `error[E0063]: missing field 'epoch_transform' in initializer of
+  raster::ReprojectOptions` (`crates/wbraster/src/raster.rs:6431`).
+  This is treated as a release-gate blocker before any default-enable decision flip.
 - [x] `wblidar` workflows demonstrate no required pre-conversion for validated Tier 1 paths.
   Evidence (2026-06-01): validated direct `wblidar` adapter paths for GEDI canopy-style
   contiguous reads and ATL08 canopy chunked reads with fixture-backed tests and explicit

@@ -6448,6 +6448,7 @@ mod tests {
             grid_size_policy: GridSizePolicy::Expand,
             destination_footprint: DestinationFootprint::None,
             warn_on_area_of_use_mismatch: false,
+            epoch_transform: EpochTransformOptions::default(),
         };
 
         let out = r.reproject_with_options(&opts).unwrap();

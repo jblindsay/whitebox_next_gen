@@ -2,7 +2,10 @@
 //!
 //! Implements ordinary kriging, local kriging, simple kriging, universal kriging,
 //! and spatio-temporal kriging by wrapping the wbspatialstats backend.
-//! All tools output raster GeoTIFF files with configurable grid resolution and CRS handling.
+//!
+//! All tools output raster surfaces (grid resolution configurable) with full CRS preservation.
+//! Output format is determined by file extension (e.g., .tif → GeoTIFF, .img → HFA, .hdf → HDF5).
+//! Format flexibility is handled automatically by wbraster via GisOverlayCore::store_or_write_output().
 
 use super::*;
 use wbspatialstats::kriging::{OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, UniversalKriging, SpaceTimeKriging};
@@ -141,6 +144,8 @@ impl Tool for OrdinaryKrigingTool {
             output.data.set_f64(index, *value);
         }
 
+        // Output format determined by file extension (.tif → GeoTIFF, .img → HFA, etc.)
+        // Format detection handled automatically by wbraster via GisOverlayCore.
         let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
         ctx.progress.progress(1.0);
         Ok(GisOverlayCore::build_result(locator))
@@ -277,6 +282,8 @@ impl Tool for LocalOrdinaryKrigingTool {
             output.data.set_f64(index, *value);
         }
 
+        // Output format determined by file extension (.tif → GeoTIFF, .img → HFA, etc.)
+        // Format detection handled automatically by wbraster via GisOverlayCore.
         let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
         ctx.progress.progress(1.0);
         Ok(GisOverlayCore::build_result(locator))
@@ -413,6 +420,8 @@ impl Tool for SimpleKrigingTool {
             output.data.set_f64(index, *value);
         }
 
+        // Output format determined by file extension (.tif → GeoTIFF, .img → HFA, etc.)
+        // Format detection handled automatically by wbraster via GisOverlayCore.
         let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
         ctx.progress.progress(1.0);
         Ok(GisOverlayCore::build_result(locator))
@@ -549,6 +558,8 @@ impl Tool for UniversalKrigingTool {
             output.data.set_f64(index, *value);
         }
 
+        // Output format determined by file extension (.tif → GeoTIFF, .img → HFA, etc.)
+        // Format detection handled automatically by wbraster via GisOverlayCore.
         let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
         ctx.progress.progress(1.0);
         Ok(GisOverlayCore::build_result(locator))
@@ -732,8 +743,8 @@ impl Tool for SpaceTimeKrigingTool {
         for (index, value) in out_values.iter().enumerate() {
             output.data.set_f64(index, *value);
         }
-
-        let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
+        // Output format determined by file extension (.tif → GeoTIFF, .img → HFA, etc.)
+        // Format detection handled automatically by wbraster via GisOverlayCore.        let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
         ctx.progress.progress(1.0);
         Ok(GisOverlayCore::build_result(locator))
     }

@@ -12,7 +12,7 @@ name = "wbspatialstats"
 crate-type = ["rlib"]
 
 [dependencies]
-nalgebra = { version = "0.32", features = ["serde"] }
+nalgebra = { version = "0.34", features = ["serde"] }
 ndarray = { version = "0.15", features = ["serde"] }
 rayon = "1.7"
 serde = { version = "1.0", features = ["derive"] }

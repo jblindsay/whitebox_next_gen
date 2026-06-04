@@ -2381,11 +2381,148 @@ impl Tool for SpatialLagRegressionTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        // Integration with wbspatialstats::regression::SpatialLagRegression pending
-        // Will: load vector → extract fields → build weights → call regression → output results
-        Err(ToolError::Execution(
-            "Full implementation pending - wbspatialstats regression integration in progress".to_string(),
-        ))
+        use wbspatialstats::regression::SpatialLagRegression;
+        use nalgebra::DMatrix;
+
+        let input = load_vector_arg(args, "input")?;
+        let response_field = parse_string_arg(args, "response_field")?;
+        let predictor_str = parse_string_arg(args, "predictor_fields")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let mode = SpatialWeightsMode::parse(args)?;
+        let k = parse_optional_usize_arg(args, "k")?.unwrap_or(8);
+        let distance = parse_optional_f64_arg(args, "distance").unwrap_or(0.0);
+        let row_standardize = parse_bool_arg(args, "row_standardize", true);
+        let island_policy = IslandPolicy::parse(args)?;
+
+        let predictor_fields: Vec<&str> = predictor_str.split(',').map(|s| s.trim()).collect();
+
+        ctx.progress.info("Extracting response and predictor variables");
+        let (observations, dropped) = collect_spatial_observations(&input, &response_field)?;
+        if observations.is_empty() {
+            return Err(ToolError::Execution(format!(
+                "No valid observations after dropping {} features",
+                dropped
+            )));
+        }
+
+        let n = observations.len();
+        let y: Vec<f64> = observations.iter().map(|o| o.value).collect();
+
+        // Extract predictor fields - build design matrix column by column
+        let mut x_data: Vec<f64> = Vec::with_capacity(n * (1 + predictor_fields.len()));
+        
+        // Intercept column
+        for _ in 0..n {
+            x_data.push(1.0);
+        }
+
+        for &pred_field in &predictor_fields {
+            let (pred_obs, _) = collect_spatial_observations(&input, pred_field)?;
+            if pred_obs.len() != n {
+                return Err(ToolError::Execution(format!(
+                    "Predictor '{}' has {} observations vs {} for response",
+                    pred_field,
+                    pred_obs.len(),
+                    n
+                )));
+            }
+            for obs in pred_obs {
+                x_data.push(obs.value);
+            }
+        }
+
+        let x = DMatrix::from_column_slice(n, 1 + predictor_fields.len(), &x_data);
+
+        ctx.progress.info("Building spatial weights");
+        let weights = build_spatial_weights(
+            &observations,
+            mode,
+            row_standardize,
+            island_policy,
+            k,
+            distance,
+            dropped,
+        )?;
+
+        ctx.progress.info("Estimating spatial lag model (SAR)");
+        let result = SpatialLagRegression::estimate(&y, &x, &weights, 100, 1e-6)
+            .map_err(|e| ToolError::Execution(format!("SAR estimation failed: {}", e)))?;
+
+        ctx.progress.info("Building output layer");
+        let mut output_layer = input.clone();
+        let mut schema = output_layer.schema.clone();
+
+        // Add coefficient, SE, t-stat, p-value columns
+        schema.add_field(wbvector::FieldDef::new("coef_intercept", wbvector::FieldType::Float));
+        for pred_field in &predictor_fields {
+            schema.add_field(wbvector::FieldDef::new(
+                &format!("{}_coef", pred_field),
+                wbvector::FieldType::Float,
+            ));
+            schema.add_field(wbvector::FieldDef::new(
+                &format!("{}_se", pred_field),
+                wbvector::FieldType::Float,
+            ));
+        }
+
+        schema.add_field(wbvector::FieldDef::new("rho", wbvector::FieldType::Float));
+        schema.add_field(wbvector::FieldDef::new("rho_pvalue", wbvector::FieldType::Float));
+        schema.add_field(wbvector::FieldDef::new("r_squared", wbvector::FieldType::Float));
+        schema.add_field(wbvector::FieldDef::new("aic", wbvector::FieldType::Float));
+
+        output_layer.schema = schema;
+
+        // Add output features with results
+        for (idx, feature) in input.features.iter().enumerate() {
+            if idx >= n { break; }
+            
+            let mut new_feature = feature.clone();
+            new_feature.attributes.insert(
+                output_layer.schema.field_index("coef_intercept").unwrap(),
+                wbvector::FieldValue::Float(result.base.coefficients[0]),
+            );
+
+            for (i, &pred_field) in predictor_fields.iter().enumerate() {
+                let coef_idx = output_layer.schema.field_index(&format!("{}_coef", pred_field)).unwrap();
+                let se_idx = output_layer.schema.field_index(&format!("{}_se", pred_field)).unwrap();
+
+                new_feature.attributes.insert(
+                    coef_idx,
+                    wbvector::FieldValue::Float(result.base.coefficients[i + 1]),
+                );
+                new_feature.attributes.insert(
+                    se_idx,
+                    wbvector::FieldValue::Float(result.base.standard_errors[i + 1]),
+                );
+            }
+
+            new_feature.attributes.insert(
+                output_layer.schema.field_index("rho").unwrap(),
+                wbvector::FieldValue::Float(result.rho),
+            );
+            new_feature.attributes.insert(
+                output_layer.schema.field_index("rho_pvalue").unwrap(),
+                wbvector::FieldValue::Float(result.rho_pvalue),
+            );
+            new_feature.attributes.insert(
+                output_layer.schema.field_index("r_squared").unwrap(),
+                wbvector::FieldValue::Float(result.base.r_squared),
+            );
+            new_feature.attributes.insert(
+                output_layer.schema.field_index("aic").unwrap(),
+                wbvector::FieldValue::Float(result.base.aic),
+            );
+
+            output_layer.features.push(new_feature);
+        }
+
+        let locator = write_vector_output(&output_layer, output_path.trim())?;
+
+        let mut outputs = ToolArgs::new();
+        outputs.insert("output".to_string(), json!(locator));
+        
+        ctx.progress.progress(1.0);
+        Ok(ToolRunResult { outputs })
     }
 }
 
@@ -2458,10 +2595,148 @@ impl Tool for SpatialErrorRegressionTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        ctx.progress.info("Spatial Error Regression (SEM) - Full implementation coming in next phase");
-        Err(ToolError::Execution(
-            "Full implementation pending - wbspatialstats regression integration in progress".to_string(),
-        ))
+        use wbspatialstats::regression::SpatialErrorRegression;
+        use nalgebra::DMatrix;
+
+        let input = load_vector_arg(args, "input")?;
+        let response_field = parse_string_arg(args, "response_field")?;
+        let predictor_str = parse_string_arg(args, "predictor_fields")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let mode = SpatialWeightsMode::parse(args)?;
+        let k = parse_optional_usize_arg(args, "k")?.unwrap_or(8);
+        let distance = parse_optional_f64_arg(args, "distance").unwrap_or(0.0);
+        let row_standardize = parse_bool_arg(args, "row_standardize", true);
+        let island_policy = IslandPolicy::parse(args)?;
+
+        let predictor_fields: Vec<&str> = predictor_str.split(',').map(|s| s.trim()).collect();
+
+        ctx.progress.info("Extracting response and predictor variables");
+        let (observations, dropped) = collect_spatial_observations(&input, &response_field)?;
+        if observations.is_empty() {
+            return Err(ToolError::Execution(format!(
+                "No valid observations after dropping {} features",
+                dropped
+            )));
+        }
+
+        let n = observations.len();
+        let y: Vec<f64> = observations.iter().map(|o| o.value).collect();
+
+        // Extract predictor fields - build design matrix column by column
+        let mut x_data: Vec<f64> = Vec::with_capacity(n * (1 + predictor_fields.len()));
+        
+        // Intercept column
+        for _ in 0..n {
+            x_data.push(1.0);
+        }
+
+        for &pred_field in &predictor_fields {
+            let (pred_obs, _) = collect_spatial_observations(&input, pred_field)?;
+            if pred_obs.len() != n {
+                return Err(ToolError::Execution(format!(
+                    "Predictor '{}' has {} observations vs {} for response",
+                    pred_field,
+                    pred_obs.len(),
+                    n
+                )));
+            }
+            for obs in pred_obs {
+                x_data.push(obs.value);
+            }
+        }
+
+        let x = DMatrix::from_column_slice(n, 1 + predictor_fields.len(), &x_data);
+
+        ctx.progress.info("Building spatial weights");
+        let weights = build_spatial_weights(
+            &observations,
+            mode,
+            row_standardize,
+            island_policy,
+            k,
+            distance,
+            dropped,
+        )?;
+
+        ctx.progress.info("Estimating spatial error model (SEM)");
+        let result = SpatialErrorRegression::estimate_fgls(&y, &x, &weights, 100, 1e-6)
+            .map_err(|e| ToolError::Execution(format!("SEM estimation failed: {}", e)))?;
+
+        ctx.progress.info("Building output layer");
+        let mut output_layer = input.clone();
+        let mut schema = output_layer.schema.clone();
+
+        // Add coefficient, SE columns
+        schema.add_field(wbvector::FieldDef::new("coef_intercept", wbvector::FieldType::Float));
+        for pred_field in &predictor_fields {
+            schema.add_field(wbvector::FieldDef::new(
+                &format!("{}_coef", pred_field),
+                wbvector::FieldType::Float,
+            ));
+            schema.add_field(wbvector::FieldDef::new(
+                &format!("{}_se", pred_field),
+                wbvector::FieldType::Float,
+            ));
+        }
+
+        schema.add_field(wbvector::FieldDef::new("lambda", wbvector::FieldType::Float));
+        schema.add_field(wbvector::FieldDef::new("lambda_pvalue", wbvector::FieldType::Float));
+        schema.add_field(wbvector::FieldDef::new("r_squared", wbvector::FieldType::Float));
+        schema.add_field(wbvector::FieldDef::new("aic", wbvector::FieldType::Float));
+
+        output_layer.schema = schema;
+
+        // Add output features with results
+        for (idx, feature) in input.features.iter().enumerate() {
+            if idx >= n { break; }
+            
+            let mut new_feature = feature.clone();
+            new_feature.attributes.insert(
+                output_layer.schema.field_index("coef_intercept").unwrap(),
+                wbvector::FieldValue::Float(result.base.coefficients[0]),
+            );
+
+            for (i, &pred_field) in predictor_fields.iter().enumerate() {
+                let coef_idx = output_layer.schema.field_index(&format!("{}_coef", pred_field)).unwrap();
+                let se_idx = output_layer.schema.field_index(&format!("{}_se", pred_field)).unwrap();
+
+                new_feature.attributes.insert(
+                    coef_idx,
+                    wbvector::FieldValue::Float(result.base.coefficients[i + 1]),
+                );
+                new_feature.attributes.insert(
+                    se_idx,
+                    wbvector::FieldValue::Float(result.base.standard_errors[i + 1]),
+                );
+            }
+
+            new_feature.attributes.insert(
+                output_layer.schema.field_index("lambda").unwrap(),
+                wbvector::FieldValue::Float(result.lambda),
+            );
+            new_feature.attributes.insert(
+                output_layer.schema.field_index("lambda_pvalue").unwrap(),
+                wbvector::FieldValue::Float(result.lambda_pvalue),
+            );
+            new_feature.attributes.insert(
+                output_layer.schema.field_index("r_squared").unwrap(),
+                wbvector::FieldValue::Float(result.base.r_squared),
+            );
+            new_feature.attributes.insert(
+                output_layer.schema.field_index("aic").unwrap(),
+                wbvector::FieldValue::Float(result.base.aic),
+            );
+
+            output_layer.features.push(new_feature);
+        }
+
+        let locator = write_vector_output(&output_layer, output_path.trim())?;
+
+        let mut outputs = ToolArgs::new();
+        outputs.insert("output".to_string(), json!(locator));
+        
+        ctx.progress.progress(1.0);
+        Ok(ToolRunResult { outputs })
     }
 }
 
@@ -2527,9 +2802,124 @@ impl Tool for GeographicallyWeightedRegressionTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        ctx.progress.info("Geographically Weighted Regression (GWR) - Full implementation coming in next phase");
-        Err(ToolError::Execution(
-            "Full implementation pending - wbspatialstats regression integration in progress".to_string(),
-        ))
+        use wbspatialstats::regression::GeographicallyWeightedRegression;
+        use nalgebra::DMatrix;
+
+        let input = load_vector_arg(args, "input")?;
+        let response_field = parse_string_arg(args, "response_field")?;
+        let predictor_str = parse_string_arg(args, "predictor_fields")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let bandwidth_hint = parse_optional_f64_arg(args, "bandwidth_hint");
+
+        let predictor_fields: Vec<&str> = predictor_str.split(',').map(|s| s.trim()).collect();
+
+        ctx.progress.info("Extracting response and predictor variables");
+        let (observations, dropped) = collect_spatial_observations(&input, &response_field)?;
+        if observations.is_empty() {
+            return Err(ToolError::Execution(format!(
+                "No valid observations after dropping {} features",
+                dropped
+            )));
+        }
+
+        let n = observations.len();
+        let y: Vec<f64> = observations.iter().map(|o| o.value).collect();
+        let coords: Vec<(f64, f64)> = observations.iter().map(|o| (o.x, o.y)).collect();
+
+        // Extract predictor fields - build design matrix column by column
+        let mut x_data: Vec<f64> = Vec::with_capacity(n * (1 + predictor_fields.len()));
+        
+        // Intercept column
+        for _ in 0..n {
+            x_data.push(1.0);
+        }
+
+        for &pred_field in &predictor_fields {
+            let (pred_obs, _) = collect_spatial_observations(&input, pred_field)?;
+            if pred_obs.len() != n {
+                return Err(ToolError::Execution(format!(
+                    "Predictor '{}' has {} observations vs {} for response",
+                    pred_field,
+                    pred_obs.len(),
+                    n
+                )));
+            }
+            for obs in pred_obs {
+                x_data.push(obs.value);
+            }
+        }
+
+        let x = DMatrix::from_column_slice(n, 1 + predictor_fields.len(), &x_data);
+
+        ctx.progress.info("Estimating geographically weighted regression (GWR)");
+        let result = GeographicallyWeightedRegression::estimate(&y, &x, &coords, bandwidth_hint)
+            .map_err(|e| ToolError::Execution(format!("GWR estimation failed: {}", e)))?;
+
+        ctx.progress.info("Building output layer");
+        let mut output_layer = input.clone();
+        let mut schema = output_layer.schema.clone();
+
+        // Add local coefficient columns for each location and predictor
+        schema.add_field(wbvector::FieldDef::new("coef_intercept_local", wbvector::FieldType::Float));
+        for pred_field in &predictor_fields {
+            schema.add_field(wbvector::FieldDef::new(
+                &format!("{}_coef_local", pred_field),
+                wbvector::FieldType::Float,
+            ));
+            schema.add_field(wbvector::FieldDef::new(
+                &format!("{}_se_local", pred_field),
+                wbvector::FieldType::Float,
+            ));
+        }
+
+        schema.add_field(wbvector::FieldDef::new("gwr_bandwidth", wbvector::FieldType::Float));
+        schema.add_field(wbvector::FieldDef::new("gwr_r_squared", wbvector::FieldType::Float));
+
+        output_layer.schema = schema;
+
+        // Add output features with local coefficients
+        for (idx, feature) in input.features.iter().enumerate() {
+            if idx >= n { break; }
+            
+            let mut new_feature = feature.clone();
+            
+            new_feature.attributes.insert(
+                output_layer.schema.field_index("coef_intercept_local").unwrap(),
+                wbvector::FieldValue::Float(result.local_coefficients[(idx, 0)]),
+            );
+
+            for (i, &pred_field) in predictor_fields.iter().enumerate() {
+                let coef_idx = output_layer.schema.field_index(&format!("{}_coef_local", pred_field)).unwrap();
+                let se_idx = output_layer.schema.field_index(&format!("{}_se_local", pred_field)).unwrap();
+
+                new_feature.attributes.insert(
+                    coef_idx,
+                    wbvector::FieldValue::Float(result.local_coefficients[(idx, i + 1)]),
+                );
+                new_feature.attributes.insert(
+                    se_idx,
+                    wbvector::FieldValue::Float(result.local_standard_errors[(idx, i + 1)]),
+                );
+            }
+
+            new_feature.attributes.insert(
+                output_layer.schema.field_index("gwr_bandwidth").unwrap(),
+                wbvector::FieldValue::Float(result.bandwidth),
+            );
+            new_feature.attributes.insert(
+                output_layer.schema.field_index("gwr_r_squared").unwrap(),
+                wbvector::FieldValue::Float(result.r_squared),
+            );
+
+            output_layer.features.push(new_feature);
+        }
+
+        let locator = write_vector_output(&output_layer, output_path.trim())?;
+
+        let mut outputs = ToolArgs::new();
+        outputs.insert("output".to_string(), json!(locator));
+        
+        ctx.progress.progress(1.0);
+        Ok(ToolRunResult { outputs })
     }
 }

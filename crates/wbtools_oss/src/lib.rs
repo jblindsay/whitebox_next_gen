@@ -387,6 +387,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::PointPatternEnvelopeTool));
     registry.register(Box::new(tools::InhomogeneousBaselineTool));
     registry.register(Box::new(tools::HotspotVsProcessTool));
+    registry.register(Box::new(tools::PointProcessResidualsComparisonTool));
     
     // Phase B Kriging Tools
     registry.register(Box::new(tools::OrdinaryKrigingTool));

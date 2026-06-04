@@ -559,6 +559,7 @@ pub use gis::RipleysKFunctionTool;
 pub use gis::PointPatternEnvelopeTool;
 pub use gis::InhomogeneousBaselineTool;
 pub use gis::HotspotVsProcessTool;
+pub use gis::PointProcessResidualsComparisonTool;
 pub use gis::OrdinaryKrigingTool;
 pub use gis::LocalOrdinaryKrigingTool;
 pub use gis::SimpleKrigingTool;

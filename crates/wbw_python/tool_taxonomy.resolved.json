@@ -465,7 +465,8 @@
         "ripleys_k_function",
         "point_pattern_envelope",
         "inhomogeneous_baseline",
-        "hotspot_vs_process"
+        "hotspot_vs_process",
+        "point_process_residuals_comparison"
       ]
     },
     {
@@ -3139,6 +3140,10 @@
       "source_crate": "wbtools_oss"
     },
     "point_process_residuals": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "point_process_residuals_comparison": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },

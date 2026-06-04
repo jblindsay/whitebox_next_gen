@@ -41,6 +41,7 @@ pub use spatial_stats_phase_d::RipleysKFunctionTool;
 pub use spatial_stats_phase_d::PointPatternEnvelopeTool;
 pub use spatial_stats_phase_d::InhomogeneousBaselineTool;
 pub use spatial_stats_phase_d::HotspotVsProcessTool;
+pub use spatial_stats_phase_d::PointProcessResidualsComparisonTool;
 
 
 fn max_distance_squared(

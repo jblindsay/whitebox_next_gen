@@ -2641,6 +2641,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("plan_curvature", "terrain", "derivatives"),
     ("point_pattern_envelope", "vector", "spatial_statistics"),
     ("point_process_residuals", "vector", "spatial_statistics"),
+    ("point_process_residuals_comparison", "vector", "spatial_statistics"),
     ("points_along_lines", "vector", "linear_referencing"),
     ("polygon_area", "vector", "shape_metrics"),
     ("polygon_long_axis", "vector", "shape_metrics"),

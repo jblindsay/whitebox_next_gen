@@ -472,6 +472,7 @@ tools = [
   "point_pattern_envelope",
   "inhomogeneous_baseline",
   "hotspot_vs_process",
+  "point_process_residuals_comparison",
 ]
 
 [[mapping]]

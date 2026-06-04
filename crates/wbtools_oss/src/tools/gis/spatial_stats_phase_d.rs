@@ -14,8 +14,8 @@ pub struct PointPatternEnvelopeTool;
 /// Estimates intensity surface (λ) and computes intensity-corrected K function
 pub struct InhomogeneousBaselineTool;
 
-/// Computes and diagnoses residuals from point process models
-pub struct PointProcessResidualsTool;
+/// Computes and diagnoses residuals from point process models comparing observed vs predicted
+pub struct PointProcessResidualsComparisonTool;
 
 /// Compares hotspot locations with underlying point-process predictions
 pub struct HotspotVsProcessTool;
@@ -406,11 +406,11 @@ impl Tool for InhomogeneousBaselineTool {
 // POINT PROCESS RESIDUALS TOOL
 // ============================================================================
 
-impl Tool for PointProcessResidualsTool {
+impl Tool for PointProcessResidualsComparisonTool {
     fn metadata(&self) -> ToolMetadata {
         ToolMetadata {
-            id: "point_process_residuals",
-            display_name: "Point Process Residuals Diagnostics",
+            id: "point_process_residuals_comparison",
+            display_name: "Point Process Residuals Comparison",
             summary: "Computes and diagnoses residuals from point process models (raw, standardized, Pearson).",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,

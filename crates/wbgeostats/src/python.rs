@@ -15,7 +15,7 @@ use crate::variogram::{
 };
 
 #[cfg(feature = "python")]
-use crate::kriging::OrdinaryKriging;
+use crate::kriging::{OrdinaryKriging, LocalOrdinaryKriging};
 
 #[cfg(feature = "python")]
 use crate::cv::LeaveOneOutCV;
@@ -215,6 +215,103 @@ impl PyOrdinaryKriging {
     }
 }
 
+/// Python-exposed LocalOrdinaryKriging wrapper
+#[cfg(feature = "python")]
+#[pyclass(name = "LocalOrdinaryKriging")]
+pub struct PyLocalOrdinaryKriging {
+    kriging: Arc<LocalOrdinaryKriging>,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyLocalOrdinaryKriging {
+    #[new]
+    fn new(
+        coords: Vec<(f64, f64)>,
+        values: Vec<f64>,
+        vario: &PyVariogramModel,
+        k: Option<usize>,
+    ) -> PyResult<Self> {
+        if coords.len() != values.len() {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "Coordinate and value arrays must have equal length",
+            ));
+        }
+
+        if coords.len() < 3 {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "At least 3 training points required",
+            ));
+        }
+
+        let k = k.unwrap_or(20).min(coords.len());
+
+        if k < 3 {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "k must be at least 3 for kriging",
+            ));
+        }
+
+        let kriging = LocalOrdinaryKriging::new(coords, values, vario.model.clone(), k)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+
+        Ok(PyLocalOrdinaryKriging {
+            kriging: Arc::new(kriging),
+        })
+    }
+
+    fn predict(&self, x: f64, y: f64) -> PyResult<PyKrigingResult> {
+        let result = self
+            .kriging
+            .predict((x, y))
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+
+        Ok(PyKrigingResult {
+            prediction: result.prediction,
+            variance: result.variance,
+            std_error: result.std_error,
+            ci_lower: result.ci_lower,
+            ci_upper: result.ci_upper,
+        })
+    }
+
+    fn predict_batch(&self, coords: Vec<(f64, f64)>) -> PyResult<Vec<PyKrigingResult>> {
+        let results = self
+            .kriging
+            .predict_batch(&coords)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+
+        Ok(results
+            .into_iter()
+            .map(|r| PyKrigingResult {
+                prediction: r.prediction,
+                variance: r.variance,
+                std_error: r.std_error,
+                ci_lower: r.ci_lower,
+                ci_upper: r.ci_upper,
+            })
+            .collect())
+    }
+
+    #[getter]
+    fn k(&self) -> usize {
+        self.kriging.k()
+    }
+
+    #[getter]
+    fn n_training(&self) -> usize {
+        self.kriging.n_training()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "LocalOrdinaryKriging(training_points={}, k={})",
+            self.kriging.n_training(),
+            self.kriging.k()
+        )
+    }
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // Functional Python API
 // ──────────────────────────────────────────────────────────────────────────
@@ -351,6 +448,7 @@ fn wbgeostats(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyVariogramModel>()?;
     m.add_class::<PyKrigingResult>()?;
     m.add_class::<PyOrdinaryKriging>()?;
+    m.add_class::<PyLocalOrdinaryKriging>()?;
     m.add_function(wrap_pyfunction!(estimate_variogram, m)?)?;
     m.add_function(wrap_pyfunction!(fit_variogram, m)?)?;
     m.add_function(wrap_pyfunction!(cross_validate_kriging, m)?)?;

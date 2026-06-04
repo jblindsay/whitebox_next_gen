@@ -9,6 +9,11 @@ use std::f64;
 
 use crate::variogram::VariogramModel;
 
+// Sub-modules
+pub mod local;
+
+pub use local::LocalOrdinaryKriging;
+
 /// Ordinary Kriging prediction result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KrigingResult {

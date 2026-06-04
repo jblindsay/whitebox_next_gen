@@ -14,10 +14,15 @@ pub mod local;
 pub mod simple;
 pub mod st_kriging;
 pub mod universal;
+pub mod prediction_intervals;
 
 pub use local::LocalOrdinaryKriging;
 pub use simple::SimpleKriging;
 pub use st_kriging::SpaceTimeKriging;
+pub use prediction_intervals::{
+    PredictionInterval, kriging_prediction_interval_gaussian,
+    kriging_prediction_interval_posterior, IntervalCalibration, assess_interval_calibration
+};
 pub use universal::UniversalKriging;
 
 /// Ordinary Kriging prediction result

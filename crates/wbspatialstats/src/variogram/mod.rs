@@ -4,11 +4,13 @@ pub mod empirical;
 pub mod model;
 pub mod robust;
 pub mod directional;
+pub mod cross_variogram;
 
 pub use empirical::{EmpiricalVariogram, EmpiricalVariogramBuilder};
 pub use model::{VariogramModel, VariogramModelFamily, VariogramFitter};
 pub use robust::{RobustVariogramFitter, RobustLossFunction};
 pub use directional::{DirectionalVariogramBin, AnisotropyModel, compute_directional_variogram, fit_anisotropy};
+pub use cross_variogram::{CrossVariogramBin, CrossVariogramModel, compute_cross_variogram, fit_cross_variogram_model};
 
 use serde::{Deserialize, Serialize};
 use std::fmt;

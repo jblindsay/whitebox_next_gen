@@ -407,6 +407,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     // Geostatistics/Kriging Tools (legacy variogram tools)
     registry.register(Box::new(tools::EstimateVariogramTool));
     registry.register(Box::new(tools::FitVariogramTool));
+    registry.register(Box::new(tools::DirectionalVariogramTool));
     // Note: kriging tools moved to Phase B (OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, UniversalKriging, SpaceTimeKriging)
     // and are registered with other spatial stats tools above
     

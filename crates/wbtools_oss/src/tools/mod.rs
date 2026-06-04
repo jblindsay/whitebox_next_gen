@@ -577,6 +577,7 @@ pub use gis::ReprojectVectorTool;
 // Legacy geostats tools removed in favor of unified wbtools_oss/gis implementation
 pub use geostats::EstimateVariogramTool;
 pub use geostats::FitVariogramTool;
+pub use geostats::DirectionalVariogramTool;
 pub use gis::SimplifyFeaturesTool;
 pub use gis::FilterVectorFeaturesByAreaTool;
 pub use gis::EuclideanAllocationTool;

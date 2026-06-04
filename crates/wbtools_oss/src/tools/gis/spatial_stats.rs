@@ -1,14 +1,19 @@
 use super::*;
+use wbspatialstats::weights;
+use wbspatialstats::autocorrelation;
 
-#[derive(Clone, Copy)]
-enum SpatialWeightsMode {
-    Queen,
-    Rook,
-    KNearest,
-    DistanceBand,
+// Re-export from wbspatialstats for convenience
+use weights::SpatialWeightsMode;
+use weights::IslandPolicy;
+
+// Helper trait to convert wbspatialstats enums to/from strings for Tool args
+trait WeightsModeExt {
+    fn parse(args: &ToolArgs) -> Result<Self, ToolError>
+    where
+        Self: Sized;
 }
 
-impl SpatialWeightsMode {
+impl WeightsModeExt for SpatialWeightsMode {
     fn parse(args: &ToolArgs) -> Result<Self, ToolError> {
         let text = args
             .get("weights_mode")
@@ -16,26 +21,21 @@ impl SpatialWeightsMode {
             .unwrap_or("k_nearest")
             .trim()
             .to_ascii_lowercase();
-        match text.as_str() {
-            "queen" => Ok(Self::Queen),
-            "rook" => Ok(Self::Rook),
-            "k_nearest" => Ok(Self::KNearest),
-            "distance_band" => Ok(Self::DistanceBand),
-            _ => Err(ToolError::Validation(
+        SpatialWeightsMode::from_str(&text).ok_or_else(|| {
+            ToolError::Validation(
                 "weights_mode must be one of: queen, rook, k_nearest, distance_band".to_string(),
-            )),
-        }
+            )
+        })
     }
 }
 
-#[derive(Clone, Copy)]
-enum IslandPolicy {
-    DropWithWarning,
-    KeepZeroWeight,
-    Error,
+trait IslandPolicyExt {
+    fn parse(args: &ToolArgs) -> Result<Self, ToolError>
+    where
+        Self: Sized;
 }
 
-impl IslandPolicy {
+impl IslandPolicyExt for IslandPolicy {
     fn parse(args: &ToolArgs) -> Result<Self, ToolError> {
         let text = args
             .get("island_policy")
@@ -43,14 +43,11 @@ impl IslandPolicy {
             .unwrap_or("drop_with_warning")
             .trim()
             .to_ascii_lowercase();
-        match text.as_str() {
-            "drop_with_warning" => Ok(Self::DropWithWarning),
-            "keep_zero_weight" => Ok(Self::KeepZeroWeight),
-            "error" => Ok(Self::Error),
-            _ => Err(ToolError::Validation(
+        IslandPolicy::from_str(&text).ok_or_else(|| {
+            ToolError::Validation(
                 "island_policy must be one of: drop_with_warning, keep_zero_weight, error".to_string(),
-            )),
-        }
+            )
+        })
     }
 }
 
@@ -61,24 +58,6 @@ struct SpatialObservation {
     y: f64,
     value: f64,
     topo: Option<TopoGeometry>,
-}
-
-#[derive(Clone)]
-struct SpatialWeightsDiagnostics {
-    n_features: usize,
-    n_islands: usize,
-    neighbor_count_min: usize,
-    neighbor_count_mean: f64,
-    neighbor_count_max: usize,
-    connected_component_count: usize,
-    row_standardized: bool,
-    dropped_feature_count: usize,
-}
-
-struct SpatialWeightsGraph {
-    neighbors: Vec<Vec<(usize, f64)>>,
-    diagnostics: SpatialWeightsDiagnostics,
-    warnings: Vec<String>,
 }
 
 pub struct GlobalMoransITool;
@@ -171,37 +150,6 @@ fn collect_spatial_observations(layer: &wbvector::Layer, field: &str) -> Result<
     Ok((observations, dropped))
 }
 
-fn connected_components(neighbors: &[Vec<(usize, f64)>]) -> usize {
-    let n = neighbors.len();
-    let mut undirected = vec![Vec::<usize>::new(); n];
-    for (i, row) in neighbors.iter().enumerate() {
-        for (j, _) in row {
-            undirected[i].push(*j);
-            undirected[*j].push(i);
-        }
-    }
-
-    let mut visited = vec![false; n];
-    let mut components = 0usize;
-    for start in 0..n {
-        if visited[start] {
-            continue;
-        }
-        components += 1;
-        let mut stack = vec![start];
-        visited[start] = true;
-        while let Some(node) = stack.pop() {
-            for next in &undirected[node] {
-                if !visited[*next] {
-                    visited[*next] = true;
-                    stack.push(*next);
-                }
-            }
-        }
-    }
-    components
-}
-
 fn build_distance_neighbors(
     observations: &[SpatialObservation],
     mode: SpatialWeightsMode,
@@ -292,7 +240,7 @@ fn build_spatial_weights(
     k: usize,
     distance_band: f64,
     dropped_feature_count: usize,
-) -> Result<SpatialWeightsGraph, ToolError> {
+) -> Result<weights::SpatialWeightsGraph, ToolError> {
     let (mut neighbors, rook_approximation) = match mode {
         SpatialWeightsMode::Queen | SpatialWeightsMode::Rook => {
             let (n, approx) = build_contiguity_neighbors(observations, mode)?;
@@ -361,18 +309,18 @@ fn build_spatial_weights(
         counts.iter().sum::<usize>() as f64 / counts.len() as f64
     };
 
-    let diagnostics = SpatialWeightsDiagnostics {
+    let diagnostics = weights::SpatialWeightsDiagnostics {
         n_features: observations.len(),
         n_islands: island_count,
         neighbor_count_min: min_neighbors,
         neighbor_count_mean: mean_neighbors,
         neighbor_count_max: max_neighbors,
-        connected_component_count: connected_components(&neighbors),
+        connected_component_count: weights::connected_components(&neighbors),
         row_standardized: row_standardize,
         dropped_feature_count,
     };
 
-    Ok(SpatialWeightsGraph {
+    Ok(weights::SpatialWeightsGraph {
         neighbors,
         diagnostics,
         warnings,
@@ -381,13 +329,14 @@ fn build_spatial_weights(
 
 fn compute_global_morans_i(
     values: &[f64],
-    neighbors: &[Vec<(usize, f64)>],
+    raw_weights: &weights::SpatialWeightsGraph,
     island_policy: IslandPolicy,
-) -> Result<(f64, f64, Option<f64>, Option<f64>, usize), ToolError> {
+) -> Result<(f64, f64, f64, f64, usize), ToolError> {
+    // Filter for islands if needed
     let n_total = values.len();
     let mut included = vec![true; n_total];
     if matches!(island_policy, IslandPolicy::DropWithWarning) {
-        for (i, row) in neighbors.iter().enumerate() {
+        for (i, row) in raw_weights.neighbors.iter().enumerate() {
             if row.is_empty() {
                 included[i] = false;
             }
@@ -399,91 +348,47 @@ fn compute_global_morans_i(
         .enumerate()
         .filter_map(|(i, keep)| if *keep { Some(i) } else { None })
         .collect();
+    
     if idxs.len() < 3 {
         return Err(ToolError::Validation(
             "insufficient connected observations after island handling".to_string(),
         ));
     }
 
-    let n = idxs.len() as f64;
-    let mean = idxs.iter().map(|i| values[*i]).sum::<f64>() / n;
-
-    let mut z = vec![0.0f64; n_total];
-    for i in &idxs {
-        z[*i] = values[*i] - mean;
+    // Build filtered weights and values
+    let mut filtered_values = Vec::new();
+    let mut index_map = vec![None; n_total];
+    for (new_idx, &old_idx) in idxs.iter().enumerate() {
+        index_map[old_idx] = Some(new_idx);
+        filtered_values.push(values[old_idx]);
     }
 
-    let den = idxs.iter().map(|i| z[*i] * z[*i]).sum::<f64>();
-    if den <= 0.0 {
-        return Err(ToolError::Validation(
-            "input field variance is zero; Moran's I is undefined".to_string(),
-        ));
-    }
-
-    let mut num = 0.0f64;
-    let mut s0 = 0.0f64;
-    let mut w = vec![vec![0.0f64; n_total]; n_total];
-    for i in &idxs {
-        for (j, wij) in &neighbors[*i] {
-            if !included[*j] {
-                continue;
+    let mut filtered_neighbors: Vec<Vec<(usize, f64)>> = vec![Vec::new(); idxs.len()];
+    for (new_i, &old_i) in idxs.iter().enumerate() {
+        for (old_j, weight) in &raw_weights.neighbors[old_i] {
+            if let Some(new_j) = index_map[*old_j] {
+                filtered_neighbors[new_i].push((new_j, *weight));
             }
-            w[*i][*j] = *wij;
-            num += *wij * z[*i] * z[*j];
-            s0 += *wij;
         }
     }
 
-    if s0 <= 0.0 {
-        return Err(ToolError::Validation(
-            "weights sum is zero under the selected neighborhood configuration".to_string(),
-        ));
-    }
-
-    let i_stat = (n / s0) * (num / den);
-    let expected = -1.0 / (n - 1.0);
-
-    let mut s1 = 0.0;
-    for i in &idxs {
-        for j in &idxs {
-            let wij = w[*i][*j];
-            let wji = w[*j][*i];
-            let term = wij + wji;
-            s1 += term * term;
-        }
-    }
-    s1 *= 0.5;
-
-    let mut s2 = 0.0;
-    for i in &idxs {
-        let row_sum: f64 = idxs.iter().map(|j| w[*i][*j]).sum();
-        let col_sum: f64 = idxs.iter().map(|j| w[*j][*i]).sum();
-        s2 += (row_sum + col_sum) * (row_sum + col_sum);
-    }
-
-    let m2 = den / n;
-    let m4 = idxs.iter().map(|i| z[*i].powi(4)).sum::<f64>() / n;
-    let k = if m2 > 0.0 { m4 / (m2 * m2) } else { 0.0 };
-
-    let a = n * ((n * n - 3.0 * n + 3.0) * s1 - n * s2 + 3.0 * s0 * s0);
-    let b = k * ((n * n - n) * s1 - 2.0 * n * s2 + 6.0 * s0 * s0);
-    let c = (n - 1.0) * (n - 2.0) * (n - 3.0) * s0 * s0;
-
-    let variance = if c.abs() > 0.0 {
-        let raw = (a - b) / c - expected * expected;
-        if raw.is_finite() && raw > 0.0 {
-            Some(raw)
-        } else {
-            None
-        }
-    } else {
-        None
+    let filtered_weights = weights::SpatialWeightsGraph {
+        neighbors: filtered_neighbors,
+        diagnostics: raw_weights.diagnostics.clone(),
+        warnings: vec![],
     };
 
-    let z_score = variance.map(|v| (i_stat - expected) / v.sqrt());
-    let p_value = z_score.map(two_tailed_normal_p);
+    // Call wbspatialstats function
+    let result = autocorrelation::morans_i(&filtered_values, &filtered_weights)
+        .map_err(|e| ToolError::Validation(format!("Moran's I computation failed: {}", e)))?;
 
-    Ok((i_stat, expected, z_score, p_value, n as usize))
+    Ok((
+        result.statistic,
+        result.expected_value,
+        result.z_score,
+        result.p_value,
+        idxs.len(),
+    ))
 }
 
 fn write_text(path: &std::path::Path, contents: &str) -> Result<(), ToolError> {
@@ -676,7 +581,7 @@ impl Tool for GlobalMoransITool {
 
         ctx.progress.info("computing Moran's I");
         let (statistic_i, expected_i, z_score, p_value, n_used) =
-            compute_global_morans_i(&values, &weights.neighbors, island_policy)?;
+            compute_global_morans_i(&values, &weights, island_policy)?;
 
         let mut report = serde_json::Map::new();
         report.insert("tool_id".to_string(), json!("global_morans_i"));
@@ -685,13 +590,10 @@ impl Tool for GlobalMoransITool {
         report.insert("expected_i".to_string(), json!(expected_i));
         report.insert(
             "variance_i".to_string(),
-            match z_score {
-                Some(z) if z.is_finite() && z != 0.0 => json!(((statistic_i - expected_i) / z).powi(2)),
-                _ => serde_json::Value::Null,
-            },
+            json!(((statistic_i - expected_i) / z_score).powi(2)),
         );
-        report.insert("z_score".to_string(), z_score.map_or(serde_json::Value::Null, |z| json!(z)));
-        report.insert("p_value_two_sided".to_string(), p_value.map_or(serde_json::Value::Null, |p| json!(p)));
+        report.insert("z_score".to_string(), json!(z_score));
+        report.insert("p_value_two_sided".to_string(), json!(p_value));
         report.insert("n_features_used".to_string(), json!(n_used));
         report.insert("n_features_dropped".to_string(), json!(weights.diagnostics.dropped_feature_count));
         report.insert(
@@ -711,20 +613,19 @@ impl Tool for GlobalMoransITool {
             json!(weights.warnings),
         );
         report.insert("statistic".to_string(), json!(statistic_i));
-        report.insert(
-            "p_value".to_string(),
-            p_value.map_or(serde_json::Value::Null, |p| json!(p)),
-        );
+        report.insert("p_value".to_string(), json!(p_value));
         report.insert("alpha".to_string(), serde_json::Value::Null);
         report.insert("n_observations".to_string(), json!(n_used));
         report.insert(
             "dropped_observations".to_string(),
             json!(weights.diagnostics.dropped_feature_count),
         );
-        let significance_class = match (z_score, p_value) {
-            (Some(z), Some(p)) if p <= 0.05 && z > 0.0 => "positive",
-            (Some(z), Some(p)) if p <= 0.05 && z < 0.0 => "negative",
-            _ => "ns",
+        let significance_class = if p_value <= 0.05 && z_score > 0.0 {
+            "positive"
+        } else if p_value <= 0.05 && z_score < 0.0 {
+            "negative"
+        } else {
+            "ns"
         };
         report.insert("significance_class".to_string(), json!(significance_class));
         report.insert(
@@ -756,8 +657,8 @@ impl Tool for GlobalMoransITool {
         }
 
         if let Some(path) = output_csv {
-            let z_text = z_score.map(|z| z.to_string()).unwrap_or_default();
-            let p_text = p_value.map(|p| p.to_string()).unwrap_or_default();
+            let z_text = z_score.to_string();
+            let p_text = p_value.to_string();
             let body = format!(
                 "tool_id,statistic_i,expected_i,z_score,p_value_two_sided,n_features_used,n_features_dropped\nglobal_morans_i,{},{},{},{},{},{}\n",
                 statistic_i,
@@ -772,12 +673,8 @@ impl Tool for GlobalMoransITool {
         }
 
         if let Some(path) = output_html {
-            let z_text = z_score
-                .map(|z| format!("{z:.6}"))
-                .unwrap_or_else(|| "NA".to_string());
-            let p_text = p_value
-                .map(|p| format!("{p:.6}"))
-                .unwrap_or_else(|| "NA".to_string());
+            let z_text = format!("{z_score:.6}");
+            let p_text = format!("{p_value:.6}");
             let body = build_branded_html_report(
                 "Global Moran's I Report",
                 &[

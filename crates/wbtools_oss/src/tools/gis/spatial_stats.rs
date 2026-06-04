@@ -1884,44 +1884,15 @@ impl Tool for NearestNeighbourIndexTool {
             ));
         }
 
-        let mut tree = KdTree::new(2);
-        for (idx, (x, y)) in points.iter().enumerate() {
-            tree.add([*x, *y], idx)
-                .map_err(|e| ToolError::Execution(format!("failed building k-d tree: {e}")))?;
-        }
+        ctx.progress.info("computing nearest-neighbour index");
+        let result = autocorrelation::nearest_neighbor_index(&points)
+            .map_err(|e| ToolError::Validation(format!("NNI computation failed: {}", e)))?;
 
-        let mut sum_min_dist = 0.0f64;
-        for (idx, (x, y)) in points.iter().enumerate() {
-            let nearest = tree
-                .nearest(&[*x, *y], 3, &squared_euclidean)
-                .map_err(|e| ToolError::Execution(format!("nearest query failed: {e}")))?;
-            let mut best = f64::INFINITY;
-            for (d2, jref) in nearest {
-                if *jref == idx {
-                    continue;
-                }
-                let d = d2.sqrt();
-                if d > 0.0 {
-                    best = best.min(d);
-                }
-            }
-            if !best.is_finite() {
-                return Err(ToolError::Validation(
-                    "could not compute nearest-neighbour distance; duplicated or degenerate input"
-                        .to_string(),
-                ));
-            }
-            sum_min_dist += best;
-        }
-
-        let n = points.len() as f64;
-        let observed_mean = sum_min_dist / n;
-        let lambda = n / study_area.max(1.0e-12);
-        let expected_mean = 0.5 / lambda.sqrt();
-        let nni_ratio = observed_mean / expected_mean.max(1.0e-12);
-        let se = 0.26136 / (n * lambda).sqrt().max(1.0e-12);
-        let z_score = (observed_mean - expected_mean) / se.max(1.0e-12);
-        let p_value = two_tailed_normal_p(z_score);
+        let observed_mean = result.observed_distance;
+        let expected_mean = result.expected_distance;
+        let nni_ratio = result.nni;
+        let z_score = result.z_score;
+        let p_value = result.p_value;
 
         let significance_class = if p_value <= 0.05 {
             if z_score > 0.0 { "clustered" } else { "dispersed" }
@@ -2196,24 +2167,15 @@ impl Tool for QuadratCountTestTool {
 
         let n_points = points.len() as f64;
         let expected = n_points / n_quadrats as f64;
-        let mut chi_square = 0.0f64;
-        for c in &counts {
-            let diff = *c as f64 - expected;
-            chi_square += diff * diff / expected.max(1.0e-12);
-        }
-        let df = (n_quadrats as f64 - 1.0).max(1.0);
-        let p_value = chi_square_survival_approx(chi_square, df);
 
-        let mean = expected;
-        let var = counts
-            .iter()
-            .map(|c| {
-                let d = *c as f64 - mean;
-                d * d
-            })
-            .sum::<f64>()
-            / n_quadrats as f64;
-        let vmr = var / mean.max(1.0e-12);
+        ctx.progress.info("computing quadrat analysis statistics");
+        let result = autocorrelation::quadrat_analysis(&points, rows, cols)
+            .map_err(|e| ToolError::Validation(format!("Quadrat analysis failed: {}", e)))?;
+
+        let chi_square = result.chi_square;
+        let df = result.degrees_of_freedom as f64;
+        let p_value = result.p_value;
+        let vmr = result.variance_mean_ratio;
 
         let significance_class = if p_value <= 0.05 { "non_random" } else { "ns" };
 

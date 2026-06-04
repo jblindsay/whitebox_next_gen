@@ -29,6 +29,9 @@ pub use cross_validation::KrigingCrossValidationTool;
 mod directional_variogram;
 pub use directional_variogram::DirectionalVariogramTool;
 
+mod ordinary_cokriging;
+pub use ordinary_cokriging::OrdinaryCoKrigingTool;
+
 // Helper functions for vector loading
 fn load_vector_arg(args: &ToolArgs, key: &str) -> Result<wbvector::Layer, ToolError> {
     let path = args

@@ -67,6 +67,12 @@ pub struct GetisOrdGiStarTool;
 pub struct GetisOrdGiStarRasterTool;
 pub struct NearestNeighbourIndexTool;
 pub struct QuadratCountTestTool;
+pub struct SpatialLagRegressionTool;
+pub struct SpatialLagRegressionRasterTool;
+pub struct SpatialErrorRegressionTool;
+pub struct SpatialErrorRegressionRasterTool;
+pub struct GeographicallyWeightedRegressionTool;
+pub struct GeographicallyWeightedRegressionRasterTool;
 
 fn parse_optional_usize_arg(args: &ToolArgs, key: &str) -> Result<Option<usize>, ToolError> {
     match args.get(key) {
@@ -3323,5 +3329,179 @@ impl Tool for GetisOrdGiStarRasterTool {
 
         ctx.progress.progress(1.0);
         Ok(ToolRunResult { outputs })
+    }
+}
+
+// ============================================================================
+// PHASE C RASTER TOOLS (Spatial Regression - Fitted Value Surfaces)
+// ============================================================================
+// TODO: Implement raster output versions of spatial regression tools
+// These should estimate regression models and output fitted value surfaces
+
+impl Tool for SpatialLagRegressionRasterTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "spatial_lag_regression_raster",
+            display_name: "Spatial Lag Regression (SAR) - Raster Output",
+            summary: "[NOT YET IMPLEMENTED] Outputs fitted value surface from spatial lag regression.",
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "response_field", description: "Response variable.", required: true },
+                ToolParamSpec { name: "predictor_fields", description: "Comma-separated predictor fields.", required: true },
+                ToolParamSpec { name: "output", description: "Output raster (fitted values).", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.gpkg"));
+        defaults.insert("response_field".to_string(), json!("response"));
+        defaults.insert("predictor_fields".to_string(), json!("predictor1"));
+        defaults.insert("output".to_string(), json!("fitted.tif"));
+
+        ToolManifest {
+            id: "spatial_lag_regression_raster".to_string(),
+            display_name: "Spatial Lag Regression (SAR) - Raster Output".to_string(),
+            summary: "[NOT YET IMPLEMENTED] Outputs fitted value surface from SAR model.".to_string(),
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "response_field".to_string(), description: "Response variable.".to_string(), required: true },
+                ToolParamDescriptor { name: "predictor_fields".to_string(), description: "Predictor fields.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output raster.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![],
+            tags: vec!["raster".to_string(), "spatial-regression".to_string(), "sar".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, _args: &ToolArgs) -> Result<(), ToolError> {
+        Err(ToolError::Validation(
+            "spatial_lag_regression_raster is not yet implemented".to_string(),
+        ))
+    }
+
+    fn run(&self, _args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        Err(ToolError::Execution(
+            "spatial_lag_regression_raster is not yet implemented".to_string(),
+        ))
+    }
+}
+
+impl Tool for SpatialErrorRegressionRasterTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "spatial_error_regression_raster",
+            display_name: "Spatial Error Regression (SEM) - Raster Output",
+            summary: "[NOT YET IMPLEMENTED] Outputs fitted value surface from spatial error regression.",
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "response_field", description: "Response variable.", required: true },
+                ToolParamSpec { name: "predictor_fields", description: "Comma-separated predictor fields.", required: true },
+                ToolParamSpec { name: "output", description: "Output raster (fitted values).", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.gpkg"));
+        defaults.insert("response_field".to_string(), json!("response"));
+        defaults.insert("predictor_fields".to_string(), json!("predictor1"));
+        defaults.insert("output".to_string(), json!("fitted.tif"));
+
+        ToolManifest {
+            id: "spatial_error_regression_raster".to_string(),
+            display_name: "Spatial Error Regression (SEM) - Raster Output".to_string(),
+            summary: "[NOT YET IMPLEMENTED] Outputs fitted value surface from SEM model.".to_string(),
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "response_field".to_string(), description: "Response variable.".to_string(), required: true },
+                ToolParamDescriptor { name: "predictor_fields".to_string(), description: "Predictor fields.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output raster.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![],
+            tags: vec!["raster".to_string(), "spatial-regression".to_string(), "sem".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, _args: &ToolArgs) -> Result<(), ToolError> {
+        Err(ToolError::Validation(
+            "spatial_error_regression_raster is not yet implemented".to_string(),
+        ))
+    }
+
+    fn run(&self, _args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        Err(ToolError::Execution(
+            "spatial_error_regression_raster is not yet implemented".to_string(),
+        ))
+    }
+}
+
+impl Tool for GeographicallyWeightedRegressionRasterTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "geographically_weighted_regression_raster",
+            display_name: "Geographically Weighted Regression (GWR) - Raster Output",
+            summary: "[NOT YET IMPLEMENTED] Outputs local coefficient rasters from GWR model.",
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "response_field", description: "Response variable.", required: true },
+                ToolParamSpec { name: "predictor_fields", description: "Comma-separated predictor fields.", required: true },
+                ToolParamSpec { name: "output", description: "Output raster prefix (multiple bands for coefficients).", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.gpkg"));
+        defaults.insert("response_field".to_string(), json!("response"));
+        defaults.insert("predictor_fields".to_string(), json!("predictor1"));
+        defaults.insert("output".to_string(), json!("gwr_coef.tif"));
+
+        ToolManifest {
+            id: "geographically_weighted_regression_raster".to_string(),
+            display_name: "Geographically Weighted Regression (GWR) - Raster Output".to_string(),
+            summary: "[NOT YET IMPLEMENTED] Outputs local coefficient surfaces from GWR.".to_string(),
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "response_field".to_string(), description: "Response variable.".to_string(), required: true },
+                ToolParamDescriptor { name: "predictor_fields".to_string(), description: "Predictor fields.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output raster.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![],
+            tags: vec!["raster".to_string(), "spatial-regression".to_string(), "gwr".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, _args: &ToolArgs) -> Result<(), ToolError> {
+        Err(ToolError::Validation(
+            "geographically_weighted_regression_raster is not yet implemented".to_string(),
+        ))
+    }
+
+    fn run(&self, _args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        Err(ToolError::Execution(
+            "geographically_weighted_regression_raster is not yet implemented".to_string(),
+        ))
     }
 }

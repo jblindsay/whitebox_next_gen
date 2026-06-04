@@ -371,6 +371,11 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::LocalMoransILisaRasterTool));
     registry.register(Box::new(tools::GetisOrdGiStarRasterTool));
     
+    // Phase C Raster Regression Tools
+    registry.register(Box::new(tools::SpatialLagRegressionRasterTool));
+    registry.register(Box::new(tools::SpatialErrorRegressionRasterTool));
+    registry.register(Box::new(tools::GeographicallyWeightedRegressionRasterTool));
+    
     // Phase B Kriging Tools
     registry.register(Box::new(tools::OrdinaryKrigingTool));
     registry.register(Box::new(tools::LocalOrdinaryKrigingTool));

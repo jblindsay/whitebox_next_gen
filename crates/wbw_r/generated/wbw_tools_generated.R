@@ -636,6 +636,11 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("emergency_scenario_routing_and_accessibility_simulator", list(...))
   }
   session$enhanced_lee_filter <- function(...) {
+
+  session$envelope_test <- function(...) {
+    # envelope_test
+    run_tool("envelope_test", list(...))
+  }
     # Performs Enhanced Lee filtering using sigma-ratio weighting and ENL-dependent blending.
     run_tool("enhanced_lee_filter", list(...))
   }
@@ -932,6 +937,16 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("generate_network_nodes", list(...))
   }
   session$generating_function <- function(...) {
+
+  session$geographically_weighted_regression <- function(...) {
+    # geographically_weighted_regression
+    run_tool("geographically_weighted_regression", list(...))
+  }
+
+  session$geographically_weighted_regression_raster <- function(...) {
+    # geographically_weighted_regression_raster
+    run_tool("geographically_weighted_regression_raster", list(...))
+  }
     # Calculates generating function from a DEM.
     run_tool("generating_function", list(...))
   }
@@ -940,10 +955,25 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("geomorphons", list(...))
   }
   session$georeference_raster_from_control_points <- function(...) {
+
+  session$getis_ord_gi_star <- function(...) {
+    # getis_ord_gi_star
+    run_tool("getis_ord_gi_star", list(...))
+  }
+
+  session$getis_ord_gi_star_raster <- function(...) {
+    # getis_ord_gi_star_raster
+    run_tool("getis_ord_gi_star_raster", list(...))
+  }
     # Fits a transform from GCPs and warps a raster into georeferenced output.
     run_tool("georeference_raster_from_control_points", list(...))
   }
   session$glcm_texture <- function(...) {
+
+  session$global_morans_i <- function(...) {
+    # global_morans_i
+    run_tool("global_morans_i", list(...))
+  }
     # Computes general-purpose local GLCM texture rasters as a multiband output.
     run_tool("glcm_texture", list(...))
   }
@@ -1124,6 +1154,11 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("individual_tree_detection", list(...))
   }
   session$individual_tree_segmentation <- function(...) {
+
+  session$inhomogeneous_intensity_raster <- function(...) {
+    # inhomogeneous_intensity_raster
+    run_tool("inhomogeneous_intensity_raster", list(...))
+  }
     # Segments vegetation LiDAR points into individual tree clusters using a mean-shift mode-seeking workflow.
     run_tool("individual_tree_segmentation", list(...))
   }
@@ -1460,6 +1495,21 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("ln", list(...))
   }
   session$local_hypsometric_analysis <- function(...) {
+
+  session$local_kriging <- function(...) {
+    # local_kriging
+    run_tool("local_kriging", list(...))
+  }
+
+  session$local_morans_i_lisa <- function(...) {
+    # local_morans_i_lisa
+    run_tool("local_morans_i_lisa", list(...))
+  }
+
+  session$local_morans_i_lisa_raster <- function(...) {
+    # local_morans_i_lisa_raster
+    run_tool("local_morans_i_lisa_raster", list(...))
+  }
     # Computes the minimum local hypsometric integral across a nonlinearly sampled range of neighbourhood scales.
     run_tool("local_hypsometric_analysis", list(...))
   }
@@ -1792,6 +1842,11 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("ndvi_based_emissivity", list(...))
   }
   session$near <- function(...) {
+
+  session$nearest_neighbour_index <- function(...) {
+    # nearest_neighbour_index
+    run_tool("nearest_neighbour_index", list(...))
+  }
     # Finds the nearest feature in a near layer and writes NEAR_FID and NEAR_DIST attributes.
     run_tool("near", list(...))
   }
@@ -1948,6 +2003,11 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("opening", list(...))
   }
   session$openness <- function(...) {
+
+  session$ordinary_kriging <- function(...) {
+    # ordinary_kriging
+    run_tool("ordinary_kriging", list(...))
+  }
     # Calculates Yokoyama et al. (2002) topographic openness from an input DEM. Returns positive (convex) and negative (concave) openness rasters.
     run_tool("openness", list(...))
   }
@@ -2028,6 +2088,11 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("piecewise_contrast_stretch", list(...))
   }
   session$plan_curvature <- function(...) {
+
+  session$point_process_residuals <- function(...) {
+    # point_process_residuals
+    run_tool("point_process_residuals", list(...))
+  }
     # Calculates plan (contour) curvature from a DEM.
     run_tool("plan_curvature", list(...))
   }
@@ -2112,6 +2177,11 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("prune_vector_streams", list(...))
   }
   session$qin_flow_accumulation <- function(...) {
+
+  session$quadrat_count_test <- function(...) {
+    # quadrat_count_test
+    run_tool("quadrat_count_test", list(...))
+  }
     # Calculates Qin MFD flow accumulation from a DEM.
     run_tool("qin_flow_accumulation", list(...))
   }
@@ -2340,6 +2410,11 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("ridge_and_valley_vectors", list(...))
   }
   session$ring_curvature <- function(...) {
+
+  session$ripleys_k_test <- function(...) {
+    # ripleys_k_test
+    run_tool("ripleys_k_test", list(...))
+  }
     # Calculates ring curvature (squared flow-line twisting) from a DEM.
     run_tool("ring_curvature", list(...))
   }
@@ -2524,6 +2599,11 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("sieve", list(...))
   }
   session$sigmoidal_contrast_stretch <- function(...) {
+
+  session$simple_kriging <- function(...) {
+    # simple_kriging
+    run_tool("simple_kriging", list(...))
+  }
     # Performs sigmoidal contrast stretching using gain and cutoff.
     run_tool("sigmoidal_contrast_stretch", list(...))
   }
@@ -2604,10 +2684,35 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("solar_site_suitability_analysis", list(...))
   }
   session$sort_lidar <- function(...) {
+
+  session$spacetime_kriging <- function(...) {
+    # spacetime_kriging
+    run_tool("spacetime_kriging", list(...))
+  }
+
+  session$spatial_error_regression <- function(...) {
+    # spatial_error_regression
+    run_tool("spatial_error_regression", list(...))
+  }
+
+  session$spatial_error_regression_raster <- function(...) {
+    # spatial_error_regression_raster
+    run_tool("spatial_error_regression_raster", list(...))
+  }
     # Sorts points by one or more LiDAR properties, with optional bin sizes per criterion.
     run_tool("sort_lidar", list(...))
   }
   session$spatial_join <- function(...) {
+
+  session$spatial_lag_regression <- function(...) {
+    # spatial_lag_regression
+    run_tool("spatial_lag_regression", list(...))
+  }
+
+  session$spatial_lag_regression_raster <- function(...) {
+    # spatial_lag_regression_raster
+    run_tool("spatial_lag_regression_raster", list(...))
+  }
     # Joins attributes from a join layer onto target features using a spatial predicate.
     run_tool("spatial_join", list(...))
   }
@@ -2856,6 +2961,11 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("two_sample_ks_test", list(...))
   }
   session$union <- function(...) {
+
+  session$universal_kriging <- function(...) {
+    # universal_kriging
+    run_tool("universal_kriging", list(...))
+  }
     # Dissolves combined input and overlay polygons into a unified polygon coverage.
     run_tool("union", list(...))
   }

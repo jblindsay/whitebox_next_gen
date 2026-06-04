@@ -313,9 +313,11 @@ Performance is a design constraint, not a post-hoc optimization task.
 - [x] Step 4: Full Phase C spatial regression implementation (Spatial Lag, Error, GWR) — all 8 tests passing, release build verified
 - [x] Phase C Tool Wrappers: SpatialLagRegressionTool, SpatialErrorRegressionTool, GeographicallyWeightedRegressionTool
 
-**✅ COMPLETED / NEXT:**
+**✅ FULLY COMPLETE:**
+- [x] **Phase A:** Global/local autocorrelation tools (Moran's I, LISA, Getis-Ord G/G*, NNI, Quadrat)
 - [x] **Phase D:** Point-process tools (K/L, envelopes, inhomogeneous baselines, diagnostics, hotspot comparison)
-- [ ] Step 3: Complete Phase A tool implementations (LISA, Getis-Ord, NNI, Quadrat computation functions)
+
+**⏳ TODO - Python/R Bindings:**
 - [ ] Step 5: Update Python/R bindings for Phase A, C, & D
 
 ### Motivation
@@ -345,8 +347,8 @@ crates/wbspatialstats/  (renamed from wbgeostats; ✅ DONE)
 │   ├── cv/              (Phase B: cross-validation; ✅ COMPLETE)
 │   ├── weights/         (✅ COMPLETE: Shared Phase A+C infrastructure)
 │   │   └── mod.rs       (SpatialWeightsMode, IslandPolicy, SpatialWeightsGraph, connected_components)
-│   ├── autocorrelation/  (🔄 PARTIAL: Phase A tools foundation)
-│   │   └── mod.rs       (GlobalAutocorrelationResult, LocalAssociationResult, morans_i())
+│   ├── autocorrelation/  (✅ COMPLETE: Phase A tools)
+│   │   └── mod.rs       (morans_i, local_morans_i_lisa, getis_ord_g, getis_ord_g_star, nearest_neighbour_index, quadrat_analysis)
 │   ├── regression/       (✅ COMPLETE: Phase C tools)
 │   │   ├── mod.rs
 │   │   ├── spatial_lag.rs    (✅ Spatial lag regression)
@@ -355,9 +357,9 @@ crates/wbspatialstats/  (renamed from wbgeostats; ✅ DONE)
 │   │   ├── diagnostics.rs   (✅ Shared significance/instability output)
 │   │   ├── matrix_solvers.rs (✅ OLS/GLS solvers)
 │   │   └── test_data.rs     (✅ Columbus validation dataset)
-│   ├── density_estimation/   (🔄 NEW: Phase D infrastructure)
+│   ├── density_estimation/   (✅ COMPLETE: Phase D infrastructure)
 │   │   └── mod.rs       (KernelDensityEstimator, bandwidth selection)
-│   ├── point_process/    (⏳ TODO: Phase D tools)
+│   ├── point_process/    (✅ COMPLETE: Phase D tools)
 │   │   ├── mod.rs       (KFunction, LFunction, EnvelopeResult)
 │   │   ├── ripley.rs    (K/L computation, distance binning)
 │   │   ├── envelopes.rs (Critical band, Monte Carlo simulation)
@@ -374,7 +376,7 @@ crates/wbspatialstats/  (renamed from wbgeostats; ✅ DONE)
 └── tests/
     ├── kriging_tests.rs       (✅ 61 tests)
     ├── regression_tests.rs    (✅ 8 tests)
-    ├── autocorrelation_tests.rs     (🔄 PARTIAL: 2 tests)
+    ├── autocorrelation_tests.rs     (✅ COMPLETE: ~15+ tests for all Phase A functions)
     └── point_process_tests.rs (⏳ TODO: ~20 tests)
 ```
 
@@ -395,16 +397,16 @@ crates/wbspatialstats/  (renamed from wbgeostats; ✅ DONE)
    - [x] 6 unit tests passing
    - [x] Commit: 75e5e60
 
-3. **🔄 IN PROGRESS: Extract Phase A tools from `wbtools_oss`**
+3. **✅ COMPLETE: Extract and implement Phase A tools**
    - [x] Create `autocorrelation/mod.rs` foundation
-   - [x] Implement `morans_i()` computation function
-   - [x] Add GlobalAutocorrelationResult and LocalAssociationResult types
-   - [ ] Implement LISA computation function
-   - [ ] Implement Getis-Ord G/G* computation function
-   - [ ] Implement NNI computation function
-   - [ ] Implement Quadrat analysis computation function
-   - [ ] (Tool trait implementations remain in wbtools_oss for now, using wbspatialstats computation logic)
-   - 2 unit tests in place; pending: 8+ more as functions are completed
+   - [x] Implement `morans_i()` global autocorrelation computation
+   - [x] Implement `local_morans_i_lisa()` local cluster analysis with HH/LL/HL/LH/insignificant classification
+   - [x] Implement `getis_ord_g()` global G hotspot measure
+   - [x] Implement `getis_ord_g_star()` local G* hotspot analysis with significance
+   - [x] Implement `nearest_neighbour_index()` for CSR hypothesis testing
+   - [x] Implement `quadrat_analysis()` count-based spatial pattern testing
+   - [x] Tool wrappers in wbtools_oss (5 tools: GlobalMoransITool, LocalMoransILisaTool, GetisOrdGiStarTool, NearestNeighbourIndexTool, QuadratCountTestTool)
+   - [x] All tools compiled, registered, and tested; tools exported in tools/mod.rs
 
 4. **✅ COMPLETE: Implement universal kriging** (Phase B extension)
    - [x] New `kriging/universal.rs` with polynomial trend component

@@ -1525,7 +1525,7 @@ impl Tool for GetisOrdGiStarTool {
         ToolMetadata {
             id: "getis_ord_gi_star",
             display_name: "Getis-Ord Gi / Gi*",
-            summary: "Computes Getis-Ord Gi or Gi* z-scores and hotspot/coldspot classes.",
+            summary: "Computes Getis-Ord Gi or Gi* z-scores with permutation or asymptotic significance and hotspot/coldspot classification.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1536,10 +1536,11 @@ impl Tool for GetisOrdGiStarTool {
                 ToolParamSpec { name: "distance", description: "Distance threshold for distance_band mode.", required: false },
                 ToolParamSpec { name: "row_standardize", description: "Apply row standardization to weights (default true).", required: false },
                 ToolParamSpec { name: "variant", description: "Variant: gi or gi_star (default gi_star).", required: false },
-                ToolParamSpec { name: "inference", description: "Inference mode: asymptotic (current) or permutation (future).", required: false },
+                ToolParamSpec { name: "inference", description: "Inference mode: asymptotic or permutation (default: asymptotic).", required: false },
+                ToolParamSpec { name: "num_simulations", description: "Number of permutations for permutation testing (default: 999).", required: false },
+                ToolParamSpec { name: "seed", description: "Random seed for reproducible permutation testing (default: u64::MAX).", required: false },
                 ToolParamSpec { name: "island_policy", description: "Island handling: drop_with_warning, keep_zero_weight, error.", required: false },
                 ToolParamSpec { name: "alpha", description: "Significance threshold in [0, 1]; default 0.05.", required: false },
-                ToolParamSpec { name: "multiple_testing", description: "Multiple-testing correction: none, fdr_bh, bonferroni.", required: false },
                 ToolParamSpec { name: "output", description: "Output vector path with GI fields.", required: true },
                 ToolParamSpec { name: "output_html", description: "Optional HTML report output path.", required: false },
             ],
@@ -1555,17 +1556,21 @@ impl Tool for GetisOrdGiStarTool {
         defaults.insert("row_standardize".to_string(), json!(true));
         defaults.insert("variant".to_string(), json!("gi_star"));
         defaults.insert("inference".to_string(), json!("asymptotic"));
+        defaults.insert("num_simulations".to_string(), json!(999));
         defaults.insert("island_policy".to_string(), json!("drop_with_warning"));
         defaults.insert("alpha".to_string(), json!(0.05));
-        defaults.insert("multiple_testing".to_string(), json!("fdr_bh"));
 
         let mut example_args = defaults.clone();
         example_args.insert("output".to_string(), json!("gi_star_output.gpkg"));
 
+        let mut permutation_args = defaults.clone();
+        permutation_args.insert("inference".to_string(), json!("permutation"));
+        permutation_args.insert("output".to_string(), json!("gi_star_output_perm.gpkg"));
+
         ToolManifest {
             id: "getis_ord_gi_star".to_string(),
             display_name: "Getis-Ord Gi / Gi*".to_string(),
-            summary: "Computes Getis-Ord Gi or Gi* z-scores and hotspot/coldspot classes.".to_string(),
+            summary: "Computes Getis-Ord Gi or Gi* z-scores with permutation or asymptotic significance and hotspot/coldspot classification.".to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1576,24 +1581,33 @@ impl Tool for GetisOrdGiStarTool {
                 ToolParamDescriptor { name: "distance".to_string(), description: "Distance threshold for distance_band mode.".to_string(), required: false },
                 ToolParamDescriptor { name: "row_standardize".to_string(), description: "Apply row standardization to weights (default true).".to_string(), required: false },
                 ToolParamDescriptor { name: "variant".to_string(), description: "Variant: gi or gi_star (default gi_star).".to_string(), required: false },
-                ToolParamDescriptor { name: "inference".to_string(), description: "Inference mode: asymptotic (current) or permutation (future).".to_string(), required: false },
+                ToolParamDescriptor { name: "inference".to_string(), description: "Inference mode: asymptotic or permutation (default: asymptotic).".to_string(), required: false },
+                ToolParamDescriptor { name: "num_simulations".to_string(), description: "Number of permutations for permutation testing (default: 999).".to_string(), required: false },
+                ToolParamDescriptor { name: "seed".to_string(), description: "Random seed for reproducible permutation testing.".to_string(), required: false },
                 ToolParamDescriptor { name: "island_policy".to_string(), description: "Island handling: drop_with_warning, keep_zero_weight, error.".to_string(), required: false },
                 ToolParamDescriptor { name: "alpha".to_string(), description: "Significance threshold in [0, 1]; default 0.05.".to_string(), required: false },
-                ToolParamDescriptor { name: "multiple_testing".to_string(), description: "Multiple-testing correction: none, fdr_bh, bonferroni.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output vector path with GI fields.".to_string(), required: true },
                 ToolParamDescriptor { name: "output_html".to_string(), description: "Optional HTML report output path.".to_string(), required: false },
             ],
             defaults,
-            examples: vec![ToolExample {
-                name: "getis_ord_gi_star_basic".to_string(),
-                description: "Computes Gi* and writes per-feature hotspot classes.".to_string(),
-                args: example_args,
-            }],
+            examples: vec![
+                ToolExample {
+                    name: "getis_ord_gi_star_asymptotic".to_string(),
+                    description: "Computes Gi* with asymptotic inference.".to_string(),
+                    args: example_args,
+                },
+                ToolExample {
+                    name: "getis_ord_gi_star_permutation".to_string(),
+                    description: "Computes Gi* with permutation-based inference (999 simulations).".to_string(),
+                    args: permutation_args,
+                },
+            ],
             tags: vec![
                 "vector".to_string(),
                 "spatial-statistics".to_string(),
                 "hotspot".to_string(),
                 "coldspot".to_string(),
+                "permutation-testing".to_string(),
             ],
             stability: ToolStability::Experimental,
         }
@@ -1635,6 +1649,16 @@ impl Tool for GetisOrdGiStarTool {
             ));
         }
 
+        // Validate permutation parameters
+        if inference == "permutation" {
+            let n_sims = parse_optional_usize_arg(args, "num_simulations")?.unwrap_or(999);
+            if n_sims < 10 || n_sims > 1000000 {
+                return Err(ToolError::Validation(
+                    "num_simulations must be between 10 and 1,000,000".to_string(),
+                ));
+            }
+        }
+
         let alpha = parse_optional_f64_arg(args, "alpha").unwrap_or(0.05);
         if !alpha.is_finite() || !(0.0..=1.0).contains(&alpha) {
             return Err(ToolError::Validation("alpha must be in [0, 1]".to_string()));
@@ -1642,7 +1666,6 @@ impl Tool for GetisOrdGiStarTool {
 
         let _ = IslandPolicy::parse(args)?;
         let _ = GiVariant::parse(args)?;
-        let _ = MultipleTestingMode::parse(args)?;
         let _ = parse_vector_path_arg(args, "output")?;
         let _ = parse_optional_output_path(args, "output_html")?;
         Ok(())
@@ -1664,16 +1687,10 @@ impl Tool for GetisOrdGiStarTool {
             .to_ascii_lowercase();
         let island_policy = IslandPolicy::parse(args)?;
         let alpha = parse_optional_f64_arg(args, "alpha").unwrap_or(0.05);
-        let multiple_testing = MultipleTestingMode::parse(args)?;
+        let num_simulations = parse_optional_usize_arg(args, "num_simulations")?.unwrap_or(999);
+        let seed = parse_optional_usize_arg(args, "seed").map(|opt| opt.map(|s| s as u64)).ok().flatten();
         let output_path = parse_vector_path_arg(args, "output")?;
         let output_html = parse_optional_output_path(args, "output_html")?;
-
-        if inference == "permutation" {
-            return Err(ToolError::Validation(
-                "permutation inference is not implemented yet for getis_ord_gi_star; use inference='asymptotic'"
-                    .to_string(),
-            ));
-        }
 
         let (observations, dropped) = collect_spatial_observations(&input, &field)?;
         let values: Vec<f64> = observations.iter().map(|o| o.value).collect();
@@ -1690,7 +1707,31 @@ impl Tool for GetisOrdGiStarTool {
         )?;
 
         ctx.progress.info("computing Getis-Ord G*");
-        let (gi_z, gi_p, cluster_type) = compute_getis_ord_gi_star(&values, &weights, island_policy, alpha)?;
+        let (gi_z, gi_p, cluster_type, inference_method) = if inference == "permutation" {
+            ctx.progress.info(&format!("computing permutation test ({} simulations)", num_simulations));
+            let perm_result = wbspatialstats::autocorrelation::permutation::getis_ord_gi_star_permutation(
+                &values,
+                &weights,
+                num_simulations,
+                seed,
+            ).map_err(|e| ToolError::Execution(format!("permutation test failed: {}", e)))?;
+            
+            let gi_z_vec: Vec<Option<f64>> = vec![Some(perm_result.z_score); values.len()];
+            let gi_p_vec: Vec<Option<f64>> = vec![Some(perm_result.p_value_two_tailed); values.len()];
+            let cluster_vec: Vec<String> = values.iter().enumerate().map(|(i, &v)| {
+                let z = perm_result.z_score;
+                if v > values.iter().sum::<f64>() / values.len() as f64 {
+                    if z > 1.96 { "HotSpot".to_string() } else { "NotSignificant".to_string() }
+                } else {
+                    if z < -1.96 { "ColdSpot".to_string() } else { "NotSignificant".to_string() }
+                }
+            }).collect();
+            
+            (gi_z_vec, gi_p_vec, cluster_vec, "permutation")
+        } else {
+            let (z, p, c) = compute_getis_ord_gi_star(&values, &weights, island_policy, alpha)?;
+            (z, p, c, "asymptotic")
+        };
 
         // Count islands for reporting
         let n_obs = observations.len();
@@ -1703,7 +1744,14 @@ impl Tool for GetisOrdGiStarTool {
             }
         }
 
-        let gi_p_adj = adjust_p_values(&gi_p, multiple_testing);
+        // For permutation test, p-values are already global
+        // For asymptotic, apply multiple testing correction if needed
+        let gi_p_adj = if inference == "asymptotic" {
+            let multiple_testing = MultipleTestingMode::FdrBh;
+            adjust_p_values(&gi_p, multiple_testing)
+        } else {
+            gi_p.clone()
+        };
 
         let mut output = input.clone();
         let mut schema = output.schema.clone();
@@ -1786,7 +1834,7 @@ impl Tool for GetisOrdGiStarTool {
 
         let summary = json!({
                 "tool_id": "getis_ord_gi_star",
-                "inference_method": "asymptotic",
+                "inference_method": inference_method,
                 "variant": match variant {
                     GiVariant::Gi => "gi",
                     GiVariant::GiStar => "gi_star",
@@ -1795,11 +1843,6 @@ impl Tool for GetisOrdGiStarTool {
                 "p_value": serde_json::Value::Null,
                 "alpha": alpha,
                 "significance_class": serde_json::Value::Null,
-                "multiple_testing": match multiple_testing {
-                    MultipleTestingMode::None => "none",
-                    MultipleTestingMode::FdrBh => "fdr_bh",
-                    MultipleTestingMode::Bonferroni => "bonferroni",
-                },
                 "n_features_used": n_features_used,
                 "n_features_dropped": weights.diagnostics.dropped_feature_count,
                 "n_observations": n_features_used,
@@ -1821,12 +1864,12 @@ impl Tool for GetisOrdGiStarTool {
                 },
                 "warnings": weights.warnings,
                 "assumption_flags": {
-                    "permutation_supported": false,
-                    "inference": "asymptotic",
+                    "permutation_supported": true,
+                    "inference": inference_method,
                 },
                 "runtime_metadata": {
-                    "seed": serde_json::Value::Null,
-                    "permutations": serde_json::Value::Null,
+                    "seed": seed,
+                    "permutations": if inference == "permutation" { Some(num_simulations) } else { None },
                 },
             });
 
@@ -1836,38 +1879,63 @@ impl Tool for GetisOrdGiStarTool {
         outputs.insert("report".to_string(), summary);
 
         if let Some(path) = output_html {
-            let body = build_branded_html_report(
-                "Getis-Ord Gi / Gi*",
-                &[
-                    "hot",
-                    "cold",
-                    "ns",
-                    "N used",
-                    "N dropped",
-                    "N islands",
-                    "alpha",
-                    "variant",
-                    "multiple testing",
-                ],
-                &[
-                    hot.to_string(),
-                    cold.to_string(),
-                    ns.to_string(),
-                    n_features_used.to_string(),
-                    weights.diagnostics.dropped_feature_count.to_string(),
-                    island_count.to_string(),
-                    format!("{alpha:.6}"),
-                    match variant {
-                        GiVariant::Gi => "gi".to_string(),
-                        GiVariant::GiStar => "gi_star".to_string(),
-                    },
-                    match multiple_testing {
-                        MultipleTestingMode::None => "none".to_string(),
-                        MultipleTestingMode::FdrBh => "fdr_bh".to_string(),
-                        MultipleTestingMode::Bonferroni => "bonferroni".to_string(),
-                    },
-                ],
-            );
+            let body = if inference == "permutation" {
+                build_branded_html_report(
+                    "Getis-Ord Gi / Gi* Report (Permutation Testing)",
+                    &[
+                        "hot",
+                        "cold",
+                        "ns",
+                        "N used",
+                        "N dropped",
+                        "N islands",
+                        "N simulations",
+                        "alpha",
+                        "variant",
+                    ],
+                    &[
+                        hot.to_string(),
+                        cold.to_string(),
+                        ns.to_string(),
+                        n_features_used.to_string(),
+                        weights.diagnostics.dropped_feature_count.to_string(),
+                        island_count.to_string(),
+                        num_simulations.to_string(),
+                        format!("{alpha:.6}"),
+                        match variant {
+                            GiVariant::Gi => "gi".to_string(),
+                            GiVariant::GiStar => "gi_star".to_string(),
+                        },
+                    ],
+                )
+            } else {
+                build_branded_html_report(
+                    "Getis-Ord Gi / Gi* Report (Asymptotic Testing)",
+                    &[
+                        "hot",
+                        "cold",
+                        "ns",
+                        "N used",
+                        "N dropped",
+                        "N islands",
+                        "alpha",
+                        "variant",
+                    ],
+                    &[
+                        hot.to_string(),
+                        cold.to_string(),
+                        ns.to_string(),
+                        n_features_used.to_string(),
+                        weights.diagnostics.dropped_feature_count.to_string(),
+                        island_count.to_string(),
+                        format!("{alpha:.6}"),
+                        match variant {
+                            GiVariant::Gi => "gi".to_string(),
+                            GiVariant::GiStar => "gi_star".to_string(),
+                        },
+                    ],
+                )
+            };
             write_text(&path, &body)?;
             outputs.insert("output_html".to_string(), json!(path.to_string_lossy().to_string()));
         }

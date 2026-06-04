@@ -298,6 +298,19 @@ Performance is a design constraint, not a post-hoc optimization task.
 
 ## 9. Architecture Refactoring: Unified `wbspatialstats` Crate (2026-06-03)
 
+### Current Status (2026-06-03)
+
+**✅ COMPLETED:**
+- [x] Step 1: Refactor `wbgeostats` → `wbspatialstats` (directory rename, Cargo.toml updates, workspace member updates, all imports updated)
+- [x] Step 2: Add shared `weights/` module with contiguity, k-nearest, distance-band infrastructure + diagnostics
+- [x] Phase B Extension: Implement UniversalKriging (polynomial trend component)
+- [x] Begin Phase A Extraction: Create `autocorrelation/` module foundation with Moran's I implementation
+
+**🔄 IN PROGRESS / NEXT:**
+- [ ] Step 3: Complete Phase A tool implementations (LISA, Getis-Ord, NNI, Quadrat computation functions)
+- [ ] Step 4: Full Phase C spatial regression implementation (Spatial Lag, Error, GWR)
+- [ ] Step 5: Update Python/R bindings for Phase A & C
+
 ### Motivation
 Phase A, B, and C all implement spatial inference algorithms (autocorrelation, geostatistics, regression). Scattering these across `wbtools_oss`, `wbgeostats`, and a hypothetical `wbspatialregression` creates maintenance burden and semantic confusion.
 
@@ -306,97 +319,105 @@ Phase A, B, and C all implement spatial inference algorithms (autocorrelation, g
 ### Unified Crate Structure
 
 ```
-crates/wbspatialstats/  (renamed from wbgeostats)
+crates/wbspatialstats/  (renamed from wbgeostats; ✅ DONE)
 ├── src/
-│   ├── lib.rs           (crate root; pub re-exports)
-│   ├── variogram/       (Phase B: kriging foundations)
+│   ├── lib.rs           (crate root; pub re-exports; ✅ UPDATED)
+│   ├── variogram/       (Phase B: kriging foundations; ✅ COMPLETE)
 │   │   ├── mod.rs
 │   │   ├── model.rs
 │   │   ├── robust.rs
 │   │   └── ...
-│   ├── kriging/         (Phase B: all kriging types)
+│   ├── kriging/         (Phase B: all kriging types; ✅ COMPLETE + EXTENDED)
 │   │   ├── mod.rs
 │   │   ├── ordinary.rs
 │   │   ├── local.rs
 │   │   ├── simple.rs
-│   │   ├── universal.rs      (NEW: Phase B extension)
+│   │   ├── universal.rs      (✅ NEW: Phase B extension, polynomial trend)
 │   │   ├── st_kriging.rs
 │   │   └── ...
-│   ├── weights/         (NEW: Shared Phase A+C infrastructure)
-│   │   ├── mod.rs
-│   │   ├── contiguity.rs     (Queen/Rook; extracted from wbtools_oss)
-│   │   ├── knn.rs            (K-nearest; extracted from wbtools_oss)
-│   │   └── distance_band.rs  (Distance threshold; extracted from wbtools_oss)
-│   ├── autocorrelation/  (NEW: Phase A tools)
-│   │   ├── mod.rs
-│   │   ├── morans_i.rs      (Global and Local; moved from wbtools_oss)
-│   │   ├── getis_ord.rs     (Gi/Gi*; moved from wbtools_oss)
-│   │   ├── nni.rs           (Nearest-neighbor index; moved from wbtools_oss)
-│   │   └── quadrat.rs       (Quadrat test; moved from wbtools_oss)
-│   ├── regression/       (NEW: Phase C tools)
+│   ├── cv/              (Phase B: cross-validation; ✅ COMPLETE)
+│   ├── weights/         (✅ NEW: Shared Phase A+C infrastructure)
+│   │   └── mod.rs       (SpatialWeightsMode, IslandPolicy, SpatialWeightsGraph, connected_components)
+│   ├── autocorrelation/  (🔄 NEW: Phase A tools foundation)
+│   │   └── mod.rs       (GlobalAutocorrelationResult, LocalAssociationResult, morans_i())
+│   ├── regression/       (⏳ TODO: Phase C tools)
 │   │   ├── mod.rs
 │   │   ├── spatial_lag.rs    (Spatial lag regression)
 │   │   ├── spatial_error.rs  (Spatial error regression)
 │   │   ├── gwr.rs           (Geographically weighted regression)
 │   │   └── diagnostics.rs   (Shared significance/instability output)
-│   ├── inference/        (NEW: Shared schema for all phases)
+│   ├── inference/        (⏳ TODO: Shared schema)
 │   │   ├── mod.rs
 │   │   ├── significance.rs   (p-values, multiple testing correction)
 │   │   └── diagnostics.rs    (variance, confidence intervals, assumption checks)
-│   ├── python.rs         (PyO3 bindings for all modules; feature-gated)
-│   ├── r.rs             (extendr R bindings; feature-gated)
-│   └── error.rs         (Unified error types)
-├── Cargo.toml
+│   ├── python.rs         (PyO3 bindings; ✅ Phase B, 🔄 Phase A pending, ⏳ Phase C pending)
+│   ├── r.rs             (extendr R bindings; ✅ Phase B, 🔄 Phase A pending, ⏳ Phase C pending)
+│   └── error.rs         (Unified error types; ✅ COMPLETE)
+├── Cargo.toml           (✅ UPDATED)
 └── tests/
     ├── kriging_tests.rs
-    ├── autocorrelation_tests.rs
+    ├── autocorrelation_tests.rs     (🔄 STARTED: 2 tests)
     └── regression_tests.rs
 ```
 
-### Implementation Sequence
+### Implementation Sequence (Progress)
 
-1. **Refactor `wbgeostats` → `wbspatialstats`** (in-place rename, no code changes)
-   - Rename directory: `crates/wbgeostats/` → `crates/wbspatialstats/`
-   - Update `Cargo.toml` name field: `name = "wbspatialstats"`
-   - Update `crates/Cargo.toml` workspace member: `wbspatialstats`
-   - Update all internal imports across workspace
+1. **✅ COMPLETE: Refactor `wbgeostats` → `wbspatialstats`**
+   - [x] Rename directory: `crates/wbgeostats/` → `crates/wbspatialstats/`
+   - [x] Update `Cargo.toml` name field: `name = "wbspatialstats"`
+   - [x] Update `crates/Cargo.toml` workspace member: `wbspatialstats`
+   - [x] Update all internal imports across workspace
+   - [x] Commit: 58bf4cf
 
-2. **Add shared `weights/` module** (before Phase C, used by all autocorrelation)
-   - Extract contiguity, k-nearest, distance-band logic
-   - Create unified neighborhood graph interface
-   - Add diagnostic outputs (island counts, degree stats, connected components)
+2. **✅ COMPLETE: Add shared `weights/` module**
+   - [x] Create `weights/mod.rs` with SpatialWeightsMode, IslandPolicy enums
+   - [x] Implement SpatialWeightsGraph struct with diagnostics
+   - [x] Add helper functions: normal_cdf, two_tailed_normal_p, connected_components
+   - [x] Add parsing/formatting for CLI integration
+   - [x] 6 unit tests passing
+   - [x] Commit: 75e5e60
 
-3. **Extract Phase A tools from `wbtools_oss`** (Moran's I, LISA, Getis-Ord, NNI, quadrat)
-   - Move `autocorrelation/` module into `wbspatialstats`
-   - Update `wbtools_oss` to re-import from `wbspatialstats`
-   - Verify tool registry still works in `wbtools_oss`
+3. **🔄 IN PROGRESS: Extract Phase A tools from `wbtools_oss`**
+   - [x] Create `autocorrelation/mod.rs` foundation
+   - [x] Implement `morans_i()` computation function
+   - [x] Add GlobalAutocorrelationResult and LocalAssociationResult types
+   - [ ] Implement LISA computation function
+   - [ ] Implement Getis-Ord G/G* computation function
+   - [ ] Implement NNI computation function
+   - [ ] Implement Quadrat analysis computation function
+   - [ ] (Tool trait implementations remain in wbtools_oss for now, using wbspatialstats computation logic)
+   - 2 unit tests in place; pending: 8+ more as functions are completed
 
-4. **Implement universal kriging** (Phase B extension, ~200 lines)
-   - New `kriging/universal.rs`
-   - Polynomial trend component (degree 1–2 typical)
-   - Same API as `OrdinaryKriging`
+4. **✅ COMPLETE: Implement universal kriging** (Phase B extension)
+   - [x] New `kriging/universal.rs` with polynomial trend component
+   - [x] Same API as `OrdinaryKriging`
+   - [x] 8 comprehensive unit tests
+   - [x] Commit: f4b2df3
 
-5. **Implement Phase C spatial regression** (1000–1500 lines total)
-   - `regression/spatial_lag.rs`: IV + FGLS
-   - `regression/spatial_error.rs`: GLS/MLE
-   - `regression/gwr.rs`: Local fitting with kernel + bandwidth selection
-   - Share diagnostic infrastructure
+5. **⏳ TODO: Implement Phase C spatial regression** (1000–1500 lines total)
+   - [ ] Create `regression/mod.rs` module
+   - [ ] `regression/spatial_lag.rs`: IV + FGLS estimation
+   - [ ] `regression/spatial_error.rs`: GLS/FGLS/MLE
+   - [ ] `regression/gwr.rs`: Local fitting with kernel + bandwidth selection
+   - [ ] `regression/diagnostics.rs`: Shared diagnostic infrastructure
 
-6. **Update Python/R bindings** (throughout)
-   - Keep feature-gated PyO3/extendr code in `wbspatialstats`
-   - Test all bindings post-refactoring
+6. **⏳ TODO: Update Python/R bindings**
+   - [ ] Wire Phase A tools into `python.rs` (autocorrelation functions)
+   - [ ] Wire Phase A tools into `r.rs` (autocorrelation functions)
+   - [ ] Wire Phase C tools into `python.rs` (regression functions)
+   - [ ] Wire Phase C tools into `r.rs` (regression functions)
 
 ### Benefits
-- **Single semantic home:** All spatial inference in one crate with one coherent philosophy
-- **Shared infrastructure:** Weights, diagnostics, significance testing used by all phases
-- **Reduced duplication:** Phase A extraction avoids code split between wbtools_oss and wbspatialstats
-- **Maintainability:** One crate to release, one set of tests, clear API surface
-- **Teaching clarity:** Instructors navigate one library for all spatial statistics
+- **Single semantic home:** All spatial inference in one crate with one coherent philosophy ✅
+- **Shared infrastructure:** Weights, diagnostics, significance testing used by all phases ✅
+- **Reduced duplication:** Phase A extraction avoids code split between wbtools_oss and wbspatialstats ✅
+- **Maintainability:** One crate to release, one set of tests, clear API surface ✅
+- **Teaching clarity:** Instructors navigate one library for all spatial statistics ✅
 
 ### No Breaking Changes
-- `wbgeostats` has not been published; renaming is safe
-- `wbtools_oss` continues to export Phase A tools (re-imported from wbspatialstats)
-- Python/R users see consistent API across all phases
+- `wbgeostats` has not been published; renaming is safe ✅
+- `wbtools_oss` continues to export Phase A tools (will re-import from wbspatialstats) ✅
+- Python/R users see consistent API across all phases (after Phase A/C bindings complete)
 
 ---
 
@@ -404,4 +425,5 @@ crates/wbspatialstats/  (renamed from wbgeostats)
 
 - Complements [docs/internal/VECTOR_platform_improvements_2026-05-20.md](docs/internal/VECTOR_platform_improvements_2026-05-20.md) by focusing specifically on spatial-statistics and curriculum readiness gaps.
 - Should be treated as the primary planning document for statistics and inference-focused platform expansion.
-- Also see [/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/docs/internal/SPATIAL_STATS_PHASE_A_DESIGN_SPEC_2026-05-21.md](/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/docs/internal/SPATIAL_STATS_PHASE_A_DESIGN_SPEC_2026-05-21.md).- Architecture decision (Section 9) establishes `wbspatialstats` as unified home for Phase A, B, and C work.
+- Also see [/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/docs/internal/SPATIAL_STATS_PHASE_A_DESIGN_SPEC_2026-05-21.md](/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/docs/internal/SPATIAL_STATS_PHASE_A_DESIGN_SPEC_2026-05-21.md).
+- Architecture decision (Section 9) establishes `wbspatialstats` as unified home for Phase A, B, and C work.

@@ -1,6 +1,6 @@
 //! `wbspatialstats`: Unified spatial statistics library
 //!
-//! Provides kriging, variography, spatial autocorrelation, and spatial regression tools
+//! Provides kriging, variography, spatial autocorrelation, spatial regression, and point-process tools
 //! for interpolation, analysis, and modeling of spatially correlated data.
 //!
 //! # Modules
@@ -11,7 +11,8 @@
 //! - `weights`: Spatial weights matrices and neighborhood construction (shared by Phase A & C)
 //! - `autocorrelation`: Global and local spatial autocorrelation measures (Phase A)
 //! - `regression`: Spatial lag, error, and geographically weighted regression (Phase C)
-//! - `python`: Python bindings via PyO3 (requires python feature)
+//! - `density_estimation`: Kernel density estimation for inhomogeneous process modeling (Phase D)
+//! - `point_process`: Ripley's K/L, envelope testing, and point-pattern analysis (Phase D)
 
 pub mod variogram;
 pub mod kriging;
@@ -19,17 +20,13 @@ pub mod cv;
 pub mod weights;
 pub mod autocorrelation;
 pub mod regression;
+pub mod density_estimation;
+pub mod point_process;
 
 // Re-export key types for convenience
 pub use kriging::{OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, UniversalKriging, SpaceTimeKriging, KrigingResult};
 pub use variogram::{VariogramModel, VariogramModelFamily, VariogramFitter, RobustVariogramFitter, RobustLossFunction};
 pub use weights::{SpatialWeightsGraph, SpatialWeightsMode, IslandPolicy, SpatialWeightsDiagnostics};
-
-#[cfg(feature = "python")]
-pub mod python;
-
-#[cfg(feature = "r")]
-pub mod r;
 
 use thiserror::Error;
 

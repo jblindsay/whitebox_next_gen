@@ -366,6 +366,21 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::SpatialLagRegressionTool));
     registry.register(Box::new(tools::SpatialErrorRegressionTool));
     registry.register(Box::new(tools::GeographicallyWeightedRegressionTool));
+    
+    // Phase B Kriging Tools
+    registry.register(Box::new(tools::OrdinaryKrigingTool));
+    registry.register(Box::new(tools::LocalOrdinaryKrigingTool));
+    registry.register(Box::new(tools::SimpleKrigingTool));
+    registry.register(Box::new(tools::UniversalKrigingTool));
+    registry.register(Box::new(tools::SpaceTimeKrigingTool));
+    
+    // Phase D Point-Process Tools
+    registry.register(Box::new(tools::RipleysKFunctionTool));
+    registry.register(Box::new(tools::PointPatternEnvelopeTool));
+    registry.register(Box::new(tools::InhomogeneousBaselineTool));
+    registry.register(Box::new(tools::PointProcessResidualsTool));
+    registry.register(Box::new(tools::HotspotVsProcessTool));
+    
     registry.register(Box::new(tools::SelectByLocationTool));
     registry.register(Box::new(tools::SpatialJoinTool));
     registry.register(Box::new(tools::NearTool));
@@ -374,11 +389,11 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::ReprojectVectorTool));
     registry.register(Box::new(tools::SimplifyFeaturesTool));
     
-    // Geostatistics/Kriging Tools
+    // Geostatistics/Kriging Tools (legacy variogram tools)
     registry.register(Box::new(tools::EstimateVariogramTool));
     registry.register(Box::new(tools::FitVariogramTool));
-    registry.register(Box::new(tools::OrdinaryKrigingTool));
-    registry.register(Box::new(tools::KrigingCrossValidationTool));
+    // Note: kriging tools moved to Phase B (OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, UniversalKriging, SpaceTimeKriging)
+    // and are registered with other spatial stats tools above
     
     registry.register(Box::new(tools::ExtractRasterValuesAtPointsTool));
     registry.register(Box::new(tools::ExtractNodesTool));

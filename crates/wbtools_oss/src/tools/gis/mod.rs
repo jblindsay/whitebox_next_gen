@@ -19,6 +19,20 @@ pub use spatial_stats::SpatialLagRegressionTool;
 pub use spatial_stats::SpatialErrorRegressionTool;
 pub use spatial_stats::GeographicallyWeightedRegressionTool;
 
+mod spatial_stats_phase_b;
+pub use spatial_stats_phase_b::OrdinaryKrigingTool;
+pub use spatial_stats_phase_b::LocalOrdinaryKrigingTool;
+pub use spatial_stats_phase_b::SimpleKrigingTool;
+pub use spatial_stats_phase_b::UniversalKrigingTool;
+pub use spatial_stats_phase_b::SpaceTimeKrigingTool;
+
+mod spatial_stats_phase_d;
+pub use spatial_stats_phase_d::RipleysKFunctionTool;
+pub use spatial_stats_phase_d::PointPatternEnvelopeTool;
+pub use spatial_stats_phase_d::InhomogeneousBaselineTool;
+pub use spatial_stats_phase_d::PointProcessResidualsTool;
+pub use spatial_stats_phase_d::HotspotVsProcessTool;
+
 
 fn max_distance_squared(
     (x1, y1): (f64, f64),

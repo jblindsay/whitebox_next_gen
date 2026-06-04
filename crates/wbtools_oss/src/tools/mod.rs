@@ -545,6 +545,11 @@ pub use gis::QuadratCountTestTool;
 pub use gis::SpatialLagRegressionTool;
 pub use gis::SpatialErrorRegressionTool;
 pub use gis::GeographicallyWeightedRegressionTool;
+pub use gis::OrdinaryKrigingTool;
+pub use gis::LocalOrdinaryKrigingTool;
+pub use gis::SimpleKrigingTool;
+pub use gis::UniversalKrigingTool;
+pub use gis::SpaceTimeKrigingTool;
 pub use gis::RipleysKFunctionTool;
 pub use gis::PointPatternEnvelopeTool;
 pub use gis::InhomogeneousBaselineTool;
@@ -558,10 +563,10 @@ pub use gis::AddGeometryAttributesTool;
 pub use gis::ReprojectVectorTool;
 
 // Geostatistics/Kriging Tools
+// Note: Kriging tools are now in gis::spatial_stats_phase_b (OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, UniversalKriging, SpaceTimeKriging)
+// Legacy geostats tools removed in favor of unified wbtools_oss/gis implementation
 pub use geostats::EstimateVariogramTool;
 pub use geostats::FitVariogramTool;
-pub use geostats::OrdinaryKrigingTool;
-pub use geostats::KrigingCrossValidationTool;
 pub use gis::SimplifyFeaturesTool;
 pub use gis::FilterVectorFeaturesByAreaTool;
 pub use gis::EuclideanAllocationTool;

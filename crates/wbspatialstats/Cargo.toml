@@ -15,6 +15,7 @@ crate-type = ["rlib"]
 nalgebra = { version = "0.34", features = ["serde"] }
 ndarray = { version = "0.15", features = ["serde"] }
 rayon = "1.7"
+rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"

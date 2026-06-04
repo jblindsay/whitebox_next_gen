@@ -239,6 +239,125 @@ pub fn assess_interval_calibration(
     })
 }
 
+
+/// Compute bootstrap prediction interval using residual resampling
+///
+/// Constructs empirical confidence intervals by resampling residuals from
+/// cross-validation. This method is model-free and works with any kriging model.
+///
+/// # Algorithm
+/// 1. Take residuals from cross-validation: obs - pred for each training point
+/// 2. Center residuals (subtract mean to preserve symmetry)
+/// 3. Resample residuals with replacement (bootstrap samples)
+/// 4. Add bootstrap samples to kriging prediction
+/// 5. Compute empirical quantiles at (1-conf)/2 and (1+conf)/2
+///
+/// # Arguments
+/// - `prediction`: Kriged prediction at target location
+/// - `residuals`: CV residuals from training set (observed - predicted)
+/// - `confidence`: Confidence level in [0.5, 1.0) (e.g., 0.95 for 95% CI)
+/// - `n_bootstrap`: Number of bootstrap resamples (typically 999-9999)
+/// - `seed`: Optional seed for reproducibility (None = random)
+///
+/// # Returns
+/// PredictionInterval with empirical bounds
+///
+/// # Notes
+/// - Assumes residuals are IID (independent, identically distributed)
+/// - Works best with ≥30 residuals for reliable quantiles
+/// - More computationally expensive than Gaussian method
+/// - More robust to non-normal residual distributions
+pub fn kriging_prediction_interval_bootstrap(
+    prediction: f64,
+    residuals: &[f64],
+    confidence: f64,
+    n_bootstrap: usize,
+    seed: Option<u64>,
+) -> Result<PredictionInterval, String> {
+    if !confidence.is_finite() || confidence <= 0.5 || confidence >= 1.0 {
+        return Err("Confidence level must be in (0.5, 1.0)".to_string());
+    }
+
+    if !prediction.is_finite() {
+        return Err("Prediction must be finite".to_string());
+    }
+
+    if residuals.is_empty() {
+        return Err("Residuals cannot be empty for bootstrap intervals".to_string());
+    }
+
+    if n_bootstrap < 100 {
+        return Err("n_bootstrap should be ≥100 for reliable bootstrap intervals".to_string());
+    }
+
+    // Check all residuals are finite
+    if residuals.iter().any(|r| !r.is_finite()) {
+        return Err("All residuals must be finite".to_string());
+    }
+
+    // Center residuals (subtract mean) to preserve symmetry
+    let mean_residual = residuals.iter().sum::<f64>() / residuals.len() as f64;
+    let centered_residuals: Vec<f64> = residuals.iter().map(|r| r - mean_residual).collect();
+
+    // Initialize random number generator
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let seed_val = seed.unwrap_or_else(|| {
+        let mut hasher = DefaultHasher::new();
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            .hash(&mut hasher);
+        hasher.finish()
+    });
+
+    // Simple LCG pseudo-random generator for consistency across platforms
+    let mut rng_state = seed_val as u64;
+
+    let lcg_next = |state: &mut u64| -> f64 {
+        const A: u64 = 6364136223846793005;
+        const C: u64 = 1442695040888963407;
+        *state = A.wrapping_mul(*state).wrapping_add(C);
+        (*state >> 11) as f64 / (1u64 << 53) as f64
+    };
+
+    // Generate bootstrap samples of predictions
+    let mut bootstrap_predictions = Vec::with_capacity(n_bootstrap);
+
+    for _ in 0..n_bootstrap {
+        // Resample one residual uniformly at random
+        let idx = ((lcg_next(&mut rng_state) * centered_residuals.len() as f64).floor() as usize)
+            .min(centered_residuals.len() - 1);
+        let bootstrap_residual = centered_residuals[idx];
+        bootstrap_predictions.push(prediction + bootstrap_residual);
+    }
+
+    // Sort for quantile computation
+    bootstrap_predictions.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    // Compute empirical quantiles
+    let lower_idx = (((1.0 - confidence) / 2.0) * n_bootstrap as f64).floor() as usize;
+    let upper_idx = (((1.0 + confidence) / 2.0) * n_bootstrap as f64).ceil() as usize;
+
+    let lower_idx = lower_idx.min(bootstrap_predictions.len() - 1);
+    let upper_idx = upper_idx.min(bootstrap_predictions.len() - 1);
+
+    let lower = bootstrap_predictions[lower_idx];
+    let upper = bootstrap_predictions[upper_idx];
+    let margin_of_error = (upper - lower) / 2.0;
+
+    Ok(PredictionInterval {
+        lower,
+        point_estimate: prediction,
+        upper,
+        confidence,
+        method: "bootstrap".to_string(),
+        margin_of_error,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -454,6 +573,80 @@ mod tests {
         let observations = vec![100.0, 150.0];
 
         let result = assess_interval_calibration(&predictions, &intervals, &observations);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_bootstrap_interval_basic() {
+        let prediction = 100.0;
+        let residuals = vec![-5.0, -3.0, -1.0, 0.0, 1.0, 3.0, 5.0, 2.0, -2.0, 4.0];
+        let result = kriging_prediction_interval_bootstrap(prediction, &residuals, 0.90, 999, Some(42));
+
+        assert!(result.is_ok());
+        let interval = result.unwrap();
+        assert_eq!(interval.point_estimate, 100.0);
+        assert!(interval.lower < 100.0);
+        assert!(interval.upper > 100.0);
+        assert_eq!(interval.confidence, 0.90);
+        assert_eq!(interval.method, "bootstrap");
+        // For residuals ~[-5, 5], 90% CI should be roughly [95, 105]
+        assert!(interval.lower >= 94.0 && interval.lower <= 96.0);
+        assert!(interval.upper >= 104.0 && interval.upper <= 106.0);
+    }
+
+    #[test]
+    fn test_bootstrap_interval_95_ci() {
+        let prediction = 50.0;
+        let residuals = vec![-10.0, -5.0, 0.0, 5.0, 10.0];
+        let result = kriging_prediction_interval_bootstrap(prediction, &residuals, 0.95, 999, Some(123));
+
+        assert!(result.is_ok());
+        let interval = result.unwrap();
+        assert_eq!(interval.confidence, 0.95);
+        // 95% CI should be wider than 90% CI
+        assert!(interval.width() > 15.0);
+    }
+
+    #[test]
+    fn test_bootstrap_interval_reproducibility() {
+        let prediction = 100.0;
+        let residuals = vec![-3.0, -1.0, 0.0, 1.0, 3.0];
+
+        let result1 = kriging_prediction_interval_bootstrap(prediction, &residuals, 0.90, 999, Some(42));
+        let result2 = kriging_prediction_interval_bootstrap(prediction, &residuals, 0.90, 999, Some(42));
+
+        assert!(result1.is_ok() && result2.is_ok());
+        let int1 = result1.unwrap();
+        let int2 = result2.unwrap();
+        // Same seed should give identical results
+        assert_eq!(int1.lower, int2.lower);
+        assert_eq!(int1.upper, int2.upper);
+    }
+
+    #[test]
+    fn test_bootstrap_interval_invalid_confidence() {
+        let prediction = 100.0;
+        let residuals = vec![-5.0, 0.0, 5.0];
+
+        let result = kriging_prediction_interval_bootstrap(prediction, &residuals, 0.4, 999, Some(42));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_bootstrap_interval_empty_residuals() {
+        let prediction = 100.0;
+        let residuals: Vec<f64> = vec![];
+
+        let result = kriging_prediction_interval_bootstrap(prediction, &residuals, 0.90, 999, Some(42));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_bootstrap_interval_insufficient_bootstrap_samples() {
+        let prediction = 100.0;
+        let residuals = vec![-5.0, 0.0, 5.0];
+
+        let result = kriging_prediction_interval_bootstrap(prediction, &residuals, 0.90, 50, Some(42));
         assert!(result.is_err());
     }
 }

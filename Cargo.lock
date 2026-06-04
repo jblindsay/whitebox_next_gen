@@ -4382,12 +4382,9 @@ name = "wbspatialstats"
 version = "0.1.0"
 dependencies = [
  "approx",
- "extendr-api",
  "log",
  "nalgebra",
  "ndarray",
- "pyo3",
- "pyo3-build-config",
  "rand 0.8.5",
  "rayon",
  "serde",

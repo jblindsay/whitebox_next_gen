@@ -15,7 +15,7 @@ pub mod kriging;
 pub mod cv;
 
 // Re-export key types for convenience
-pub use kriging::{OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, SpaceTimeKriging, KrigingResult};
+pub use kriging::{OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, UniversalKriging, SpaceTimeKriging, KrigingResult};
 pub use variogram::{VariogramModel, VariogramModelFamily, VariogramFitter, RobustVariogramFitter, RobustLossFunction};
 
 #[cfg(feature = "python")]

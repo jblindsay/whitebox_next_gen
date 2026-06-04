@@ -13,10 +13,12 @@ use crate::variogram::VariogramModel;
 pub mod local;
 pub mod simple;
 pub mod st_kriging;
+pub mod universal;
 
 pub use local::LocalOrdinaryKriging;
 pub use simple::SimpleKriging;
 pub use st_kriging::SpaceTimeKriging;
+pub use universal::UniversalKriging;
 
 /// Ordinary Kriging prediction result
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,6 +50,7 @@ impl KrigingResult {
 }
 
 /// Ordinary Kriging engine
+#[derive(Debug)]
 pub struct OrdinaryKriging {
     /// Training point coordinates
     pub training_coords: Vec<(f64, f64)>,

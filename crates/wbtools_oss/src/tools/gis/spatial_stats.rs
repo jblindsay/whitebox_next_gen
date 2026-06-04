@@ -470,6 +470,81 @@ fn compute_local_morans_i_lisa(
     Ok((lisa_i, lisa_z, lisa_p, quadrant))
 }
 
+/// Wrapper that handles island filtering and calls wbspatialstats::autocorrelation::getis_ord_g_star()
+fn compute_getis_ord_gi_star(
+    values: &[f64],
+    raw_weights: &weights::SpatialWeightsGraph,
+    island_policy: IslandPolicy,
+    alpha: f64,
+) -> Result<(Vec<Option<f64>>, Vec<Option<f64>>, Vec<String>), ToolError> {
+    let n_total = values.len();
+    let mut included = vec![true; n_total];
+    if matches!(island_policy, IslandPolicy::DropWithWarning) {
+        for (i, row) in raw_weights.neighbors.iter().enumerate() {
+            if row.is_empty() {
+                included[i] = false;
+            }
+        }
+    }
+
+    let idxs: Vec<usize> = included
+        .iter()
+        .enumerate()
+        .filter_map(|(i, keep)| if *keep { Some(i) } else { None })
+        .collect();
+
+    if idxs.len() < 3 {
+        return Err(ToolError::Validation(
+            "insufficient connected observations after island handling".to_string(),
+        ));
+    }
+
+    // Build filtered weights and values
+    let mut filtered_values = Vec::new();
+    let mut index_map = vec![None; n_total];
+    for (new_idx, &old_idx) in idxs.iter().enumerate() {
+        index_map[old_idx] = Some(new_idx);
+        filtered_values.push(values[old_idx]);
+    }
+
+    let mut filtered_neighbors: Vec<Vec<(usize, f64)>> = vec![Vec::new(); idxs.len()];
+    for (new_i, &old_i) in idxs.iter().enumerate() {
+        for (old_j, weight) in &raw_weights.neighbors[old_i] {
+            if let Some(new_j) = index_map[*old_j] {
+                filtered_neighbors[new_i].push((new_j, *weight));
+            }
+        }
+    }
+
+    let filtered_weights = weights::SpatialWeightsGraph {
+        neighbors: filtered_neighbors,
+        diagnostics: raw_weights.diagnostics.clone(),
+        warnings: vec![],
+    };
+
+    // Call wbspatialstats function
+    let result = autocorrelation::getis_ord_g_star(&filtered_values, &filtered_weights, alpha)
+        .map_err(|e| ToolError::Validation(format!("Getis-Ord G* computation failed: {}", e)))?;
+
+    // Map results back to original indices
+    let mut gi_z = vec![None; n_total];
+    let mut gi_p = vec![None; n_total];
+    let mut cluster_type = vec!["insignificant".to_string(); n_total];
+
+    for (new_i, &old_i) in idxs.iter().enumerate() {
+        gi_z[old_i] = Some(result.z_scores[new_i]);
+        gi_p[old_i] = Some(result.p_values[new_i]);
+        cluster_type[old_i] = match result.cluster_types[new_i].as_str() {
+            "HotSpot" => "HotSpot",
+            "ColdSpot" => "ColdSpot",
+            _ => "insignificant",
+        }
+        .to_string();
+    }
+
+    Ok((gi_z, gi_p, cluster_type))
+}
+
 fn write_text(path: &std::path::Path, contents: &str) -> Result<(), ToolError> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
@@ -1396,93 +1471,18 @@ impl Tool for GetisOrdGiStarTool {
             dropped,
         )?;
 
+        ctx.progress.info("computing Getis-Ord G*");
+        let (gi_z, gi_p, cluster_type) = compute_getis_ord_gi_star(&values, &weights, island_policy, alpha)?;
+
+        // Count islands for reporting
         let n_obs = observations.len();
-        let mut included = vec![true; n_obs];
-        if matches!(island_policy, IslandPolicy::DropWithWarning) {
-            for (i, row) in weights.neighbors.iter().enumerate() {
-                if row.is_empty() {
-                    included[i] = false;
-                }
-            }
-        }
-
-        let included_idxs: Vec<usize> = included
-            .iter()
-            .enumerate()
-            .filter_map(|(i, keep)| if *keep { Some(i) } else { None })
-            .collect();
-        if included_idxs.len() < 3 {
-            return Err(ToolError::Validation(
-                "insufficient connected observations after island handling".to_string(),
-            ));
-        }
-
-        let n = included_idxs.len() as f64;
-        let mean = included_idxs.iter().map(|i| values[*i]).sum::<f64>() / n;
-        let mean_sq = included_idxs
-            .iter()
-            .map(|i| values[*i] * values[*i])
-            .sum::<f64>()
-            / n;
-        let s = (mean_sq - mean * mean).max(0.0).sqrt();
-        if s <= 1.0e-12 {
-            return Err(ToolError::Validation(
-                "input field variance is zero; Getis-Ord Gi is undefined".to_string(),
-            ));
-        }
-
-        let mut gi_z = vec![None; n_obs];
-        let mut gi_p = vec![None; n_obs];
         let mut island_count = 0usize;
-
-        for i in 0..n_obs {
-            if !included[i] {
-                island_count += 1;
-                continue;
-            }
-
-            let mut local_w: Vec<(usize, f64)> = weights.neighbors[i]
-                .iter()
-                .copied()
-                .filter(|(j, _)| included[*j])
-                .collect();
-
-            if matches!(variant, GiVariant::GiStar) {
-                local_w.push((i, 1.0));
-                if row_standardize {
-                    let sum_w: f64 = local_w.iter().map(|(_, w)| *w).sum();
-                    if sum_w > 0.0 {
-                        for (_, w) in &mut local_w {
-                            *w /= sum_w;
-                        }
-                    }
+        if matches!(island_policy, IslandPolicy::DropWithWarning) {
+            for i in 0..n_obs {
+                if weights.neighbors[i].is_empty() {
+                    island_count += 1;
                 }
             }
-
-            if local_w.is_empty() {
-                island_count += 1;
-                continue;
-            }
-
-            let mut sum_w = 0.0f64;
-            let mut sum_w2 = 0.0f64;
-            let mut weighted_sum = 0.0f64;
-            for (j, w) in local_w {
-                sum_w += w;
-                sum_w2 += w * w;
-                weighted_sum += w * values[j];
-            }
-
-            let num = weighted_sum - mean * sum_w;
-            let den_term = ((n * sum_w2 - sum_w * sum_w) / (n - 1.0)).max(0.0);
-            if den_term <= 1.0e-12 {
-                island_count += 1;
-                continue;
-            }
-            let z_score = num / (s * den_term.sqrt());
-            let p_value = two_tailed_normal_p(z_score);
-            gi_z[i] = Some(z_score);
-            gi_p[i] = Some(p_value);
         }
 
         let gi_p_adj = adjust_p_values(&gi_p, multiple_testing);
@@ -1517,13 +1517,12 @@ impl Tool for GetisOrdGiStarTool {
                 let z_value = gi_z[obs_idx];
                 let p_adj = gi_p_adj[obs_idx];
                 let sig = p_adj.is_some_and(|p| p <= alpha);
+                let class_str = &cluster_type[obs_idx];
                 let class = if sig {
-                    if z_value.is_some_and(|z| z > 0.0) {
-                        "hot"
-                    } else if z_value.is_some_and(|z| z < 0.0) {
-                        "cold"
-                    } else {
-                        "ns"
+                    match class_str.as_str() {
+                        "HotSpot" => "hot",
+                        "ColdSpot" => "cold",
+                        _ => "ns",
                     }
                 } else {
                     "ns"
@@ -1565,15 +1564,17 @@ impl Tool for GetisOrdGiStarTool {
 
         let locator = write_vector_output(&output, output_path.trim())?;
 
+        let n_features_used = n_obs - weights.diagnostics.dropped_feature_count - island_count;
+
         let summary = json!({
                 "tool_id": "getis_ord_gi_star",
                 "inference_method": "asymptotic",
-                "statistic": serde_json::Value::Null,
-                "p_value": serde_json::Value::Null,
                 "variant": match variant {
                     GiVariant::Gi => "gi",
                     GiVariant::GiStar => "gi_star",
                 },
+                "statistic": serde_json::Value::Null,
+                "p_value": serde_json::Value::Null,
                 "alpha": alpha,
                 "significance_class": serde_json::Value::Null,
                 "multiple_testing": match multiple_testing {
@@ -1581,9 +1582,9 @@ impl Tool for GetisOrdGiStarTool {
                     MultipleTestingMode::FdrBh => "fdr_bh",
                     MultipleTestingMode::Bonferroni => "bonferroni",
                 },
-                "n_features_used": included_idxs.len(),
+                "n_features_used": n_features_used,
                 "n_features_dropped": weights.diagnostics.dropped_feature_count,
-                "n_observations": included_idxs.len(),
+                "n_observations": n_features_used,
                 "dropped_observations": weights.diagnostics.dropped_feature_count,
                 "n_islands": island_count,
                 "class_counts": {
@@ -1634,7 +1635,7 @@ impl Tool for GetisOrdGiStarTool {
                     hot.to_string(),
                     cold.to_string(),
                     ns.to_string(),
-                    included_idxs.len().to_string(),
+                    n_features_used.to_string(),
                     weights.diagnostics.dropped_feature_count.to_string(),
                     island_count.to_string(),
                     format!("{alpha:.6}"),

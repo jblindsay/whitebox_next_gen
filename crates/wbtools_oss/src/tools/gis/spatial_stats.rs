@@ -73,6 +73,10 @@ pub struct SpatialErrorRegressionTool;
 pub struct SpatialErrorRegressionRasterTool;
 pub struct GeographicallyWeightedRegressionTool;
 pub struct GeographicallyWeightedRegressionRasterTool;
+pub struct InhomogeneousIntensityTool;
+pub struct RipleysKTool;
+pub struct EnvelopeTestTool;
+pub struct PointProcessResidualsTool;
 
 fn parse_optional_usize_arg(args: &ToolArgs, key: &str) -> Result<Option<usize>, ToolError> {
     match args.get(key) {
@@ -3894,5 +3898,251 @@ impl Tool for GeographicallyWeightedRegressionRasterTool {
 
         ctx.progress.progress(1.0);
         Ok(ToolRunResult { outputs })
+    }
+}
+
+// ============================================================================
+// PHASE D TOOLS (Point Process Analysis)
+// ============================================================================
+
+impl Tool for InhomogeneousIntensityTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "inhomogeneous_intensity_raster",
+            display_name: "Inhomogeneous Intensity - Raster Output",
+            summary: "Computes kernel density estimation surface for point pattern intensity.",
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input point vector layer.", required: true },
+                ToolParamSpec { name: "bandwidth", description: "Kernel bandwidth (default: auto-computed).", required: false },
+                ToolParamSpec { name: "kernel", description: "Kernel type: gaussian, epanechnikov (default: gaussian).", required: false },
+                ToolParamSpec { name: "cell_size", description: "Output raster cell size (optional).", required: false },
+                ToolParamSpec { name: "output", description: "Output intensity raster.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.gpkg"));
+        defaults.insert("kernel".to_string(), json!("gaussian"));
+
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("intensity.tif"));
+
+        ToolManifest {
+            id: "inhomogeneous_intensity_raster".to_string(),
+            display_name: "Inhomogeneous Intensity - Raster Output".to_string(),
+            summary: "Computes kernel density estimation surface for point intensity analysis.".to_string(),
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input point vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "bandwidth".to_string(), description: "Kernel bandwidth.".to_string(), required: false },
+                ToolParamDescriptor { name: "kernel".to_string(), description: "Kernel type.".to_string(), required: false },
+                ToolParamDescriptor { name: "cell_size".to_string(), description: "Output raster cell size.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output intensity raster.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "kde_basic".to_string(),
+                description: "Compute kernel density estimation surface.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["raster".to_string(), "point-pattern".to_string(), "kde".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let _ = parse_raster_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, _args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        Err(ToolError::Execution(
+            "inhomogeneous_intensity_raster is not yet implemented".to_string(),
+        ))
+    }
+}
+
+impl Tool for RipleysKTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "ripleys_k_test",
+            display_name: "Ripley's K Function",
+            summary: "Computes Ripley's K statistic for point pattern analysis.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input point vector layer.", required: true },
+                ToolParamSpec { name: "max_distance", description: "Maximum analysis distance.", required: false },
+                ToolParamSpec { name: "step_size", description: "Distance step size for computation.", required: false },
+                ToolParamSpec { name: "output", description: "Output vector with K statistics.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.gpkg"));
+
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("k_results.gpkg"));
+
+        ToolManifest {
+            id: "ripleys_k_test".to_string(),
+            display_name: "Ripley's K Function".to_string(),
+            summary: "Computes Ripley's K statistic for point pattern clustering analysis.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input point vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "max_distance".to_string(), description: "Maximum analysis distance.".to_string(), required: false },
+                ToolParamDescriptor { name: "step_size".to_string(), description: "Distance step size.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector with K statistics.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "ripley_k_basic".to_string(),
+                description: "Compute Ripley's K function.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "point-pattern".to_string(), "ripley-k".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, _args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        Err(ToolError::Execution(
+            "ripleys_k_test is not yet implemented".to_string(),
+        ))
+    }
+}
+
+impl Tool for EnvelopeTestTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "envelope_test",
+            display_name: "Envelope Test",
+            summary: "Computes simulation envelope for point pattern significance testing.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input point vector layer.", required: true },
+                ToolParamSpec { name: "num_simulations", description: "Number of Monte Carlo simulations (default 99).", required: false },
+                ToolParamSpec { name: "max_distance", description: "Maximum analysis distance.", required: false },
+                ToolParamSpec { name: "output", description: "Output vector with envelope bounds.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.gpkg"));
+        defaults.insert("num_simulations".to_string(), json!(99));
+
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("envelope_results.gpkg"));
+
+        ToolManifest {
+            id: "envelope_test".to_string(),
+            display_name: "Envelope Test".to_string(),
+            summary: "Computes simulation envelope for significance testing of point patterns.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input point vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "num_simulations".to_string(), description: "Number of Monte Carlo simulations.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_distance".to_string(), description: "Maximum analysis distance.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector with envelope bounds.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "envelope_test_basic".to_string(),
+                description: "Compute envelope test for point pattern analysis.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "point-pattern".to_string(), "envelope".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, _args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        Err(ToolError::Execution(
+            "envelope_test is not yet implemented".to_string(),
+        ))
+    }
+}
+
+impl Tool for PointProcessResidualsTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "point_process_residuals",
+            display_name: "Point Process Residuals",
+            summary: "Computes residuals from fitted Poisson point process model.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input point vector layer.", required: true },
+                ToolParamSpec { name: "intensity_field", description: "Fitted intensity field (optional; computes residuals).", required: false },
+                ToolParamSpec { name: "output", description: "Output vector with residual values.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.gpkg"));
+
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("residuals.gpkg"));
+
+        ToolManifest {
+            id: "point_process_residuals".to_string(),
+            display_name: "Point Process Residuals".to_string(),
+            summary: "Computes residuals from fitted Poisson point process model.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input point vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "intensity_field".to_string(), description: "Fitted intensity field.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector with residuals.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "residuals_basic".to_string(),
+                description: "Compute point process residuals.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "point-pattern".to_string(), "residuals".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, _args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        Err(ToolError::Execution(
+            "point_process_residuals is not yet implemented".to_string(),
+        ))
     }
 }

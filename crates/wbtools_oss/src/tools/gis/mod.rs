@@ -19,6 +19,10 @@ pub use spatial_stats::SpatialLagRegressionTool;
 pub use spatial_stats::SpatialErrorRegressionTool;
 pub use spatial_stats::GeographicallyWeightedRegressionTool;
 
+mod spatial_stats_phase_a_raster;
+pub use spatial_stats_phase_a_raster::LocalMoransILisaRasterTool;
+pub use spatial_stats_phase_a_raster::LocalGetisOrdGStarRasterTool;
+
 mod spatial_stats_phase_b;
 pub use spatial_stats_phase_b::OrdinaryKrigingTool;
 pub use spatial_stats_phase_b::LocalOrdinaryKrigingTool;

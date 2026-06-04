@@ -540,6 +540,8 @@ pub use gis::ExtractByAttributeTool;
 pub use gis::GlobalMoransITool;
 pub use gis::GetisOrdGiStarTool;
 pub use gis::LocalMoransILisaTool;
+pub use gis::LocalMoransILisaRasterTool;
+pub use gis::LocalGetisOrdGStarRasterTool;
 pub use gis::NearestNeighbourIndexTool;
 pub use gis::QuadratCountTestTool;
 pub use gis::SpatialLagRegressionTool;

@@ -49,10 +49,26 @@ impl ConvOp {
 
     fn summary(self) -> &'static str {
         match self {
-            Self::HighPass => "Performs high-pass filtering using neighborhood mean subtraction.",
-            Self::Laplacian => "Performs Laplacian edge/sharpen filtering.",
-            Self::Sobel => "Performs Sobel edge detection.",
-            Self::Prewitt => "Performs Prewitt edge detection.",
+            Self::HighPass => r#"Performs high-pass filtering via neighborhood mean subtraction: output = center - neighborhood_mean. Enhances fine-scale features and edges while suppressing broad-scale variations. Output is typically centered around zero (negative = darker than surroundings, positive = brighter). Useful for texture enhancement, noise removal, and feature detection.
+
+High-pass filtering is the inverse of low-pass (smoothing) filtering. By subtracting mean, it reveals local deviations from the neighborhood trend. Common preprocessing for edge detection, texture analysis, and sharpening workflows. Filter size parameter controls scale of features preserved: small window (3×3) highlights fine detail; larger window (21×21+) emphasizes larger-scale variation.
+
+Applications: (1) Texture enhancement before classification, (2) Noise removal by subtracting mean then applying thresholding, (3) Edge enhancement (similar to unsharp masking), (4) Preprocessing for morphological operations, (5) Quality control of satellite imagery (detects artifacts in background)."#,
+            Self::Laplacian => r#"Performs Laplacian edge detection using second-derivative (local curvature) operator. Detects edges as zero-crossing boundaries between positive and negative output values. Particularly sensitive to edges and corners; less sensitive to orientation than Sobel/Prewitt. Multiple Laplacian kernels available (3×3, 5×5 variants) with different coefficient patterns.
+
+Laplacian is an isotropic operator—equally responsive to edges in all directions. Provides good edge localization but sensitive to noise. Often applied to Gaussian-smoothed image first (Laplacian-of-Gaussians, LoG) to reduce noise artifacts. Output is "double-differentiated" slope—very responsive to thin edges and isolated features, but less robust than Sobel for noisy data.
+
+Applications: (1) Edge detection for boundary extraction, (2) Feature detection (corners, isolated objects), (3) Preprocessing for watershed segmentation, (4) Combined with original image for edge-enhanced visualization, (5) Blob detection via zero-crossing analysis. Typical workflow: smooth→Laplacian→threshold zero-crossings→binary edge map."#,
+            Self::Sobel => r#"Performs Sobel edge detection using directional first-derivative (gradient) operators. Computes both X and Y directional derivatives via 3×3 convolution kernels, then derives magnitude (edge strength) and optionally direction. More robust to noise than Laplacian because it uses first derivatives rather than second. Available in 3×3 and 5×5 variants.
+
+Sobel edge magnitude measures local gradient strength—high values indicate strong edges. Directional gradient reveals whether edges are more vertical, horizontal, or diagonal. Less sensitive than Laplacian to isolated noise; more forgiving for natural imagery with varying texture. Widely used baseline for edge detection across remote sensing, medical imaging, and computer vision applications.
+
+Applications: (1) General-purpose edge detection, (2) Boundary extraction for object detection, (3) Directional edge analysis (separating vertical vs. horizontal features), (4) Preprocessing for feature-based registration, (5) Terrain edge detection in DEMs. Typical post-processing: thresholding Sobel magnitude to create binary edge map, or using 8-connected component analysis to trace detected edges."#,
+            Self::Prewitt => r#"Performs Prewitt edge detection using weighted directional first-derivative operators similar to Sobel but with different weighting. Emphasizes edges across horizontal/vertical directions equally; produces thinner edge lines than Sobel in some scenarios. 3×3 kernel standard; slightly different coefficient weights than Sobel improve certain edge types.
+
+Prewitt vs. Sobel: Sobel weights center pixel more heavily (reduces noise), Prewitt treats neighborhood more uniformly (simpler, sometimes crisper edges). Performance difference is usually small for clean imagery; Sobel generally preferred for noisy data. Both provide magnitude and optionally directional output for downstream processing.
+
+Applications: (1) Edge detection alternative to Sobel (especially for synthetic/crisp imagery), (2) Comparison with Sobel to validate edge detection (differences indicate noise sensitivity), (3) Feature detection in structured/aerial imagery, (4) Boundary extraction for segmentation. Workflow: apply Prewitt→magnitude thresholding→optional thinning→edge-based feature extraction or vectorization."#,
         }
     }
 

@@ -85,41 +85,71 @@ impl Phase3Op {
 
     fn summary(self) -> &'static str {
         match self {
-            Self::FastAlmostGaussian => "Performs a fast approximation to Gaussian smoothing.",
-            Self::EdgePreservingMean => {
-                "Performs thresholded edge-preserving mean filtering."
-            }
-            Self::Unsharp => "Performs edge-enhancing unsharp masking.",
-            Self::DiffOfGaussians => {
-                "Performs Difference-of-Gaussians band-pass filtering."
-            }
-            Self::Adaptive => {
-                "Performs adaptive thresholded mean replacement based on local z-scores."
-            }
-            Self::Lee => {
-                "Performs Lee sigma filtering using in-range neighborhood averaging."
-            }
-            Self::RefinedLee => {
-                "Performs Refined Lee filtering with edge-preserving sub-window homogeneity classification."
-            }
-            Self::EnhancedLee => {
-                "Performs Enhanced Lee filtering using sigma-ratio weighting and ENL-dependent blending."
-            }
-            Self::ConservativeSmoothing => {
-                "Performs conservative smoothing by clipping impulse outliers to neighborhood bounds."
-            }
-            Self::Olympic => {
-                "Performs Olympic smoothing by averaging local values excluding min and max."
-            }
-            Self::KNearestMean => {
-                "Performs edge-preserving k-nearest neighbor mean smoothing."
-            }
-            Self::HighPassMedian => {
-                "Performs high-pass filtering by subtracting local median from center values."
-            }
-            Self::LaplacianOfGaussians => {
-                "Performs Laplacian-of-Gaussians edge enhancement."
-            }
+            Self::FastAlmostGaussian => r#"Fast approximation to Gaussian smoothing using iterative mean filtering or simplified kernels. Computationally efficient—particularly valuable for large images/multiple iterations. Sacrifices slight precision for speed: smoothing result very close to true Gaussian but computed ~3-5× faster for large kernels.
+
+Fast approximations use separable convolutions or recursive filtering instead of explicit Gaussian kernel. Results are nearly indistinguishable from true Gaussian to human observers, enabling rapid prototyping and real-time processing. Acceptable trade-off when small precision differences are negligible compared to computational savings. Excellent for interactive workflows or batch processing of large satellite datasets.
+
+Applications: (1) Real-time image processing workflows, (2) Multi-scale pyramid construction (need many smoothing levels), (3) Rapid prototyping before committing to true Gaussian, (4) Large satellite image processing where speed dominates, (5) Mobile/embedded processing (speed-limited environments). Parameters similar to Gaussian sigma; performance gain increases with larger sigma values."#,
+            Self::EdgePreservingMean => r#"Performs local mean replacement only for pixels within threshold range of center value (z-score based). Filters noise while preserving sharp edges—hybrid approach between mean (edge-blurring) and bilateral (computationally expensive). Threshold parameter controls selectivity: high threshold = more pixels averaged (more smoothing, less edge preservation); low threshold = fewer pixels averaged (less smoothing, more edge preservation).
+
+Unlike bilateral filter (uses intensity difference), z-score approach uses standard deviation—adaptive to local variability. Statistical approach: pixels within (mean ± k×stdev) are averaged; outliers are preserved. Faster than bilateral filter while still achieving reasonable edge preservation. Particularly effective on multi-band data where outliers in one band might indicate features in another band.
+
+Applications: (1) Noise reduction with edge preservation (faster alternative to bilateral), (2) Multi-band image preprocessing, (3) Mixed data types (detects outliers statistically), (4) SAR/radar preprocessing (adaptive to local texture), (5) Quality control (preserves feature boundaries). Typical parameters: threshold 2-3 standard deviations."#,
+            Self::Unsharp => r#"Performs edge enhancement by subtracting blurred version from original: output = original + k×(original - blurred). Sharpens edges and emphasizes fine details while boosting contrast. Similar to high-pass filter but with configurable strength parameter. Widely used for enhancement and visualization.
+
+Unsharp masking (despite the name) enhances detail rather than blurs. The "unsharp" name historical—traditional film-based technique used blurred negative. Local contrast is increased: light edges become lighter, dark edges become darker. Strength parameter controls intensity of sharpening; excessive sharpening creates halos around edges. Often followed by clamping to prevent overflow.
+
+Applications: (1) Image enhancement for visualization, (2) Detail enhancement before classification, (3) Texture enhancement in satellite imagery, (4) Preprocessing for feature extraction, (5) Quality control (highlights artifacts or interesting features). Typical parameters: blur_sigma=1.0-2.0, strength=0.5-2.0. Workflow: apply unsharp→threshold for edge extraction, or keep for enhanced display."#,
+            Self::DiffOfGaussians => r#"Performs band-pass filtering by subtracting two Gaussian-smoothed versions at different scales: output = Gaussian(sigma1) - Gaussian(sigma2). Isolates features at intermediate scales (neither too fine nor too coarse). Different sigma values create band-pass at different frequencies. Efficient alternative to explicit Fourier band-pass filtering.
+
+Difference-of-Gaussians (DoG) is computationally efficient band-pass filter useful for feature detection at specific scales. Scales sigma1/sigma2 define band center. LoG (Laplacian-of-Gaussians) is related—captures similar frequency band via second derivative. Used in SIFT feature detection and scale-space analysis. Applications span feature detection, multi-scale analysis, and texture characterization.
+
+Applications: (1) Multi-scale feature detection, (2) SIFT-style keypoint detection, (3) Band-pass filtering without Fourier transform, (4) Scale-space analysis (try multiple sigma combinations), (5) Texture enhancement at specific scales. Typical parameters: sigma1=0.5-2.0, sigma2=1.5-5.0 (sigma2 > sigma1). Workflow: compute DoG→threshold to find feature peaks→extract keypoints."#,
+            Self::Adaptive => r#"Performs adaptive noise filtering by replacing pixels falling outside neighborhood range with local mean. Based on local z-score thresholding: if (pixel - mean) / stdev > threshold, keep pixel; otherwise replace with mean. Adapts to local statistics—smooths variable noise while preserving outliers. More sophisticated than simple z-score outlier detection because context is neighborhood-based.
+
+Statistical approach classifies each pixel as "normal" or "outlier" based on local deviation. Threshold parameter (usually 2-3 standard deviations) controls sensitivity. Output variance decreases in homogeneous areas (high smoothing), variance increases near edges (low smoothing). Particularly effective for mixed noise (Gaussian + impulse).
+
+Applications: (1) Mixed noise removal (Gaussian + impulse), (2) Outlier detection and preservation, (3) Adaptive preprocessing (smoothing intensity varies by location), (4) Quality control (outliers often indicate artifacts), (5) Multi-band outlier removal (preserves anomalies). Threshold parameter 2-3 is typical. Workflow: apply adaptive→thresholding for anomaly detection."#,
+            Self::Lee => r#"Performs Lee sigma filtering for SAR image despeckling using in-range neighborhood averaging. Particularly designed for multiplicative speckle noise common in radar. Range-based approach: averages pixels similar to center pixel. Simpler alternative to more sophisticated SAR filters. Lee filter: if pixel within (mean ± k×stdev), include in averaging; otherwise exclude. Computational efficiency without sophisticated homogeneity classification.
+
+Lee filtering is foundational SAR image processing. Unlike Gaussian (assumes additive noise), Lee assumes multiplicative speckle noise model. Range-based averaging preserves more structure than simple mean. Often used as first-pass SAR preprocessing before classification. Trade-off: faster than Refined/Enhanced Lee, but more blurring on edges.
+
+Applications: (1) SAR image despeckling, (2) Radar backscatter preprocessing, (3) InSAR preprocessing, (4) Multiplicative noise reduction generally. Typical parameters: filter_size=5×5 or 7×7, sigma=1.5-2.0. Workflow: apply Lee→edge detection→segmentation/classification."#,
+            Self::RefinedLee => r#"Performs Refined Lee filtering with sub-window homogeneity classification for improved SAR despeckling. Subdivides filter window into homogeneous regions, estimates local noise/signal statistics per region, applies region-specific weighting. Significantly better edge preservation than standard Lee filter. More computationally expensive but superior visual results on real SAR data.
+
+Refined Lee uses local homogeneity testing to identify uniform sub-regions and preserve edges. Classification logic: window divided into sub-windows, each classified as homogeneous or heterogeneous; averaging applied selectively. Produces crisper edges and better feature preservation than standard Lee. Widely used in operational SAR processing. Trade-off between quality (excellent) and speed (moderate).
+
+Applications: (1) High-quality SAR despeckling, (2) SAR classification preprocessing, (3) InSAR intensity image preprocessing, (4) Radar backscatter filtering. Typical parameters: filter_size=5×7 to 7×7, damping_factor=1.0-1.5. Workflow: Refined Lee→Sobel edge detection→advanced segmentation."#,
+            Self::EnhancedLee => r#"Performs Enhanced Lee filtering incorporating ENL (Equivalent Number of Looks) -dependent blending and sigma-ratio weighting. Most sophisticated Lee variant: adapts filtering based on local signal-to-noise ratio. Particularly effective on multi-look SAR data where ENL characterizes effective averaging. Represents state-of-the-art single-filter SAR preprocessing.
+
+Enhanced Lee uses ENL parameter to characterize noise in multi-look SAR: ENL=L (number of looks) for multi-looked data. Sigma-ratio weighting provides adaptive blending: strong edges have low blending (preserves), weak edges have high blending (smooths). Requires proper ENL estimation but produces superior results. More parameters than Refined Lee but superior adaptation.
+
+Applications: (1) Multi-look SAR despeckling (uses ENL parameter), (2) Advanced SAR classification preprocessing, (3) InSAR quality enhancement, (4) Texture-preserving SAR filtering. Typical parameters: filter_size=5×7 to 7×7, damping_factor=1.0-1.5, ENL=appropriate for sensor (4-40+). Workflow: Enhanced Lee→advanced segmentation/classification. Requires understanding sensor's look count."#,
+            Self::ConservativeSmoothing => r#"Performs conservative smoothing by clipping impulse outliers to neighborhood bounds. Output = clamp(pixel, min_neighborhood, max_neighborhood). Non-linear filter removing only extreme outliers while preserving valid structure. Preserves edges better than mean filtering. Faster than median while similar effect for salt-and-pepper noise.
+
+Conservative smoothing: pixel values outside neighborhood range are clipped to range edge, others preserved. Removes impulse noise (isolated extreme values) without blurring edges. Output range matches input range (no new values created). Useful when moderate smoothing required but edge preservation critical. Particularly effective for low-moderate noise levels.
+
+Applications: (1) Salt-and-pepper noise removal, (2) Outlier clipping, (3) Conservative preprocessing (minimal change to data), (4) Radiometric correction (constrains values to plausible range), (5) Edge preservation with gentle smoothing. Faster than median; results similar for impulse noise, different for Gaussian noise. Workflow: apply conservative smoothing→edge detection→segmentation."#,
+            Self::Olympic => r#"Performs Olympic smoothing by computing neighborhood mean excluding min and max values. Less aggressive than median (median excludes all but center value), less permissive than mean (mean includes all values). Soft thresholding approach: removes outliers while retaining most neighborhood information. Robust to noise while better detail preservation than median.
+
+Olympic filter (also called mid-range or trimmed mean): average of neighborhood excluding min/max. 1-2 extreme values removal reduces noise while preserving structure better than median. Effective compromise for moderate noise levels. Name refers to scoring (Olympic athletes' scores exclude min/max before averaging). Symmetric operation—equally responsive to high and low outliers.
+
+Applications: (1) Moderate noise reduction (between mean and median), (2) Mixed noise (Gaussian + few outliers), (3) Detail-preserving smoothing, (4) Automated preprocessing (tuning-free alternative to mean/median), (5) Multi-band processing. Generally 1-3 outliers removed per window. Workflow: apply Olympic→enhanced edges→classification."#,
+            Self::KNearestMean => r#"Performs edge-preserving k-nearest neighbor mean smoothing: sorts neighborhood by distance to center value, averages k closest values. Hybrid approach preserving edges via similarity weighting. Center pixel and k-1 most similar neighbors are averaged. More sophisticated than simple k-NN (considers both spatial and intensity similarity). Computationally efficient relative to bilateral.
+
+K-nearest approach adaptively selects neighbors: pixel values close to center are averaged, dissimilar pixels ignored. K parameter controls smoothing: k=1 (no smoothing), k=n (all neighbors = mean filter). Typically k=n/2 (half the neighborhood). Efficient alternative to bilateral filter—similar edge preservation at lower computational cost. Particularly useful for images with strong intensity discontinuities.
+
+Applications: (1) Edge-preserving smoothing (alternative to bilateral), (2) Fast preprocessing for classification, (3) Efficiency-critical preprocessing, (4) Multi-band image filtering. Typical parameters: k=neighborhood_size/2 to 3/4. Workflow: apply k-nearest→sharpened output→segmentation/classification."#,
+            Self::HighPassMedian => r#"Performs high-pass filtering by subtracting local median from center values: output = pixel - median_neighborhood. Combines high-pass filtering (enhances detail) with median robustness (removes noise). Center-around-zero output (negative = darker than surroundings, positive = brighter). Robust to outliers compared to Gaussian-based high-pass.
+
+High-pass residual reveals local deviations from median trend. Particularly robust for noisy data—median is more stable than mean for outliers. Output emphasizes fine-scale variation. Often applied to Gaussian-smoothed versions (creates band-pass filter). Useful for texture enhancement and feature extraction from noisy imagery.
+
+Applications: (1) Texture enhancement from noisy data, (2) Detail extraction before classification, (3) Robust feature detection, (4) Preprocessing for texture-based segmentation, (5) SAR preprocessing. Typical workflow: high-pass median→thresholding for feature extraction, or combine with original for enhanced display."#,
+            Self::LaplacianOfGaussians => r#"Performs Laplacian-of-Gaussians (LoG) edge enhancement combining Gaussian smoothing with Laplacian edge detection. Computationally approximated via difference-of-Gaussians (DoG). First smooths image (reduces noise), then applies Laplacian (detects edges). Classical multi-scale edge detection technique. Zero-crossing detection on LoG output identifies precise edge locations.
+
+LoG is standard for scale-space edge detection: Gaussian removes noise, Laplacian amplifies edges. Sigma parameter controls scale of edges detected: small sigma detects fine edges, large sigma detects broad edges. LoG approximated via DoG for efficiency. Multiple sigma values enable multi-scale edge detection (identify features at different scales).
+
+Applications: (1) Robust edge detection (noise-resistant), (2) Multi-scale edge detection (use multiple sigma), (3) Zero-crossing edge localization, (4) Preprocessing for segmentation, (5) Blob detection via LoG zero-crossings. Typical workflow: apply LoG→identify zero-crossings→trace edges→vectorization or further processing."#,
         }
     }
 }

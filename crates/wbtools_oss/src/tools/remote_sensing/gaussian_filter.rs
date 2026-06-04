@@ -97,7 +97,11 @@ impl Tool for GaussianFilterTool {
         ToolMetadata {
             id: "gaussian_filter",
             display_name: "Gaussian Filter",
-            summary: "Performs Gaussian smoothing on a raster image.",
+            summary: r#"Performs Gaussian smoothing using weighted kernel where weights follow normal distribution. Fundamental low-pass filter reducing noise while slightly blurring edges. Sigma parameter controls smoothing intensity: sigma=0.75 pixels (default) is gentle smoothing; sigma=2.0+ creates more aggressive smoothing. Output is weighted average of neighborhood weighted by distance-based Gaussian profile.
+
+Gaussian filtering is mathematically optimal for Gaussian noise removal (minimizes mean-squared error). More sophisticated than simple mean filter—nearby pixels weighted more than distant pixels, reducing edge blur. Foundational for many algorithms: Gaussian pyramid (multi-scale analysis), Laplacian-of-Gaussians (edge detection), difference-of-Gaussians (band-pass filtering). RGB raster support with color-space-aware smoothing available.
+
+Applications: (1) General noise reduction preprocessing, (2) Multi-scale analysis via Gaussian pyramid, (3) Preprocessing for edge detection (LoG filters), (4) Band-pass filtering (via difference-of-Gaussians), (5) Blur/softening for visualization. Typical workflow: apply Gaussian at sigma=0.75 for gentle smoothing, increase sigma for stronger smoothing, use multi-scale for hierarchical analysis."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -145,7 +149,7 @@ impl Tool for GaussianFilterTool {
         ToolManifest {
             id: "gaussian_filter".to_string(),
             display_name: "Gaussian Filter".to_string(),
-            summary: "Performs Gaussian smoothing on a raster image.".to_string(),
+            summary: r#"Mathematically-optimal Gaussian smoothing with distance-weighted kernel. Foundational for multi-scale analysis, edge detection, band-pass filtering. Sigma parameter controls smoothing intensity; RGB-aware."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![

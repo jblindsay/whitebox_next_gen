@@ -48,10 +48,26 @@ impl RankOp {
 
     fn summary(self) -> &'static str {
         match self {
-            Self::Median => "Computes moving-window median values.",
-            Self::Percentile => "Computes center-cell percentile rank in a moving window.",
-            Self::Majority => "Computes moving-window mode (majority class/value).",
-            Self::Diversity => "Computes moving-window diversity (count of unique values).",
+            Self::Median => r#"Computes moving-window median value for each pixel, replacing with 50th percentile of neighborhood. Robust noise filter preserving edges (non-linear). Particularly effective for impulse noise (salt-and-pepper) removal while maintaining sharp boundaries. Output values are actual pixel values from neighborhood (not interpolated).
+
+Median filtering is non-linear—critical advantage over mean filtering for noise reduction because it doesn't create new values or blur edges. Large filter sizes heavily smooth while preserving sharp transitions. Widely used in remote sensing, medical imaging, and SAR image processing. Computational cost increases with filter size but generally faster than bilateral or guided filters.
+
+Applications: (1) SAR image speckle reduction (especially effective for phase coherence), (2) Salt-and-pepper noise removal, (3) Preprocessing before edge detection (reduces false edges), (4) Boundary preservation in classification preprocessing, (5) Radiometric correction for outlier values. Typical workflow: apply median→edge-enhanced output→threshold for feature extraction."#,
+            Self::Percentile => r#"Computes local percentile rank of center cell elevation/value within moving window (0-100%). Analogous to Elevation Percentile for generic raster data. Measures relative position: output=0 indicates local minimum, output=100 indicates local maximum, output=50 indicates median. Reveals local position-in-distribution independently of absolute values.
+
+Percentile filtering enables position-relative analysis. Useful for layering analysis: cells ranking high percentile (>80) in all bands indicate "bright" features; low percentile (<20) indicate "dark" features. Particularly useful for classification preprocessing—separates terrain/texture position rather than just magnitude. Often combined with statistical filters for multi-metric characterization.
+
+Applications: (1) Relative brightness/darkness classification, (2) Texture characterization (high percentile variance = rough, low variance = smooth), (3) Local contrast enhancement (percentile-based normalization), (4) Landform identification similar to elevation percentile, (5) Multi-band texture analysis (apply percentile to each band, compare patterns)."#,
+            Self::Majority => r#"Computes moving-window mode (most frequent value/class) for each pixel. Non-linear filter preserving categorical boundaries and dominant patterns. Particularly useful for classified imagery where output must remain within original class set (unlike mean filter which creates interpolated values). Essential for morphological cleaning of classification outputs.
+
+Majority filtering is the mode-based equivalent of median filtering. For categorical data (classified imagery, land cover), majority preserves class definitions while smoothing noise. For continuous data, majority can reveal local peaks in value distribution. Often followed by minority class elimination (post-classification cleanup) to remove "salt-and-pepper" classification artifacts.
+
+Applications: (1) Post-classification smoothing (removes small spurious class patches), (2) Majority class map from multi-classified outputs, (3) Vector data cleaning (class disaggregation), (4) Noise suppression in thresholded imagery, (5) Attribute smoothing in segmentation outputs. Typical workflow: classify→majority filter→minority elimination→final cleaned map."#,
+            Self::Diversity => r#"Computes moving-window diversity as count of unique values/classes within neighborhood. Measures local heterogeneity: high diversity = varied terrain/classes, low diversity = homogeneous. Reveals texture, fragmentation, and pattern diversity. Often applied to classified or categorical imagery to identify transition/edge zones.
+
+Diversity filter creates a metric of local variation independent of specific values. Useful for landscape ecology (habitat diversity, fragmentation metrics), classification quality assessment (high diversity = mixed/uncertain areas), and texture analysis. Applied to elevation data, diversity indicates roughness at neighborhood scale. Applied to classification, it identifies mixed/ecotone/boundary zones.
+
+Applications: (1) Landscape fragmentation mapping (high diversity = diverse mosaic, low diversity = uniform patches), (2) Classification confidence/uncertainty assessment (high diversity = uncertain area), (3) Texture analysis (heterogeneity mapping), (4) Edge/boundary detection via diversity peaks, (5) Habitat diversity for ecological analysis (suitability depends on local diversity)."#,
         }
     }
 

@@ -91,7 +91,11 @@ impl Tool for BilateralFilterTool {
         ToolMetadata {
             id: "bilateral_filter",
             display_name: "Bilateral Filter",
-            summary: "Performs an edge-preserving bilateral smoothing filter on a raster image.",
+            summary: r#"Performs edge-preserving bilateral smoothing using two Gaussian kernels: spatial (distance-based) and intensity-based. Crucial innovation over simple Gaussian—smooths across regions while preserving sharp boundaries by suppressing pixels differing greatly in intensity. Sigma_dist controls spatial smoothing radius; sigma_int controls edge-preservation threshold.
+
+Bilateral filtering is non-linear, making it vastly superior to Gaussian for detail preservation. Pixels similar in intensity are averaged together, but pixels at intensity discontinuities (edges) are not averaged—maintains sharp transitions. Particularly valuable for noise reduction without detail loss. Trade-off: computationally more expensive than Gaussian, but visually superior for many applications. HSI-aware filtering available for RGB imagery.
+
+Applications: (1) High-quality noise reduction preserving edges, (2) Detail enhancement before classification, (3) Preprocessing for segmentation (smooths interior, preserves boundaries), (4) Medical image denoising, (5) Satellite image preprocessing (removes speckle while preserving terrain features). Typical parameters: sigma_dist=1.0-2.0 pixels, sigma_int=25-100 (depends on value range). Workflow: apply bilateral→edge-enhanced output→segmentation/classification."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -156,7 +160,7 @@ impl Tool for BilateralFilterTool {
         ToolManifest {
             id: "bilateral_filter".to_string(),
             display_name: "Bilateral Filter".to_string(),
-            summary: "Performs an edge-preserving bilateral smoothing filter on a raster image."
+            summary: r#"Edge-preserving bilateral smoothing via spatial + intensity kernels. Superior to Gaussian for detail preservation. Sigma_dist=radius, sigma_int=edge-preservation threshold. RGB-aware."#
                 .to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,

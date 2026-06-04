@@ -57,12 +57,36 @@ impl WindowOp {
 
     fn summary(self) -> &'static str {
         match self {
-            Self::Mean => "Computes a moving-window mean for each raster cell.",
-            Self::Total => "Computes a moving-window total for each raster cell.",
-            Self::StdDev => "Computes a moving-window standard deviation for each raster cell.",
-            Self::Min => "Computes a moving-window minimum for each raster cell.",
-            Self::Max => "Computes a moving-window maximum for each raster cell.",
-            Self::Range => "Computes a moving-window range (max-min) for each raster cell.",
+            Self::Mean => r#"Computes moving-window mean (average) for each pixel. Fundamental smoothing operation reducing local noise while blurring sharp transitions. Output represents local central tendency. Widely used for preprocessing, noise reduction, and multi-scale analysis.
+
+Mean filtering is the most common low-pass smoothing operation. Highly sensitive to outliers (extreme values can distort results), making median filter preferable for noisy data. Computationally efficient. Filter size controls smoothing extent: small (3×3) preserves detail, large (31×31+) creates heavily smoothed surface. Often applied iteratively or at multiple scales for multi-resolution analysis.
+
+Applications: (1) Basic noise reduction, (2) Preprocessing before feature detection (smooths false positives), (3) Multi-scale analysis (apply at 3×3, 11×11, 31×31), (4) Temporal smoothing (combining scenes), (5) Baseline for other statistical operations. Compare with median (non-linear, preserves edges) for improved edge preservation."#,
+            Self::Total => r#"Computes moving-window sum (total) of pixel values in neighborhood. Integrates local signal strength. Applications depend on data semantics: for counts/densities, total reveals local density patterns; for precipitation, total reveals basin-scale accumulation; for reflectance, total is proportional to local target size.
+
+Total filtering has different interpretations by domain. In count/population data, total reveals clustering and hotspots. In elevation data, total is rarely used (sum has no geomorphological meaning). In spectral analysis, total can reveal multi-band signal strength. Often used as intermediate step (e.g., divide by neighborhood cell count to compute mean, or compare with neighboring totals for local heterogeneity detection).
+
+Applications: (1) Hotspot detection in count data (high total = clusters), (2) Basin/watershed accumulation models, (3) Integration of distributed measurements, (4) Intermediate calculation (total/N = mean), (5) Signal strength aggregation in multi-sensor mosaics."#,
+            Self::StdDev => r#"Computes moving-window standard deviation, measuring local value variation/dispersion. High stdev = diverse values (rough/heterogeneous), low stdev = uniform values (smooth/homogeneous). Reveals texture, roughness, and variability patterns. Critical for uncertainty quantification and quality assessment.
+
+Standard deviation is more robust than range for characterizing local variation (not biased by single outlier). Enables classification of areas by texture: steep slopes (high stdev), gentle slopes (low stdev); forests (high stdev), grasslands (low stdev). Often normalized (coefficient of variation = stdev/mean) to enable comparison across data with different value ranges. Can be computed from histogram (variance = mean_of_squares - square_of_mean).
+
+Applications: (1) Texture mapping (roughness/heterogeneity analysis), (2) Uncertainty quantification in noisy data, (3) Quality assessment (uniform background = low stdev, feature-rich areas = high), (4) Classification confidence (high stdev = mixed/uncertain classes), (5) Multi-band heterogeneity (stack stdevs from each band). Typical workflow: compute stdev at multiple scales→compare pattern changes across scales→identify characteristic scales."#,
+            Self::Min => r#"Computes moving-window minimum value, revealing local lows and troughs. Erosion operator in morphological image processing. Useful for detecting valley floors, depressions, and minimum-altitude features. Sensitive to single outlier (one low value in window produces low output).
+
+Minimum filter is the morphological "erosion" operator—shrinks light regions and expands dark regions. When applied repeatedly (multi-pass erosion), creates smoothed valleys and isolated features disappear. Combined with maximum filter (dilation) enables opening (erosion then dilation) and closing (dilation then erosion) operations. Often used in multi-scale decomposition: compare min at 3×3, 11×11, 31×31 to identify feature scales.
+
+Applications: (1) Morphological erosion for size-based filtering, (2) Opening via erosion→dilation to remove small noise objects, (3) Depression/valley identification in terrain, (4) Local floor level in bathymetry/DEM, (5) Multi-scale feature analysis (compare erosion across scales). Typical workflow: minimum→comparison with maximum→opening or closing depending on feature type."#,
+            Self::Max => r#"Computes moving-window maximum value, revealing local peaks and ridges. Dilation operator in morphological image processing. Useful for detecting peaks, ridgelines, and maximum-amplitude features. Sensitive to single outlier (one high value in window produces high output).
+
+Maximum filter is the morphological "dilation" operator—expands light regions and shrinks dark regions. When applied repeatedly (multi-pass dilation), creates smoothed peaks and isolated features grow to fill their neighborhoods. Combined with minimum filter enables closing (dilation then erosion) and opening (erosion then dilation). Essential for morphological feature detection and multi-scale analysis.
+
+Applications: (1) Morphological dilation for size-based filtering, (2) Closing via dilation→erosion to fill small holes, (3) Peak/ridge identification in terrain and imagery, (4) Local ceiling level in bathymetry/DEM, (5) Multi-scale feature analysis (compare dilation across scales). Typical workflow: maximum→comparison with minimum→closing or opening depending on feature type."#,
+            Self::Range => r#"Computes moving-window range (maximum - minimum), revealing local value spread independent of mean level. Simple heterogeneity metric: high range = diverse values, low range = uniform values. Simpler than standard deviation but equally informative for many applications, and more robust to distribution shape.
+
+Range is computationally efficient (requires only two comparisons). Particularly useful for detecting transitions/boundaries where range spikes indicate contrast zones. Less sensitive to distribution shape than stdev (stdev emphasizes outliers, range only uses extremes). Normalized range (range/mean) enables cross-band comparison like coefficient of variation enables cross-scale comparison.
+
+Applications: (1) Texture/contrast mapping (easy interpretation: high range = rough/contrasted), (2) Boundary detection via range peaks, (3) Computational efficiency alternative to stdev, (4) Quality control (uniform background low range, feature areas high range), (5) Roughness/variability in generic data. Typical workflow: compute range→threshold to identify transition zones→vectorize high-range boundaries."#,
         }
     }
 

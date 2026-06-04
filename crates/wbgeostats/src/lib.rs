@@ -8,10 +8,14 @@
 //! - `variogram`: Empirical and modeled semivariograms
 //! - `kriging`: Ordinary Kriging predictions and variance estimation
 //! - `cv`: Cross-validation diagnostics and metrics
+//! - `python`: Python bindings via PyO3 (requires python feature)
 
 pub mod variogram;
 pub mod kriging;
 pub mod cv;
+
+#[cfg(feature = "python")]
+pub mod python;
 
 use thiserror::Error;
 

@@ -7,6 +7,10 @@ description = "Production-grade geostatistics library: kriging, variography, spa
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/jblindsay/whitebox"
 
+[lib]
+name = "wbgeostats"
+crate-type = ["rlib"]
+
 [dependencies]
 nalgebra = { version = "0.32", features = ["serde"] }
 ndarray = { version = "0.15", features = ["serde"] }
@@ -15,7 +19,15 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
 log = "0.4"
+pyo3 = { version = "0.28.2", features = ["extension-module", "abi3-py39", "macros"], optional = true }
+
+[build-dependencies]
+pyo3-build-config = { version = "0.28.2", optional = true }
 
 [dev-dependencies]
 approx = "0.5"
 rand = "0.8"
+
+[features]
+default = []
+python = ["pyo3", "pyo3-build-config"]

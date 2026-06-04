@@ -5395,7 +5395,11 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "elevation_percentile",
             display_name: "Elevation Percentile",
-            summary: "Calculates the local percentile rank of each cell elevation within a neighbourhood window.",
+            summary: r#"Calculates the local percentile rank of each cell elevation within a neighborhood window, measuring relative height within local context (0-100%). Values near 0 indicate local elevation minima (valleys); values near 100 indicate local maxima (ridges). Provides position-in-relief metric independent of absolute elevation changes.
+
+Elevation percentile captures local topographic position relative to neighborhood elevations. Useful for landform classification (plateau/ridge/slope/valley/basin), terrain roughness assessment, and identifying locally anomalous elevation. Filter size controls analysis scale: small windows (7×7) detect fine-scale variation; large windows (31×31+) identify broad landforms.
+
+Applications: (1) Landform classification combining elevation percentile + slope, (2) Identifying summit areas (percentile>85), bench areas (percentile 40-60), and valley floors (percentile<20), (3) Terrain roughness mapping (high variance in percentile within window), (4) Multi-scale landform analysis (compute at multiple filter sizes, stack), (5) Combined with other metrics for automated landscape mapping. Significant digits parameter controls elevation binning precision, affecting how finely elevation variation is detected."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -5417,7 +5421,7 @@ impl TerrainAnalysisCore {
         ToolManifest {
             id: "elevation_percentile".to_string(),
             display_name: "Elevation Percentile".to_string(),
-            summary: "Calculates the local percentile rank of each cell elevation within a neighbourhood window.".to_string(),
+            summary: r#"Local elevation percentile rank within neighborhood (0-100). Identifies valleys (low %), ridges (high %), and slopes (mid %). Landform classification metric independent of absolute elevation."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![],
@@ -7197,7 +7201,11 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "ruggedness_index",
             display_name: "Ruggedness Index",
-            summary: "Calculates the terrain ruggedness index (TRI) after Riley et al. (1999).",
+            summary: r#"Calculates Terrain Ruggedness Index (TRI) after Riley et al. (1999), measuring terrain roughness as sum of squared elevation differences in 3×3 neighborhood. High TRI indicates rough, mountainous terrain; low TRI indicates smooth, flat terrain. Scale-independent summary statistic useful for terrain classification and landform mapping.
+
+TRI quantifies local elevation variation magnitude independent of terrain direction or slope magnitude—captures both steep AND variable terrain as "rough." Values range from 0 (perfectly flat) to large values (extremely jagged). Applications: (1) Terrain classification (smooth plains, gentle slopes, rough mountains), (2) Habitat suitability models (species prefer specific roughness ranges), (3) Soil type prediction (rougher terrain = less developed soils), (4) Landform mapping.
+
+Compare to Elevation Percentile (relative position in relief) and Surface Area Ratio (3D surface complexity). TRI emphasizes variability; curvature-based metrics emphasize form. Particularly valuable for multi-scale analysis: compute TRI at multiple moving window sizes to identify characteristic terrain scales. Used extensively in ecological and geomorphological classification."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -7226,7 +7234,7 @@ impl TerrainAnalysisCore {
         ToolManifest {
             id: "ruggedness_index".to_string(),
             display_name: "Ruggedness Index".to_string(),
-            summary: "Calculates the terrain ruggedness index (TRI) after Riley et al. (1999)."
+            summary: r#"Terrain roughness via Riley TRI (sum of squared elevation differences). Scale-independent terrain classification metric: low=smooth plains, high=rough mountains. Ecological and geomorphological landform mapping."#
                 .to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
@@ -7332,7 +7340,11 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "surface_area_ratio",
             display_name: "Surface Area Ratio",
-            summary: "Calculates the ratio of 3D surface area to planimetric area using the Jenness (2004) method.",
+            summary: r#"Calculates ratio of 3D surface area to planimetric (map) area using Jenness (2004) method. SAR > 1.0 indicates rough, undulating terrain (3D area exceeds map area); SAR ≈ 1.0 indicates flat terrain. Dimensionless metric quantifying surface rugosity independent of absolute elevation or slope values.
+
+SAR measures how much the actual curved 3D surface "stretches" beyond its planar projection. Steep slopes, deep valleys, and sharp features all increase SAR. Values typically range 1.0-3.0+ depending on terrain complexity. Particularly useful for terrain classification, ecosystem mapping, and quantifying surface complexity for water flow and erosion models.
+
+Applications: (1) Terrain roughness classification (smooth=near 1.0, rough>2.0), (2) Bedrock exposure prediction (higher SAR = more exposed), (3) Soil depth estimation (lower SAR = thicker soils), (4) Ecosystem habitat heterogeneity, (5) Comparing terrain across regions with different absolute elevations (dimensionless metric enables direct comparison). Jeness method accounts for DEM resolution effects via triangulation, making SAR more robust than simple slope-based roughness."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -7361,7 +7373,7 @@ impl TerrainAnalysisCore {
         ToolManifest {
             id: "surface_area_ratio".to_string(),
             display_name: "Surface Area Ratio".to_string(),
-            summary: "Calculates the ratio of 3D surface area to planimetric area using the Jenness (2004) method.".to_string(),
+            summary: r#"3D surface area / planimetric area ratio (Jenness method). >1.0=rough terrain, ≈1.0=flat. Dimensionless rugosity metric enabling cross-region terrain comparison."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![

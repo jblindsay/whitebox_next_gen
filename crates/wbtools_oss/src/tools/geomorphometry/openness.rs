@@ -53,7 +53,11 @@ impl OpennessCore {
         ToolMetadata {
             id: "openness",
             display_name: "Openness",
-            summary: "Calculates Yokoyama et al. (2002) topographic openness index from an input DEM.",
+            summary: r#"Calculates Yokoyama et al. (2002) topographic openness index—two complementary metrics quantifying terrain exposure to surroundings. Positive openness measures how exposed/exposed a location is (high on peaks/ridges); negative openness measures enclosure/shelteredness (high in valleys/basins). Ranges [−π/2, π/2].
+
+Openness combines all radial directions from target cell, measuring mean slope angle to terrain horizon. Positive openness (convex, exposed): detected on ridges, peaks, elevated plateaus; uses downslope angles. Negative openness (concave, enclosed): detected in valleys, depressions, canyons; uses upslope angles. Two separate outputs enable independent analysis.
+
+Applications: (1) Landform classification (high positive=ridge, low negative=basin, near zero=slope), (2) Visibility and exposure analysis (positive=visible from distance, exposed to wind), (3) Microclimate modeling (positive=sun-exposed, cold; negative=shaded, warm), (4) Landscape characterization. Search distance parameter controls analysis radius (20 cells typical, 30+ for broader patterns). Often combined with curvature for comprehensive terrain characterization."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -72,8 +76,7 @@ impl OpennessCore {
         ToolManifest {
             id: "openness".to_string(),
             display_name: "Openness".to_string(),
-            summary: "Calculates Yokoyama et al. (2002) topographic openness from an input DEM. \
-                      Returns positive (convex) and negative (concave) openness rasters.".to_string(),
+            summary: r#"Yokoyama topographic openness: positive (exposed ridges/peaks) and negative (enclosed valleys) exposure metrics. Landform classification and visibility/microclimate analysis."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![],

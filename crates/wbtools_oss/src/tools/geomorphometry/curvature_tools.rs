@@ -55,12 +55,12 @@ impl CurvatureOp {
 
     fn summary(self) -> &'static str {
         match self {
-            Self::Plan => "Calculates plan (contour) curvature from a DEM.",
-            Self::Profile => "Calculates profile curvature from a DEM.",
-            Self::Tangential => "Calculates tangential curvature from a DEM.",
-            Self::Total => "Calculates total curvature from a DEM.",
-            Self::Mean => "Calculates mean curvature from a DEM.",
-            Self::Gaussian => "Calculates Gaussian curvature from a DEM.",
+            Self::Plan => r#"Calculates plan (contour) curvature measuring convergence/divergence of flow across contour lines. Positive values (convergent) indicate flow concentration toward center (concave); negative values (divergent) indicate flow dispersal away from center (convex). Identifies lateral flow concentration zones (valleys) vs. dispersal zones (ridges). Essential for predicting soil moisture distribution and landslide susceptibility."#,
+            Self::Profile => r#"Calculates profile (downslope) curvature measuring flow acceleration/deceleration along slope direction. Positive values (concave) indicate flow acceleration zones (erosional); negative values (convex) indicate flow deceleration zones (depositional). Reveals slope form: concave (valley bottoms, erosion), convex (ridges, material removal), linear (transitional)."#,
+            Self::Tangential => r#"Calculates tangential curvature (E-W direction component), similar to plan curvature but directional. Used for comprehensive curvature characterization capturing lateral flow divergence perpendicular to slope direction. Often combined with profile for full 3D curvature understanding."#,
+            Self::Total => r#"Calculates total curvature (quadratic mean of principal curvatures). Scalar metric independent of direction. High values indicate highly curved terrain (peaks, pits); low values indicate planar terrain. Useful as dimensionless roughness metric for terrain classification and anomaly detection."#,
+            Self::Mean => r#"Calculates mean curvature (average of principal curvatures). Related to total curvature but emphasizes surface smoothness. Values close to 0 indicate smooth terrain; high values indicate abrupt curvature changes. Useful for surface characterization and breakline detection."#,
+            Self::Gaussian => r#"Calculates Gaussian (intrinsic) curvature (product of principal curvatures). Indicates local surface topology: positive (bowl/dome), negative (saddle), zero (cylindrical). Classifies terrain into landform categories: convex features (ridges), concave features (valleys), saddle features (passes/gaps). Used in advanced landform classification."#,
         }
     }
 

@@ -397,7 +397,11 @@ impl TerrainCore {
         ToolMetadata {
             id: "slope",
             display_name: "Slope",
-            summary: "Calculates slope gradient from a DEM.",
+            summary: r#"Computes slope gradient from digital elevation model (DEM) using Zevenbergen-Thorne method over 3×3 moving window. Outputs in degrees (0-90), radians (0-π/2), or percent-slope (0-∞). Essential first-step terrain characterization tool used in hydrology, geomorphology, solar radiation modeling, and erosion assessment. Steep slopes (>30°) indicate mountains/ridges; gentle slopes (<5°) indicate plains/valleys.
+
+Slope is the most fundamental geomorphometric parameter, essential for downstream terrain analysis, landslide susceptibility mapping, flow path routing, and aspect-slope correlations. Output directly feeds into curvature calculations, flow direction algorithms, hillshading, and visibility analysis. Z-factor parameter allows compensation for vertical exaggeration or coordinate system differences (e.g., converting projected-meter slope to geographic-degree slope).
+
+Common workflow: (1) Slope magnitude for terrain classification, (2) Combined with aspect for sunlight exposure analysis, (3) Input to curvature for concavity/convexity mapping, (4) Thresholded for steep-slope hazard mapping. Compare to Tangential Curvature (flow-divergence indicator) and Profile Curvature (acceleration/deceleration). Percent-slope output useful for comparison to hydraulic gradient in hydrologic analysis."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -418,7 +422,7 @@ impl TerrainCore {
         ToolManifest {
             id: "slope".to_string(),
             display_name: "Slope".to_string(),
-            summary: "Calculates slope gradient from a DEM.".to_string(),
+            summary: r#"Zevenbergen-Thorne slope gradient (degrees/radians/percent). Fundamental geomorphometric metric; downstream input to curvature, flow direction, shading, visibility."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -499,7 +503,11 @@ impl TerrainCore {
         ToolMetadata {
             id: "aspect",
             display_name: "Aspect",
-            summary: "Calculates slope aspect in degrees clockwise from north.",
+            summary: r#"Calculates slope aspect (direction of maximum slope) in degrees clockwise from north (0-360). Output ranges: 0° (north-facing), 90° (east-facing), 180° (south-facing), 270° (west-facing). Computed as the direction of the downslope gradient vector using Zevenbergen-Thorne method over 3×3 window.
+
+Aspect is critical for solar radiation modeling, predicting vegetation patterns (sunlight exposure), microclimate assessment, snow melt timing, and landslide susceptibility in mountainous terrain. North-facing slopes receive less solar radiation (cooler, wetter); south-facing slopes receive more (hotter, drier). Combined with slope magnitude for comprehensive exposure characterization.
+
+Applications: (1) Solar potential analysis, (2) Ecological habitat classification (aspect-dependent vegetation), (3) Avalanche forecasting (slope + aspect + snow), (4) Vineyard yield prediction (aspect affects ripening), (5) Erosion models (aspect affects water/wind), (6) Combined with slope for terrain classification. Note: Aspect undefined on flat terrain (slope ≈ 0); such cells should be masked before interpretation."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -514,7 +522,7 @@ impl TerrainCore {
         ToolManifest {
             id: "aspect".to_string(),
             display_name: "Aspect".to_string(),
-            summary: "Calculates slope aspect in degrees clockwise from north.".to_string(),
+            summary: r#"Direction of maximum slope (0°=N, 90°=E, 180°=S, 270°=W). Critical for solar radiation, vegetation patterns, microclimate, and exposure analysis."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![],
@@ -572,7 +580,11 @@ impl TerrainCore {
         ToolMetadata {
             id: "convergence_index",
             display_name: "Convergence Index",
-            summary: "Calculates the convergence/divergence index from local neighbour aspect alignment.",
+            summary: r#"Calculates convergence (flow concentration) / divergence (flow dispersal) index from local neighbor aspect alignment. Positive values (convergent) indicate flow concentration toward valley floor; negative values (divergent) indicate flow dispersal on ridges. Ranges typically -1 (highly divergent) to +1 (highly convergent). Identifies concentrated vs. dispersed flow zones.
+
+Convergence Index measures how aligned neighboring cell aspects are—high alignment indicates concave (convergent) terrain; low/misaligned indicates convex (divergent) terrain. Particularly useful for identifying drainage lines, ridge crests, and transition zones without computing full flow routing. Computationally efficient alternative to complex flow algorithms.
+
+Applications: (1) Valley/ridge identification without flow direction computation, (2) Landslide susceptibility (convergent zones are wet, unstable), (3) Vegetation pattern mapping (convergent zones wetter), (4) Hydrogeomorphic unit mapping (convergent = valleys; divergent = ridges), (5) Erosion modeling (concentrated flow indicates higher erosion). Often combined with slope magnitude: steep + convergent = gully zones; gentle + divergent = knoll zones."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -591,7 +603,7 @@ impl TerrainCore {
         ToolManifest {
             id: "convergence_index".to_string(),
             display_name: "Convergence Index".to_string(),
-            summary: "Calculates the convergence/divergence index from local neighbour aspect alignment."
+            summary: r#"Flow convergence/divergence from local aspect alignment. Identifies valleys (convergent) and ridges (divergent) without full flow routing. Efficient alternative to flow direction algorithms."#
                 .to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
@@ -722,7 +734,11 @@ impl TerrainCore {
         ToolMetadata {
             id: "hillshade",
             display_name: "Hillshade",
-            summary: "Produces shaded-relief from a DEM.",
+            summary: r#"Produces shaded relief (hillshade) visualization from DEM using directional illumination model. Illumination from specified azimuth (0-360°) and altitude (0-90°) angles creates 3D appearance showing terrain relief. Output is grayscale 0-255 image where slopes facing light appear bright, slopes facing away appear dark.
+
+Hillshade is fundamental terrain visualization technique for qualitative relief display and analysis. Single light source variant (this tool) is fast, simple, and suitable for quick DEM inspection, map production, and terrain characterization. Azimuth parameter controls light direction (0°=North, 90°=East, 180°=South, 270°=West); altitude controls light angle above horizon (90°=overhead, 45°=typical, 0°=horizon grazing). Z-factor exaggerates relief for better visualization on gentle terrain.
+
+Applications: (1) DEM quality assessment (visual inspection for artifacts), (2) Terrain visualization for reports/publications, (3) Overlay on satellite/map data for 3D context, (4) Manual landform interpretation, (5) Rapid terrain characterization. For enhanced feature visibility with reduced shadow artifacts, use Multidirectional Hillshade (combines multiple light sources)."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![],
@@ -733,7 +749,7 @@ impl TerrainCore {
         ToolManifest {
             id: "hillshade".to_string(),
             display_name: "Hillshade".to_string(),
-            summary: "Produces shaded-relief from a DEM.".to_string(),
+            summary: r#"Single-source directional hillshade visualization (grayscale 0-255). Azimuth & altitude parameters control light direction. Fast terrain visualization for DEM inspection and map display."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![],
@@ -752,7 +768,11 @@ impl TerrainCore {
         ToolMetadata {
             id: "multidirectional_hillshade",
             display_name: "Multidirectional Hillshade",
-            summary: "Produces weighted multi-azimuth shaded-relief.",
+            summary: r#"Produces weighted multi-directional shaded relief combining illumination from multiple azimuth angles (typically 8 directions) to enhance feature visibility. Reduces shadow artifacts present in single-light hillshade by averaging contributions from multiple light sources. Output is grayscale 0-255 image where all terrain features are similarly enhanced regardless of light direction.
+
+Multidirectional hillshade overcomes single-light shadowing limitations: features perpendicular to single light source direction become nearly invisible. By combining multiple light sources, all features become visible, reducing perceptual bias toward specific terrain aspects. Particularly effective for complex terrain with ridges and valleys in varied directions. Slightly slower than single-light hillshade but produces more balanced relief visualization.
+
+Applications: (1) Enhanced DEM visualization (better than single-light for complex terrain), (2) Terrain visualization for publications/presentations (more professional appearance), (3) Improved manual landform interpretation (no directional shadowing bias), (4) Combined with satellite/color data (produces superior multispectral overlays), (5) Quality assessment of DEMs (artifacts more visible under multi-directional lighting). Preferred over single Hillshade for final visualization products and detailed terrain analysis."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![],
@@ -763,7 +783,7 @@ impl TerrainCore {
         ToolManifest {
             id: "multidirectional_hillshade".to_string(),
             display_name: "Multidirectional Hillshade".to_string(),
-            summary: "Produces weighted multi-azimuth shaded-relief.".to_string(),
+            summary: r#"Multi-directional hillshade (8+ light sources) eliminating single-light shadowing artifacts. Balanced feature visibility for complex terrain; preferred for publications and detailed analysis."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![],

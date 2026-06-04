@@ -8363,7 +8363,11 @@ impl Tool for HexagonalGridFromRasterBaseTool {
         ToolMetadata {
             id: "hexagonal_grid_from_raster_base",
             display_name: "Hexagonal Grid From Raster Base",
-            summary: "Creates a hexagonal polygon grid covering a raster extent.",
+            summary: r#"Creates a hexagonal polygon grid covering a raster layer extent, with configurable width and orientation. Hexagon-based grids provide equal-area tessellation superior to rectangular grids for heatmaps and aggregation.
+
+Hexagonal grids overcome rectangular grid biases (edge artifacts, unequal neighbors). Raster-extent control ensures seamless integration with existing raster data and coordinate systems.
+
+Applications: (1) Heatmap generation—unbiased density visualization, (2) Raster aggregation—summarizing raster data by hex bin, (3) Spatial sampling—selecting hex-bin representative points, (4) Statistical grids—computing zonal statistics, (5) Map standardization—applying consistent bin structure across datasets."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -8386,7 +8390,7 @@ impl Tool for HexagonalGridFromRasterBaseTool {
         ToolManifest {
             id: "hexagonal_grid_from_raster_base".to_string(),
             display_name: "Hexagonal Grid From Raster Base".to_string(),
-            summary: "Creates a hexagonal polygon grid covering a raster extent.".to_string(),
+            summary: r#"Creates a hexagonal polygon grid with configurable width and orientation, providing unbiased tessellation for heatmaps and aggregation."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -8486,7 +8490,11 @@ impl Tool for HexagonalGridFromVectorBaseTool {
         ToolMetadata {
             id: "hexagonal_grid_from_vector_base",
             display_name: "Hexagonal Grid From Vector Base",
-            summary: "Creates a hexagonal polygon grid covering a vector-layer bounding extent.",
+            summary: r#"Creates a hexagonal polygon grid covering a vector layer bounding extent, with configurable width and orientation. Hexagon grids provide equal-area tessellation superior to rectangular grids for spatial analysis and visualization.
+
+Vector-extent control ensures grid aligns with feature boundaries and coordinate systems. Hexagons eliminate grid bias artifacts inherent to rectangular grids and provide uniform neighbor relationships.
+
+Applications: (1) Spatial aggregation—summarizing vector features into hex bins, (2) Density heatmaps—unbiased visualization of point/polygon density, (3) Reporting grids—standardized spatial units for analysis, (4) Overlay base—reference grid for multiple layer analysis, (5) Statistical zones—equal-area units for zonal statistics."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -8509,7 +8517,7 @@ impl Tool for HexagonalGridFromVectorBaseTool {
         ToolManifest {
             id: "hexagonal_grid_from_vector_base".to_string(),
             display_name: "Hexagonal Grid From Vector Base".to_string(),
-            summary: "Creates a hexagonal polygon grid covering a vector-layer bounding extent."
+            summary: r#"Creates a hexagonal polygon grid aligned to vector layer extent, enabling unbiased spatial aggregation and density visualization."#
                 .to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
@@ -10135,7 +10143,11 @@ impl Tool for ExtendVectorLinesTool {
         ToolMetadata {
             id: "extend_vector_lines",
             display_name: "Extend Vector Lines",
-            summary: "Extends polyline endpoints by a specified distance at the start, end, or both.",
+            summary: r#"Extends polyline endpoints by a specified distance at the start, end, or both directions. Line extension maintains original line direction and follows the endpoint tangent for proper geometric continuation.
+
+Line extension is useful for connecting nearly-touching features, extending utilities to boundaries, and ensuring topological coherence. Many GIS workflows require snapping extended lines to adjacent features for proper topology building.
+
+Applications: (1) Topology cleanup—connecting slightly-separated lines, (2) Boundary alignment—extending utilities to administrative boundaries, (3) Network completion—finishing truncated network segments, (4) Data preparation—ensuring connections for routing, (5) Feature densification—improving coverage for analysis."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -10412,7 +10424,7 @@ impl Tool for SmoothVectorsTool {
         ToolManifest {
             id: "smooth_vectors".to_string(),
             display_name: "Smooth Vectors".to_string(),
-            summary: "Smooths polyline or polygon vectors using a moving-average filter."
+            summary: r#"Smooths polyline or polygon geometries using moving-average filtering to reduce digitization noise and GPS track jitter."#
                 .to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
@@ -11083,7 +11095,11 @@ impl Tool for VoronoiDiagramTool {
         ToolMetadata {
             id: "voronoi_diagram",
             display_name: "Voronoi Diagram",
-            summary: "Creates Voronoi (Thiessen) polygons from input point locations.",
+            summary: r#"Generates Voronoi (Thiessen) polygons from point locations, partitioning space such that each polygon contains all areas closer to its seeding point than to any other seed. Voronoi diagrams form fundamental structures in computational geometry.
+
+Voronoi diagrams solve proximity analysis and enable region-based queries. Applications range from facility service areas (each polygon represents territory served by one facility) to spatial interpolation (nearest-neighbor classification).
+
+Applications: (1) Facility coverage—defining service areas for hospitals/stations, (2) Nearest-neighbor classification—assigning points to nearest facility, (3) Spatial interpolation—Voronoi-based nearest-neighbor estimation, (4) Market analysis—territory assignment in sales/logistics, (5) Biodiversity assessment—modeling habitat influence regions."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -13726,7 +13742,7 @@ Applications: (1) Thematic mapping—placing category labels within polygons, (2
         ToolManifest {
             id: "centroid_vector".to_string(),
             display_name: "Centroid Vector".to_string(),
-            summary: r#"Creates point features representing the geographic center (centroid) of each input geometry."#.to_string(),
+            summary: r#"Computes the geographic center (mean coordinate of mass) for each vector feature, producing a point layer for label placement, clustering, and spatial analysis."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -13922,7 +13938,7 @@ Applications: (1) Label placement—ensuring text appears within feature bounds,
         ToolManifest {
             id: "representative_point_vector".to_string(),
             display_name: "Representative Point Vector".to_string(),
-            summary: r#"Generates a point guaranteed to lie within or on each geometry (interior representative point)."#
+            summary: r#"Generates an interior point guaranteed to lie within or on each geometry using pole-of-inaccessibility, ideal for label placement in concave polygons."#
                 .to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
@@ -17144,7 +17160,11 @@ impl Tool for PolygonizeTool {
         ToolMetadata {
             id: "polygonize",
             display_name: "Polygonize",
-            summary: "Creates polygons from input linework, including intersecting/open segments where enclosed faces can be formed.",
+            summary: r#"Constructs polygon geometries from intersecting line segments by identifying and assembling closed rings. Polygonization automatically detects where line endpoints meet and forms valid polygon boundaries, handling both simple rings and complex planar subdivisions.
+
+Polygonization converts line-based data into polygon form required for area analysis and geometric calculations. It solves the critical GIS workflow of converting line surveys into polygon zones.
+
+Applications: (1) Boundary conversion—converting sketched lines to polygon zones, (2) Administrative boundaries—assembling survey lines into jurisdictional polygons, (3) Land parcels—generating parcels from property boundary lines, (4) Network analysis—creating zones from road networks, (5) Topological analysis—identifying enclosed regions in line-based data."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -20967,8 +20987,11 @@ impl Tool for ConstructVectorTinTool {
         ToolMetadata {
             id: "construct_vector_tin",
             display_name: "Construct Vector TIN",
-            summary:
-                "Constructs a triangular irregular network (TIN) from an input point set using Delaunay triangulation.",
+            summary: r#"Creates a triangular irregular network (TIN) from input point coordinates using Delaunay triangulation, which maximizes the minimum angle in triangles and produces optimal irregular grids. Each triangle represents a local planar surface from three points.
+
+TINs are foundational for DEM generation and terrain analysis. TINs preserve sample locations and adapt resolution to data density—sparse regions have large triangles, dense regions have small triangles. This adaptive resolution provides accurate representation without artificial grid artifacts.
+
+Applications: (1) Terrain modeling—creating 3D surfaces from LiDAR/survey points, (2) DEM generation—converting point clouds to continuous elevation models, (3) Slope/aspect analysis—computing terrain derivatives, (4) Hydrologic flow—determining water paths down surfaces, (5) Volume calculations—computing cut/fill quantities from TIN-based surfaces."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -21372,8 +21395,11 @@ impl Tool for VectorHexBinningTool {
         ToolMetadata {
             id: "vector_hex_binning",
             display_name: "Vector Hex Binning",
-            summary:
-                "Aggregates point features into hexagonal bins, counting points per hex cell.",
+            summary: r#"Aggregates point features into hexagonal bins, counting points per hex cell and producing polygon statistics. Hexagonal binning is superior to rectangular grids for visualization and analysis because hexagons tile evenly without edge artifacts.
+
+Hexagonal binning enables rapid heatmap generation, density visualization, and spatial aggregation without statistical bias. Unlike rectangular grids, hexagons provide equal-area cells with uniform neighbor relationships. This tool enables exploration of spatial patterns at selected resolutions.
+
+Applications: (1) Heatmaps—visualizing point density with publication-ready aesthetics, (2) Spatial clustering—identifying concentration zones without threshold bias, (3) Statistical aggregation—computing statistics by hex bin, (4) Population mapping—displaying demographics at regional scale, (5) Activity hotspots—showing concentrated areas of occurrence."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -23793,7 +23819,11 @@ impl Tool for ReprojectVectorTool {
         ToolMetadata {
             id: "reproject_vector",
             display_name: "Reproject Vector",
-            summary: "Reprojects an input vector layer to a destination EPSG code.",
+            summary: r#"Reprojects vector geometry coordinates from the source CRS to a destination EPSG projection, updating all coordinates while preserving topology and feature attributes. Supports all EPSG-registered projections.
+
+Reprojection enables integration of datasets from different sources and coordinate systems. Proper reprojection maintains geometric accuracy, preserves distance/area relationships (in equal-area projections), and enables seamless overlay analysis.
+
+Applications: (1) Multi-source integration—combining datasets in different CRS, (2) Regional analysis—standardizing to organizational projection, (3) Web mapping—converting to Web Mercator (EPSG:3857), (4) Accuracy improvement—using locally-optimized projections, (5) Data sharing—standardizing CRS for stakeholders."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -23814,7 +23844,7 @@ impl Tool for ReprojectVectorTool {
         ToolManifest {
             id: "reproject_vector".to_string(),
             display_name: "Reproject Vector".to_string(),
-            summary: "Reprojects an input vector layer to a destination EPSG code.".to_string(),
+            summary: r#"Reprojects vector geometries to destination EPSG projection while preserving topology and attributes, enabling multi-source integration."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -23900,7 +23930,7 @@ Applications: (1) Feature classification—filtering polygons by area or perimet
         ToolManifest {
             id: "add_geometry_attributes".to_string(),
             display_name: "Add Geometry Attributes".to_string(),
-            summary: r#"Adds calculated fields for area, length, perimeter, and/or centroid coordinates (supports planar and geodesic modes)."#.to_string(),
+            summary: r#"Automatically calculates geometric properties (area, length, perimeter, centroid) and adds them as new fields, supporting both planar and geodesic measurements."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -24115,7 +24145,7 @@ Applications: (1) Multi-scale visualization—generating coarser versions for sm
         ToolManifest {
             id: "simplify_features".to_string(),
             display_name: "Simplify Features".to_string(),
-            summary: r#"Reduces geometry complexity by removing vertices below a Douglas-Peucker tolerance threshold."#.to_string(),
+            summary: r#"Reduces geometry complexity using Douglas-Peucker algorithm to minimize file size, remove GPS noise, and optimize rendering performance while preserving shape."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -24526,7 +24556,11 @@ impl Tool for FieldCalculatorTool {
         ToolMetadata {
             id: "field_calculator",
             display_name: "Field Calculator",
-            summary: "Calculates a field value from an expression using feature attributes and geometry variables; supports SQL-style CASE, CAST, null checks, and UPDATE ... SET ... [WHERE ...] wrappers.",
+            summary: r#"Calculates field values from SQL-style expressions using feature attributes and geometry variables. Expressions support CASE statements, type casting, null checks, and UPDATE ... SET ... WHERE wrappers for flexible, powerful attribute manipulation.
+
+Field Calculator is the foundation of attribute-based analysis and data preparation. Rather than exporting and using spreadsheet software, in-situ field calculation maintains data integrity, enables reproducible workflows, and scales efficiently to large datasets.
+
+Applications: (1) Feature classification—assigning categories based on attribute values, (2) Derived metrics—computing area/perimeter ratios, index values, (3) Data standardization—normalizing values across features, (4) Conditional assignments—spatially-aware rules (e.g., land-use based on boundaries), (5) Bulk updates—efficient mass attribute changes."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -25255,7 +25289,11 @@ impl Tool for ConcaveHullTool {
         ToolMetadata {
             id: "concave_hull",
             display_name: "Concave Hull",
-            summary: "Creates concave hull polygons around input feature coordinates using the concaveman algorithm.",
+            summary: r#"Generates concave hull polygons that tightly wrap input feature coordinates using the concaveman algorithm, which produces a tighter hull than convex hulls by adjusting concavity levels. The concavity ratio controls how deeply the hull indents (0=very concave, higher values=closer to convex).
+
+Concave hulls provide accurate boundary approximation for irregularly-shaped feature clusters, preserving local geometry while excluding isolated outliers. They are superior to convex hulls for environmental delineation, facility boundaries, and coverage analysis.
+
+Applications: (1) Environmental delineation—accurate species/ecosystem range mapping, (2) Urban boundaries—excluding isolated sprawl, (3) Facility coverage—representing actual service areas, (4) Hotspot identification—delineating concentration zones, (5) Quality control—detecting anomalous scattered points."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -25419,7 +25457,11 @@ impl Tool for RandomPointsInPolygonTool {
         ToolMetadata {
             id: "random_points_in_polygon",
             display_name: "Random Points In Polygon",
-            summary: "Generates random points uniformly within input polygon geometries.",
+            summary: r#"Creates uniformly-distributed random points within polygon boundaries using rejection sampling, with optional seed for reproducibility. Produces valid sample points strictly contained within polygon interiors.
+
+Random point generation is essential for statistical sampling, simulation modeling, and unbiased spatial analysis. Random sampling within polygon constraints eliminates selection bias and provides statistically defensible samples.
+
+Applications: (1) Ground-truth sampling—selecting unbiased survey locations, (2) Agent-based modeling—initializing agents in spatial domains, (3) Monte Carlo simulation—generating random inputs, (4) Species distribution—creating background points for MaxEnt models, (5) Environmental monitoring—designing unbiased sampling networks."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -25585,7 +25627,11 @@ impl Tool for DensifyFeaturesTool {
         ToolMetadata {
             id: "densify_features",
             display_name: "Densify Features",
-            summary: "Adds vertices along line and polygon boundaries at a specified spacing.",
+            summary: r#"Increases geometric resolution by inserting vertices at regular spacing intervals along line and polygon edges. Densification prepares coarse geometries for curved surface interpolation and ensures minimum vertex spacing for smooth rendering.
+
+Densification is critical for map projections and geodetic calculations. Sparse geometries with distant vertices accumulate projection errors; densified geometries distribute errors across more segments and maintain accuracy.
+
+Applications: (1) Coordinate transformation—ensuring sufficient vertices for projection accuracy, (2) Smooth rendering—adding detail for cartographic display, (3) Surface interpolation—densifying geometry for 3D modeling, (4) Geometric calculations—enabling precise distance/area computations, (5) Data standardization—conforming to standard vertex spacing."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -25751,7 +25797,7 @@ Applications: (1) Environmental monitoring—water quality sampling points along
         ToolManifest {
             id: "points_along_lines".to_string(),
             display_name: "Points Along Lines".to_string(),
-            summary: r#"Creates point features at regular spacing intervals along input line geometries."#.to_string(),
+            summary: r#"Generates regular-spaced point features along input polylines for infrastructure monitoring, environmental sampling, and spatial analysis."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -29026,7 +29072,11 @@ impl Tool for RenameFieldTool {
         ToolMetadata {
             id: "rename_field",
             display_name: "Rename Field",
-            summary: "Renames an attribute field in a vector layer.",
+            summary: r#"Renames an attribute field in a vector layer while preserving data integrity and all feature records. Field renaming enables schema standardization, data harmonization, and preparation for downstream GIS workflows.
+
+While seemingly simple, field renaming is essential for data integration when combining datasets with inconsistent naming conventions. Batch field renaming is more efficient than manual editing and reduces errors.
+
+Applications: (1) Data harmonization—standardizing field names across datasets, (2) Schema compliance—conforming to organizational standards, (3) Integration preparation—aligning naming before merge operations, (4) Documentation—making field names more descriptive, (5) Legacy data conversion—cleaning outdated field names."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -29122,7 +29172,11 @@ impl Tool for DeleteFieldTool {
         ToolMetadata {
             id: "delete_field",
             display_name: "Delete Field",
-            summary: "Deletes one or more attribute fields from a vector layer.",
+            summary: r#"Removes one or more attribute fields from a vector layer, reducing schema complexity and file size. Supports comma-delimited field name lists for bulk deletion and preserves all feature geometries.
+
+Field deletion is critical for data cleaning, privacy (removing sensitive fields), and file optimization. Removing unnecessary fields reduces storage, improves performance, and clarifies remaining attributes for analysis.
+
+Applications: (1) Privacy compliance—removing sensitive personal data, (2) Schema cleanup—eliminating redundant/unused fields, (3) File optimization—reducing dataset size for distribution, (4) Data harmonization—preparing for joins by removing conflicts, (5) Documentation clarity—maintaining only relevant attributes."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -29342,7 +29396,11 @@ impl Tool for LinePolygonClipTool {
         ToolMetadata {
             id: "line_polygon_clip",
             display_name: "Line Polygon Clip",
-            summary: "Clips line features to polygon interiors and outputs clipped line segments.",
+            summary: r#"Clips line features to polygon interior boundaries, output clipped line segments that fall entirely within clip polygon regions. Supports multiple overlay modes (inside, outside, split at boundaries).
+
+Line-polygon clipping is essential for infrastructure analysis, network subsetting, and spatial data integration. Unlike simple intersections that only return crossing points, true line clipping returns continuous line segments properly trimmed to polygon bounds.
+
+Applications: (1) Infrastructure subsetting—extracting utilities within administrative boundaries, (2) Network clipping—selecting roads/streams in regions of interest, (3) Land-use specific analysis—analyzing features within zoned areas, (4) Data integration—aligning line and polygon datasets, (5) Report generation—creating focused maps for jurisdictional reports."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![

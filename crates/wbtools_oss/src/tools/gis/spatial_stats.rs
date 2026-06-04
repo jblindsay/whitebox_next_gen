@@ -3253,7 +3253,11 @@ impl Tool for LocalMoransILisaRasterTool {
         ToolMetadata {
             id: "local_morans_i_lisa_raster",
             display_name: "Local Moran's I (LISA) - Raster Output",
-            summary: "Computes Local Moran's I (LISA) and outputs a classification raster surface.",
+            summary: r#"Computes Local Moran's I (LISA) cluster analysis from point observations and outputs a categorical raster classifying each grid cell. Vector-based LISA identifies clusters at feature locations; this raster variant interpolates cluster classifications to grid, enabling raster-based spatial analysis and seamless integration with raster workflows.
+
+Output raster uses integer codes: 0=not significant, 1=HH (high-value cluster), 2=LL (low-value cluster), 3=HL (high outlier), 4=LH (low outlier). Spatial context is crucial—grid cell classification depends on nearby point values and their neighborhoods, not cell location itself. Cell size controls interpolation resolution; larger cells average more points; smaller cells provide finer spatial detail but may create isolated classifications.
+
+Applications: Disease/crime hotspot mapping (combine with epidemiological/crime data), poverty concentration mapping, environmental justice analysis. Use with satellite imagery or environmental grids to identify where cluster patterns concentrate. Raster output integrates naturally with raster analytics (map algebra, zonal statistics). Compare vector LISA for precise feature-level analysis vs. raster variant for grid-based workflow integration."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3287,7 +3291,7 @@ impl Tool for LocalMoransILisaRasterTool {
         ToolManifest {
             id: "local_morans_i_lisa_raster".to_string(),
             display_name: "Local Moran's I (LISA) - Raster Output".to_string(),
-            summary: "Computes Local Moran's I (LISA) and outputs a classification raster surface.".to_string(),
+            summary: r#"Computes LISA cluster analysis from points and outputs categorical raster (HH/LL/HL/LH/NS). Enables raster-based integration."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3452,7 +3456,11 @@ impl Tool for GetisOrdGiStarRasterTool {
         ToolMetadata {
             id: "getis_ord_gi_star_raster",
             display_name: "Getis-Ord Gi* - Raster Output",
-            summary: "Computes Getis-Ord Gi* and outputs a hotspot/coldspot classification raster.",
+            summary: r#"Computes Getis-Ord Gi* from point observations and outputs a categorical raster classifying each grid cell as hotspot, coldspot, or non-significant. Vector-based Gi* identifies local concentration of high/low values; this raster variant spatializes classifications to grid, enabling raster-based hotspot mapping and integration with raster analysis workflows.
+
+Output raster uses integer codes: -1=coldspot (significant low-value concentration), 0=not significant, 1=hotspot (significant high-value concentration). More interpretable than LISA for practitioners—positive values directly indicate high concentration areas. Grid cell classification depends on nearby point values interpolated within that cell's neighborhood.
+
+Applications: Crime hotspot mapping, retail sales concentration, pollution zone identification, poverty/wealth mapping. Raster output integrates naturally with management prioritization (e.g., allocate resources to hotspot zones), overlay analysis with other grids, and raster classification workflows. Compare z-scores (continuous) from vector Gi* for gradient analysis vs. categorical raster for management thresholds. Adjust alpha parameter to control significance threshold; smaller alpha→stricter hotspot/coldspot definition."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3486,7 +3494,7 @@ impl Tool for GetisOrdGiStarRasterTool {
         ToolManifest {
             id: "getis_ord_gi_star_raster".to_string(),
             display_name: "Getis-Ord Gi* - Raster Output".to_string(),
-            summary: "Computes Getis-Ord Gi* and outputs a hotspot/coldspot classification raster.".to_string(),
+            summary: r#"Computes Gi* hotspot/coldspot classifications from points and outputs raster (-1=cold, 0=NS, 1=hot). For hotspot-based analysis.\"#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![

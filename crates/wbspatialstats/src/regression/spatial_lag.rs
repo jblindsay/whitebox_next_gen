@@ -4,6 +4,7 @@
 // Model: y = ρWy + Xβ + ε
 //
 // Estimation strategy: GMM with IV, then FGLS for efficiency
+// Parallelized with rayon for spatial lag computation and parameter updates
 
 use super::{
     RegressionResult, SpatialLagResult, RegressionResultBase, EffectDecomposition,
@@ -11,6 +12,7 @@ use super::{
 };
 use crate::weights::SpatialWeightsGraph;
 use nalgebra::{DMatrix, DVector};
+use rayon::prelude::*;
 
 /// Spatial lag regression model
 pub struct SpatialLagRegression;
@@ -156,30 +158,41 @@ impl SpatialLagRegression {
     }
 }
 
-/// Compute Wy (spatial lag of y)
+/// Compute Wy (spatial lag of y) - parallelized over features
 fn compute_spatial_lag(y: &[f64], weights: &SpatialWeightsGraph) -> Vec<f64> {
-    y.iter()
-        .enumerate()
-        .map(|(i, _)| {
+    (0..y.len())
+        .into_par_iter()
+        .map(|i| {
             weights.neighbors[i]
                 .iter()
                 .map(|(j, w)| w * y[*j])
-                .sum()
+                .sum::<f64>()
         })
         .collect()
 }
 
-/// Compute spatial lag of X matrix: WX
+/// Compute spatial lag of X matrix: WX - parallelized over rows
 fn compute_spatial_lag_matrix(x: &DMatrix<f64>, weights: &SpatialWeightsGraph) -> RegressionResult<DMatrix<f64>> {
     let n = x.nrows();
     let k = x.ncols();
-    let mut wx = DMatrix::zeros(n, k);
 
-    for i in 0..n {
-        for (j, w) in &weights.neighbors[i] {
-            for p in 0..k {
-                wx[(i, p)] += w * x[(*j, p)];
+    let wx_rows: Vec<Vec<f64>> = (0..n)
+        .into_par_iter()
+        .map(|i| {
+            let mut row = vec![0.0; k];
+            for (j, w) in &weights.neighbors[i] {
+                for p in 0..k {
+                    row[p] += w * x[(*j, p)];
+                }
             }
+            row
+        })
+        .collect();
+
+    let mut wx = DMatrix::zeros(n, k);
+    for (i, row) in wx_rows.into_iter().enumerate() {
+        for (p, &val) in row.iter().enumerate() {
+            wx[(i, p)] = val;
         }
     }
 
@@ -314,7 +327,7 @@ fn estimate_spatial_parameter_se(
     }
 }
 
-/// Compute effect decomposition from spatial lag model
+/// Compute effect decomposition from spatial lag model (parallelized)
 fn compute_effect_decomposition(
     beta: &DVector<f64>,
     rho: f64,
@@ -328,34 +341,44 @@ fn compute_effect_decomposition(
 
     // Effect computation relies on W matrix structure
     // For each parameter j: Direct effect ≈ β_j, Indirect ≈ β_j * ρ * avg(W effect)
-    let direct_effects = beta.as_slice()[1..].to_vec(); // Skip intercept
-    
-    // Rough approximation: indirect ≈ beta * rho * (1/n)
-    let indirect_effects: Vec<f64> = beta.as_slice()[1..]
-        .iter()
-        .map(|b| b * rho / n_f)
+    let beta_slice = &beta.as_slice()[1..];
+    let ses_slice = &ses_beta[1..];
+
+    // Parallelize effect calculations
+    let results: Vec<_> = (0..beta_slice.len())
+        .into_par_iter()
+        .map(|j| {
+            let b = beta_slice[j];
+            let se_b = ses_slice[j];
+            
+            let direct = b;
+            let indirect = b * rho / n_f;
+            let total = direct + indirect;
+            
+            let d_se = se_b;
+            let i_se = (se_b.powi(2) * rho.powi(2) + beta_slice[0] * se_rho).sqrt() / n_f;
+            let t_se = (d_se.powi(2) + i_se.powi(2)).sqrt();
+            
+            (direct, indirect, total, d_se, i_se, t_se)
+        })
         .collect();
 
-    let total_effects: Vec<f64> = direct_effects
-        .iter()
-        .zip(indirect_effects.iter())
-        .map(|(d, i)| d + i)
-        .collect();
+    // Unpack results
+    let (direct, indirect, total, d_se, i_se, t_se): (Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>) =
+        results.into_iter().fold(
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()),
+            |(mut d, mut i, mut t, mut ds, mut is, mut ts), (xd, xi, xt, xds, xis, xts)| {
+                d.push(xd);
+                i.push(xi);
+                t.push(xt);
+                ds.push(xds);
+                is.push(xis);
+                ts.push(xts);
+                (d, i, t, ds, is, ts)
+            }
+        );
 
-    // Standard errors via delta method
-    let direct_se = ses_beta[1..].to_vec();
-    let indirect_se: Vec<f64> = ses_beta[1..]
-        .iter()
-        .map(|se| (se.powi(2) * rho.powi(2) + beta[1] * se_rho).sqrt() / n_f)
-        .collect();
-
-    let total_se: Vec<f64> = direct_se
-        .iter()
-        .zip(indirect_se.iter())
-        .map(|(d, i)| (d.powi(2) + i.powi(2)).sqrt())
-        .collect();
-
-    EffectDecomposition::new(direct_effects, indirect_effects, total_effects, direct_se, indirect_se, total_se)
+    EffectDecomposition::new(direct, indirect, total, d_se, i_se, t_se)
 }
 
 /// Compute fitted values including spatial lag term

@@ -616,7 +616,7 @@ impl Tool for GlobalMoransITool {
         ToolMetadata {
             id: "global_morans_i",
             display_name: "Global Moran's I",
-            summary: "Computes Global Moran's I with diagnostics and asymptotic significance.",
+            summary: "Computes Global Moran's I with diagnostics and asymptotic or permutation significance testing.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -626,11 +626,14 @@ impl Tool for GlobalMoransITool {
                 ToolParamSpec { name: "k", description: "k value for k_nearest mode.", required: false },
                 ToolParamSpec { name: "distance", description: "Distance threshold for distance_band mode.", required: false },
                 ToolParamSpec { name: "row_standardize", description: "Apply row standardization to weights (default true).", required: false },
-                ToolParamSpec { name: "inference", description: "Inference mode: asymptotic (current) or permutation (future).", required: false },
+                ToolParamSpec { name: "inference", description: "Inference mode: asymptotic or permutation (default: asymptotic).", required: false },
+                ToolParamSpec { name: "num_simulations", description: "Number of permutations for permutation testing (default: 999).", required: false },
+                ToolParamSpec { name: "seed", description: "Random seed for reproducible permutation testing (default: u64::MAX).", required: false },
                 ToolParamSpec { name: "island_policy", description: "Island handling: drop_with_warning, keep_zero_weight, error.", required: false },
                 ToolParamSpec { name: "output_json", description: "Optional JSON report output path.", required: false },
                 ToolParamSpec { name: "output_html", description: "Optional HTML report output path.", required: false },
                 ToolParamSpec { name: "output_csv", description: "Optional CSV summary output path.", required: false },
+                ToolParamSpec { name: "output_distribution", description: "Optional path to save permutation distribution as JSON (permutation mode only).", required: false },
             ],
         }
     }
@@ -643,15 +646,20 @@ impl Tool for GlobalMoransITool {
         defaults.insert("k".to_string(), json!(8));
         defaults.insert("row_standardize".to_string(), json!(true));
         defaults.insert("inference".to_string(), json!("asymptotic"));
+        defaults.insert("num_simulations".to_string(), json!(999));
         defaults.insert("island_policy".to_string(), json!("drop_with_warning"));
 
         let mut example_args = defaults.clone();
         example_args.insert("output_json".to_string(), json!("morans_i_report.json"));
 
+        let mut permutation_args = defaults.clone();
+        permutation_args.insert("inference".to_string(), json!("permutation"));
+        permutation_args.insert("num_simulations".to_string(), json!(999));
+
         ToolManifest {
             id: "global_morans_i".to_string(),
             display_name: "Global Moran's I".to_string(),
-            summary: "Computes Global Moran's I with diagnostics and asymptotic significance.".to_string(),
+            summary: "Computes Global Moran's I with diagnostics and asymptotic or permutation significance testing.".to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -661,22 +669,33 @@ impl Tool for GlobalMoransITool {
                 ToolParamDescriptor { name: "k".to_string(), description: "k value for k_nearest mode.".to_string(), required: false },
                 ToolParamDescriptor { name: "distance".to_string(), description: "Distance threshold for distance_band mode.".to_string(), required: false },
                 ToolParamDescriptor { name: "row_standardize".to_string(), description: "Apply row standardization to weights (default true).".to_string(), required: false },
-                ToolParamDescriptor { name: "inference".to_string(), description: "Inference mode: asymptotic (current) or permutation (future).".to_string(), required: false },
+                ToolParamDescriptor { name: "inference".to_string(), description: "Inference mode: asymptotic or permutation (default: asymptotic).".to_string(), required: false },
+                ToolParamDescriptor { name: "num_simulations".to_string(), description: "Number of permutations for permutation testing (default: 999).".to_string(), required: false },
+                ToolParamDescriptor { name: "seed".to_string(), description: "Random seed for reproducible permutation testing.".to_string(), required: false },
                 ToolParamDescriptor { name: "island_policy".to_string(), description: "Island handling: drop_with_warning, keep_zero_weight, error.".to_string(), required: false },
                 ToolParamDescriptor { name: "output_json".to_string(), description: "Optional JSON report output path.".to_string(), required: false },
                 ToolParamDescriptor { name: "output_html".to_string(), description: "Optional HTML report output path.".to_string(), required: false },
                 ToolParamDescriptor { name: "output_csv".to_string(), description: "Optional CSV summary output path.".to_string(), required: false },
+                ToolParamDescriptor { name: "output_distribution".to_string(), description: "Optional path to save permutation distribution as JSON.".to_string(), required: false },
             ],
             defaults,
-            examples: vec![ToolExample {
-                name: "global_morans_i_basic".to_string(),
-                description: "Computes Global Moran's I and writes a JSON summary report.".to_string(),
-                args: example_args,
-            }],
+            examples: vec![
+                ToolExample {
+                    name: "global_morans_i_asymptotic".to_string(),
+                    description: "Computes Global Moran's I with asymptotic inference.".to_string(),
+                    args: example_args,
+                },
+                ToolExample {
+                    name: "global_morans_i_permutation".to_string(),
+                    description: "Computes Global Moran's I with permutation-based inference (999 simulations).".to_string(),
+                    args: permutation_args,
+                },
+            ],
             tags: vec![
                 "vector".to_string(),
                 "spatial-statistics".to_string(),
                 "autocorrelation".to_string(),
+                "permutation-testing".to_string(),
                 "report".to_string(),
             ],
             stability: ToolStability::Experimental,
@@ -721,10 +740,21 @@ impl Tool for GlobalMoransITool {
             ));
         }
 
+        // Validate permutation parameters
+        if inference == "permutation" {
+            let n_sims = parse_optional_usize_arg(args, "num_simulations")?.unwrap_or(999);
+            if n_sims < 10 || n_sims > 1000000 {
+                return Err(ToolError::Validation(
+                    "num_simulations must be between 10 and 1,000,000".to_string(),
+                ));
+            }
+        }
+
         let _ = IslandPolicy::parse(args)?;
         let _ = parse_optional_output_path(args, "output_json")?;
         let _ = parse_optional_output_path(args, "output_html")?;
         let _ = parse_optional_output_path(args, "output_csv")?;
+        let _ = parse_optional_output_path(args, "output_distribution")?;
         Ok(())
     }
 
@@ -742,17 +772,13 @@ impl Tool for GlobalMoransITool {
             .trim()
             .to_ascii_lowercase();
         let island_policy = IslandPolicy::parse(args)?;
+        let num_simulations = parse_optional_usize_arg(args, "num_simulations")?.unwrap_or(999);
+        let seed = parse_optional_usize_arg(args, "seed").map(|opt| opt.map(|s| s as u64)).ok().flatten();
 
         let output_json = parse_optional_output_path(args, "output_json")?;
         let output_html = parse_optional_output_path(args, "output_html")?;
         let output_csv = parse_optional_output_path(args, "output_csv")?;
-
-        if inference == "permutation" {
-            return Err(ToolError::Validation(
-                "permutation inference is not implemented yet for global_morans_i; use inference='asymptotic'"
-                    .to_string(),
-            ));
-        }
+        let output_distribution = parse_optional_output_path(args, "output_distribution")?;
 
         let (observations, dropped) = collect_spatial_observations(&input, &field)?;
         let values: Vec<f64> = observations.iter().map(|o| o.value).collect();
@@ -772,9 +798,24 @@ impl Tool for GlobalMoransITool {
         let (statistic_i, expected_i, z_score, p_value, n_used) =
             compute_global_morans_i(&values, &weights, island_policy)?;
 
+        // Determine inference method and compute results
+        let (final_p_value, permutation_distribution, inference_method) = if inference == "permutation" {
+            ctx.progress.info(&format!("computing permutation test ({} simulations)", num_simulations));
+            let perm_result = wbspatialstats::autocorrelation::permutation::morans_i_permutation(
+                &values,
+                &weights,
+                num_simulations,
+                seed,
+            ).map_err(|e| ToolError::Execution(format!("permutation test failed: {}", e)))?;
+
+            (perm_result.p_value_two_tailed, Some(perm_result.permutation_distribution), "permutation")
+        } else {
+            (p_value, None, "asymptotic")
+        };
+
         let mut report = serde_json::Map::new();
         report.insert("tool_id".to_string(), json!("global_morans_i"));
-        report.insert("inference_method".to_string(), json!("asymptotic"));
+        report.insert("inference_method".to_string(), json!(inference_method));
         report.insert("statistic_i".to_string(), json!(statistic_i));
         report.insert("expected_i".to_string(), json!(expected_i));
         report.insert(
@@ -782,7 +823,8 @@ impl Tool for GlobalMoransITool {
             json!(((statistic_i - expected_i) / z_score).powi(2)),
         );
         report.insert("z_score".to_string(), json!(z_score));
-        report.insert("p_value_two_sided".to_string(), json!(p_value));
+        report.insert("p_value_asymptotic".to_string(), json!(p_value));
+        report.insert("p_value_two_sided".to_string(), json!(final_p_value));
         report.insert("n_features_used".to_string(), json!(n_used));
         report.insert("n_features_dropped".to_string(), json!(weights.diagnostics.dropped_feature_count));
         report.insert(
@@ -809,26 +851,40 @@ impl Tool for GlobalMoransITool {
             "dropped_observations".to_string(),
             json!(weights.diagnostics.dropped_feature_count),
         );
-        let significance_class = if p_value <= 0.05 && z_score > 0.0 {
+        let significance_class = if final_p_value <= 0.05 && statistic_i > expected_i {
             "positive"
-        } else if p_value <= 0.05 && z_score < 0.0 {
+        } else if final_p_value <= 0.05 && statistic_i < expected_i {
             "negative"
         } else {
             "ns"
         };
         report.insert("significance_class".to_string(), json!(significance_class));
+        
+        // Add permutation-specific info if applicable
+        if inference == "permutation" {
+            if let Some(dist) = &permutation_distribution {
+                report.insert("permutation_distribution_size".to_string(), json!(dist.len()));
+                report.insert("permutation_distribution_mean".to_string(), 
+                    json!(dist.iter().sum::<f64>() / dist.len() as f64));
+                report.insert("permutation_distribution_min".to_string(),
+                    json!(dist.iter().cloned().fold(f64::INFINITY, f64::min)));
+                report.insert("permutation_distribution_max".to_string(),
+                    json!(dist.iter().cloned().fold(f64::NEG_INFINITY, f64::max)));
+            }
+        }
+        
         report.insert(
             "assumption_flags".to_string(),
             json!({
-                "permutation_supported": false,
-                "inference": "asymptotic",
+                "permutation_supported": true,
+                "inference": inference_method,
             }),
         );
         report.insert(
             "runtime_metadata".to_string(),
             json!({
-                "seed": serde_json::Value::Null,
-                "permutations": serde_json::Value::Null,
+                "seed": seed,
+                "permutations": if inference == "permutation" { Some(num_simulations) } else { None },
             }),
         );
 
@@ -845,44 +901,98 @@ impl Tool for GlobalMoransITool {
             outputs.insert("output_json".to_string(), json!(path.to_string_lossy().to_string()));
         }
 
+        if let Some(path) = output_distribution {
+            if let Some(dist) = &permutation_distribution {
+                let dist_json = json!({
+                    "observed_statistic": statistic_i,
+                    "p_value_two_tailed": final_p_value,
+                    "permutation_distribution": dist,
+                    "n_simulations": dist.len(),
+                });
+                let body = serde_json::to_string_pretty(&dist_json)
+                    .map_err(|e| ToolError::Execution(format!("failed serializing distribution: {e}")))?;
+                write_text(&path, &body)?;
+                outputs.insert("output_distribution".to_string(), json!(path.to_string_lossy().to_string()));
+            } else {
+                ctx.progress.info("WARNING: output_distribution specified but inference mode is asymptotic (not permutation)");
+            }
+        }
+
         if let Some(path) = output_csv {
-            let z_text = z_score.to_string();
-            let p_text = p_value.to_string();
-            let body = format!(
-                "tool_id,statistic_i,expected_i,z_score,p_value_two_sided,n_features_used,n_features_dropped\nglobal_morans_i,{},{},{},{},{},{}\n",
-                statistic_i,
-                expected_i,
-                z_text,
-                p_text,
-                n_used,
-                weights.diagnostics.dropped_feature_count,
-            );
+            let p_text = final_p_value.to_string();
+            let body = if inference == "permutation" {
+                format!(
+                    "tool_id,statistic_i,expected_i,z_score,p_value_asymptotic,p_value_permutation,n_simulations,n_features_used,n_features_dropped\nglobal_morans_i,{},{},{},{},{},{},{},{}\n",
+                    statistic_i,
+                    expected_i,
+                    z_score,
+                    p_value,
+                    p_text,
+                    num_simulations,
+                    n_used,
+                    weights.diagnostics.dropped_feature_count,
+                )
+            } else {
+                format!(
+                    "tool_id,statistic_i,expected_i,z_score,p_value_asymptotic,n_features_used,n_features_dropped\nglobal_morans_i,{},{},{},{},{},{}\n",
+                    statistic_i,
+                    expected_i,
+                    z_score,
+                    p_value,
+                    n_used,
+                    weights.diagnostics.dropped_feature_count,
+                )
+            };
             write_text(&path, &body)?;
             outputs.insert("output_csv".to_string(), json!(path.to_string_lossy().to_string()));
         }
 
         if let Some(path) = output_html {
             let z_text = format!("{z_score:.6}");
-            let p_text = format!("{p_value:.6}");
-            let body = build_branded_html_report(
-                "Global Moran's I Report",
-                &[
-                    "Statistic I",
-                    "Expected I",
-                    "Z",
-                    "P (two-sided)",
-                    "N used",
-                    "N dropped",
-                ],
-                &[
-                    format!("{statistic_i:.6}"),
-                    format!("{expected_i:.6}"),
-                    z_text,
-                    p_text,
-                    n_used.to_string(),
-                    weights.diagnostics.dropped_feature_count.to_string(),
-                ],
-            );
+            let p_text = format!("{final_p_value:.6}");
+            let body = if inference == "permutation" {
+                build_branded_html_report(
+                    "Global Moran's I Report (Permutation Testing)",
+                    &[
+                        "Statistic I",
+                        "Expected I",
+                        "Z (asymptotic)",
+                        "P (permutation)",
+                        "N simulations",
+                        "N used",
+                        "N dropped",
+                    ],
+                    &[
+                        format!("{statistic_i:.6}"),
+                        format!("{expected_i:.6}"),
+                        z_text,
+                        p_text,
+                        num_simulations.to_string(),
+                        n_used.to_string(),
+                        weights.diagnostics.dropped_feature_count.to_string(),
+                    ],
+                )
+            } else {
+                build_branded_html_report(
+                    "Global Moran's I Report (Asymptotic Testing)",
+                    &[
+                        "Statistic I",
+                        "Expected I",
+                        "Z",
+                        "P (two-sided)",
+                        "N used",
+                        "N dropped",
+                    ],
+                    &[
+                        format!("{statistic_i:.6}"),
+                        format!("{expected_i:.6}"),
+                        z_text,
+                        p_text,
+                        n_used.to_string(),
+                        weights.diagnostics.dropped_feature_count.to_string(),
+                    ],
+                )
+            };
             write_text(&path, &body)?;
             outputs.insert("output_html".to_string(), json!(path.to_string_lossy().to_string()));
         }

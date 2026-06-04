@@ -12541,7 +12541,11 @@ impl Tool for BufferVectorTool {
         ToolMetadata {
             id: "buffer_vector",
             display_name: "Buffer Vector",
-            summary: "Creates polygon buffers around point, line, and polygon vector geometries with configurable cap and join styles.",
+            summary: r#"Creates polygon buffers (zones of influence) around point, line, and polygon vector geometries by extending boundaries by a specified distance. The buffer operation uses the JTS topology library with configurable cap styles (round, flat, or square for line endpoints) and join styles (round, bevel, or mitre for corners), plus optional segment resolution for arc smoothness.
+
+Buffering is fundamental to spatial analysis, risk assessment, and operational planning workflows. Buffers represent proximity zones and are commonly used to identify features within specified distances, create viewsheds and accessibility zones, and generate regulatory compliance areas.
+
+Applications: (1) Environmental protection—buffering streams/wetlands for setback regulations, (2) Urban planning—proximity analysis of amenities or hazardous facilities, (3) Infrastructure—cable/pipeline protection corridors, (4) Ecological modeling—dispersal zones and habitat edges, (5) Accessibility mapping—walkable/drivable distance analysis."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -12573,7 +12577,7 @@ impl Tool for BufferVectorTool {
         ToolManifest {
             id: "buffer_vector".to_string(),
             display_name: "Buffer Vector".to_string(),
-            summary: "Creates polygon buffers around point, line, and polygon vector geometries with configurable cap and join styles.".to_string(),
+            summary: r#"Extends geometries by a specified distance, creating polygon buffers with customizable cap/join styles. Optional dissolve merges overlapping buffers into unified polygons."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -13691,7 +13695,11 @@ impl Tool for CentroidVectorTool {
         ToolMetadata {
             id: "centroid_vector",
             display_name: "Centroid Vector",
-            summary: "Computes centroid points from vector features.",
+            summary: r#"Computes the centroid (geographic center of mass) for each vector feature, returning a point layer representing the mean coordinate of all vertices. For polygon features, the true centroid represents the feature's geometric center; for multipart geometries, a single centroid is computed across all constituent parts.
+
+Centroid generation enables label placement, spatial clustering, and feature representation at reduced geometric complexity. Centroids are widely used in cartography, statistical analysis, and as reference points for distance measurements or spatial indexing.
+
+Applications: (1) Thematic mapping—placing category labels within polygons, (2) Density analysis—counting features in hexagonal/rectangular grids, (3) Spatial aggregation—computing statistics on grouped features, (4) Route optimization—finding central facility locations, (5) Feature classification—using centroid-to-centroid distances for clustering."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -13718,7 +13726,7 @@ impl Tool for CentroidVectorTool {
         ToolManifest {
             id: "centroid_vector".to_string(),
             display_name: "Centroid Vector".to_string(),
-            summary: "Computes centroid points from vector features.".to_string(),
+            summary: r#"Creates point features representing the geographic center (centroid) of each input geometry."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -13883,7 +13891,11 @@ impl Tool for RepresentativePointVectorTool {
         ToolMetadata {
             id: "representative_point_vector",
             display_name: "Representative Point Vector",
-            summary: "Computes representative points guaranteed to lie on or within input geometries.",
+            summary: r#"Computes a representative point for each input geometry that is guaranteed to lie on or within the original shape (unlike true centroids which may fall outside concave polygons). This is essential for labeling and analysis workflows where a single, geometrically-safe reference point is required.
+
+Representative points solve a critical problem in thematic mapping and spatial analysis—labels must fall within visible map areas, and computations sometimes require guaranteed-interior points. The algorithm uses the pole-of-inaccessibility principle, finding the point furthest from the polygon boundary.
+
+Applications: (1) Label placement—ensuring text appears within feature bounds, (2) Interior sampling—selecting representative locations for symbolization, (3) Concave geometry handling—where centroids may be invalid, (4) Point-in-polygon verification—testing geometric relationships, (5) Spatial analysis requiring interior anchoring."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -13910,7 +13922,7 @@ impl Tool for RepresentativePointVectorTool {
         ToolManifest {
             id: "representative_point_vector".to_string(),
             display_name: "Representative Point Vector".to_string(),
-            summary: "Computes representative points guaranteed to lie on or within input geometries."
+            summary: r#"Generates a point guaranteed to lie within or on each geometry (interior representative point)."#
                 .to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
@@ -23855,7 +23867,11 @@ impl Tool for AddGeometryAttributesTool {
         ToolMetadata {
             id: "add_geometry_attributes",
             display_name: "Add Geometry Attributes",
-            summary: "Adds area, length, perimeter, and centroid attributes to vector features.",
+            summary: r#"Automatically calculates and adds geometric properties (area, length, perimeter, and centroid coordinates) as new fields in the vector layer. Supports both planar (Euclidean) and geodesic (great-circle) measurements; measurement method can be automatic (inferred from CRS), explicit planar, or explicit geodesic.
+
+Geometric attributes are fundamental for thematic analysis, filtering, and labeling workflows. Rather than computing these properties on-the-fly during analysis, pre-computing them as fields enables efficient filtering, sorting, and visualization in downstream tools and applications.
+
+Applications: (1) Feature classification—filtering polygons by area or perimeter, (2) Cartographic labeling—placing text at centroid coordinates, (3) Quality control—identifying suspiciously large/small features, (4) Density analysis—normalizing counts by area, (5) Statistical summaries—aggregating properties for reporting."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -23884,7 +23900,7 @@ impl Tool for AddGeometryAttributesTool {
         ToolManifest {
             id: "add_geometry_attributes".to_string(),
             display_name: "Add Geometry Attributes".to_string(),
-            summary: "Adds area, length, perimeter, and centroid attributes to vector features.".to_string(),
+            summary: r#"Adds calculated fields for area, length, perimeter, and/or centroid coordinates (supports planar and geodesic modes)."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -24074,7 +24090,11 @@ impl Tool for SimplifyFeaturesTool {
         ToolMetadata {
             id: "simplify_features",
             display_name: "Simplify Features",
-            summary: "Simplifies vector geometries using Douglas-Peucker tolerance.",
+            summary: r#"Reduces geometric complexity using the Douglas-Peucker algorithm, which iteratively removes vertices that lie below a tolerance threshold from the simplified line. A higher tolerance removes more vertices (more generalization); a lower tolerance preserves finer detail. Simplification reduces file size, improves rendering performance, and removes noise from digitized or GPS-derived data.
+
+Simplification is critical for efficient storage, transmission, and visualization of geospatial data. Over-complex geometries cause rendering slowdowns and inflate file sizes; under-simplification retains noise and artifacts from data capture. The Douglas-Peucker algorithm is the de facto standard because it preserves geometric shape while achieving dramatic size reductions.
+
+Applications: (1) Multi-scale visualization—generating coarser versions for smaller map scales, (2) Data compression—reducing Shapefile/GeoJSON size for web delivery, (3) Cartographic generalization—smoothing road/river networks, (4) GPS track cleaning—removing acquisition noise, (5) Performance optimization—accelerating interactive mapping."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -24095,7 +24115,7 @@ impl Tool for SimplifyFeaturesTool {
         ToolManifest {
             id: "simplify_features".to_string(),
             display_name: "Simplify Features".to_string(),
-            summary: "Simplifies vector geometries using Douglas-Peucker tolerance.".to_string(),
+            summary: r#"Reduces geometry complexity by removing vertices below a Douglas-Peucker tolerance threshold."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -24224,7 +24244,11 @@ impl Tool for NearTool {
         ToolMetadata {
             id: "near",
             display_name: "Near",
-            summary: "Finds the nearest feature in a near layer and writes NEAR_FID and NEAR_DIST attributes.",
+            summary: r#"Performs a spatial nearest-neighbor search to identify the closest feature in a near-layer for each feature in the input layer, then writes the near-feature's FID (NEAR_FID) and the distance (NEAR_DIST) as new attributes. Uses a spatial index (R-tree) for efficient O(log n) lookups on large datasets; optional max_distance parameter bounds the search.
+
+Nearest-neighbor analysis is essential for proximity-based queries and spatial relationships. Common applications include supply-chain routing (finding nearest warehouse/distribution center), ecological connectivity (measuring distances to nearest habitat patches), and infrastructure optimization (identifying nearest service facilities).
+
+Applications: (1) Service location analysis—fire station/hospital coverage, (2) Connectivity assessment—wildlife corridor design, (3) Contamination source identification, (4) Customer-to-store matching, (5) Spatial vulnerability mapping."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -24246,7 +24270,7 @@ impl Tool for NearTool {
         ToolManifest {
             id: "near".to_string(),
             display_name: "Near".to_string(),
-            summary: "Finds the nearest feature in a near layer and writes NEAR_FID and NEAR_DIST attributes.".to_string(),
+            summary: r#"Adds NEAR_FID and NEAR_DIST attributes identifying nearest features and their distances using spatial indexing."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -24342,7 +24366,11 @@ impl Tool for SelectByLocationTool {
         ToolMetadata {
             id: "select_by_location",
             display_name: "Select By Location",
-            summary: "Extracts target features that satisfy a spatial relationship to query features.",
+            summary: r#"Performs spatial filtering by extracting target features that satisfy a specified spatial relationship (intersects, within, contains, touches, crosses, overlaps, disjoint, or within_distance) relative to query features. Uses spatial indexing for efficient subset selection in large datasets.
+
+Location-based selection is a cornerstone of spatial query workflows and forms the basis for overlay analysis, interactive mapping, and database filtering. Unlike attribute-based filtering which relies solely on field values, location selection enables dynamic extraction of features based on their geometric positions and topological relationships.
+
+Applications: (1) Regulatory compliance—features violating setback requirements, (2) Multi-criteria analysis—combining location filters with reclassification, (3) Emergency response—identifying affected structures in disaster zones, (4) Urban inventory—facilities within administrative boundaries, (5) Biodiversity assessment—species occurrence in designated conservation areas."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -24366,7 +24394,7 @@ impl Tool for SelectByLocationTool {
         ToolManifest {
             id: "select_by_location".to_string(),
             display_name: "Select By Location".to_string(),
-            summary: "Extracts target features that satisfy a spatial relationship to query features.".to_string(),
+            summary: r#"Filters target features by spatial predicates (intersects, within, contains, touches, overlaps, etc.) relative to query features."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -24750,7 +24778,11 @@ impl Tool for SpatialJoinTool {
         ToolMetadata {
             id: "spatial_join",
             display_name: "Spatial Join",
-            summary: "Joins attributes from a join layer onto target features using a spatial predicate.",
+            summary: r#"Joins attributes from a join layer onto target features using a specified spatial predicate (intersects, within, contains, touches, crosses, overlaps, within_distance), with configurable aggregation strategies (first, last, count, sum, mean, min, max) for multiple matches. Essential for combining tabular attributes based on geometric proximity rather than explicit key fields.
+
+Spatial joins enable enrichment of feature attributes with contextual information from related layers—a fundamental operation in thematic analysis, zoning compliance checks, and multi-source data integration. Unlike traditional table joins requiring a common key field, spatial joins automatically determine associations based on geometry, making them ideal for data fusion workflows.
+
+Applications: (1) Zoning compliance—labeling parcels with adjacent land-use categories, (2) Demographics—assigning census data to neighborhoods, (3) Infrastructure inventory—associating utilities with service areas, (4) Environmental assessment—overlaying contamination risk layers, (5) Urban planning—combining multiple zoning/policy overlays."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -24778,7 +24810,7 @@ impl Tool for SpatialJoinTool {
         ToolManifest {
             id: "spatial_join".to_string(),
             display_name: "Spatial Join".to_string(),
-            summary: "Joins attributes from a join layer onto target features using a spatial predicate.".to_string(),
+            summary: r#"Transfers attributes from join-layer features to targets using spatial predicates; supports aggregation strategies (count, sum, mean, min, max) for multiple matches."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -25692,7 +25724,11 @@ impl Tool for PointsAlongLinesTool {
         ToolMetadata {
             id: "points_along_lines",
             display_name: "Points Along Lines",
-            summary: "Creates regularly spaced point features along input line geometries.",
+            summary: r#"Generates regular spaced point features at a specified interval along each input polyline (or multilinestring). Points are placed at the requested spacing; the optional include_end parameter controls whether line endpoints are included as output points.
+
+Points-along-lines is essential for sampling linear features at regular intervals, creating reference markers for infrastructure monitoring, and generating spatial analysis points. Applications range from environmental monitoring (stream sampling stations) to transportation (traffic count locations).
+
+Applications: (1) Environmental monitoring—water quality sampling points along streams, (2) Infrastructure inspection—regular spacing of utility monitoring locations, (3) Transportation analysis—traffic count stations on highways, (4) Network analysis—creating regular waypoints for routing, (5) Spatial sampling—systematic point grids along linear corridors."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -25715,7 +25751,7 @@ impl Tool for PointsAlongLinesTool {
         ToolManifest {
             id: "points_along_lines".to_string(),
             display_name: "Points Along Lines".to_string(),
-            summary: "Creates regularly spaced point features along input line geometries.".to_string(),
+            summary: r#"Creates point features at regular spacing intervals along input line geometries."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -28828,7 +28864,11 @@ impl Tool for VectorSummaryStatisticsTool {
         ToolMetadata {
             id: "vector_summary_statistics",
             display_name: "Vector Summary Statistics",
-            summary: "Computes grouped summary statistics for a numeric field and writes the result to CSV.",
+            summary: r#"Computes grouped summary statistics (count, sum, mean, min, max, standard deviation) for a numeric value field, stratified by a categorical group field, and writes results to a CSV file. Useful for quick statistical summaries without specialized statistical software.
+
+Summary statistics provide a concise quantitative snapshot of grouped data, enabling rapid assessment of category-level distributions and central tendencies. Common use cases include inventory counts by category, zonal statistics aggregation, and damage assessment summaries.
+
+Applications: (1) Inventory management—counting features by type/class, (2) Damage assessment—summarizing impact metrics by administrative zone, (3) Environmental monitoring—statistical summaries by habitat type, (4) Urban planning—comparing metrics across neighborhoods, (5) Quality control—detecting anomalous distributions in grouped data."#,
             category: ToolCategory::Conversion,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -28851,7 +28891,7 @@ impl Tool for VectorSummaryStatisticsTool {
         ToolManifest {
             id: "vector_summary_statistics".to_string(),
             display_name: "Vector Summary Statistics".to_string(),
-            summary: "Computes grouped summary statistics for a numeric field and writes the result to CSV.".to_string(),
+            summary: r#"Computes count, sum, mean, min, max, and standard deviation by categorical group and exports to CSV."#.to_string(),
             category: ToolCategory::Conversion,
             license_tier: LicenseTier::Open,
             params: vec![

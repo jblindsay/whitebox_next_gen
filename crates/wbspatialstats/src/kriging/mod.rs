@@ -15,6 +15,7 @@ pub mod simple;
 pub mod st_kriging;
 pub mod universal;
 pub mod prediction_intervals;
+pub mod cokriging;
 
 pub use local::LocalOrdinaryKriging;
 pub use simple::SimpleKriging;
@@ -24,6 +25,7 @@ pub use prediction_intervals::{
     kriging_prediction_interval_posterior, IntervalCalibration, assess_interval_calibration
 };
 pub use universal::UniversalKriging;
+pub use cokriging::{OrdinaryCoKriging, CoKrigingPrediction};
 
 /// Ordinary Kriging prediction result
 #[derive(Debug, Clone, Serialize, Deserialize)]

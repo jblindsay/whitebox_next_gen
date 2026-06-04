@@ -12,7 +12,7 @@ use crate::variogram::{
 };
 
 #[cfg(feature = "r")]
-use crate::kriging::{OrdinaryKriging, LocalOrdinaryKriging};
+use crate::kriging::{OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging};
 
 #[cfg(feature = "r")]
 use crate::cv::LeaveOneOutCV;
@@ -590,6 +590,188 @@ pub fn kriging_predict_grid_local(
         ci_lower = ci_lowers,
         ci_upper = ci_uppers,
         k = k as i32,
+    )
+    .into())
+}
+
+/// Perform simple kriging prediction (single point, known mean)
+///
+/// # Arguments
+/// - `train_x`, `train_y`: Training data coordinates
+/// - `train_values`: Training data values
+/// - `pred_x`, `pred_y`: Prediction location
+/// - `known_mean`: The known constant mean of the field
+/// - `family`, `nugget`, `psill`, `range`: Variogram model parameters
+///
+/// # Returns
+/// List with: prediction, variance, std_error, ci_lower, ci_upper, known_mean
+#[cfg(feature = "r")]
+#[extendr]
+pub fn kriging_predict_simple(
+    train_x: Vec<f64>,
+    train_y: Vec<f64>,
+    train_values: Vec<f64>,
+    pred_x: f64,
+    pred_y: f64,
+    known_mean: f64,
+    family: &str,
+    nugget: f64,
+    psill: f64,
+    range: f64,
+) -> Result<Robj> {
+    if train_x.len() != train_y.len() || train_x.len() != train_values.len() {
+        return Err(extendr_api::Error::Other(
+            "Training x, y, and values must have equal length".to_string(),
+        ));
+    }
+
+    if train_x.len() < 3 {
+        return Err(extendr_api::Error::Other(
+            "At least 3 training points required".to_string(),
+        ));
+    }
+
+    let vario_family = match family.to_lowercase().as_str() {
+        "spherical" => VariogramModelFamily::Spherical,
+        "exponential" => VariogramModelFamily::Exponential,
+        "gaussian" => VariogramModelFamily::Gaussian,
+        _ => {
+            return Err(extendr_api::Error::Other(
+                "Invalid family. Use: 'spherical', 'exponential', or 'gaussian'".to_string(),
+            ))
+        }
+    };
+
+    let vario_model = VariogramModel {
+        family: vario_family,
+        nugget,
+        partial_sill: psill,
+        range,
+        wrss: 0.0,
+        condition_number: 1.0,
+    };
+
+    let coords: Vec<(f64, f64)> = train_x
+        .iter()
+        .zip(train_y.iter())
+        .map(|(&x, &y)| (x, y))
+        .collect();
+
+    let simple_kriging = SimpleKriging::new(coords, train_values, vario_model, known_mean).map_err(|e| {
+        extendr_api::Error::Other(format!("Simple kriging initialization failed: {}", e))
+    })?;
+
+    let result = simple_kriging.predict(pred_x, pred_y).map_err(|e| {
+        extendr_api::Error::Other(format!("Simple prediction failed: {}", e))
+    })?;
+
+    Ok(list!(
+        prediction = result.prediction,
+        variance = result.variance,
+        std_error = result.std_error,
+        ci_lower = result.ci_lower,
+        ci_upper = result.ci_upper,
+        known_mean = known_mean,
+    )
+    .into())
+}
+
+/// Perform simple kriging grid prediction (vectorized, known mean)
+///
+/// # Arguments
+/// - `train_x`, `train_y`: Training data coordinates
+/// - `train_values`: Training data values
+/// - `pred_x`, `pred_y`: Grid prediction locations (vectors)
+/// - `known_mean`: The known constant mean of the field
+/// - `family`, `nugget`, `psill`, `range`: Variogram model parameters
+///
+/// # Returns
+/// List with vectors: prediction, variance, std_error, ci_lower, ci_upper, known_mean
+#[cfg(feature = "r")]
+#[extendr]
+pub fn kriging_predict_grid_simple(
+    train_x: Vec<f64>,
+    train_y: Vec<f64>,
+    train_values: Vec<f64>,
+    pred_x: Vec<f64>,
+    pred_y: Vec<f64>,
+    known_mean: f64,
+    family: &str,
+    nugget: f64,
+    psill: f64,
+    range: f64,
+) -> Result<Robj> {
+    if train_x.len() != train_y.len() || train_x.len() != train_values.len() {
+        return Err(extendr_api::Error::Other(
+            "Training x, y, and values must have equal length".to_string(),
+        ));
+    }
+
+    if pred_x.len() != pred_y.len() {
+        return Err(extendr_api::Error::Other(
+            "pred_x and pred_y must have equal length".to_string(),
+        ));
+    }
+
+    if train_x.len() < 3 {
+        return Err(extendr_api::Error::Other(
+            "At least 3 training points required".to_string(),
+        ));
+    }
+
+    let vario_family = match family.to_lowercase().as_str() {
+        "spherical" => VariogramModelFamily::Spherical,
+        "exponential" => VariogramModelFamily::Exponential,
+        "gaussian" => VariogramModelFamily::Gaussian,
+        _ => {
+            return Err(extendr_api::Error::Other(
+                "Invalid family. Use: 'spherical', 'exponential', or 'gaussian'".to_string(),
+            ))
+        }
+    };
+
+    let vario_model = VariogramModel {
+        family: vario_family,
+        nugget,
+        partial_sill: psill,
+        range,
+        wrss: 0.0,
+        condition_number: 1.0,
+    };
+
+    let train_coords: Vec<(f64, f64)> = train_x
+        .iter()
+        .zip(train_y.iter())
+        .map(|(&x, &y)| (x, y))
+        .collect();
+
+    let pred_coords: Vec<(f64, f64)> = pred_x
+        .iter()
+        .zip(pred_y.iter())
+        .map(|(&x, &y)| (x, y))
+        .collect();
+
+    let simple_kriging = SimpleKriging::new(train_coords, train_values, vario_model, known_mean).map_err(|e| {
+        extendr_api::Error::Other(format!("Simple kriging initialization failed: {}", e))
+    })?;
+
+    let results = simple_kriging.predict_batch(&pred_coords).map_err(|e| {
+        extendr_api::Error::Other(format!("Simple batch prediction failed: {}", e))
+    })?;
+
+    let predictions: Vec<f64> = results.iter().map(|r| r.prediction).collect();
+    let variances: Vec<f64> = results.iter().map(|r| r.variance).collect();
+    let std_errors: Vec<f64> = results.iter().map(|r| r.std_error).collect();
+    let ci_lowers: Vec<f64> = results.iter().map(|r| r.ci_lower).collect();
+    let ci_uppers: Vec<f64> = results.iter().map(|r| r.ci_upper).collect();
+
+    Ok(list!(
+        prediction = predictions,
+        variance = variances,
+        std_error = std_errors,
+        ci_lower = ci_lowers,
+        ci_upper = ci_uppers,
+        known_mean = known_mean,
     )
     .into())
 }

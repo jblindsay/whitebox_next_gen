@@ -451,23 +451,23 @@ tools = [
 category = "vector"
 subcategory = "spatial_statistics"
 tools = [
-  # Phase A: Autocorrelation
   "global_morans_i",
   "getis_ord_gi_star",
   "local_morans_i_lisa",
   "nearest_neighbour_index",
   "quadrat_count_test",
-  # Phase B: Kriging (vector variants)
-  # Note: Kriging tools are primarily raster-based; see raster.spatial_statistics
-  # Phase C: Spatial Regression
+  # Variography & Kriging
+  "estimate_variogram",
+  "fit_variogram",
+  "directional_variogram",
+  "kriging_cross_validation",
+  # Regression
   "spatial_lag_regression",
   "spatial_error_regression",
   "geographically_weighted_regression",
-  # Phase D: Point Process Analysis (core)
   "ripleys_k_test",
   "envelope_test",
   "point_process_residuals",
-  # Phase D: Point Process Analysis (exploratory/advanced diagnostics)
   "ripleys_k_function",
   "point_pattern_envelope",
   "inhomogeneous_baseline",
@@ -731,20 +731,17 @@ tools = [
 category = "raster"
 subcategory = "spatial_statistics"
 tools = [
-  # Phase A: Autocorrelation (raster variants)
   "local_morans_i_lisa_raster",
   "getis_ord_gi_star_raster",
-  # Phase B: Kriging interpolation
   "ordinary_kriging",
   "local_kriging",
   "simple_kriging",
   "universal_kriging",
   "spacetime_kriging",
-  # Phase C: Spatial Regression (raster variants)
+  "ordinary_cokriging",
   "spatial_lag_regression_raster",
   "spatial_error_regression_raster",
   "geographically_weighted_regression_raster",
-  # Phase D: Point Process Analysis
   "inhomogeneous_intensity_raster",
 ]
 

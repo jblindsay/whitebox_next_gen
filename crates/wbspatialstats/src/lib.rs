@@ -10,6 +10,7 @@
 //! - `cv`: Cross-validation diagnostics and metrics
 //! - `weights`: Spatial weights matrices and neighborhood construction (shared by Phase A & C)
 //! - `autocorrelation`: Global and local spatial autocorrelation measures (Phase A)
+//! - `regression`: Spatial lag, error, and geographically weighted regression (Phase C)
 //! - `python`: Python bindings via PyO3 (requires python feature)
 
 pub mod variogram;
@@ -17,6 +18,7 @@ pub mod kriging;
 pub mod cv;
 pub mod weights;
 pub mod autocorrelation;
+pub mod regression;
 
 // Re-export key types for convenience
 pub use kriging::{OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, UniversalKriging, SpaceTimeKriging, KrigingResult};

@@ -1,5 +1,6 @@
 use super::*;
 use wbraster::{Raster, RasterFormat, raster::RasterData};
+use wbspatialstats::variogram::directional::AnisotropyModel;
 
 pub struct OrdinaryKrigingTool;
 
@@ -234,17 +235,88 @@ impl Tool for OrdinaryKrigingTool {
 
         // Build kriging engine
         ctx.progress.info("Building kriging system...");
-        let kriging = OrdinaryKriging::new(coords, values, vario)
+        
+        // Create anisotropy model if needed
+        let anisotropy_model = if anisotropy {
+            ctx.progress.info(&format!(
+                "Applying anisotropic distance: azimuth={:.1}°, ratio={:.3}",
+                major_azimuth, anisotropy_ratio
+            ));
+            Some(AnisotropyModel {
+                major_azimuth,
+                major_range: 0.0,  // Not used in distance calculation
+                minor_range: 0.0,  // Not used in distance calculation
+                ratio: anisotropy_ratio,
+                angle_tolerance: 22.5,  // Default tolerance for directional analysis
+                method: "kriging".to_string(),
+            })
+        } else {
+            None
+        };
+
+        // Transform coordinates to anisotropic space if needed
+        let transformed_coords = if let Some(ref anis) = anisotropy_model {
+            coords.iter()
+                .map(|(x, y)| {
+                    let dx = *x;
+                    let dy = *y;
+                    // Apply anisotropic distance transformation
+                    let az_rad = anis.major_azimuth * std::f64::consts::PI / 180.0;
+                    let cos_az = az_rad.cos();
+                    let sin_az = az_rad.sin();
+                    
+                    // Rotate
+                    let x_rot = dx * cos_az + dy * sin_az;
+                    let y_rot = -dx * sin_az + dy * cos_az;
+                    
+                    // Scale
+                    let x_scaled = x_rot;
+                    let y_scaled = y_rot / anis.ratio;
+                    
+                    (x_scaled, y_scaled)
+                })
+                .collect::<Vec<_>>()
+        } else {
+            coords.clone()
+        };
+
+        let kriging = OrdinaryKriging::new(transformed_coords, values, vario)
             .map_err(|e| ToolError::Execution(format!("Kriging setup error: {}", e)))?;
 
         // Extract grid coordinates from template raster (parallelized generation)
         ctx.progress.info("Generating prediction grid...");
         let grid_coords = generate_raster_grid(&template);
         
-        ctx.progress.info(&format!("Predicting {} grid cells...", grid_coords.len()));
+        // Transform grid coordinates to anisotropic space if needed
+        let transformed_grid = if let Some(ref anis) = anisotropy_model {
+            grid_coords.iter()
+                .map(|(x, y)| {
+                    let dx = *x;
+                    let dy = *y;
+                    // Apply anisotropic distance transformation
+                    let az_rad = anis.major_azimuth * std::f64::consts::PI / 180.0;
+                    let cos_az = az_rad.cos();
+                    let sin_az = az_rad.sin();
+                    
+                    // Rotate
+                    let x_rot = dx * cos_az + dy * sin_az;
+                    let y_rot = -dx * sin_az + dy * cos_az;
+                    
+                    // Scale
+                    let x_scaled = x_rot;
+                    let y_scaled = y_rot / anis.ratio;
+                    
+                    (x_scaled, y_scaled)
+                })
+                .collect::<Vec<_>>()
+        } else {
+            grid_coords.clone()
+        };
+        
+        ctx.progress.info(&format!("Predicting {} grid cells...", transformed_grid.len()));
 
         // Parallel batch prediction - uses rayon internally
-        let predictions = kriging.predict_batch(&grid_coords)
+        let predictions = kriging.predict_batch(&transformed_grid)
             .map_err(|e| ToolError::Execution(format!("Kriging prediction error: {}", e)))?;
 
         // Create output raster with predictions

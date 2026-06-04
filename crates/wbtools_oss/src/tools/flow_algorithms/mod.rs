@@ -2486,7 +2486,11 @@ impl Tool for D8PointerTool {
         ToolMetadata {
             id: "d8_pointer",
             display_name: "D8 Pointer",
-            summary: "Generates a D8 flow-direction pointer raster from a DEM.",
+            summary: r#"Generates a D8 flow-direction pointer raster using steepest-descent algorithm over 3×3 moving window. Each grid cell receives one of 8 cardinal/diagonal flow directions (N, NE, E, SE, S, SW, W, NW) pointing toward the lowest neighbor. Output is integer-encoded direction pointer used as input to D8 Flow Accumulation and hydrological analysis tools.
+
+D8 is the foundation for deterministic single-flow-direction (SFD) hydrology modeling. It assumes concentrated, non-dispersive flow following terrain gradient. Fast computation and clear drainage structure make D8 standard for routing, valley identification, and flow-path extraction. Common in hydrologic modeling, watershed delineation, and network extraction.
+
+Compare to D-Infinity (continuous angles, better sediment transport) or FD8 (multiple-flow, better dispersion modeling). D8 often produces artificial channelization and underestimates flow convergence in dispersive terrain. Consider D-Infinity if continuous flow directions are preferred; consider FD8 if flow divergence is important."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2515,7 +2519,7 @@ impl Tool for D8PointerTool {
         ToolManifest {
             id: "d8_pointer".to_string(),
             display_name: "D8 Pointer".to_string(),
-            summary: "Generates a D8 flow-direction pointer raster from a DEM.".to_string(),
+            summary: r#"Steepest-descent flow direction over 8 neighbors (N/NE/E/SE/S/SW/W/NW). Foundation for D8 hydrologic analysis and watershed delineation."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![],
@@ -2738,7 +2742,11 @@ impl Tool for DInfPointerTool {
         ToolMetadata {
             id: "dinf_pointer",
             display_name: "D-Infinity Pointer",
-            summary: "Generates a D-Infinity flow-direction raster from a DEM.",
+            summary: r#"Generates D-Infinity continuous flow directions (0 to 2π radians) pointing to steepest gradient at sub-grid resolution. Unlike D8 (discrete 8 directions), D-Infinity determines gradient direction continuously, eliminating abrupt directional changes and diagonal bias. Output is floating-point angle representation used by D-Infinity flow accumulation.
+
+D-Infinity produces smoother, more realistic flow paths and is superior for modeling sediment transport and divergent flow patterns. Continuous angles reduce artificial channelization typical of D8. Particularly effective in flat or gently-sloping terrain where D8 may create unrealistic flow concentrations.
+
+D-Infinity has higher computational cost than D8 but better represents true gradient direction. Preferred for erosion modeling, sediment transport, and when flow-path clarity is secondary to accurate divergence/convergence patterns. Often paired with D-Infinity Flow Accumulation for comprehensive terrain analysis."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2752,7 +2760,7 @@ impl Tool for DInfPointerTool {
         ToolManifest {
             id: "dinf_pointer".to_string(),
             display_name: "D-Infinity Pointer".to_string(),
-            summary: "Generates a D-Infinity flow-direction raster from a DEM.".to_string(),
+            summary: r#"Continuous flow directions (0-2π radians) eliminating D8 diagonal bias. Better for sediment transport and divergent flow modeling."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![],
@@ -2903,7 +2911,11 @@ impl Tool for MDInfFlowAccumTool {
         ToolMetadata {
             id: "mdinf_flow_accum",
             display_name: "MD-Infinity Flow Accumulation",
-            summary: "Calculates MD-Infinity triangular multiple-flow-direction accumulation from a DEM.",
+            summary: r#"Calculates MD-Infinity (Modified D-Infinity) flow accumulation using triangular multiple-flow-direction distribution with slope-gradient weighting. More sophisticated than standard D8/D-Infinity, MD-Infinity improves flow distribution in complex terrain by: (1) distributing flow among multiple neighbors via triangular facet method, (2) weighting flow proportionally to slope gradient (exponent parameter, default 1.1), (3) applying optional convergence threshold above which flow is concentrated.
+
+MD-Infinity balances realism of multiple-flow methods with computational efficiency. Output types include: cells (pixel count), CA (catchment area in cells), and SCA (specific catchment area = CA/cell_area). Log-transform option enhances visualization of low-accumulation areas. Better handles dispersive terrain than D8; more stable than pure FD8 in areas with local minima or nearly-flat slopes.
+
+Slope exponent (default 1.1) controls flow sensitivity to gradient magnitude—higher exponents increase concentration toward steep paths. Convergence threshold can force flow concentration above specified accumulation thresholds, useful for identifying main flow paths in highly divergent terrain. Preferred for erosion modeling, sediment transport, and complex topography where balanced multiple-flow representation is needed."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2928,8 +2940,7 @@ impl Tool for MDInfFlowAccumTool {
         ToolManifest {
             id: "mdinf_flow_accum".to_string(),
             display_name: "MD-Infinity Flow Accumulation".to_string(),
-            summary: "Calculates MD-Infinity triangular multiple-flow-direction accumulation from a DEM."
-                .to_string(),
+            summary: r#"Multiple-flow accumulation with slope-gradient weighting (exponent 1.1). Balances dispersal realism with concentrated main-flow identification. Outputs: cells, CA, or SCA."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![],
@@ -3485,7 +3496,11 @@ impl Tool for FD8PointerTool {
         ToolMetadata {
             id: "fd8_pointer",
             display_name: "FD8 Pointer",
-            summary: "Generates an FD8 multiple-flow-direction pointer raster from a DEM.",
+            summary: r#"Generates FD8 fractional multiple-flow-direction (MFD) raster distributing flow among multiple downslope neighbors weighted by slope gradient. Unlike single-flow D8/D-Infinity, FD8 splits flow proportionally, conserving mass and better representing dispersive, diffusive processes. Each cell routes flow to all steeper neighbors with weights proportional to gradient magnitude.
+
+FD8 is superior for modeling lateral flow, hillslope erosion, and sediment distribution where simple concentration is unrealistic. Flow divergence creates more natural, widespread accumulation patterns. Particularly effective for shallow-slope terrain where single-flow methods concentrate flow artificially. Output enables asymmetric flow patterns reflecting true terrain structure.
+
+Computationally more expensive than D8 but generates accumulation patterns closer to true physics. Widely used in erosion modeling, landscape evolution, and when mass conservation and realistic dispersal are critical. Consider FD8 Flow Accumulation as companion tool for complete MFD analysis."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3499,7 +3514,7 @@ impl Tool for FD8PointerTool {
         ToolManifest {
             id: "fd8_pointer".to_string(),
             display_name: "FD8 Pointer".to_string(),
-            summary: "Generates an FD8 multiple-flow-direction pointer raster from a DEM.".to_string(),
+            summary: r#"Fractional flow to multiple downslope neighbors weighted by gradient. Better than D8 for dispersive, diffusive processes and mass conservation."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![],
@@ -3543,7 +3558,11 @@ impl Tool for Rho8PointerTool {
         ToolMetadata {
             id: "rho8_pointer",
             display_name: "Rho8 Pointer",
-            summary: "Generates a Rho8 stochastic single-flow-direction pointer raster from a DEM.",
+            summary: r#"Generates Rho8 stochastic flow-direction raster randomly assigning single-flow directions weighted by slope gradient. Each cell receives one of 8 cardinal/diagonal directions (like D8), but direction is sampled probabilistically rather than deterministically. Slopes probability of flow = gradient magnitude; flatter neighbors receive lower probability.
+
+Rho8 reduces artificial channelization and edge artifacts inherent to D8 by introducing randomness reflecting flow uncertainty in flat/complex terrain. Each run produces different drainage patterns, which is feature not bug—reflects true stochastic nature of flow in real landscapes. Designed for ensemble analysis where multiple independent runs are averaged for robust statistical conclusions.
+
+Requires multiple runs (typically 50-100) with ensemble averaging for statistical significance. Computationally more expensive than deterministic methods but produces better uncertainty quantification. Valuable for sensitivity analysis, ensemble prediction, and testing robustness of hydrologic conclusions. Single runs should not be used directly; instead aggregate results across ensemble."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3560,7 +3579,7 @@ impl Tool for Rho8PointerTool {
         ToolManifest {
             id: "rho8_pointer".to_string(),
             display_name: "Rho8 Pointer".to_string(),
-            summary: "Generates a Rho8 stochastic single-flow-direction pointer raster from a DEM.".to_string(),
+            summary: r#"Stochastic single-flow direction weighted by slope gradient. Run multiple times for ensemble analysis reducing D8 channelization artifacts."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![],

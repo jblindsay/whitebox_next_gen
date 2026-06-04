@@ -8,15 +8,20 @@
 //! - `variogram`: Empirical and modeled semivariograms (geostatistics)
 //! - `kriging`: Ordinary, Local, Simple, Universal, and Spatio-Temporal Kriging predictions
 //! - `cv`: Cross-validation diagnostics and metrics
+//! - `weights`: Spatial weights matrices and neighborhood construction (shared by Phase A & C)
+//! - `autocorrelation`: Global and local spatial autocorrelation measures (Phase A)
 //! - `python`: Python bindings via PyO3 (requires python feature)
 
 pub mod variogram;
 pub mod kriging;
 pub mod cv;
+pub mod weights;
+pub mod autocorrelation;
 
 // Re-export key types for convenience
 pub use kriging::{OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, UniversalKriging, SpaceTimeKriging, KrigingResult};
 pub use variogram::{VariogramModel, VariogramModelFamily, VariogramFitter, RobustVariogramFitter, RobustLossFunction};
+pub use weights::{SpatialWeightsGraph, SpatialWeightsMode, IslandPolicy, SpatialWeightsDiagnostics};
 
 #[cfg(feature = "python")]
 pub mod python;

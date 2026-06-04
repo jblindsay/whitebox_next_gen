@@ -370,6 +370,13 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::AddGeometryAttributesTool));
     registry.register(Box::new(tools::ReprojectVectorTool));
     registry.register(Box::new(tools::SimplifyFeaturesTool));
+    
+    // Geostatistics/Kriging Tools
+    registry.register(Box::new(tools::EstimateVariogramTool));
+    registry.register(Box::new(tools::FitVariogramTool));
+    registry.register(Box::new(tools::OrdinaryKrigingTool));
+    registry.register(Box::new(tools::KrigingCrossValidationTool));
+    
     registry.register(Box::new(tools::ExtractRasterValuesAtPointsTool));
     registry.register(Box::new(tools::ExtractNodesTool));
     registry.register(Box::new(tools::FilterVectorFeaturesByAreaTool));

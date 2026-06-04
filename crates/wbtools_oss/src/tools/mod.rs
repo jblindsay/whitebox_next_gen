@@ -5,6 +5,7 @@ use wbcore::ToolParamSchema;
 mod raster;
 mod data_tools;
 mod gis;
+mod geostats;
 mod geomorphometry;
 mod remote_sensing;
 mod stream_network_analysis;
@@ -547,6 +548,12 @@ pub use gis::NearTool;
 pub use gis::FieldCalculatorTool;
 pub use gis::AddGeometryAttributesTool;
 pub use gis::ReprojectVectorTool;
+
+// Geostatistics/Kriging Tools
+pub use geostats::EstimateVariogramTool;
+pub use geostats::FitVariogramTool;
+pub use geostats::OrdinaryKrigingTool;
+pub use geostats::KrigingCrossValidationTool;
 pub use gis::SimplifyFeaturesTool;
 pub use gis::FilterVectorFeaturesByAreaTool;
 pub use gis::EuclideanAllocationTool;

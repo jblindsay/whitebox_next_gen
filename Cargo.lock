@@ -4452,6 +4452,7 @@ dependencies = [
  "time",
  "ureq",
  "wbcore",
+ "wbgeostats",
  "wbgeotiff",
  "wblidar",
  "wbprojection",

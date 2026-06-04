@@ -8,6 +8,7 @@
 // - Quadrat Analysis: Count-based spatial pattern analysis
 
 use crate::weights::SpatialWeightsGraph;
+use rayon::prelude::*;
 
 /// Result of global spatial autocorrelation analysis
 #[derive(Debug, Clone)]
@@ -217,48 +218,61 @@ pub fn local_morans_i_lisa(values: &[f64], weights: &SpatialWeightsGraph, alpha:
     let mut p_values = vec![0.0; values.len()];
     let mut cluster_types = vec!["insignificant".to_string(); values.len()];
 
-    for i in 0..values.len() {
-        let mut lag_z = 0.0;
-        let mut wi = 0.0;
-        let mut wi2 = 0.0;
+    // Parallel computation of per-feature LISA statistics
+    let results: Vec<_> = (0..values.len())
+        .into_par_iter()
+        .map(|i| {
+            let mut lag_z = 0.0;
+            let mut wi = 0.0;
+            let mut wi2 = 0.0;
 
-        for (j, w) in &weights.neighbors[i] {
-            lag_z += w * z[*j];
-            wi += w;
-            wi2 += w * w;
-        }
-
-        if wi == 0.0 {
-            continue;
-        }
-
-        let i_stat = z[i] * lag_z;
-        local_i[i] = i_stat;
-        
-        let expected = -wi / (n - 1.0);
-        expected_vals[i] = expected;
-
-        let var_raw = ((n - b2) / (n - 1.0)) * wi2 + ((2.0 * b2 - n) / ((n - 1.0) * (n - 2.0))) * (wi * wi - wi2) - expected * expected;
-        
-        if var_raw.is_finite() && var_raw > 1.0e-12 {
-            variances[i] = var_raw;
-            let zscore = (i_stat - expected) / var_raw.sqrt();
-            z_scores[i] = zscore;
-            let p = crate::weights::two_tailed_normal_p(zscore);
-            p_values[i] = p;
-
-            if p <= alpha {
-                cluster_types[i] = if z[i] >= 0.0 && lag_z >= 0.0 {
-                    "HH".to_string()
-                } else if z[i] < 0.0 && lag_z < 0.0 {
-                    "LL".to_string()
-                } else if z[i] >= 0.0 && lag_z < 0.0 {
-                    "HL".to_string()
-                } else {
-                    "LH".to_string()
-                };
+            for (j, w) in &weights.neighbors[i] {
+                lag_z += w * z[*j];
+                wi += w;
+                wi2 += w * w;
             }
-        }
+
+            if wi == 0.0 {
+                return (
+                    0.0, 0.0, 0.0, 0.0, 0.0, "insignificant".to_string(),
+                );
+            }
+
+            let i_stat = z[i] * lag_z;
+            let expected = -wi / (n - 1.0);
+            let var_raw = ((n - b2) / (n - 1.0)) * wi2 + ((2.0 * b2 - n) / ((n - 1.0) * (n - 2.0))) * (wi * wi - wi2) - expected * expected;
+            
+            if var_raw.is_finite() && var_raw > 1.0e-12 {
+                let zscore = (i_stat - expected) / var_raw.sqrt();
+                let p = crate::weights::two_tailed_normal_p(zscore);
+                let cluster = if p <= alpha {
+                    if z[i] >= 0.0 && lag_z >= 0.0 {
+                        "HH".to_string()
+                    } else if z[i] < 0.0 && lag_z < 0.0 {
+                        "LL".to_string()
+                    } else if z[i] >= 0.0 && lag_z < 0.0 {
+                        "HL".to_string()
+                    } else {
+                        "LH".to_string()
+                    }
+                } else {
+                    "insignificant".to_string()
+                };
+                (i_stat, expected, var_raw, zscore, p, cluster)
+            } else {
+                (i_stat, expected, 0.0, 0.0, 1.0, "insignificant".to_string())
+            }
+        })
+        .collect();
+
+    // Unpack parallel results into output vectors
+    for (i, (i_stat, expected, var_raw, zscore, p, cluster)) in results.into_iter().enumerate() {
+        local_i[i] = i_stat;
+        expected_vals[i] = expected;
+        variances[i] = var_raw;
+        z_scores[i] = zscore;
+        p_values[i] = p;
+        cluster_types[i] = cluster;
     }
 
     Ok(LocalAssociationResult {
@@ -353,6 +367,50 @@ pub fn getis_ord_g_star(values: &[f64], weights: &SpatialWeightsGraph, alpha: f6
     let sum_sq: f64 = values.iter().map(|v| v * v).sum();
     let b2 = values.iter().map(|v| v.powi(4)).sum::<f64>();
 
+    // Parallel computation of per-feature Getis-Ord G* statistics
+    let results: Vec<_> = (0..values.len())
+        .into_par_iter()
+        .map(|i| {
+            let mut sum_wy = 0.0;
+            let mut wi = 0.0;
+            let mut wi2 = 0.0;
+
+            for (j, w) in &weights.neighbors[i] {
+                sum_wy += w * values[*j];
+                wi += w;
+                wi2 += w * w;
+            }
+
+            if wi == 0.0 {
+                return (
+                    0.0, 0.0, 0.0, 0.0, 1.0, "insignificant".to_string(),
+                );
+            }
+
+            let g_local = sum_wy / sum_val;
+            let expected = wi / (n - 1.0);
+
+            let var_numerator = (n - 1.0) * (sum_sq * wi2 - (wi * wi)) - 2.0 * (n - 2.0) * wi.powi(2) * sum_val;
+            let var_denominator = (n - 1.0).powi(2) * sum_val.powi(2);
+            let variance = if var_denominator > 0.0 { var_numerator / var_denominator } else { 0.0 };
+            let variance = variance.max(0.0);
+
+            if variance > 0.0 {
+                let zscore = (g_local - expected) / variance.sqrt();
+                let p = crate::weights::two_tailed_normal_p(zscore);
+                let cluster = if p <= alpha {
+                    if zscore > 0.0 { "HotSpot".to_string() } else { "ColdSpot".to_string() }
+                } else {
+                    "insignificant".to_string()
+                };
+                (g_local, expected, variance, zscore, p, cluster)
+            } else {
+                (g_local, expected, 0.0, 0.0, 1.0, "insignificant".to_string())
+            }
+        })
+        .collect();
+
+    // Unpack parallel results into output vectors
     let mut local_g = vec![0.0; values.len()];
     let mut expected_vals = vec![0.0; values.len()];
     let mut variances = vec![0.0; values.len()];
@@ -360,43 +418,13 @@ pub fn getis_ord_g_star(values: &[f64], weights: &SpatialWeightsGraph, alpha: f6
     let mut p_values = vec![0.0; values.len()];
     let mut cluster_types = vec!["insignificant".to_string(); values.len()];
 
-    for i in 0..values.len() {
-        let mut sum_wy = 0.0;
-        let mut wi = 0.0;
-        let mut wi2 = 0.0;
-
-        for (j, w) in &weights.neighbors[i] {
-            sum_wy += w * values[*j];
-            wi += w;
-            wi2 += w * w;
-        }
-
-        if wi == 0.0 {
-            continue;
-        }
-
-        let g_local = sum_wy / sum_val;
-        local_g[i] = g_local;
-
-        let expected = wi / (n - 1.0);
-        expected_vals[i] = expected;
-
-        let var_numerator = (n - 1.0) * (sum_sq * wi2 - (wi * wi)) - 2.0 * (n - 2.0) * wi.powi(2) * sum_val;
-        let var_denominator = (n - 1.0).powi(2) * sum_val.powi(2);
-
-        let variance = if var_denominator > 0.0 { var_numerator / var_denominator } else { 0.0 };
-        variances[i] = variance.max(0.0);
-
-        if variance > 0.0 {
-            let zscore = (g_local - expected) / variance.sqrt();
-            z_scores[i] = zscore;
-            let p = crate::weights::two_tailed_normal_p(zscore);
-            p_values[i] = p;
-
-            if p <= alpha {
-                cluster_types[i] = if zscore > 0.0 { "HotSpot".to_string() } else { "ColdSpot".to_string() };
-            }
-        }
+    for (i, (g, exp, var, z, p, cluster)) in results.into_iter().enumerate() {
+        local_g[i] = g;
+        expected_vals[i] = exp;
+        variances[i] = var;
+        z_scores[i] = z;
+        p_values[i] = p;
+        cluster_types[i] = cluster;
     }
 
     Ok(LocalGetisOrdResult {

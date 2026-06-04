@@ -17,8 +17,8 @@
 /// # Example
 ///
 /// ```ignore
-/// use wbgeostats::SimpleKriging;
-/// use wbgeostats::variogram::VariogramModel;
+/// use wbspatialstats::SimpleKriging;
+/// use wbspatialstats::variogram::VariogramModel;
 ///
 /// let coords = vec![(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)];
 /// let values = vec![10.0, 12.0, 11.0];

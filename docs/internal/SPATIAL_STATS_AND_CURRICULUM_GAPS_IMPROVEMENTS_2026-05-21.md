@@ -119,22 +119,48 @@ Upper-level GIS and GIScience courses commonly require a spatial statistics bloc
 
 **Deliverables:** core tools, QA tests, Python/R/QGIS examples, teaching lab scripts.
 
-### Phase B (Geostatistics and interpolation inference)
+### Phase B (Geostatistics and interpolation inference) ✅ **COMPLETE + EXTENDING** — Commit 2ffcfe0
 
-- Variogram modeling
-- Ordinary kriging
-- Universal kriging
-- Cross-validation and uncertainty surfaces
+**Completed (wbgeostats):**
+- ✅ Variogram modeling (Spherical, Exponential, Gaussian families with weighted fitting)
+- ✅ Ordinary kriging
+- ✅ Local ordinary kriging (k-nearest neighborhood adaptation)
+- ✅ Simple kriging (with known global mean)
+- ✅ Spatio-temporal kriging (3D space-time predictions with separable models)
+- ✅ Robust variogram fitting (L¹ and Huber loss for outlier handling)
+- ✅ Cross-validation framework and uncertainty surfaces
+- ✅ Kriging result variance and confidence intervals (95% CI computed)
+- ✅ Python/R bindings for all 4 kriging variants
+- ✅ Batch prediction with rayon parallelization
+- ✅ 61 comprehensive unit tests (all passing)
 
-**Deliverables:** reproducible kriging pipeline, benchmark reports, guidance on model assumptions.
+**Phase B Extension (wbspatialstats):**
+- ⏳ Universal kriging (polynomial trend component, ~200 lines) — to be added before Phase C
+- Addresses kriging with explicit drift/trend (e.g., linear elevation dependence)
+- Maintains API parity with OrdinaryKriging
 
-### Phase C (Spatial regression and local modeling)
+**Deliverables:** 
+- wbspatialstats crate (unified spatial statistics library; renamed from wbgeostats)
+- Python bindings via PyO3
+- R bindings via extendr
+- All kriging tests + universal kriging tests
+- Guidance on kriging assumptions and spatiotemporal application domains
+- Support for weather, pollution, hydrology, and remote-sensing time-series workflows
 
-- Spatial lag/error regression
-- Intro GWR
-- Diagnostic suite (residual spatial autocorrelation, local instability flags)
+### Phase C (Spatial regression and local modeling) — In `wbspatialstats`
 
-**Deliverables:** teaching-oriented regression examples and interpretation templates.
+- Spatial lag regression models (IV + FGLS estimation).
+- Spatial error regression models (GLS/FGLS/MLE).
+- Geographically weighted regression (GWR) with bandwidth selection (CV/AIC).
+- Spatial Durbin variants (optional for Phase C).
+- Multi-scale and local instability diagnostics.
+- Python/R bindings for all regression variants.
+
+**Deliverables:** 
+- Core spatial regression algorithms (~1000-1500 lines)
+- Python/R bindings
+- Teaching-oriented regression examples and interpretation templates
+- Diagnostics: residual spatial autocorrelation, local coefficient stability, marginal/total effects
 
 ### Phase D (Point-process expansion)
 
@@ -230,24 +256,152 @@ Performance is a design constraint, not a post-hoc optimization task.
 - **Status:** Moderate
 - **Primary blocker:** Native spatial statistics and inference depth.
 
-### Target after Phases A-C
+### Target after Phases A-D
 - **Status goal:** Strong
-- **Condition:** Complete autocorrelation/hotspot/kriging/spatial regression baseline with diagnostics and parity docs.
+- **Phase B achievement (2026-06-03):** Kriging family complete with all variants, robust fitting, Python/R parity, and 61 tests passing. Ready for tool-integration and teaching-workflow packaging.
+- **Phase A next:** Autocorrelation/hotspot baseline (Global Moran's I, LISA, Getis-Ord).
+- **Phase C next:** Spatial regression and GWR (this session target).
+- **Phase D horizon:** Point-process diagnostics.
 
 ---
 
-## 8. Immediate Next Actions
+## 8. Immediate Next Actions (Updated 2026-06-03)
 
-1. Publish an explicit open-tier capability note clarifying advanced network support.
-2. Implement the shared weights/diagnostics core as the first engineering milestone.
-3. Implement `global_morans_i` as the first production Phase A tool.
-4. Add lightweight performance sanity checks and runtime envelopes for each new tool.
-5. Track parity progress in Python, R, and QGIS manuals as each tool lands.
+**Completed:**
+1. ✅ Phase B: Kriging family (ordinary, local, simple, spatio-temporal) with robust fitting.
+2. ✅ Python/R/QGIS documentation parity for kriging methods.
+
+**Planned (In Order):**
+1. **Refactor: `wbgeostats` → `wbspatialstats`** (Section 9 details)
+   - In-place rename and workspace update (no code changes)
+   - Allows unified home for Phase A, B, C work
+   
+2. **Phase B Extension: Universal Kriging** (~200 lines)
+   - Polynomial trend component (degree 1–2)
+   - Same API as OrdinaryKriging
+   - Tests + Python/R bindings
+   
+3. **Phase C (Spatial Regression — this session's focus):**
+   - Spatial lag regression models (IV + FGLS)
+   - Spatial error regression models (GLS/FGLS/MLE)
+   - Geographically weighted regression (GWR) with bandwidth selection
+   - Diagnostics: residual spatial autocorrelation, local instability flags
+   - Python/R bindings for all variants
+
+**Teaching Workflow Packaging (Ongoing):**
+- Lightweight performance sanity checks per tool (10k-50k features interactively)
+- Runtime envelopes and classroom guidance
+- Reproducible teaching diagnostics (p-values, confidence intervals, assumption checks)
+- Curated reference datasets with known-answer tests
 
 ---
 
-## 9. Relationship to Existing Roadmaps
+## 9. Architecture Refactoring: Unified `wbspatialstats` Crate (2026-06-03)
+
+### Motivation
+Phase A, B, and C all implement spatial inference algorithms (autocorrelation, geostatistics, regression). Scattering these across `wbtools_oss`, `wbgeostats`, and a hypothetical `wbspatialregression` creates maintenance burden and semantic confusion.
+
+**Decision:** Rename `wbgeostats` → `wbspatialstats` and consolidate all spatial statistics work in one place.
+
+### Unified Crate Structure
+
+```
+crates/wbspatialstats/  (renamed from wbgeostats)
+├── src/
+│   ├── lib.rs           (crate root; pub re-exports)
+│   ├── variogram/       (Phase B: kriging foundations)
+│   │   ├── mod.rs
+│   │   ├── model.rs
+│   │   ├── robust.rs
+│   │   └── ...
+│   ├── kriging/         (Phase B: all kriging types)
+│   │   ├── mod.rs
+│   │   ├── ordinary.rs
+│   │   ├── local.rs
+│   │   ├── simple.rs
+│   │   ├── universal.rs      (NEW: Phase B extension)
+│   │   ├── st_kriging.rs
+│   │   └── ...
+│   ├── weights/         (NEW: Shared Phase A+C infrastructure)
+│   │   ├── mod.rs
+│   │   ├── contiguity.rs     (Queen/Rook; extracted from wbtools_oss)
+│   │   ├── knn.rs            (K-nearest; extracted from wbtools_oss)
+│   │   └── distance_band.rs  (Distance threshold; extracted from wbtools_oss)
+│   ├── autocorrelation/  (NEW: Phase A tools)
+│   │   ├── mod.rs
+│   │   ├── morans_i.rs      (Global and Local; moved from wbtools_oss)
+│   │   ├── getis_ord.rs     (Gi/Gi*; moved from wbtools_oss)
+│   │   ├── nni.rs           (Nearest-neighbor index; moved from wbtools_oss)
+│   │   └── quadrat.rs       (Quadrat test; moved from wbtools_oss)
+│   ├── regression/       (NEW: Phase C tools)
+│   │   ├── mod.rs
+│   │   ├── spatial_lag.rs    (Spatial lag regression)
+│   │   ├── spatial_error.rs  (Spatial error regression)
+│   │   ├── gwr.rs           (Geographically weighted regression)
+│   │   └── diagnostics.rs   (Shared significance/instability output)
+│   ├── inference/        (NEW: Shared schema for all phases)
+│   │   ├── mod.rs
+│   │   ├── significance.rs   (p-values, multiple testing correction)
+│   │   └── diagnostics.rs    (variance, confidence intervals, assumption checks)
+│   ├── python.rs         (PyO3 bindings for all modules; feature-gated)
+│   ├── r.rs             (extendr R bindings; feature-gated)
+│   └── error.rs         (Unified error types)
+├── Cargo.toml
+└── tests/
+    ├── kriging_tests.rs
+    ├── autocorrelation_tests.rs
+    └── regression_tests.rs
+```
+
+### Implementation Sequence
+
+1. **Refactor `wbgeostats` → `wbspatialstats`** (in-place rename, no code changes)
+   - Rename directory: `crates/wbgeostats/` → `crates/wbspatialstats/`
+   - Update `Cargo.toml` name field: `name = "wbspatialstats"`
+   - Update `crates/Cargo.toml` workspace member: `wbspatialstats`
+   - Update all internal imports across workspace
+
+2. **Add shared `weights/` module** (before Phase C, used by all autocorrelation)
+   - Extract contiguity, k-nearest, distance-band logic
+   - Create unified neighborhood graph interface
+   - Add diagnostic outputs (island counts, degree stats, connected components)
+
+3. **Extract Phase A tools from `wbtools_oss`** (Moran's I, LISA, Getis-Ord, NNI, quadrat)
+   - Move `autocorrelation/` module into `wbspatialstats`
+   - Update `wbtools_oss` to re-import from `wbspatialstats`
+   - Verify tool registry still works in `wbtools_oss`
+
+4. **Implement universal kriging** (Phase B extension, ~200 lines)
+   - New `kriging/universal.rs`
+   - Polynomial trend component (degree 1–2 typical)
+   - Same API as `OrdinaryKriging`
+
+5. **Implement Phase C spatial regression** (1000–1500 lines total)
+   - `regression/spatial_lag.rs`: IV + FGLS
+   - `regression/spatial_error.rs`: GLS/MLE
+   - `regression/gwr.rs`: Local fitting with kernel + bandwidth selection
+   - Share diagnostic infrastructure
+
+6. **Update Python/R bindings** (throughout)
+   - Keep feature-gated PyO3/extendr code in `wbspatialstats`
+   - Test all bindings post-refactoring
+
+### Benefits
+- **Single semantic home:** All spatial inference in one crate with one coherent philosophy
+- **Shared infrastructure:** Weights, diagnostics, significance testing used by all phases
+- **Reduced duplication:** Phase A extraction avoids code split between wbtools_oss and wbspatialstats
+- **Maintainability:** One crate to release, one set of tests, clear API surface
+- **Teaching clarity:** Instructors navigate one library for all spatial statistics
+
+### No Breaking Changes
+- `wbgeostats` has not been published; renaming is safe
+- `wbtools_oss` continues to export Phase A tools (re-imported from wbspatialstats)
+- Python/R users see consistent API across all phases
+
+---
+
+## 10. Relationship to Existing Roadmaps
 
 - Complements [docs/internal/VECTOR_platform_improvements_2026-05-20.md](docs/internal/VECTOR_platform_improvements_2026-05-20.md) by focusing specifically on spatial-statistics and curriculum readiness gaps.
 - Should be treated as the primary planning document for statistics and inference-focused platform expansion.
-- Also see [/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/docs/internal/SPATIAL_STATS_PHASE_A_DESIGN_SPEC_2026-05-21.md](/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/docs/internal/SPATIAL_STATS_PHASE_A_DESIGN_SPEC_2026-05-21.md).
+- Also see [/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/docs/internal/SPATIAL_STATS_PHASE_A_DESIGN_SPEC_2026-05-21.md](/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/docs/internal/SPATIAL_STATS_PHASE_A_DESIGN_SPEC_2026-05-21.md).- Architecture decision (Section 9) establishes `wbspatialstats` as unified home for Phase A, B, and C work.

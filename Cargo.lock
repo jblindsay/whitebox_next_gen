@@ -4326,24 +4326,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wbgeostats"
-version = "0.1.0"
-dependencies = [
- "approx",
- "extendr-api",
- "log",
- "nalgebra 0.32.6",
- "ndarray",
- "pyo3",
- "pyo3-build-config",
- "rand 0.8.5",
- "rayon",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "wbgeotiff"
 version = "0.1.2"
 dependencies = [
@@ -4436,6 +4418,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "wbspatialstats"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "extendr-api",
+ "log",
+ "nalgebra 0.32.6",
+ "ndarray",
+ "pyo3",
+ "pyo3-build-config",
+ "rand 0.8.5",
+ "rayon",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "wbtools_oss"
 version = "0.1.1"
 dependencies = [
@@ -4455,11 +4455,11 @@ dependencies = [
  "time",
  "ureq",
  "wbcore",
- "wbgeostats",
  "wbgeotiff",
  "wblidar",
  "wbprojection",
  "wbraster",
+ "wbspatialstats",
  "wbtopology",
  "wbvector",
  "wide 1.3.0",

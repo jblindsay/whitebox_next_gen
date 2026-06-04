@@ -98,7 +98,7 @@ impl Tool for FitVariogramTool {
                 .and_then(|v| v.as_u64())
                 .unwrap_or(1) as usize;
 
-            lags.push(wbgeostats::variogram::LagBin { 
+            lags.push(wbspatialstats::variogram::LagBin { 
                 distance, 
                 semivariance, 
                 pair_count 

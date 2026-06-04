@@ -7,7 +7,7 @@ use wbcore::{
 };
 use wbvector;
 use wbraster;
-use wbgeostats::{
+use wbspatialstats::{
     variogram::{EmpiricalVariogramBuilder, VariogramModelFamily, VariogramFitter},
     kriging::OrdinaryKriging,
     cv::LeaveOneOutCV,

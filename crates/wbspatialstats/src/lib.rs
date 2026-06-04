@@ -1,12 +1,12 @@
-//! `wbgeostats`: Production-grade geostatistics library
+//! `wbspatialstats`: Unified spatial statistics library
 //!
-//! Provides kriging, variography, and spatial inference tools for interpolation
-//! and analysis of spatially correlated data.
+//! Provides kriging, variography, spatial autocorrelation, and spatial regression tools
+//! for interpolation, analysis, and modeling of spatially correlated data.
 //!
 //! # Modules
 //!
-//! - `variogram`: Empirical and modeled semivariograms
-//! - `kriging`: Ordinary, Local, Simple, and Spatio-Temporal Kriging predictions
+//! - `variogram`: Empirical and modeled semivariograms (geostatistics)
+//! - `kriging`: Ordinary, Local, Simple, Universal, and Spatio-Temporal Kriging predictions
 //! - `cv`: Cross-validation diagnostics and metrics
 //! - `python`: Python bindings via PyO3 (requires python feature)
 

@@ -1,4 +1,4 @@
-//! PyO3 Python Bindings for wbgeostats Kriging Library
+//! PyO3 Python Bindings for wbspatialstats Spatial Statistics Library
 //!
 //! Exposes kriging, variography, and cross-validation functionality to Python.
 //! Build with: maturin develop
@@ -615,7 +615,7 @@ fn cross_validate_kriging(
 
 #[cfg(feature = "python")]
 #[pymodule]
-fn wbgeostats(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn wbspatialstats(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyVariogramModel>()?;
     m.add_class::<PyKrigingResult>()?;
     m.add_class::<PyOrdinaryKriging>()?;

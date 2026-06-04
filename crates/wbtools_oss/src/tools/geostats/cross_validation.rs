@@ -83,7 +83,7 @@ impl Tool for KrigingCrossValidationTool {
         let wrss = vario_obj.get("wrss").and_then(|v| v.as_f64()).unwrap_or(0.0);
         let condition_number = vario_obj.get("condition_number").and_then(|v| v.as_f64()).unwrap_or(1.0);
 
-        let vario = wbgeostats::variogram::VariogramModel {
+        let vario = wbspatialstats::variogram::VariogramModel {
             family,
             nugget,
             partial_sill,

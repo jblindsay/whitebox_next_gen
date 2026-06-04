@@ -1,4 +1,4 @@
-//! extendr R Bindings for wbgeostats Kriging Library
+//! extendr R Bindings for wbspatialstats Spatial Statistics Library
 //!
 //! Functional interface for kriging, variography, and cross-validation.
 //! Returns plain lists (Robj) with named vectors for easy R consumption.
@@ -1011,7 +1011,7 @@ pub fn kriging_predict_grid_spacetime(
 
 #[cfg(feature = "r")]
 extendr_module! {
-    mod wbgeostats;
+    mod wbspatialstats;
     fn estimate_variogram;
     fn fit_variogram;
     fn kriging_predict;

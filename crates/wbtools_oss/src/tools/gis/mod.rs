@@ -15,6 +15,9 @@ pub use spatial_stats::GetisOrdGiStarTool;
 pub use spatial_stats::LocalMoransILisaTool;
 pub use spatial_stats::NearestNeighbourIndexTool;
 pub use spatial_stats::QuadratCountTestTool;
+pub use spatial_stats::SpatialLagRegressionTool;
+pub use spatial_stats::SpatialErrorRegressionTool;
+pub use spatial_stats::GeographicallyWeightedRegressionTool;
 
 
 fn max_distance_squared(

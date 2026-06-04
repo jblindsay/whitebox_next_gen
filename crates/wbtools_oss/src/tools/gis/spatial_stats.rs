@@ -2303,3 +2303,233 @@ impl Tool for QuadratCountTestTool {
         Ok(ToolRunResult { outputs })
     }
 }
+
+// ============================================================================
+// SPATIAL REGRESSION TOOLS (SAR, SEM, GWR) - Production integration pending
+// ============================================================================
+
+pub struct SpatialLagRegressionTool;
+pub struct SpatialErrorRegressionTool;
+pub struct GeographicallyWeightedRegressionTool;
+
+impl Tool for SpatialLagRegressionTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "spatial_lag_regression",
+            display_name: "Spatial Lag Regression (SAR)",
+            summary: "Estimates spatial lag regression model with GMM/IV+FGLS. Adds global coefficients and diagnostics.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "response_field", description: "Response variable (dependent variable).", required: true },
+                ToolParamSpec { name: "predictor_fields", description: "Comma-separated predictor field names.", required: true },
+                ToolParamSpec { name: "weights_mode", description: "Neighborhood mode: queen, rook, k_nearest, distance_band.", required: false },
+                ToolParamSpec { name: "k", description: "k value for k_nearest mode.", required: false },
+                ToolParamSpec { name: "distance", description: "Distance threshold for distance_band mode.", required: false },
+                ToolParamSpec { name: "row_standardize", description: "Apply row standardization to weights (default: true).", required: false },
+                ToolParamSpec { name: "output", description: "Output vector layer with regression results.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.gpkg"));
+        defaults.insert("response_field".to_string(), json!("response"));
+        defaults.insert("predictor_fields".to_string(), json!("predictor1,predictor2"));
+        defaults.insert("weights_mode".to_string(), json!("queen"));
+        defaults.insert("row_standardize".to_string(), json!(true));
+        defaults.insert("output".to_string(), json!("output.gpkg"));
+
+        ToolManifest {
+            id: "spatial_lag_regression".to_string(),
+            display_name: "Spatial Lag Regression (SAR)".to_string(),
+            summary: "Estimates spatial lag regression with GMM/IV+FGLS framework.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "response_field".to_string(), description: "Response (dependent) variable.".to_string(), required: true },
+                ToolParamDescriptor { name: "predictor_fields".to_string(), description: "Comma-separated predictor field names.".to_string(), required: true },
+                ToolParamDescriptor { name: "weights_mode".to_string(), description: "Spatial neighborhood mode.".to_string(), required: false },
+                ToolParamDescriptor { name: "k".to_string(), description: "k value for k_nearest.".to_string(), required: false },
+                ToolParamDescriptor { name: "distance".to_string(), description: "Distance threshold.".to_string(), required: false },
+                ToolParamDescriptor { name: "row_standardize".to_string(), description: "Row standardize weights.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector layer.".to_string(), required: true },
+            ],
+            defaults: defaults.clone(),
+            examples: vec![ToolExample {
+                name: "sar_basic".to_string(),
+                description: "Estimate spatial lag regression with queen neighborhood.".to_string(),
+                args: defaults,
+            }],
+            tags: vec![
+                "vector".to_string(),
+                "spatial-regression".to_string(),
+                "sar".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let _ = parse_string_arg(args, "response_field")?;
+        let _ = parse_string_arg(args, "predictor_fields")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        // Integration with wbspatialstats::regression::SpatialLagRegression pending
+        // Will: load vector → extract fields → build weights → call regression → output results
+        Err(ToolError::Execution(
+            "Full implementation pending - wbspatialstats regression integration in progress".to_string(),
+        ))
+    }
+}
+
+impl Tool for SpatialErrorRegressionTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "spatial_error_regression",
+            display_name: "Spatial Error Regression (SEM)",
+            summary: "Estimates spatial error regression model with FGLS. Adds coefficients and diagnostics.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "response_field", description: "Response variable.", required: true },
+                ToolParamSpec { name: "predictor_fields", description: "Comma-separated predictor field names.", required: true },
+                ToolParamSpec { name: "weights_mode", description: "Neighborhood mode: queen, rook, k_nearest, distance_band.", required: false },
+                ToolParamSpec { name: "k", description: "k value for k_nearest.", required: false },
+                ToolParamSpec { name: "distance", description: "Distance threshold.", required: false },
+                ToolParamSpec { name: "row_standardize", description: "Row standardize weights (default: true).", required: false },
+                ToolParamSpec { name: "output", description: "Output vector layer with results.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.gpkg"));
+        defaults.insert("response_field".to_string(), json!("response"));
+        defaults.insert("predictor_fields".to_string(), json!("predictor1,predictor2"));
+        defaults.insert("weights_mode".to_string(), json!("queen"));
+        defaults.insert("row_standardize".to_string(), json!(true));
+        defaults.insert("output".to_string(), json!("output.gpkg"));
+
+        ToolManifest {
+            id: "spatial_error_regression".to_string(),
+            display_name: "Spatial Error Regression (SEM)".to_string(),
+            summary: "Estimates spatial error regression with FGLS.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "response_field".to_string(), description: "Response variable.".to_string(), required: true },
+                ToolParamDescriptor { name: "predictor_fields".to_string(), description: "Comma-separated predictor fields.".to_string(), required: true },
+                ToolParamDescriptor { name: "weights_mode".to_string(), description: "Spatial neighborhood mode.".to_string(), required: false },
+                ToolParamDescriptor { name: "k".to_string(), description: "k for k_nearest.".to_string(), required: false },
+                ToolParamDescriptor { name: "distance".to_string(), description: "Distance threshold.".to_string(), required: false },
+                ToolParamDescriptor { name: "row_standardize".to_string(), description: "Row standardize weights.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector layer.".to_string(), required: true },
+            ],
+            defaults: defaults.clone(),
+            examples: vec![ToolExample {
+                name: "sem_basic".to_string(),
+                description: "Estimate spatial error regression with queen neighborhood.".to_string(),
+                args: defaults,
+            }],
+            tags: vec![
+                "vector".to_string(),
+                "spatial-regression".to_string(),
+                "sem".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let _ = parse_string_arg(args, "response_field")?;
+        let _ = parse_string_arg(args, "predictor_fields")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        ctx.progress.info("Spatial Error Regression (SEM) - Full implementation coming in next phase");
+        Err(ToolError::Execution(
+            "Full implementation pending - wbspatialstats regression integration in progress".to_string(),
+        ))
+    }
+}
+
+impl Tool for GeographicallyWeightedRegressionTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "geographically_weighted_regression",
+            display_name: "Geographically Weighted Regression (GWR)",
+            summary: "Estimates GWR with AICc-based bandwidth selection. Adds local coefficients per location.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "response_field", description: "Response variable.", required: true },
+                ToolParamSpec { name: "predictor_fields", description: "Comma-separated predictor field names.", required: true },
+                ToolParamSpec { name: "bandwidth_hint", description: "Optional bandwidth hint (auto-optimizes if omitted).", required: false },
+                ToolParamSpec { name: "output", description: "Output vector with local coefficients.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.gpkg"));
+        defaults.insert("response_field".to_string(), json!("response"));
+        defaults.insert("predictor_fields".to_string(), json!("predictor1,predictor2"));
+        defaults.insert("output".to_string(), json!("output.gpkg"));
+
+        ToolManifest {
+            id: "geographically_weighted_regression".to_string(),
+            display_name: "Geographically Weighted Regression (GWR)".to_string(),
+            summary: "Estimates GWR with AICc-optimized bandwidth selection.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "response_field".to_string(), description: "Response variable.".to_string(), required: true },
+                ToolParamDescriptor { name: "predictor_fields".to_string(), description: "Comma-separated predictor fields.".to_string(), required: true },
+                ToolParamDescriptor { name: "bandwidth_hint".to_string(), description: "Optional bandwidth hint.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector layer.".to_string(), required: true },
+            ],
+            defaults: defaults.clone(),
+            examples: vec![ToolExample {
+                name: "gwr_basic".to_string(),
+                description: "Estimate GWR with automatic AICc bandwidth selection.".to_string(),
+                args: defaults,
+            }],
+            tags: vec![
+                "vector".to_string(),
+                "spatial-regression".to_string(),
+                "gwr".to_string(),
+                "local-regression".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let _ = parse_string_arg(args, "response_field")?;
+        let _ = parse_string_arg(args, "predictor_fields")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        ctx.progress.info("Geographically Weighted Regression (GWR) - Full implementation coming in next phase");
+        Err(ToolError::Execution(
+            "Full implementation pending - wbspatialstats regression integration in progress".to_string(),
+        ))
+    }
+}

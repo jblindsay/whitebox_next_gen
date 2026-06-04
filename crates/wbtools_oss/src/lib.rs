@@ -363,6 +363,9 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::LocalMoransILisaTool));
     registry.register(Box::new(tools::NearestNeighbourIndexTool));
     registry.register(Box::new(tools::QuadratCountTestTool));
+    registry.register(Box::new(tools::SpatialLagRegressionTool));
+    registry.register(Box::new(tools::SpatialErrorRegressionTool));
+    registry.register(Box::new(tools::GeographicallyWeightedRegressionTool));
     registry.register(Box::new(tools::SelectByLocationTool));
     registry.register(Box::new(tools::SpatialJoinTool));
     registry.register(Box::new(tools::NearTool));

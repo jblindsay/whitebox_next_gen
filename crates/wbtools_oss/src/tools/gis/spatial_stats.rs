@@ -4232,7 +4232,11 @@ impl Tool for InhomogeneousIntensityTool {
         ToolMetadata {
             id: "inhomogeneous_intensity_raster",
             display_name: "Inhomogeneous Intensity - Raster Output",
-            summary: "Computes kernel density estimation surface for point pattern intensity.",
+            summary: r#"Computes kernel density estimation (KDE) surface visualizing point pattern intensity and spatial variation. Intensity measures point concentration per unit area; inhomogeneous intensity captures spatial variation (hotspots, coldspots) beyond simple density mapping. Bandwidth parameter controls smoothing: large bandwidth→smooth global pattern; small bandwidth→local detail but noise.
+
+The tool supports Gaussian and Epanechnikov kernels. Gaussian is standard for many applications; Epanechnikov has compact support (explicit cutoff distance). Output is a continuous intensity raster normalizing by bandwidth and point count, directly interpretable as density (points per unit area).
+
+Applications: Disease risk mapping (spatially variable incidence), species distribution estimation, event hotspot visualization. Compare to simple quadrat-based density for continuous surface and multi-scale sensitivity analysis. Use auto-computed bandwidth for data-driven selection, or specify for comparability across datasets. Combine with other point statistics (NNI, Ripley's K) for comprehensive pattern assessment."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4256,7 +4260,7 @@ impl Tool for InhomogeneousIntensityTool {
         ToolManifest {
             id: "inhomogeneous_intensity_raster".to_string(),
             display_name: "Inhomogeneous Intensity - Raster Output".to_string(),
-            summary: "Computes kernel density estimation surface for point intensity analysis.".to_string(),
+            summary: r#"Computes kernel density estimation (KDE) surface visualizing spatial point intensity. Reveals hotspots and coldspots beyond simple density."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4383,7 +4387,11 @@ impl Tool for RipleysKTool {
         ToolMetadata {
             id: "ripleys_k_test",
             display_name: "Ripley's K Function",
-            summary: "Computes Ripley's K statistic for point pattern analysis.",
+            summary: r#"Computes Ripley's K statistic, a fundamental multi-scale point pattern analysis measuring clustering intensity across distance ranges. K(d) counts expected number of points within distance d of any point, standardized by intensity. K(d) > d² indicates clustering at that scale; K(d) < d² indicates dispersion; K(d) ≈ d² indicates random pattern (CSR).
+
+Unlike single-scale tests (NNI, quadrat test), Ripley's K reveals scale-dependent clustering—some phenomena cluster at small scales but appear random/dispersed at larger scales. Output includes K values, L function (L(d) = √(K(d)/π) - d for easier interpretation), and typically visualization envelope bounds (from permutation testing).
+
+Applications: Ecology (animal territory or resource clustering detection across scales), seismology (earthquake clustering analysis), disease epidemiology (multi-scale disease cluster identification). Larger bandwidth reveals coarser patterns; narrower step_size improves resolution. Combine with envelope testing for significance. Edge effects handled via edge corrections in implementation."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4405,7 +4413,7 @@ impl Tool for RipleysKTool {
         ToolManifest {
             id: "ripleys_k_test".to_string(),
             display_name: "Ripley's K Function".to_string(),
-            summary: "Computes Ripley's K statistic for point pattern clustering analysis.".to_string(),
+            summary: r#"Computes Ripley's K multi-scale clustering statistic. Reveals scale-dependent clustering/dispersion across distance ranges."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4539,7 +4547,11 @@ impl Tool for EnvelopeTestTool {
         ToolMetadata {
             id: "envelope_test",
             display_name: "Envelope Test",
-            summary: "Computes simulation envelope for point pattern significance testing.",
+            summary: r#"Performs Monte Carlo simulation envelope testing for point pattern significance, comparing observed pattern to simulation null distribution under Complete Spatial Randomness (CSR). For each distance, the envelope bounds represent min/max values from random patterns; observed values outside envelope indicate significant clustering/dispersion at that scale.
+
+The tool generates num_simulations random point patterns preserving point count and study area, computes statistic (typically Ripley's K, L-function, or F-function) for each, then derives confidence envelopes. Output includes observed statistic values plus upper/lower envelope bounds for each distance. Significant patterns occur where observed crosses envelope bounds.
+
+Applications: Testing whether observed clustering is statistically significant or just random variation, validating ecological/epidemiological pattern hypotheses. More rigorous than asymptotic tests for non-normal or irregular patterns. Computationally intensive; use fewer simulations for exploratory analysis, more (999+) for final inference. Wider envelope (fewer simulations or larger patterns) indicates more variability in null distribution."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4562,7 +4574,7 @@ impl Tool for EnvelopeTestTool {
         ToolManifest {
             id: "envelope_test".to_string(),
             display_name: "Envelope Test".to_string(),
-            summary: "Computes simulation envelope for significance testing of point patterns.".to_string(),
+            summary: r#"Performs Monte Carlo envelope testing comparing observed pattern to CSR null distribution. Determines significance of clustering/dispersion."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4760,7 +4772,11 @@ impl Tool for PointProcessResidualsTool {
         ToolMetadata {
             id: "point_process_residuals",
             display_name: "Point Process Residuals",
-            summary: "Computes residuals from fitted Poisson point process model.",
+            summary: r#"Computes residuals for point process model diagnostics, assessing goodness-of-fit by comparing observed points to fitted Poisson intensity surface. Residuals reveal departures from model: clustering residuals (positive areas attracting more points than predicted), dispersion residuals (negative areas repelling points), or structured residuals (systematic spatial patterns missed by model).
+
+Residuals produced: standardized residuals comparing observed to expected point count per unit area. Spatial pattern of residuals reveals model weaknesses—if residuals show clustering, the model missed spatial correlation structure; if dispersed, model over-fit. Examining residual maps with spatial statistics (Moran's I on residuals) detects unmodeled spatial structure.
+
+Applications: Validating fitted Poisson point process models, diagnosing geostatistical model assumptions, detecting unaccounted spatial heterogeneity. Use with model selection criteria (AICc, BIC) for model comparison. Residual visualization and statistical testing (spatial autocorrelation) essential for model criticism. If residuals show significant autocorrelation, consider Cox point process or more complex model capturing spatial heterogeneity."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4781,7 +4797,7 @@ impl Tool for PointProcessResidualsTool {
         ToolManifest {
             id: "point_process_residuals".to_string(),
             display_name: "Point Process Residuals".to_string(),
-            summary: "Computes residuals from fitted Poisson point process model.".to_string(),
+            summary: r#"Computes residuals from fitted Poisson point process model for diagnostics. Detects unmodeled spatial structure."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![

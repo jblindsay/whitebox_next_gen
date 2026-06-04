@@ -1774,16 +1774,6 @@ fn polygon_area_and_membership(
     Ok((area, polygons))
 }
 
-fn chi_square_survival_approx(chi_square: f64, df: f64) -> f64 {
-    if df <= 0.0 {
-        return 1.0;
-    }
-    let x = (chi_square / df).powf(1.0 / 3.0);
-    let mu = 1.0 - 2.0 / (9.0 * df);
-    let sigma = (2.0 / (9.0 * df)).sqrt();
-    let z = (x - mu) / sigma.max(1.0e-12);
-    (1.0 - normal_cdf(z)).clamp(0.0, 1.0)
-}
 
 impl Tool for NearestNeighbourIndexTool {
     fn metadata(&self) -> ToolMetadata {

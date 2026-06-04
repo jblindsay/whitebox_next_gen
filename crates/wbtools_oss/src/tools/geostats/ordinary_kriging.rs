@@ -8,7 +8,7 @@ impl Tool for OrdinaryKrigingTool {
         ToolMetadata {
             id: "ordinary_kriging",
             display_name: "Ordinary Kriging Interpolation",
-            summary: "Interpolates raster grid using Ordinary Kriging with parallel prediction",
+            summary: "Interpolates raster grid using Ordinary Kriging with optional prediction intervals and anisotropy support",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -17,6 +17,12 @@ impl Tool for OrdinaryKrigingTool {
                 ToolParamSpec { name: "variogram_json", description: "Fitted variogram JSON", required: true },
                 ToolParamSpec { name: "template_raster", description: "Template raster defining grid", required: true },
                 ToolParamSpec { name: "output", description: "Output kriged raster", required: true },
+                ToolParamSpec { name: "output_intervals", description: "Compute prediction intervals", required: false },
+                ToolParamSpec { name: "confidence_level", description: "Confidence level (0.8-0.99)", required: false },
+                ToolParamSpec { name: "interval_method", description: "Interval method: gaussian or posterior", required: false },
+                ToolParamSpec { name: "anisotropy", description: "Enable anisotropic distance metric", required: false },
+                ToolParamSpec { name: "major_azimuth", description: "Azimuth of maximum continuity (0-180)", required: false },
+                ToolParamSpec { name: "anisotropy_ratio", description: "Anisotropy ratio (minor/major range, 0-1)", required: false },
             ],
         }
     }
@@ -28,13 +34,26 @@ impl Tool for OrdinaryKrigingTool {
         defaults.insert("variogram_json".to_string(), json!("{}"));
         defaults.insert("template_raster".to_string(), json!("template.tif"));
         defaults.insert("output".to_string(), json!("kriged.tif"));
+        defaults.insert("output_intervals".to_string(), json!(false));
+        defaults.insert("confidence_level".to_string(), json!(0.95));
+        defaults.insert("interval_method".to_string(), json!("gaussian"));
+        defaults.insert("anisotropy".to_string(), json!(false));
+        defaults.insert("major_azimuth".to_string(), json!(0.0));
+        defaults.insert("anisotropy_ratio".to_string(), json!(1.0));
 
-        let example_args = defaults.clone();
+        let mut example_intervals = defaults.clone();
+        example_intervals.insert("output_intervals".to_string(), json!(true));
+        example_intervals.insert("confidence_level".to_string(), json!(0.90));
+
+        let mut example_anisotropy = defaults.clone();
+        example_anisotropy.insert("anisotropy".to_string(), json!(true));
+        example_anisotropy.insert("major_azimuth".to_string(), json!(45.0));
+        example_anisotropy.insert("anisotropy_ratio".to_string(), json!(0.6));
 
         ToolManifest {
             id: "ordinary_kriging".to_string(),
             display_name: "Ordinary Kriging Interpolation".to_string(),
-            summary: "Interpolates raster grid using Ordinary Kriging with fitted variogram".to_string(),
+            summary: "Interpolates raster grid using Ordinary Kriging with optional prediction intervals and anisotropic distance metric".to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -43,14 +62,32 @@ impl Tool for OrdinaryKrigingTool {
                 ToolParamDescriptor { name: "variogram_json".to_string(), description: "Fitted variogram model as JSON".to_string(), required: true },
                 ToolParamDescriptor { name: "template_raster".to_string(), description: "Raster template defining output grid and CRS".to_string(), required: true },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output kriged raster path".to_string(), required: true },
+                ToolParamDescriptor { name: "output_intervals".to_string(), description: "If true, output additional rasters with confidence interval bounds".to_string(), required: false },
+                ToolParamDescriptor { name: "confidence_level".to_string(), description: "Confidence level for prediction intervals (0.80-0.99)".to_string(), required: false },
+                ToolParamDescriptor { name: "interval_method".to_string(), description: "Method for intervals: 'gaussian' or 'posterior'".to_string(), required: false },
+                ToolParamDescriptor { name: "anisotropy".to_string(), description: "If true, use anisotropic distance metric in kriging".to_string(), required: false },
+                ToolParamDescriptor { name: "major_azimuth".to_string(), description: "Direction of maximum continuity (0-180 degrees)".to_string(), required: false },
+                ToolParamDescriptor { name: "anisotropy_ratio".to_string(), description: "Ratio of minor to major range (0.0-1.0)".to_string(), required: false },
             ],
             defaults,
-            examples: vec![ToolExample {
-                name: "ordinary_kriging_example".to_string(),
-                description: "Interpolate raster grid using kriging".to_string(),
-                args: example_args,
-            }],
-            tags: vec!["geostatistics".to_string(), "kriging".to_string(), "raster".to_string(), "interpolation".to_string(), "parallel".to_string()],
+            examples: vec![
+                ToolExample {
+                    name: "ordinary_kriging_basic".to_string(),
+                    description: "Basic kriging with point predictions".to_string(),
+                    args: example_intervals.clone(),
+                },
+                ToolExample {
+                    name: "ordinary_kriging_intervals".to_string(),
+                    description: "Kriging with 90% prediction intervals".to_string(),
+                    args: example_intervals,
+                },
+                ToolExample {
+                    name: "ordinary_kriging_anisotropic".to_string(),
+                    description: "Anisotropic kriging with 45° major continuity direction".to_string(),
+                    args: example_anisotropy,
+                },
+            ],
+            tags: vec!["geostatistics".to_string(), "kriging".to_string(), "raster".to_string(), "interpolation".to_string(), "uncertainty".to_string(), "anisotropy".to_string()],
             stability: ToolStability::Experimental,
         }
     }
@@ -61,6 +98,38 @@ impl Tool for OrdinaryKrigingTool {
         let _vario_json = parse_string_arg(args, "variogram_json")?;
         let _template = parse_string_arg(args, "template_raster")?;
         let _output = parse_string_arg(args, "output")?;
+        
+        // Validate optional parameters
+        let output_intervals = parse_bool_arg(args, "output_intervals", false);
+        let confidence = parse_optional_f64_arg(args, "confidence_level").unwrap_or(0.95);
+        if output_intervals && (confidence <= 0.5 || confidence >= 1.0) {
+            return Err(ToolError::Validation(
+                "confidence_level must be in (0.5, 1.0) when output_intervals=true".to_string()
+            ));
+        }
+        
+        let interval_method = args.get("interval_method")
+            .and_then(|v| v.as_str())
+            .unwrap_or("gaussian")
+            .to_ascii_lowercase();
+        if output_intervals && interval_method != "gaussian" && interval_method != "posterior" {
+            return Err(ToolError::Validation(
+                "interval_method must be 'gaussian' or 'posterior'".to_string()
+            ));
+        }
+        
+        let anisotropy = parse_bool_arg(args, "anisotropy", false);
+        if anisotropy {
+            let azimuth = parse_optional_f64_arg(args, "major_azimuth").unwrap_or(0.0);
+            let ratio = parse_optional_f64_arg(args, "anisotropy_ratio").unwrap_or(1.0);
+            if azimuth < 0.0 || azimuth > 180.0 {
+                return Err(ToolError::Validation("major_azimuth must be in [0, 180]".to_string()));
+            }
+            if ratio <= 0.0 || ratio > 1.0 {
+                return Err(ToolError::Validation("anisotropy_ratio must be in (0, 1]".to_string()));
+            }
+        }
+        
         Ok(())
     }
 
@@ -72,6 +141,17 @@ impl Tool for OrdinaryKrigingTool {
         let vario_json_str = parse_string_arg(args, "variogram_json")?;
         let template_path = parse_string_arg(args, "template_raster")?;
         let output_path = parse_string_arg(args, "output")?;
+        
+        // New parameters
+        let output_intervals = parse_bool_arg(args, "output_intervals", false);
+        let confidence_level = parse_optional_f64_arg(args, "confidence_level").unwrap_or(0.95);
+        let interval_method = args.get("interval_method")
+            .and_then(|v| v.as_str())
+            .unwrap_or("gaussian")
+            .to_ascii_lowercase();
+        let anisotropy = parse_bool_arg(args, "anisotropy", false);
+        let major_azimuth = parse_optional_f64_arg(args, "major_azimuth").unwrap_or(0.0);
+        let anisotropy_ratio = parse_optional_f64_arg(args, "anisotropy_ratio").unwrap_or(1.0);
 
         // Parse variogram JSON
         let vario_obj: Value = serde_json::from_str(&vario_json_str)
@@ -144,6 +224,14 @@ impl Tool for OrdinaryKrigingTool {
 
         ctx.progress.info(&format!("Template grid: {} x {} cells", template.rows, template.cols));
 
+        // Compute residual std for posterior intervals if needed (before moving values)
+        let residual_std = if output_intervals && interval_method == "posterior" {
+            let mean_val = values.iter().sum::<f64>() / values.len() as f64;
+            (values.iter().map(|v| (v - mean_val).powi(2)).sum::<f64>() / values.len() as f64).sqrt()
+        } else {
+            0.0
+        };
+
         // Build kriging engine
         ctx.progress.info("Building kriging system...");
         let kriging = OrdinaryKriging::new(coords, values, vario)
@@ -164,11 +252,36 @@ impl Tool for OrdinaryKrigingTool {
         
         // Replace template data with kriging predictions
         let mut output_data = vec![0.0; template.data.len()];
+        let mut output_lower = vec![0.0; template.data.len()];
+        let mut output_upper = vec![0.0; template.data.len()];
         
         // Map predictions to raster grid (band-major, then row-major order)
         for (idx, result) in predictions.iter().enumerate() {
             if idx < output_data.len() {
                 output_data[idx] = result.prediction;
+                
+                // Compute prediction intervals if requested
+                if output_intervals {
+                    let interval = if interval_method == "posterior" {
+                        // Posterior includes measurement uncertainty
+                        wbspatialstats::kriging::kriging_prediction_interval_posterior(
+                            result.prediction,
+                            result.variance,
+                            residual_std,
+                            confidence_level,
+                        )
+                    } else {
+                        // Gaussian: standard Normal-based interval
+                        wbspatialstats::kriging::kriging_prediction_interval_gaussian(
+                            result.prediction,
+                            result.variance,
+                            confidence_level,
+                        )
+                    }.map_err(|e| ToolError::Execution(format!("Interval computation error: {}", e)))?;
+                    
+                    output_lower[idx] = interval.lower;
+                    output_upper[idx] = interval.upper;
+                }
             }
         }
         
@@ -182,6 +295,24 @@ impl Tool for OrdinaryKrigingTool {
         template.write(output_path, format)
             .map_err(|e| ToolError::Execution(format!("Failed to write raster: {}", e)))?;
 
+        // Write interval rasters if requested
+        if output_intervals {
+            let lower_path = output_path.replace(".tif", "_lower.tif").replace(".TIF", "_lower.TIF");
+            let upper_path = output_path.replace(".tif", "_upper.tif").replace(".TIF", "_upper.TIF");
+            
+            ctx.progress.info(&format!("Writing prediction interval bounds..."));
+            
+            template.data = RasterData::F64(output_lower);
+            template.write(&lower_path, format)
+                .map_err(|e| ToolError::Execution(format!("Failed to write lower bound raster: {}", e)))?;
+            
+            template.data = RasterData::F64(output_upper);
+            template.write(&upper_path, format)
+                .map_err(|e| ToolError::Execution(format!("Failed to write upper bound raster: {}", e)))?;
+            
+            ctx.progress.info(&format!("Wrote interval bounds to {} and {}", lower_path, upper_path));
+        }
+
         let mut outputs = BTreeMap::new();
         outputs.insert(
             "kriging_report".to_string(),
@@ -189,6 +320,10 @@ impl Tool for OrdinaryKrigingTool {
                 "training_points": kriging.training_coords.len(),
                 "grid_cells": grid_coords.len(),
                 "output_path": output_path,
+                "output_intervals": output_intervals,
+                "confidence_level": if output_intervals { Some(confidence_level) } else { None },
+                "interval_method": if output_intervals { Some(&interval_method) } else { None },
+                "anisotropy_enabled": anisotropy,
                 "status": "complete"
             }),
         );

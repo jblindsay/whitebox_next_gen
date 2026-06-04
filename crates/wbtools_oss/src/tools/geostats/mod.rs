@@ -68,6 +68,10 @@ fn parse_optional_i64_arg(args: &ToolArgs, key: &str) -> Option<i64> {
     args.get(key).and_then(|v| v.as_i64())
 }
 
+fn parse_bool_arg(args: &ToolArgs, key: &str, default: bool) -> bool {
+    args.get(key).and_then(|v| v.as_bool()).unwrap_or(default)
+}
+
 fn parse_string_arg<'a>(args: &'a ToolArgs, key: &str) -> Result<&'a str, ToolError> {
     args.get(key)
         .and_then(|v| v.as_str())

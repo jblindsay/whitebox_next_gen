@@ -578,6 +578,7 @@ pub use gis::ReprojectVectorTool;
 pub use geostats::EstimateVariogramTool;
 pub use geostats::FitVariogramTool;
 pub use geostats::DirectionalVariogramTool;
+pub use geostats::OrdinaryCoKrigingTool;
 pub use gis::SimplifyFeaturesTool;
 pub use gis::FilterVectorFeaturesByAreaTool;
 pub use gis::EuclideanAllocationTool;

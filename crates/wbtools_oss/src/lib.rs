@@ -408,6 +408,9 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::EstimateVariogramTool));
     registry.register(Box::new(tools::FitVariogramTool));
     registry.register(Box::new(tools::DirectionalVariogramTool));
+    
+    // Phase C Multivariate Kriging Tools
+    registry.register(Box::new(tools::OrdinaryCoKrigingTool));
     // Note: kriging tools moved to Phase B (OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, UniversalKriging, SpaceTimeKriging)
     // and are registered with other spatial stats tools above
     

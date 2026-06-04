@@ -2,7 +2,7 @@
 name = "wbspatialstats"
 version = "0.1.0"
 edition = "2021"
-authors = ["Whitebox Geospatial <support@whiteboxgeo.com>"]
+authors = ["John Lindsay", "Whitebox Geospatial <support@whiteboxgeo.com>"]
 description = "Unified spatial statistics library: kriging, spatial autocorrelation, spatial regression"
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/jblindsay/whitebox"

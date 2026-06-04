@@ -21,10 +21,8 @@ mod variogram_fitting;
 pub use variogram_fitting::FitVariogramTool;
 
 mod ordinary_kriging;
-pub use ordinary_kriging::OrdinaryKrigingTool;
 
 mod cross_validation;
-pub use cross_validation::KrigingCrossValidationTool;
 
 mod directional_variogram;
 pub use directional_variogram::DirectionalVariogramTool;
@@ -74,6 +72,7 @@ fn parse_optional_i64_arg(args: &ToolArgs, key: &str) -> Option<i64> {
     args.get(key).and_then(|v| v.as_i64())
 }
 
+#[allow(dead_code)]
 fn parse_bool_arg(args: &ToolArgs, key: &str, default: bool) -> bool {
     args.get(key).and_then(|v| v.as_bool()).unwrap_or(default)
 }

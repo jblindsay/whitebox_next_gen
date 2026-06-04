@@ -112,10 +112,12 @@ fn parse_vector_path_arg(args: &ToolArgs, key: &str) -> Result<String, ToolError
     super::parse_string_arg(args, key).map(|s| s.to_string())
 }
 
+#[allow(dead_code)]
 fn parse_raster_path_arg(args: &ToolArgs, key: &str) -> Result<String, ToolError> {
     super::parse_string_arg(args, key).map(|s| s.to_string())
 }
 
+#[allow(dead_code)]
 fn normal_cdf(x: f64) -> f64 {
     let z = x.abs();
     let t = 1.0 / (1.0 + 0.231_641_9 * z);
@@ -128,6 +130,7 @@ fn normal_cdf(x: f64) -> f64 {
     if x >= 0.0 { cdf } else { 1.0 - cdf }
 }
 
+#[allow(dead_code)]
 fn two_tailed_normal_p(z: f64) -> f64 {
     (2.0 * (1.0 - normal_cdf(z.abs()))).clamp(0.0, 1.0)
 }
@@ -1004,12 +1007,15 @@ impl Tool for GlobalMoransITool {
 
 #[derive(Clone, Copy)]
 enum MultipleTestingMode {
+    #[allow(dead_code)]
     None,
     FdrBh,
+    #[allow(dead_code)]
     Bonferroni,
 }
 
 impl MultipleTestingMode {
+    #[allow(dead_code)]
     fn parse(args: &ToolArgs) -> Result<Self, ToolError> {
         let text = args
             .get("multiple_testing")
@@ -1718,7 +1724,7 @@ impl Tool for GetisOrdGiStarTool {
             
             let gi_z_vec: Vec<Option<f64>> = vec![Some(perm_result.z_score); values.len()];
             let gi_p_vec: Vec<Option<f64>> = vec![Some(perm_result.p_value_two_tailed); values.len()];
-            let cluster_vec: Vec<String> = values.iter().enumerate().map(|(i, &v)| {
+            let cluster_vec: Vec<String> = values.iter().enumerate().map(|(_i, &v)| {
                 let z = perm_result.z_score;
                 if v > values.iter().sum::<f64>() / values.len() as f64 {
                     if z > 1.96 { "HotSpot".to_string() } else { "NotSignificant".to_string() }
@@ -4058,7 +4064,7 @@ impl Tool for GeographicallyWeightedRegressionRasterTool {
         let response_field = parse_string_arg(args, "response_field")?;
         let predictor_str = parse_string_arg(args, "predictor_fields")?;
         let output_prefix = parse_optional_output_path(args, "output_prefix")?;
-        let kernel = parse_string_arg(args, "kernel").unwrap_or_else(|_| "bisquare");
+        let _kernel = parse_string_arg(args, "kernel").unwrap_or_else(|_| "bisquare");
         let cell_size = parse_optional_f64_arg(args, "cell_size");
 
         let predictor_fields: Vec<&str> = predictor_str.split(',').map(|s| s.trim()).collect();
@@ -4769,7 +4775,7 @@ impl Tool for PointProcessResidualsTool {
         let mut points = Vec::new();
         let mut fitted_intensities = Vec::new();
 
-        for (idx, feature) in input.features.iter().enumerate() {
+        for (_idx, feature) in input.features.iter().enumerate() {
             if let Some(geom) = &feature.geometry {
                 if let wbvector::Geometry::Point(coord) = geom {
                     points.push((coord.x, coord.y));
@@ -4824,7 +4830,7 @@ impl Tool for PointProcessResidualsTool {
 
             let width = max_x - min_x;
             let height = max_y - min_y;
-            let area = width * height;
+            let _area = width * height;
 
             // Scott's rule bandwidth
             let n = points.len() as f64;

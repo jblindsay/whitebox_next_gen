@@ -3,8 +3,7 @@
 // Provides spatial lag, spatial error, and geographically weighted regression
 // with production-grade estimation, diagnostics, and inference.
 
-use crate::weights::SpatialWeightsGraph;
-use nalgebra::{DMatrix, DVectorSlice};
+use nalgebra::DMatrix;
 use std::fmt;
 
 pub mod matrix_solvers;

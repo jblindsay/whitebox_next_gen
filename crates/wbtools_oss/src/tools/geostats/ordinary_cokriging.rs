@@ -6,7 +6,7 @@
 // Phase 3 Week 8+ Tool Implementation (2026-06-04)
 
 use super::*;
-use wbraster::{Raster, RasterFormat, raster::RasterData};
+use wbraster::{Raster, RasterFormat};
 use wbspatialstats::variogram::{
     EmpiricalVariogramBuilder, VariogramFitter, VariogramModelFamily, 
     compute_cross_variogram, fit_cross_variogram_model,

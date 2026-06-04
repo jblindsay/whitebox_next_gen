@@ -51,7 +51,7 @@ impl SpatialLagRegression {
         // Step 1: OLS baseline
         let beta_ols = matrix_solvers::ols_solve(x, y)?;
         let fitted_ols = matrix_solvers::compute_fitted(x, &beta_ols)?;
-        let residuals_ols = matrix_solvers::compute_residuals(y, &fitted_ols)?;
+        let _residuals_ols = matrix_solvers::compute_residuals(y, &fitted_ols)?;
 
         // Step 2: Construct spatial lag of y: Wy
         let wy = compute_spatial_lag(y, weights);
@@ -86,7 +86,7 @@ impl SpatialLagRegression {
         )?;
 
         // Step 8: Model statistics
-        let (r_squared, r_squared_adj, sigma_sq, log_likelihood, aic) =
+        let (r_squared, r_squared_adj, _sigma_sq, log_likelihood, aic) =
             matrix_solvers::compute_model_stats(&y, &fitted_final, &residuals_final, k + 1)?;
 
         // Residual summary
@@ -248,7 +248,7 @@ fn fgls_iterate(
     y: &[f64],
     x: &DMatrix<f64>,
     wy: &[f64],
-    wx: &DMatrix<f64>,
+    _wx: &DMatrix<f64>,
     rho_init: f64,
     tolerance: f64,
     max_iter: usize,
@@ -296,8 +296,8 @@ fn fgls_iterate(
 }
 
 /// Update rho from residuals
-fn estimate_rho_update(residuals: &[f64], wy: &[f64], weights: &SpatialWeightsGraph) -> f64 {
-    let n = residuals.len() as f64;
+fn estimate_rho_update(residuals: &[f64], wy: &[f64], _weights: &SpatialWeightsGraph) -> f64 {
+    let _n = residuals.len() as f64;
     let numerator: f64 = residuals.iter().zip(wy).map(|(e, w)| e * w).sum();
     let denominator: f64 = wy.iter().map(|w| w * w).sum();
 
@@ -312,10 +312,10 @@ fn estimate_rho_update(residuals: &[f64], wy: &[f64], weights: &SpatialWeightsGr
 fn estimate_spatial_parameter_se(
     residuals: &[f64],
     wy: &[f64],
-    rho: f64,
+    _rho: f64,
     _weights: &SpatialWeightsGraph,
 ) -> RegressionResult<f64> {
-    let n = residuals.len() as f64;
+    let _n = residuals.len() as f64;
     let s2: f64 = residuals.iter().map(|e| e * e).sum::<f64>() / (residuals.len() as f64 - 2.0);
 
     let info_matrix: f64 = wy.iter().map(|w| w * w).sum();
@@ -333,9 +333,9 @@ fn compute_effect_decomposition(
     rho: f64,
     ses_beta: &[f64],
     se_rho: f64,
-    weights: &SpatialWeightsGraph,
+    _weights: &SpatialWeightsGraph,
     n: usize,
-    k: usize,
+    _k: usize,
 ) -> RegressionResult<EffectDecomposition> {
     let n_f = n as f64;
 

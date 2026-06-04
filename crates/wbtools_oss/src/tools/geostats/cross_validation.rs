@@ -1,5 +1,6 @@
 use super::*;
 
+#[allow(dead_code)]
 pub struct KrigingCrossValidationTool;
 
 impl Tool for KrigingCrossValidationTool {

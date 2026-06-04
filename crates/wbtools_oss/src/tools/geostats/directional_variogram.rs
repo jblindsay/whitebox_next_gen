@@ -205,7 +205,7 @@ impl Tool for DirectionalVariogramTool {
 
         // Build output JSON
         let mut vgram_json = Vec::new();
-        for (i, vgram) in vgram_bins.iter().enumerate() {
+        for (_i, vgram) in vgram_bins.iter().enumerate() {
             let mut lags_json = Vec::new();
             for j in 0..vgram.n_lags() {
                 lags_json.push(json!({
@@ -335,7 +335,7 @@ fn generate_rose_diagram(
         fill_polygons: true,
     };
 
-    let filename = output_path
+    let _filename = output_path
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("rose_diagram");

@@ -67,7 +67,7 @@ impl SpatialErrorRegression {
         let lambda_se = estimate_lambda_se(&residuals_final, lambda_final, weights)?;
 
         // Step 5: Model statistics
-        let (r_squared, r_squared_adj, sigma_sq, log_likelihood, aic) =
+        let (r_squared, r_squared_adj, _sigma_sq, log_likelihood, aic) =
             matrix_solvers::compute_model_stats(&y, &fitted_final, &residuals_final, k + 1)?;
 
         let residual_summary = diagnostics::compute_residual_summary(&residuals_final, weights)?;
@@ -209,7 +209,7 @@ fn fgls_iterate(
             })
             .collect();
 
-        let x_transformed: DMatrix<f64> = DMatrix::from_fn(n, x.ncols(), |i, k| {
+        let _x_transformed: DMatrix<f64> = DMatrix::from_fn(n, x.ncols(), |i, k| {
             // This needs special handling for parallelization
             x[(i, k)]
         });
@@ -270,7 +270,7 @@ fn fgls_iterate(
 
 /// Update λ from residuals (parallelized)
 fn estimate_lambda_update(residuals: &[f64], weights: &SpatialWeightsGraph) -> RegressionResult<f64> {
-    let n = residuals.len() as f64;
+    let _n = residuals.len() as f64;
     
     let (numerator, denominator) = (0..residuals.len())
         .into_par_iter()
@@ -299,10 +299,10 @@ fn estimate_lambda_update(residuals: &[f64], weights: &SpatialWeightsGraph) -> R
 /// Standard error of λ (parallelized)
 fn estimate_lambda_se(
     residuals: &[f64],
-    lambda: f64,
+    _lambda: f64,
     weights: &SpatialWeightsGraph,
 ) -> RegressionResult<f64> {
-    let n = residuals.len() as f64;
+    let _n = residuals.len() as f64;
     let s2: f64 = residuals.iter().map(|e| e * e).sum::<f64>() / (residuals.len() as f64 - 2.0);
 
     let info_matrix: f64 = (0..residuals.len())

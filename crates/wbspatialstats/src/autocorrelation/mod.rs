@@ -339,7 +339,7 @@ pub fn getis_ord_g(values: &[f64], weights: &SpatialWeightsGraph) -> Result<Geti
     let expected_g = sum_weights / (n * (n - 1.0));
 
     let b2 = values.iter().map(|v| v.powi(4)).sum::<f64>();
-    let s2 = sum_sq / n - (sum_val / n).powi(2);
+    let _s2 = sum_sq / n - (sum_val / n).powi(2);
 
     let var_numerator = (n * (n - 3.0) * sum_weights.powi(2) + sum_weights.powi(2) - 2.0 * (n - 1.0) * sum_weights) * sum_sq - (n - 1.0) * b2 * sum_weights.powi(2);
     let var_denominator = (n * (n - 1.0) * (sum_val / n).powi(4)).powi(2);
@@ -378,7 +378,7 @@ pub fn getis_ord_g_star(values: &[f64], weights: &SpatialWeightsGraph, alpha: f6
     let n = values.len() as f64;
     let sum_val: f64 = values.iter().sum();
     let sum_sq: f64 = values.iter().map(|v| v * v).sum();
-    let b2 = values.iter().map(|v| v.powi(4)).sum::<f64>();
+    let _b2 = values.iter().map(|v| v.powi(4)).sum::<f64>();
 
     // Parallel computation of per-feature Getis-Ord G* statistics
     let results: Vec<_> = (0..values.len())

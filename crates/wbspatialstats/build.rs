@@ -1,12 +1,8 @@
 /// Build configuration
-/// When building for Python via maturin, this is handled automatically
-/// For regular Rust builds, no special configuration needed
+/// wbspatialstats is a pure Rust backend crate.
+/// Python bindings are handled at the wbw_python level via maturin.
+/// No special build configuration needed for this crate.
 
 fn main() {
-    // pyo3-build-config is only included when python feature is enabled
-    #[cfg(feature = "python")]
-    {
-        // PyO3 automatically configures Python build settings
-        pyo3_build_config::add_extension_module_link_args();
-    }
+    // No-op: all configuration handled by maturin at the frontend level
 }

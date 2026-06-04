@@ -372,12 +372,12 @@ pub fn getis_ord_gi_star_permutation(
     let sum_w: f64 = weights.neighbors.iter().flatten().map(|(_, w)| w).sum();
 
     let mut sum_wx_overall = 0.0;
-    for (i, neighbors) in weights.neighbors.iter().enumerate() {
+    for (_i, neighbors) in weights.neighbors.iter().enumerate() {
         for (j, w) in neighbors {
             sum_wx_overall += w * values[*j];
         }
     }
-    let sum_wx_sq: f64 = weights
+    let _sum_wx_sq: f64 = weights
         .neighbors
         .iter()
         .flatten()

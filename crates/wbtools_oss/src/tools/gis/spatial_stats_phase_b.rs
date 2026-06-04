@@ -118,7 +118,7 @@ impl Tool for OrdinaryKrigingTool {
         let mut output = build_point_interpolation_output(&points, &samples, cell_size, base_raster, DataType::F64)?;
 
         ctx.progress.info(&format!("Generating predictions on {} x {} grid", output.cols, output.rows));
-        let mut coalescer = PercentCoalescer::new(1, 99);
+        let coalescer = PercentCoalescer::new(1, 99);
         let rows = output.rows;
         let cols = output.cols;
         let x_min = output.x_min;
@@ -256,7 +256,7 @@ impl Tool for LocalOrdinaryKrigingTool {
         let mut output = build_point_interpolation_output(&points, &samples, cell_size, base_raster, DataType::F64)?;
 
         ctx.progress.info(&format!("Generating predictions on {} x {} grid", output.cols, output.rows));
-        let mut coalescer = PercentCoalescer::new(1, 99);
+        let coalescer = PercentCoalescer::new(1, 99);
         let rows = output.rows;
         let cols = output.cols;
         let x_min = output.x_min;
@@ -394,7 +394,7 @@ impl Tool for SimpleKrigingTool {
         let mut output = build_point_interpolation_output(&points, &samples, cell_size, base_raster, DataType::F64)?;
 
         ctx.progress.info(&format!("Generating predictions on {} x {} grid", output.cols, output.rows));
-        let mut coalescer = PercentCoalescer::new(1, 99);
+        let coalescer = PercentCoalescer::new(1, 99);
         let rows = output.rows;
         let cols = output.cols;
         let x_min = output.x_min;
@@ -532,7 +532,7 @@ impl Tool for UniversalKrigingTool {
         let mut output = build_point_interpolation_output(&points, &samples, cell_size, base_raster, DataType::F64)?;
 
         ctx.progress.info(&format!("Generating predictions on {} x {} grid", output.cols, output.rows));
-        let mut coalescer = PercentCoalescer::new(1, 99);
+        let coalescer = PercentCoalescer::new(1, 99);
         let rows = output.rows;
         let cols = output.cols;
         let x_min = output.x_min;
@@ -718,7 +718,7 @@ impl Tool for SpaceTimeKrigingTool {
         let mean_time = coords_temporal.iter().sum::<f64>() / coords_temporal.len().max(1) as f64;
 
         ctx.progress.info(&format!("Generating predictions on {} x {} grid at time {}", output.cols, output.rows, mean_time));
-        let mut coalescer = PercentCoalescer::new(1, 99);
+        let coalescer = PercentCoalescer::new(1, 99);
         let rows = output.rows;
         let cols = output.cols;
         let x_min = output.x_min;

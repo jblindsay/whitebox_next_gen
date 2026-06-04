@@ -3,7 +3,7 @@
 // Implements local regression with AICc-based bandwidth selection
 // Parallelized with rayon for both local fitting and CV bandwidth search
 
-use super::{RegressionResult, GWRResult, PreFlightDiagnostics, matrix_solvers, diagnostics};
+use super::{RegressionResult, GWRResult, PreFlightDiagnostics, matrix_solvers};
 use nalgebra::{DMatrix, DVector};
 use rayon::prelude::*;
 
@@ -188,7 +188,7 @@ fn compute_cv_aicc(
     k: usize,
 ) -> RegressionResult<(f64, f64)> {
     let mut rss = 0.0;
-    let mut cv_sum = 0.0;
+    let mut _cv_sum = 0.0;
 
     for i in 0..n {
         // Fit at location i excluding location i (LOO CV)
@@ -213,7 +213,7 @@ fn compute_cv_aicc(
         let fitted_i = (0..k).map(|p| beta[p] * x[(i, p)]).sum::<f64>();
         let residual = y[i] - fitted_i;
         rss += residual * residual;
-        cv_sum += (residual / (1.0 - weights[i].max(0.01))).powi(2); // GCV
+        _cv_sum += (residual / (1.0 - weights[i].max(0.01))).powi(2); // GCV (reserved for future diagnostic use)
     }
 
     let sigma_sq = rss / n as f64;
@@ -255,7 +255,7 @@ fn compute_local_regressions(
 
             let beta = matrix_solvers::ols_solve(&x_w, &y_w).unwrap_or(DVector::zeros(k));
             let fitted_i = (0..k).map(|p| beta[p] * x[(i, p)]).sum::<f64>();
-            let residual = y[i] - fitted_i;
+            let _residual = y[i] - fitted_i;
 
             let ses = vec![0.0; k]; // Simplified: would need weighted SE calculation
             let ts: Vec<f64> = beta.as_slice().iter().map(|b| b * 1.96).collect(); // Approximate

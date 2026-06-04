@@ -57,6 +57,7 @@ pub struct UniversalKrigingResult {
 #[derive(Debug)]
 pub struct UniversalKriging {
     training_coords: Vec<(f64, f64)>,
+    #[allow(dead_code)]
     training_values: Vec<f64>,
     variogram: VariogramModel,
     trend_degree: usize,

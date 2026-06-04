@@ -2,6 +2,7 @@ use super::*;
 use wbraster::{Raster, RasterFormat, raster::RasterData};
 use wbspatialstats::variogram::directional::AnisotropyModel;
 
+#[allow(dead_code)]
 pub struct OrdinaryKrigingTool;
 
 impl Tool for OrdinaryKrigingTool {
@@ -408,6 +409,7 @@ impl Tool for OrdinaryKrigingTool {
 
 /// Generate grid coordinates from raster template
 /// Uses rayon for parallel coordinate generation
+#[allow(dead_code)]
 fn generate_raster_grid(raster: &Raster) -> Vec<(f64, f64)> {
     use rayon::prelude::*;
 

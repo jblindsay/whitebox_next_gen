@@ -2084,7 +2084,11 @@ impl Tool for NearestNeighbourIndexTool {
         ToolMetadata {
             id: "nearest_neighbour_index",
             display_name: "Nearest Neighbour Index",
-            summary: "Computes the Clark-Evans nearest-neighbour index with asymptotic inference.",
+            summary: r#"Computes the Clark-Evans nearest-neighbour index (NNI), a fundamental test for complete spatial randomness (CSR) in point patterns. NNI measures clustering vs. dispersion: values < 1 indicate clustered points (closer together than random); > 1 indicate dispersed pattern; = 1 indicate random distribution. The index compares mean observed nearest-neighbor distance to expected distance under CSR.
+
+Output includes the NNI statistic, standard error, z-score, and p-value (asymptotic inference). Significant p-values reject CSR hypothesis, suggesting clustering (ecological hotspots, disease clusters) or dispersion (territorial behavior, competition). The test is sensitive to boundary effects; optional study area polygon defines observation boundary for accurate expected distance calculation.
+
+Applications: Testing for ecological clustering, disease cluster detection, spatial pattern assessment. Compare to Ripley's K for multi-scale analysis or Quadrat test for grid-based pattern assessment. Note: NNI tests global randomness; use LISA for local clustering or directional variogram for anisotropy."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2109,7 +2113,7 @@ impl Tool for NearestNeighbourIndexTool {
         ToolManifest {
             id: "nearest_neighbour_index".to_string(),
             display_name: "Nearest Neighbour Index".to_string(),
-            summary: "Computes the Clark-Evans nearest-neighbour index with asymptotic inference.".to_string(),
+            summary: r#"Computes the Clark-Evans nearest-neighbour index testing for complete spatial randomness. Detects clustering vs. dispersion."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2291,7 +2295,11 @@ impl Tool for QuadratCountTestTool {
         ToolMetadata {
             id: "quadrat_count_test",
             display_name: "Quadrat Count Test",
-            summary: "Runs a quadrat count chi-square test for point-pattern randomness.",
+            summary: r#"Performs a quadrat count chi-square test for complete spatial randomness (CSR) in point patterns by dividing study area into grid quadrats, counting points in each, and testing whether counts deviate from Poisson distribution. Quadrat-based tests complement distance-based tests (NNI, Ripley's K) by assessing coarse-scale spatial uniformity.
+
+The test divides study area into rows×cols cells or fixed cell_size grid, counts points per quadrat, computes chi-square statistic comparing observed vs. expected counts under CSR. Output includes chi-square value, degrees of freedom, p-value, and optional quadrat polygon output showing point density spatially. Significant p-values indicate clustering (over-dispersed counts) or dispersion (under-dispersed).
+
+Applications: Disease cluster screening, ecological hotspot detection, retail location clustering analysis. Quadrat size affects sensitivity: large quadrats→coarse pattern detection; small quadrats→fine-scale variation detection. Use grid parameters to tune sensitivity. Compare results across quadrat sizes for robustness. Combine with visualization (output grid + point overlay) to identify where clusters concentrate."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2324,7 +2332,7 @@ impl Tool for QuadratCountTestTool {
         ToolManifest {
             id: "quadrat_count_test".to_string(),
             display_name: "Quadrat Count Test".to_string(),
-            summary: "Runs a quadrat count chi-square test for point-pattern randomness.".to_string(),
+            summary: r#"Performs chi-square test of point-pattern randomness using quadrat counts. Tests for clustering vs. dispersion."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2617,7 +2625,11 @@ impl Tool for SpatialLagRegressionTool {
         ToolMetadata {
             id: "spatial_lag_regression",
             display_name: "Spatial Lag Regression (SAR)",
-            summary: "Estimates spatial lag regression model with GMM/IV+FGLS. Adds global coefficients and diagnostics.",
+            summary: r#"Estimates a spatial autoregressive (lag) regression model where the dependent variable is influenced both by predictors and by spatially lagged values of itself. SAR models capture endogenous spatial spillover effects—situations where values at one location directly influence neighboring locations. This is appropriate when the response variable exhibits self-reinforcing spatial patterns (e.g., crime attracting more crime, property values influencing neighbors).
+
+The model includes a spatial lag term (Wy) as a predictor, making simultaneous equation estimation necessary. The tool uses GMM/IV+FGLS estimation to handle endogeneity. Output includes global coefficients (predictors + spatial lag parameter) and diagnostics. Significant spatial lag coefficient indicates strong endogenous spatial dependence.
+
+Compare to SEM (Spatial Error) when spatial dependence acts through residuals (error correlation) rather than as direct spillover. SAR produces local-mean-dependent predictions; SEM produces predictions depending on neighborhood values through error structure. Choose based on conceptual model of spatial interaction mechanism."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2645,7 +2657,7 @@ impl Tool for SpatialLagRegressionTool {
         ToolManifest {
             id: "spatial_lag_regression".to_string(),
             display_name: "Spatial Lag Regression (SAR)".to_string(),
-            summary: "Estimates spatial lag regression with GMM/IV+FGLS framework.".to_string(),
+            summary: r#"Estimates spatial autoregressive model capturing endogenous spillover effects where dependent variable is influenced by spatial neighbors."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2831,7 +2843,11 @@ impl Tool for SpatialErrorRegressionTool {
         ToolMetadata {
             id: "spatial_error_regression",
             display_name: "Spatial Error Regression (SEM)",
-            summary: "Estimates spatial error regression model with FGLS. Adds coefficients and diagnostics.",
+            summary: r#"Estimates a spatial error model (SEM) where residuals are spatially correlated rather than independent. SEM addresses exogenous spatial dependence arising from omitted variables, measurement error, or spatial spillovers of unobserved factors. When OLS assumptions of residual independence are violated and nearby residuals are correlated, SEM provides efficient, consistent estimates.
+
+The model separates systematic (predictor) effects from spatially-structured noise. Estimation uses FGLS (Feasible Generalized Least Squares) to account for spatial correlation structure. Output includes global coefficients and spatial correlation parameter (lambda). Significant lambda indicates residual spatial autocorrelation that OLS would underestimate.
+
+Compare to SAR when spatial dependence operates through the response variable directly (endogenous spillover) vs. through unobserved factors (exogenous). SEM appropriate for confounded treatments, omitted variables, or measurement error with spatial pattern. Less interpretable predictions than SAR since spatial structure is residual-based rather than response-based."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2859,7 +2875,7 @@ impl Tool for SpatialErrorRegressionTool {
         ToolManifest {
             id: "spatial_error_regression".to_string(),
             display_name: "Spatial Error Regression (SEM)".to_string(),
-            summary: "Estimates spatial error regression with FGLS.".to_string(),
+            summary: r#"Estimates spatial error model addressing exogenous spatial dependence in residuals from omitted variables or measurement error."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3045,7 +3061,11 @@ impl Tool for GeographicallyWeightedRegressionTool {
         ToolMetadata {
             id: "geographically_weighted_regression",
             display_name: "Geographically Weighted Regression (GWR)",
-            summary: "Estimates GWR with AICc-based bandwidth selection. Adds local coefficients per location.",
+            summary: r#"Estimates Geographically Weighted Regression (GWR), a local regression method producing location-specific coefficients that capture spatially-varying relationships. While SAR/SEM estimate global coefficients, GWR allows regression parameters to vary across space. This reveals whether predictor-response relationships differ by location (e.g., income's impact on housing prices varies by region).
+
+The tool automatically selects optimal bandwidth via AICc cross-validation, controlling the geographic extent of neighborhoods used for local estimation. Larger bandwidth→smoother, more global coefficients; smaller bandwidth→sharper local variation but higher variance. Output includes local coefficients for each predictor at each location, enabling map-based visualization of spatial heterogeneity.
+
+Applications: Identifying where relationships break down, detecting market segmentation, revealing spatial inequality in treatment effects. GWR requires sufficient sample density and spread; sparse data may produce unreliable local estimates. Computationally intensive; faster than permutation tests but slower than SAR/SEM. Use to explore spatial heterogeneity; validate global models' assumptions."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3068,7 +3088,7 @@ impl Tool for GeographicallyWeightedRegressionTool {
         ToolManifest {
             id: "geographically_weighted_regression".to_string(),
             display_name: "Geographically Weighted Regression (GWR)".to_string(),
-            summary: "Estimates GWR with AICc-optimized bandwidth selection.".to_string(),
+            summary: r#"Estimates location-specific regression coefficients revealing spatially-varying relationships. Detects spatial heterogeneity in predictor-response patterns."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![

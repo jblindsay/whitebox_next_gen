@@ -369,7 +369,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     
     // Phase A Raster Interpolation Tools
     registry.register(Box::new(tools::LocalMoransILisaRasterTool));
-    registry.register(Box::new(tools::LocalGetisOrdGStarRasterTool));
+    registry.register(Box::new(tools::GetisOrdGiStarRasterTool));
     
     // Phase B Kriging Tools
     registry.register(Box::new(tools::OrdinaryKrigingTool));

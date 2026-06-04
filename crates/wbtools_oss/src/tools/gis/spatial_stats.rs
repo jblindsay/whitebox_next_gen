@@ -62,7 +62,9 @@ struct SpatialObservation {
 
 pub struct GlobalMoransITool;
 pub struct LocalMoransILisaTool;
+pub struct LocalMoransILisaRasterTool;
 pub struct GetisOrdGiStarTool;
+pub struct GetisOrdGiStarRasterTool;
 pub struct NearestNeighbourIndexTool;
 pub struct QuadratCountTestTool;
 
@@ -2919,6 +2921,406 @@ impl Tool for GeographicallyWeightedRegressionTool {
         let mut outputs = ToolArgs::new();
         outputs.insert("output".to_string(), json!(locator));
         
+        ctx.progress.progress(1.0);
+        Ok(ToolRunResult { outputs })
+    }
+}
+
+// ============================================================================
+// PHASE A RASTER TOOLS
+// ============================================================================
+
+impl Tool for LocalMoransILisaRasterTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "local_morans_i_lisa_raster",
+            display_name: "Local Moran's I (LISA) - Raster Output",
+            summary: "Computes Local Moran's I (LISA) and outputs a classification raster surface.",
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer with observation points.", required: true },
+                ToolParamSpec { name: "field", description: "Numeric attribute field to analyze.", required: true },
+                ToolParamSpec { name: "weights_mode", description: "Neighborhood mode: queen, rook, k_nearest, distance_band.", required: false },
+                ToolParamSpec { name: "k", description: "k value for k_nearest mode (default 8).", required: false },
+                ToolParamSpec { name: "distance", description: "Distance threshold for distance_band mode.", required: false },
+                ToolParamSpec { name: "row_standardize", description: "Apply row standardization to weights (default true).", required: false },
+                ToolParamSpec { name: "island_policy", description: "Island handling: drop_with_warning, keep_zero_weight, error.", required: false },
+                ToolParamSpec { name: "alpha", description: "Significance threshold in [0, 1]; default 0.05.", required: false },
+                ToolParamSpec { name: "cell_size", description: "Output raster cell size (optional; uses input extent).", required: false },
+                ToolParamSpec { name: "output", description: "Output raster path (classification: 0=NS, 1=HH, 2=LL, 3=HL, 4=LH).", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.gpkg"));
+        defaults.insert("field".to_string(), json!("value"));
+        defaults.insert("weights_mode".to_string(), json!("k_nearest"));
+        defaults.insert("k".to_string(), json!(8));
+        defaults.insert("row_standardize".to_string(), json!(true));
+        defaults.insert("island_policy".to_string(), json!("drop_with_warning"));
+        defaults.insert("alpha".to_string(), json!(0.05));
+
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("lisa_surface.tif"));
+
+        ToolManifest {
+            id: "local_morans_i_lisa_raster".to_string(),
+            display_name: "Local Moran's I (LISA) - Raster Output".to_string(),
+            summary: "Computes Local Moran's I (LISA) and outputs a classification raster surface.".to_string(),
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer with observation points.".to_string(), required: true },
+                ToolParamDescriptor { name: "field".to_string(), description: "Numeric attribute field to analyze.".to_string(), required: true },
+                ToolParamDescriptor { name: "weights_mode".to_string(), description: "Neighborhood mode: queen, rook, k_nearest, distance_band.".to_string(), required: false },
+                ToolParamDescriptor { name: "k".to_string(), description: "k value for k_nearest mode (default 8).".to_string(), required: false },
+                ToolParamDescriptor { name: "distance".to_string(), description: "Distance threshold for distance_band mode.".to_string(), required: false },
+                ToolParamDescriptor { name: "row_standardize".to_string(), description: "Apply row standardization to weights (default true).".to_string(), required: false },
+                ToolParamDescriptor { name: "island_policy".to_string(), description: "Island handling: drop_with_warning, keep_zero_weight, error.".to_string(), required: false },
+                ToolParamDescriptor { name: "alpha".to_string(), description: "Significance threshold in [0, 1]; default 0.05.".to_string(), required: false },
+                ToolParamDescriptor { name: "cell_size".to_string(), description: "Output raster cell size (optional; auto-computed from extent).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output raster path (classification: 0=NS, 1=HH, 2=LL, 3=HL, 4=LH).".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "local_morans_i_lisa_raster_basic".to_string(),
+                description: "Computes LISA and interpolates to a raster surface.".to_string(),
+                args: example_args,
+            }],
+            tags: vec![
+                "raster".to_string(),
+                "spatial-statistics".to_string(),
+                "autocorrelation".to_string(),
+                "lisa".to_string(),
+                "surface".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let field = parse_string_arg(args, "field")?;
+        if field.trim().is_empty() {
+            return Err(ToolError::Validation("field must be non-empty".to_string()));
+        }
+
+        let mode = SpatialWeightsMode::parse(args)?;
+        let k = parse_optional_usize_arg(args, "k")?.unwrap_or(8);
+        if matches!(mode, SpatialWeightsMode::KNearest) && k == 0 {
+            return Err(ToolError::Validation("k must be > 0".to_string()));
+        }
+        if matches!(mode, SpatialWeightsMode::DistanceBand) {
+            let d = parse_f64_arg(args, "distance")?;
+            if !d.is_finite() || d <= 0.0 {
+                return Err(ToolError::Validation("distance must be finite and > 0".to_string()));
+            }
+        }
+        if let Some(distance) = parse_optional_f64_arg(args, "distance") {
+            if !distance.is_finite() || distance <= 0.0 {
+                return Err(ToolError::Validation("distance must be finite and > 0".to_string()));
+            }
+        }
+
+        let alpha = parse_optional_f64_arg(args, "alpha").unwrap_or(0.05);
+        if !alpha.is_finite() || !(0.0..=1.0).contains(&alpha) {
+            return Err(ToolError::Validation("alpha must be in [0, 1]".to_string()));
+        }
+
+        if let Some(cell_size) = parse_optional_f64_arg(args, "cell_size") {
+            if !cell_size.is_finite() || cell_size <= 0.0 {
+                return Err(ToolError::Validation("cell_size must be positive and finite".to_string()));
+            }
+        }
+
+        let _ = IslandPolicy::parse(args)?;
+        let _ = parse_raster_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let field = parse_string_arg(args, "field")?;
+        let mode = SpatialWeightsMode::parse(args)?;
+        let k = parse_optional_usize_arg(args, "k")?.unwrap_or(8);
+        let distance = parse_optional_f64_arg(args, "distance").unwrap_or(0.0);
+        let row_standardize = parse_bool_arg(args, "row_standardize", true);
+        let island_policy = IslandPolicy::parse(args)?;
+        let alpha = parse_optional_f64_arg(args, "alpha").unwrap_or(0.05);
+        let cell_size = parse_optional_f64_arg(args, "cell_size");
+        let output_path = parse_raster_path_arg(args, "output")?;
+
+        ctx.progress.info("Extracting spatial observations");
+        let (observations, dropped) = collect_spatial_observations(&input, &field)?;
+        let values: Vec<f64> = observations.iter().map(|o| o.value).collect();
+
+        ctx.progress.info("Building spatial weights");
+        let weights = build_spatial_weights(
+            &observations,
+            mode,
+            row_standardize,
+            island_policy,
+            k,
+            distance,
+            dropped,
+        )?;
+
+        ctx.progress.info("Computing LISA");
+        let (_, _, _, quadrant) = compute_local_morans_i_lisa(&values, &weights, island_policy, alpha)?;
+
+        ctx.progress.info("Building output raster");
+        let samples: Vec<(f64, f64, f64)> = observations.iter().map(|o| (o.x, o.y, o.value)).collect();
+        let mut output = super::build_point_interpolation_output(&input, &samples, cell_size, None, DataType::F64)?;
+
+        let rows = output.rows;
+        let cols = output.cols;
+        let x_min = output.x_min;
+        let y_max = output.y_max();
+        let cell_x = output.cell_size_x;
+        let cell_y = output.cell_size_y;
+
+        ctx.progress.info("Interpolating LISA classes to raster grid");
+        for row in 0..rows {
+            for col in 0..cols {
+                let x = x_min + (col as f64 + 0.5) * cell_x;
+                let y = y_max - (row as f64 + 0.5) * cell_y;
+
+                // Find nearest observation
+                let mut nearest_idx = 0;
+                let mut nearest_dist_sq = f64::INFINITY;
+                for (idx, obs) in observations.iter().enumerate() {
+                    let dx = obs.x - x;
+                    let dy = obs.y - y;
+                    let dist_sq = dx * dx + dy * dy;
+                    if dist_sq < nearest_dist_sq {
+                        nearest_dist_sq = dist_sq;
+                        nearest_idx = idx;
+                    }
+                }
+
+                // Map quadrant to classification value
+                let class_value = match quadrant[nearest_idx].as_str() {
+                    "HH" => 1.0,
+                    "LL" => 2.0,
+                    "HL" => 3.0,
+                    "LH" => 4.0,
+                    _ => 0.0, // "NS" and any other value maps to 0
+                };
+
+                let idx = row * cols + col;
+                output.data.set_f64(idx, class_value);
+            }
+
+            let progress = (row as f64 + 1.0) / rows as f64;
+            ctx.progress.progress(progress);
+        }
+
+        ctx.progress.info("Writing raster output");
+        let locator = GisOverlayCore::store_or_write_output(output, output_path.trim(), ctx)?;
+
+        let mut outputs = ToolArgs::new();
+        outputs.insert("output".to_string(), json!(locator));
+
+        ctx.progress.progress(1.0);
+        Ok(ToolRunResult { outputs })
+    }
+}
+
+impl Tool for GetisOrdGiStarRasterTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "getis_ord_gi_star_raster",
+            display_name: "Getis-Ord Gi* - Raster Output",
+            summary: "Computes Getis-Ord Gi* and outputs a hotspot/coldspot classification raster.",
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer with observation points.", required: true },
+                ToolParamSpec { name: "field", description: "Numeric attribute field to analyze.", required: true },
+                ToolParamSpec { name: "weights_mode", description: "Neighborhood mode: queen, rook, k_nearest, distance_band.", required: false },
+                ToolParamSpec { name: "k", description: "k value for k_nearest mode (default 8).", required: false },
+                ToolParamSpec { name: "distance", description: "Distance threshold for distance_band mode.", required: false },
+                ToolParamSpec { name: "row_standardize", description: "Apply row standardization to weights (default true).", required: false },
+                ToolParamSpec { name: "island_policy", description: "Island handling: drop_with_warning, keep_zero_weight, error.", required: false },
+                ToolParamSpec { name: "alpha", description: "Significance threshold in [0, 1]; default 0.05.", required: false },
+                ToolParamSpec { name: "cell_size", description: "Output raster cell size (optional; uses input extent).", required: false },
+                ToolParamSpec { name: "output", description: "Output raster path (classification: -1=Cold, 0=NS, 1=Hot).", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.gpkg"));
+        defaults.insert("field".to_string(), json!("value"));
+        defaults.insert("weights_mode".to_string(), json!("k_nearest"));
+        defaults.insert("k".to_string(), json!(8));
+        defaults.insert("row_standardize".to_string(), json!(true));
+        defaults.insert("island_policy".to_string(), json!("drop_with_warning"));
+        defaults.insert("alpha".to_string(), json!(0.05));
+
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("hotspots_surface.tif"));
+
+        ToolManifest {
+            id: "getis_ord_gi_star_raster".to_string(),
+            display_name: "Getis-Ord Gi* - Raster Output".to_string(),
+            summary: "Computes Getis-Ord Gi* and outputs a hotspot/coldspot classification raster.".to_string(),
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer with observation points.".to_string(), required: true },
+                ToolParamDescriptor { name: "field".to_string(), description: "Numeric attribute field to analyze.".to_string(), required: true },
+                ToolParamDescriptor { name: "weights_mode".to_string(), description: "Neighborhood mode: queen, rook, k_nearest, distance_band.".to_string(), required: false },
+                ToolParamDescriptor { name: "k".to_string(), description: "k value for k_nearest mode (default 8).".to_string(), required: false },
+                ToolParamDescriptor { name: "distance".to_string(), description: "Distance threshold for distance_band mode.".to_string(), required: false },
+                ToolParamDescriptor { name: "row_standardize".to_string(), description: "Apply row standardization to weights (default true).".to_string(), required: false },
+                ToolParamDescriptor { name: "island_policy".to_string(), description: "Island handling: drop_with_warning, keep_zero_weight, error.".to_string(), required: false },
+                ToolParamDescriptor { name: "alpha".to_string(), description: "Significance threshold in [0, 1]; default 0.05.".to_string(), required: false },
+                ToolParamDescriptor { name: "cell_size".to_string(), description: "Output raster cell size (optional; auto-computed from extent).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output raster path (classification: -1=Cold, 0=NS, 1=Hot).".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "getis_ord_gi_star_raster_basic".to_string(),
+                description: "Computes Gi* and interpolates hotspots/coldspots to a raster surface.".to_string(),
+                args: example_args,
+            }],
+            tags: vec![
+                "raster".to_string(),
+                "spatial-statistics".to_string(),
+                "hotspot".to_string(),
+                "coldspot".to_string(),
+                "surface".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let field = parse_string_arg(args, "field")?;
+        if field.trim().is_empty() {
+            return Err(ToolError::Validation("field must be non-empty".to_string()));
+        }
+
+        let mode = SpatialWeightsMode::parse(args)?;
+        let k = parse_optional_usize_arg(args, "k")?.unwrap_or(8);
+        if matches!(mode, SpatialWeightsMode::KNearest) && k == 0 {
+            return Err(ToolError::Validation("k must be > 0".to_string()));
+        }
+        if matches!(mode, SpatialWeightsMode::DistanceBand) {
+            let d = parse_f64_arg(args, "distance")?;
+            if !d.is_finite() || d <= 0.0 {
+                return Err(ToolError::Validation("distance must be finite and > 0".to_string()));
+            }
+        }
+        if let Some(distance) = parse_optional_f64_arg(args, "distance") {
+            if !distance.is_finite() || distance <= 0.0 {
+                return Err(ToolError::Validation("distance must be finite and > 0".to_string()));
+            }
+        }
+
+        let alpha = parse_optional_f64_arg(args, "alpha").unwrap_or(0.05);
+        if !alpha.is_finite() || !(0.0..=1.0).contains(&alpha) {
+            return Err(ToolError::Validation("alpha must be in [0, 1]".to_string()));
+        }
+
+        if let Some(cell_size) = parse_optional_f64_arg(args, "cell_size") {
+            if !cell_size.is_finite() || cell_size <= 0.0 {
+                return Err(ToolError::Validation("cell_size must be positive and finite".to_string()));
+            }
+        }
+
+        let _ = IslandPolicy::parse(args)?;
+        let _ = parse_raster_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let field = parse_string_arg(args, "field")?;
+        let mode = SpatialWeightsMode::parse(args)?;
+        let k = parse_optional_usize_arg(args, "k")?.unwrap_or(8);
+        let distance = parse_optional_f64_arg(args, "distance").unwrap_or(0.0);
+        let row_standardize = parse_bool_arg(args, "row_standardize", true);
+        let island_policy = IslandPolicy::parse(args)?;
+        let alpha = parse_optional_f64_arg(args, "alpha").unwrap_or(0.05);
+        let cell_size = parse_optional_f64_arg(args, "cell_size");
+        let output_path = parse_raster_path_arg(args, "output")?;
+
+        ctx.progress.info("Extracting spatial observations");
+        let (observations, dropped) = collect_spatial_observations(&input, &field)?;
+        let values: Vec<f64> = observations.iter().map(|o| o.value).collect();
+
+        ctx.progress.info("Building spatial weights");
+        let weights = build_spatial_weights(
+            &observations,
+            mode,
+            row_standardize,
+            island_policy,
+            k,
+            distance,
+            dropped,
+        )?;
+
+        ctx.progress.info("Computing Getis-Ord Gi*");
+        let (_, _, cluster_type) = compute_getis_ord_gi_star(&values, &weights, island_policy, alpha)?;
+
+        ctx.progress.info("Building output raster");
+        let samples: Vec<(f64, f64, f64)> = observations.iter().map(|o| (o.x, o.y, o.value)).collect();
+        let mut output = super::build_point_interpolation_output(&input, &samples, cell_size, None, DataType::F64)?;
+
+        let rows = output.rows;
+        let cols = output.cols;
+        let x_min = output.x_min;
+        let y_max = output.y_max();
+        let cell_x = output.cell_size_x;
+        let cell_y = output.cell_size_y;
+
+        ctx.progress.info("Interpolating hotspot classes to raster grid");
+        for row in 0..rows {
+            for col in 0..cols {
+                let x = x_min + (col as f64 + 0.5) * cell_x;
+                let y = y_max - (row as f64 + 0.5) * cell_y;
+
+                // Find nearest observation
+                let mut nearest_idx = 0;
+                let mut nearest_dist_sq = f64::INFINITY;
+                for (idx, obs) in observations.iter().enumerate() {
+                    let dx = obs.x - x;
+                    let dy = obs.y - y;
+                    let dist_sq = dx * dx + dy * dy;
+                    if dist_sq < nearest_dist_sq {
+                        nearest_dist_sq = dist_sq;
+                        nearest_idx = idx;
+                    }
+                }
+
+                // Map cluster type to classification value
+                let class_value = match cluster_type[nearest_idx].as_str() {
+                    "HotSpot" => 1.0,
+                    "ColdSpot" => -1.0,
+                    _ => 0.0, // "insignificant" and any other value maps to 0
+                };
+
+                let idx = row * cols + col;
+                output.data.set_f64(idx, class_value);
+            }
+
+            let progress = (row as f64 + 1.0) / rows as f64;
+            ctx.progress.progress(progress);
+        }
+
+        ctx.progress.info("Writing raster output");
+        let locator = GisOverlayCore::store_or_write_output(output, output_path.trim(), ctx)?;
+
+        let mut outputs = ToolArgs::new();
+        outputs.insert("output".to_string(), json!(locator));
+
         ctx.progress.progress(1.0);
         Ok(ToolRunResult { outputs })
     }

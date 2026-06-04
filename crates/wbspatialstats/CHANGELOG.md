@@ -1,53 +1,96 @@
-# CHANGELOG - wbgeostats Kriging Library
+# Changelog - wbspatialstats
 
-## [0.1.0] - 2026-06-03
+All notable changes to the `wbspatialstats` project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.1.0] - 2026-06-04
+
+Initial release of `wbspatialstats` as a unified spatial statistics library for Whitebox Geospatial.
 
 ### Added
 
-#### Core Library
-- **Variogram Module** (`variogram/`):
-  - `EmpiricalVariogram` & `EmpiricalVariogramBuilder`: Lag bin computation, configurable lag distances
-  - `VariogramModel`: Theoretical models (Spherical, Exponential, Gaussian)
-  - `VariogramFitter`: Weighted least-squares fitting with initial parameter optimization
-  - 32 unit tests covering all edge cases
+#### Kriging & Interpolation
+- **Ordinary Kriging**: Standard kriging interpolation with optional anisotropy support via directional distance metrics
+- **Local Kriging**: Neighborhood-based kriging for large datasets with locality radius control
+- **Simple Kriging**: Kriging with known (fixed) mean for specialized applications
+- **Universal Kriging**: Trend-fitting kriging with polynomial detrending (degrees 0-2)
+- **Space-Time Kriging**: 3D spatiotemporal kriging for dynamic phenomena with temporal decay
+- **Ordinary CoKriging**: Multivariate kriging leveraging auxiliary variables via cross-variograms
+- **Bootstrap Prediction Intervals**: Uncertainty quantification via bootstrap resampling (95% CI)
 
-- **Kriging Module** (`kriging/`):
-  - `OrdinaryKriging`: Core kriging solver with:
-    - Cholesky decomposition solver
-    - SVD fallback for ill-conditioned matrices
-    - Batch prediction with rayon parallelization
-  - `KrigingResult`: Predictions with uncertainty quantification (variance, standard error, 95% CI)
-  - 21 unit tests
+#### Variography
+- **Empirical Variogram**: Direct semivariogram estimation from point samples with lag binning
+- **Directional Variography**: Anisotropy detection via directional binning (0-180° azimuths with tolerance, distance-lag analysis)
+- **Anisotropy Modeling**: Estimation of anisotropy ratio/direction and automatic distance transformation
+- **Variogram Model Fitting**: Robust WLSQ fitting for exponential, Gaussian, linear, power, and spherical models
+- **Cross-Variogram Computation**: Empirical cross-variograms for multivariate kriging (CoKriging)
+- **Rose Diagram Visualization**: SVG output showing directional spatial dependence patterns
 
-- **Cross-Validation Module** (`cv/`):
-  - `LeaveOneOutCV`: Leave-One-Out cross-validation for model assessment
-  - `CVMetrics`: Well-calibration diagnostics
-  - 11 unit tests
+#### Spatial Autocorrelation
+- **Global Moran's I**: Asymptotic inference with permutation-based significance testing
+- **Local Moran's I (LISA)**: Local cluster/outlier detection with significance maps
+- **Getis-Ord Gi\***: Hot/cold spot analysis with significance bounds
+- **Ripley's K**: Point pattern intensity analysis with envelope testing (analytic and Monte Carlo)
+- **Envelope Testing**: Analytic and bootstrap-based envelopes for point process validation
+- **Quadrat Count Tests**: Regular lattice-based spatial aggregation with chi-square testing
+- **Nearest Neighbour Index**: Clark-Evans clustering measurement with significance
+- **Inhomogeneous Point Analysis**: Intensity estimation for non-stationary patterns
 
-#### Tool Integration (wbtools_oss)
-- `EstimateVariogramTool`: JSON output of empirical variograms
-- `FitVariogramTool`: Theoretical model fitting (JSON input/output)
-- `OrdinaryKrigingTool`: Raster-based kriging interpolation
-  - Template raster support
-  - Parallel grid prediction (rayon)
-  - Raster I/O via wbraster crate
-- `KrigingCrossValidationTool`: Model validation reporting
+#### Spatial Regression
+- **Spatial Lag Model (SAR)**: Spatial autoregressive modeling with maximum likelihood estimation and diagnostics
+- **Spatial Error Model (SEM)**: SEM with simultaneous lag and error components
+- **Geographically Weighted Regression (GWR)**: Local regression with Gaussian/tricube/bisquare kernels and AICc bandwidth optimization
+- **Spatial Weights Construction**: Manual edge lists and distance-based weight matrices with customizable kernels
 
-#### Python Bindings (PyO3)
-- `VariogramModel` class with properties: family, nugget, partial_sill, range, total_sill
-- `KrigingResult` class with properties: prediction, variance, std_error, ci_lower, ci_upper
-- `OrdinaryKriging` class with methods: predict(), predict_batch()
-- Module functions: estimate_variogram(), fit_variogram(), cross_validate_kriging()
-- Feature-gated compilation: `features = ["python"]`
-- Proper error handling: PyErr conversion for all Rust errors
-- pyproject.toml for maturin builds
+#### Cross-Validation & Diagnostics
+- **Leave-One-Out Cross-Validation (LOOCV)**: Robust model evaluation with prediction residuals
+- **k-Fold Cross-Validation**: Stratified folds with random seed control
+- **Residual Analysis**: Bias, RMSE, MAE, mean error, correlation metrics
+- **Spatial Autocorrelation in Residuals**: Moran's I test for model adequacy detection
 
-#### R Bindings (extendr)
-- `estimate_variogram()`: Empirical variogram from point data
-- `fit_variogram()`: Theoretical model fitting
-- `kriging_predict()`: Single-point kriging predictions
-- `kriging_predict_grid()`: Vectorized grid predictions (parallelized)
-- `kriging_cross_validate()`: LOOCV model assessment
+#### Statistical Testing & Multiple Comparison Correction
+- **Asymptotic Hypothesis Testing**: Z-scores and p-values under normality assumption
+- **Permutation-Based Inference**: Rank-based p-values with configurable realization counts (default 9999)
+- **Multiple Testing Corrections**: Bonferroni, Benjamini–Hochberg (FDR-BH) adjustments
+- **Confidence Intervals**: Asymptotic (normal approx) and bootstrap-based (percentile) CI
+
+### Architecture
+
+- **Pure Rust Implementation**: No external C/C++ dependencies; full memory safety
+- **Parallelization**: Rayon data parallelism for large datasets, permutation loops, batch kriging
+- **Robust Numerics**: LU decomposition with partial pivoting; SVD fallback for singular systems; condition number awareness
+- **Serialization**: Full serde support for variogram models, regression results, and intermediate computations
+- **Performance**: Optimized for 1M+ point datasets via spatial indexing, chunked parallelism, and rayon work-stealing
+
+### Known Limitations
+
+- **Conditional Simulation**: Stochastic simulation not yet implemented (v0.2 candidate)
+- **Indicator Kriging**: Probability kriging deferred to future release
+- **Bayesian Methods**: CAR models and MCMC inference not included
+- **Network Distances**: Euclidean distance only; network/graph-based analysis requires pre-computation
+- **Spline Interpolation**: Radial basis functions and thin-plate splines not implemented
+
+### Dependencies
+
+- **nalgebra 0.34+**: Dense linear algebra with matrix decomposition
+- **ndarray 0.15+**: N-dimensional array operations for spatial grids
+- **rayon 1.7+**: Data parallelism and thread pool management
+- **serde 1.0+**: Serialization for model persistence
+- **thiserror 1.0+**: Ergonomic error handling
+- **rand 0.8+**: Random number generation for permutation tests
+- **log 0.4+**: Structured logging
+
+### Removed
+
+- Python bindings moved to wbw_python crate (maturin-based)
+- R bindings moved to wbw_r crate (extendr-based)
+- Frontend integration code removed; pure backend library focus
+
+### License
+
+AGPL-3.0-or-later
 - All functions return R lists with named components
 - Feature-gated compilation: `features = ["r"]`
 

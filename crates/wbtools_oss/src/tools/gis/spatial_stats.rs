@@ -3335,21 +3335,24 @@ impl Tool for GetisOrdGiStarRasterTool {
 // ============================================================================
 // PHASE C RASTER TOOLS (Spatial Regression - Fitted Value Surfaces)
 // ============================================================================
-// TODO: Implement raster output versions of spatial regression tools
-// These should estimate regression models and output fitted value surfaces
 
 impl Tool for SpatialLagRegressionRasterTool {
     fn metadata(&self) -> ToolMetadata {
         ToolMetadata {
             id: "spatial_lag_regression_raster",
             display_name: "Spatial Lag Regression (SAR) - Raster Output",
-            summary: "[NOT YET IMPLEMENTED] Outputs fitted value surface from spatial lag regression.",
+            summary: "Estimates spatial lag regression and outputs fitted value surface.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
                 ToolParamSpec { name: "response_field", description: "Response variable.", required: true },
                 ToolParamSpec { name: "predictor_fields", description: "Comma-separated predictor fields.", required: true },
+                ToolParamSpec { name: "weights_mode", description: "Neighborhood mode: queen, rook, k_nearest, distance_band.", required: false },
+                ToolParamSpec { name: "k", description: "k value for k_nearest mode (default 8).", required: false },
+                ToolParamSpec { name: "distance", description: "Distance threshold for distance_band mode.", required: false },
+                ToolParamSpec { name: "row_standardize", description: "Apply row standardization to weights (default true).", required: false },
+                ToolParamSpec { name: "cell_size", description: "Output raster cell size (optional; uses input extent).", required: false },
                 ToolParamSpec { name: "output", description: "Output raster (fitted values).", required: true },
             ],
         }
@@ -3360,37 +3363,164 @@ impl Tool for SpatialLagRegressionRasterTool {
         defaults.insert("input".to_string(), json!("input.gpkg"));
         defaults.insert("response_field".to_string(), json!("response"));
         defaults.insert("predictor_fields".to_string(), json!("predictor1"));
-        defaults.insert("output".to_string(), json!("fitted.tif"));
+        defaults.insert("weights_mode".to_string(), json!("k_nearest"));
+        defaults.insert("k".to_string(), json!(8));
+        defaults.insert("row_standardize".to_string(), json!(true));
+
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("fitted.tif"));
 
         ToolManifest {
             id: "spatial_lag_regression_raster".to_string(),
             display_name: "Spatial Lag Regression (SAR) - Raster Output".to_string(),
-            summary: "[NOT YET IMPLEMENTED] Outputs fitted value surface from SAR model.".to_string(),
+            summary: "Estimates SAR model and outputs fitted value surface.".to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
                 ToolParamDescriptor { name: "response_field".to_string(), description: "Response variable.".to_string(), required: true },
                 ToolParamDescriptor { name: "predictor_fields".to_string(), description: "Predictor fields.".to_string(), required: true },
+                ToolParamDescriptor { name: "weights_mode".to_string(), description: "Neighborhood mode.".to_string(), required: false },
+                ToolParamDescriptor { name: "k".to_string(), description: "k for k_nearest.".to_string(), required: false },
+                ToolParamDescriptor { name: "distance".to_string(), description: "Distance threshold.".to_string(), required: false },
+                ToolParamDescriptor { name: "row_standardize".to_string(), description: "Row standardize weights.".to_string(), required: false },
+                ToolParamDescriptor { name: "cell_size".to_string(), description: "Output raster cell size.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output raster.".to_string(), required: true },
             ],
             defaults,
-            examples: vec![],
+            examples: vec![ToolExample {
+                name: "sar_raster_basic".to_string(),
+                description: "Estimate SAR and interpolate fitted values to raster.".to_string(),
+                args: example_args,
+            }],
             tags: vec!["raster".to_string(), "spatial-regression".to_string(), "sar".to_string()],
             stability: ToolStability::Experimental,
         }
     }
 
-    fn validate(&self, _args: &ToolArgs) -> Result<(), ToolError> {
-        Err(ToolError::Validation(
-            "spatial_lag_regression_raster is not yet implemented".to_string(),
-        ))
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let _ = parse_string_arg(args, "response_field")?;
+        let _ = parse_string_arg(args, "predictor_fields")?;
+        let _ = parse_raster_path_arg(args, "output")?;
+        Ok(())
     }
 
-    fn run(&self, _args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        Err(ToolError::Execution(
-            "spatial_lag_regression_raster is not yet implemented".to_string(),
-        ))
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        use wbspatialstats::regression::SpatialLagRegression;
+        use nalgebra::DMatrix;
+
+        let input = load_vector_arg(args, "input")?;
+        let response_field = parse_string_arg(args, "response_field")?;
+        let predictor_str = parse_string_arg(args, "predictor_fields")?;
+        let output_path = parse_raster_path_arg(args, "output")?;
+        let mode = SpatialWeightsMode::parse(args)?;
+        let k = parse_optional_usize_arg(args, "k")?.unwrap_or(8);
+        let distance = parse_optional_f64_arg(args, "distance").unwrap_or(0.0);
+        let row_standardize = parse_bool_arg(args, "row_standardize", true);
+        let island_policy = IslandPolicy::parse(args)?;
+        let cell_size = parse_optional_f64_arg(args, "cell_size");
+
+        let predictor_fields: Vec<&str> = predictor_str.split(',').map(|s| s.trim()).collect();
+
+        ctx.progress.info("Extracting response and predictor variables");
+        let (observations, dropped) = collect_spatial_observations(&input, &response_field)?;
+        if observations.is_empty() {
+            return Err(ToolError::Execution(format!(
+                "No valid observations after dropping {} features",
+                dropped
+            )));
+        }
+
+        let n = observations.len();
+        let y: Vec<f64> = observations.iter().map(|o| o.value).collect();
+
+        // Extract predictor fields - build design matrix column by column
+        let mut x_data: Vec<f64> = Vec::with_capacity(n * (1 + predictor_fields.len()));
+        
+        // Intercept column
+        for _ in 0..n {
+            x_data.push(1.0);
+        }
+
+        for &pred_field in &predictor_fields {
+            let (pred_obs, _) = collect_spatial_observations(&input, pred_field)?;
+            if pred_obs.len() != n {
+                return Err(ToolError::Execution(format!(
+                    "Predictor '{}' has {} observations vs {} for response",
+                    pred_field, pred_obs.len(), n
+                )));
+            }
+            for obs in pred_obs {
+                x_data.push(obs.value);
+            }
+        }
+
+        let x = DMatrix::from_column_slice(n, 1 + predictor_fields.len(), &x_data);
+
+        ctx.progress.info("Building spatial weights");
+        let weights = build_spatial_weights(
+            &observations,
+            mode,
+            row_standardize,
+            island_policy,
+            k,
+            distance,
+            dropped,
+        )?;
+
+        ctx.progress.info("Estimating spatial lag model (SAR)");
+        let result = SpatialLagRegression::estimate(&y, &x, &weights, 100, 1e-6)
+            .map_err(|e| ToolError::Execution(format!("SAR estimation failed: {}", e)))?;
+
+        ctx.progress.info("Building output raster");
+        let samples: Vec<(f64, f64, f64)> = observations.iter().map(|o| (o.x, o.y, o.value)).collect();
+        let mut output = super::build_point_interpolation_output(&input, &samples, cell_size, None, DataType::F64)?;
+
+        let rows = output.rows;
+        let cols = output.cols;
+        let x_min = output.x_min;
+        let y_max = output.y_max();
+        let cell_x = output.cell_size_x;
+        let cell_y = output.cell_size_y;
+
+        ctx.progress.info("Interpolating fitted values to raster grid");
+        for row in 0..rows {
+            for col in 0..cols {
+                let x = x_min + (col as f64 + 0.5) * cell_x;
+                let y = y_max - (row as f64 + 0.5) * cell_y;
+
+                // Find nearest observation
+                let mut nearest_idx = 0;
+                let mut nearest_dist_sq = f64::INFINITY;
+                for (idx, obs) in observations.iter().enumerate() {
+                    let dx = obs.x - x;
+                    let dy = obs.y - y;
+                    let dist_sq = dx * dx + dy * dy;
+                    if dist_sq < nearest_dist_sq {
+                        nearest_dist_sq = dist_sq;
+                        nearest_idx = idx;
+                    }
+                }
+
+                // Use fitted value from nearest observation
+                let fitted_value = result.base.fitted_values[nearest_idx];
+                let idx = row * cols + col;
+                output.data.set_f64(idx, fitted_value);
+            }
+
+            let progress = (row as f64 + 1.0) / rows as f64;
+            ctx.progress.progress(progress);
+        }
+
+        ctx.progress.info("Writing raster output");
+        let locator = GisOverlayCore::store_or_write_output(output, output_path.trim(), ctx)?;
+
+        let mut outputs = ToolArgs::new();
+        outputs.insert("output".to_string(), json!(locator));
+
+        ctx.progress.progress(1.0);
+        Ok(ToolRunResult { outputs })
     }
 }
 
@@ -3399,13 +3529,18 @@ impl Tool for SpatialErrorRegressionRasterTool {
         ToolMetadata {
             id: "spatial_error_regression_raster",
             display_name: "Spatial Error Regression (SEM) - Raster Output",
-            summary: "[NOT YET IMPLEMENTED] Outputs fitted value surface from spatial error regression.",
+            summary: "Estimates spatial error regression and outputs fitted value surface.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
                 ToolParamSpec { name: "response_field", description: "Response variable.", required: true },
                 ToolParamSpec { name: "predictor_fields", description: "Comma-separated predictor fields.", required: true },
+                ToolParamSpec { name: "weights_mode", description: "Neighborhood mode: queen, rook, k_nearest, distance_band.", required: false },
+                ToolParamSpec { name: "k", description: "k value for k_nearest mode (default 8).", required: false },
+                ToolParamSpec { name: "distance", description: "Distance threshold for distance_band mode.", required: false },
+                ToolParamSpec { name: "row_standardize", description: "Apply row standardization to weights (default true).", required: false },
+                ToolParamSpec { name: "cell_size", description: "Output raster cell size (optional; uses input extent).", required: false },
                 ToolParamSpec { name: "output", description: "Output raster (fitted values).", required: true },
             ],
         }
@@ -3416,37 +3551,164 @@ impl Tool for SpatialErrorRegressionRasterTool {
         defaults.insert("input".to_string(), json!("input.gpkg"));
         defaults.insert("response_field".to_string(), json!("response"));
         defaults.insert("predictor_fields".to_string(), json!("predictor1"));
-        defaults.insert("output".to_string(), json!("fitted.tif"));
+        defaults.insert("weights_mode".to_string(), json!("k_nearest"));
+        defaults.insert("k".to_string(), json!(8));
+        defaults.insert("row_standardize".to_string(), json!(true));
+
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("fitted.tif"));
 
         ToolManifest {
             id: "spatial_error_regression_raster".to_string(),
             display_name: "Spatial Error Regression (SEM) - Raster Output".to_string(),
-            summary: "[NOT YET IMPLEMENTED] Outputs fitted value surface from SEM model.".to_string(),
+            summary: "Estimates SEM model and outputs fitted value surface.".to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
                 ToolParamDescriptor { name: "response_field".to_string(), description: "Response variable.".to_string(), required: true },
                 ToolParamDescriptor { name: "predictor_fields".to_string(), description: "Predictor fields.".to_string(), required: true },
+                ToolParamDescriptor { name: "weights_mode".to_string(), description: "Neighborhood mode.".to_string(), required: false },
+                ToolParamDescriptor { name: "k".to_string(), description: "k for k_nearest.".to_string(), required: false },
+                ToolParamDescriptor { name: "distance".to_string(), description: "Distance threshold.".to_string(), required: false },
+                ToolParamDescriptor { name: "row_standardize".to_string(), description: "Row standardize weights.".to_string(), required: false },
+                ToolParamDescriptor { name: "cell_size".to_string(), description: "Output raster cell size.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output raster.".to_string(), required: true },
             ],
             defaults,
-            examples: vec![],
+            examples: vec![ToolExample {
+                name: "sem_raster_basic".to_string(),
+                description: "Estimate SEM and interpolate fitted values to raster.".to_string(),
+                args: example_args,
+            }],
             tags: vec!["raster".to_string(), "spatial-regression".to_string(), "sem".to_string()],
             stability: ToolStability::Experimental,
         }
     }
 
-    fn validate(&self, _args: &ToolArgs) -> Result<(), ToolError> {
-        Err(ToolError::Validation(
-            "spatial_error_regression_raster is not yet implemented".to_string(),
-        ))
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let _ = parse_string_arg(args, "response_field")?;
+        let _ = parse_string_arg(args, "predictor_fields")?;
+        let _ = parse_raster_path_arg(args, "output")?;
+        Ok(())
     }
 
-    fn run(&self, _args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        Err(ToolError::Execution(
-            "spatial_error_regression_raster is not yet implemented".to_string(),
-        ))
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        use wbspatialstats::regression::SpatialErrorRegression;
+        use nalgebra::DMatrix;
+
+        let input = load_vector_arg(args, "input")?;
+        let response_field = parse_string_arg(args, "response_field")?;
+        let predictor_str = parse_string_arg(args, "predictor_fields")?;
+        let output_path = parse_raster_path_arg(args, "output")?;
+        let mode = SpatialWeightsMode::parse(args)?;
+        let k = parse_optional_usize_arg(args, "k")?.unwrap_or(8);
+        let distance = parse_optional_f64_arg(args, "distance").unwrap_or(0.0);
+        let row_standardize = parse_bool_arg(args, "row_standardize", true);
+        let island_policy = IslandPolicy::parse(args)?;
+        let cell_size = parse_optional_f64_arg(args, "cell_size");
+
+        let predictor_fields: Vec<&str> = predictor_str.split(',').map(|s| s.trim()).collect();
+
+        ctx.progress.info("Extracting response and predictor variables");
+        let (observations, dropped) = collect_spatial_observations(&input, &response_field)?;
+        if observations.is_empty() {
+            return Err(ToolError::Execution(format!(
+                "No valid observations after dropping {} features",
+                dropped
+            )));
+        }
+
+        let n = observations.len();
+        let y: Vec<f64> = observations.iter().map(|o| o.value).collect();
+
+        // Extract predictor fields - build design matrix column by column
+        let mut x_data: Vec<f64> = Vec::with_capacity(n * (1 + predictor_fields.len()));
+        
+        // Intercept column
+        for _ in 0..n {
+            x_data.push(1.0);
+        }
+
+        for &pred_field in &predictor_fields {
+            let (pred_obs, _) = collect_spatial_observations(&input, pred_field)?;
+            if pred_obs.len() != n {
+                return Err(ToolError::Execution(format!(
+                    "Predictor '{}' has {} observations vs {} for response",
+                    pred_field, pred_obs.len(), n
+                )));
+            }
+            for obs in pred_obs {
+                x_data.push(obs.value);
+            }
+        }
+
+        let x = DMatrix::from_column_slice(n, 1 + predictor_fields.len(), &x_data);
+
+        ctx.progress.info("Building spatial weights");
+        let weights = build_spatial_weights(
+            &observations,
+            mode,
+            row_standardize,
+            island_policy,
+            k,
+            distance,
+            dropped,
+        )?;
+
+        ctx.progress.info("Estimating spatial error model (SEM)");
+        let result = SpatialErrorRegression::estimate(&y, &x, &weights, 100, 1e-6)
+            .map_err(|e| ToolError::Execution(format!("SEM estimation failed: {}", e)))?;
+
+        ctx.progress.info("Building output raster");
+        let samples: Vec<(f64, f64, f64)> = observations.iter().map(|o| (o.x, o.y, o.value)).collect();
+        let mut output = super::build_point_interpolation_output(&input, &samples, cell_size, None, DataType::F64)?;
+
+        let rows = output.rows;
+        let cols = output.cols;
+        let x_min = output.x_min;
+        let y_max = output.y_max();
+        let cell_x = output.cell_size_x;
+        let cell_y = output.cell_size_y;
+
+        ctx.progress.info("Interpolating fitted values to raster grid");
+        for row in 0..rows {
+            for col in 0..cols {
+                let x = x_min + (col as f64 + 0.5) * cell_x;
+                let y = y_max - (row as f64 + 0.5) * cell_y;
+
+                // Find nearest observation
+                let mut nearest_idx = 0;
+                let mut nearest_dist_sq = f64::INFINITY;
+                for (idx, obs) in observations.iter().enumerate() {
+                    let dx = obs.x - x;
+                    let dy = obs.y - y;
+                    let dist_sq = dx * dx + dy * dy;
+                    if dist_sq < nearest_dist_sq {
+                        nearest_dist_sq = dist_sq;
+                        nearest_idx = idx;
+                    }
+                }
+
+                // Use fitted value from nearest observation
+                let fitted_value = result.base.fitted_values[nearest_idx];
+                let idx = row * cols + col;
+                output.data.set_f64(idx, fitted_value);
+            }
+
+            let progress = (row as f64 + 1.0) / rows as f64;
+            ctx.progress.progress(progress);
+        }
+
+        ctx.progress.info("Writing raster output");
+        let locator = GisOverlayCore::store_or_write_output(output, output_path.trim(), ctx)?;
+
+        let mut outputs = ToolArgs::new();
+        outputs.insert("output".to_string(), json!(locator));
+
+        ctx.progress.progress(1.0);
+        Ok(ToolRunResult { outputs })
     }
 }
 
@@ -3455,14 +3717,17 @@ impl Tool for GeographicallyWeightedRegressionRasterTool {
         ToolMetadata {
             id: "geographically_weighted_regression_raster",
             display_name: "Geographically Weighted Regression (GWR) - Raster Output",
-            summary: "[NOT YET IMPLEMENTED] Outputs local coefficient rasters from GWR model.",
+            summary: "Estimates GWR and outputs local coefficient raster surfaces.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
                 ToolParamSpec { name: "response_field", description: "Response variable.", required: true },
                 ToolParamSpec { name: "predictor_fields", description: "Comma-separated predictor fields.", required: true },
-                ToolParamSpec { name: "output", description: "Output raster prefix (multiple bands for coefficients).", required: true },
+                ToolParamSpec { name: "bandwidth", description: "Bandwidth for kernel (default: adaptive).", required: false },
+                ToolParamSpec { name: "kernel", description: "Kernel type: gaussian, bisquare (default: bisquare).", required: false },
+                ToolParamSpec { name: "cell_size", description: "Output raster cell size (optional; uses input extent).", required: false },
+                ToolParamSpec { name: "output_prefix", description: "Output raster filename prefix (adds _coef_X suffix per predictor).", required: true },
             ],
         }
     }
@@ -3472,36 +3737,162 @@ impl Tool for GeographicallyWeightedRegressionRasterTool {
         defaults.insert("input".to_string(), json!("input.gpkg"));
         defaults.insert("response_field".to_string(), json!("response"));
         defaults.insert("predictor_fields".to_string(), json!("predictor1"));
-        defaults.insert("output".to_string(), json!("gwr_coef.tif"));
+        defaults.insert("kernel".to_string(), json!("bisquare"));
+
+        let mut example_args = defaults.clone();
+        example_args.insert("output_prefix".to_string(), json!("gwr_coef.tif"));
 
         ToolManifest {
             id: "geographically_weighted_regression_raster".to_string(),
             display_name: "Geographically Weighted Regression (GWR) - Raster Output".to_string(),
-            summary: "[NOT YET IMPLEMENTED] Outputs local coefficient surfaces from GWR.".to_string(),
+            summary: "Estimates GWR and outputs local coefficient raster surfaces.".to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
                 ToolParamDescriptor { name: "response_field".to_string(), description: "Response variable.".to_string(), required: true },
                 ToolParamDescriptor { name: "predictor_fields".to_string(), description: "Predictor fields.".to_string(), required: true },
-                ToolParamDescriptor { name: "output".to_string(), description: "Output raster.".to_string(), required: true },
+                ToolParamDescriptor { name: "bandwidth".to_string(), description: "Kernel bandwidth.".to_string(), required: false },
+                ToolParamDescriptor { name: "kernel".to_string(), description: "Kernel type.".to_string(), required: false },
+                ToolParamDescriptor { name: "cell_size".to_string(), description: "Output raster cell size.".to_string(), required: false },
+                ToolParamDescriptor { name: "output_prefix".to_string(), description: "Output raster prefix.".to_string(), required: true },
             ],
             defaults,
-            examples: vec![],
+            examples: vec![ToolExample {
+                name: "gwr_raster_basic".to_string(),
+                description: "Estimate GWR and output local coefficient surfaces.".to_string(),
+                args: example_args,
+            }],
             tags: vec!["raster".to_string(), "spatial-regression".to_string(), "gwr".to_string()],
             stability: ToolStability::Experimental,
         }
     }
 
-    fn validate(&self, _args: &ToolArgs) -> Result<(), ToolError> {
-        Err(ToolError::Validation(
-            "geographically_weighted_regression_raster is not yet implemented".to_string(),
-        ))
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let _ = parse_string_arg(args, "response_field")?;
+        let _ = parse_string_arg(args, "predictor_fields")?;
+        let _ = parse_raster_path_arg(args, "output_prefix")?;
+        Ok(())
     }
 
-    fn run(&self, _args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        Err(ToolError::Execution(
-            "geographically_weighted_regression_raster is not yet implemented".to_string(),
-        ))
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        use wbspatialstats::regression::GeographicallyWeightedRegression;
+        use nalgebra::DMatrix;
+
+        let input = load_vector_arg(args, "input")?;
+        let response_field = parse_string_arg(args, "response_field")?;
+        let predictor_str = parse_string_arg(args, "predictor_fields")?;
+        let output_prefix = parse_raster_path_arg(args, "output_prefix")?;
+        let kernel = parse_string_arg(args, "kernel").unwrap_or_else(|_| "bisquare".to_string());
+        let cell_size = parse_optional_f64_arg(args, "cell_size");
+
+        let predictor_fields: Vec<&str> = predictor_str.split(',').map(|s| s.trim()).collect();
+
+        ctx.progress.info("Extracting response and predictor variables");
+        let (observations, dropped) = collect_spatial_observations(&input, &response_field)?;
+        if observations.is_empty() {
+            return Err(ToolError::Execution(format!(
+                "No valid observations after dropping {} features",
+                dropped
+            )));
+        }
+
+        let n = observations.len();
+        let y: Vec<f64> = observations.iter().map(|o| o.value).collect();
+
+        // Extract predictor fields
+        let mut x_data: Vec<f64> = Vec::with_capacity(n * (1 + predictor_fields.len()));
+        
+        // Intercept column
+        for _ in 0..n {
+            x_data.push(1.0);
+        }
+
+        for &pred_field in &predictor_fields {
+            let (pred_obs, _) = collect_spatial_observations(&input, pred_field)?;
+            if pred_obs.len() != n {
+                return Err(ToolError::Execution(format!(
+                    "Predictor '{}' has {} observations vs {} for response",
+                    pred_field, pred_obs.len(), n
+                )));
+            }
+            for obs in pred_obs {
+                x_data.push(obs.value);
+            }
+        }
+
+        let x = DMatrix::from_column_slice(n, 1 + predictor_fields.len(), &x_data);
+
+        ctx.progress.info("Estimating GWR model");
+        let result = GeographicallyWeightedRegression::estimate(&y, &x, &observations, &kernel, None)
+            .map_err(|e| ToolError::Execution(format!("GWR estimation failed: {}", e)))?;
+
+        ctx.progress.info("Building output rasters");
+        let samples: Vec<(f64, f64, f64)> = observations.iter().map(|o| (o.x, o.y, o.value)).collect();
+        let base_raster = super::build_point_interpolation_output(&input, &samples, cell_size, None, DataType::F64)?;
+
+        // For each predictor + intercept, create a coefficient raster
+        let mut outputs = ToolArgs::new();
+        let n_coefs = 1 + predictor_fields.len();
+
+        for coef_idx in 0..n_coefs {
+            let coef_label = if coef_idx == 0 {
+                "intercept".to_string()
+            } else {
+                predictor_fields[coef_idx - 1].to_string()
+            };
+
+            let mut output = base_raster.clone();
+            let rows = output.rows;
+            let cols = output.cols;
+            let x_min = output.x_min;
+            let y_max = output.y_max();
+            let cell_x = output.cell_size_x;
+            let cell_y = output.cell_size_y;
+
+            ctx.progress.info(&format!("Interpolating coefficient {} to raster grid", coef_label));
+            for row in 0..rows {
+                for col in 0..cols {
+                    let x = x_min + (col as f64 + 0.5) * cell_x;
+                    let y = y_max - (row as f64 + 0.5) * cell_y;
+
+                    // Find nearest observation
+                    let mut nearest_idx = 0;
+                    let mut nearest_dist_sq = f64::INFINITY;
+                    for (idx, obs) in observations.iter().enumerate() {
+                        let dx = obs.x - x;
+                        let dy = obs.y - y;
+                        let dist_sq = dx * dx + dy * dy;
+                        if dist_sq < nearest_dist_sq {
+                            nearest_dist_sq = dist_sq;
+                            nearest_idx = idx;
+                        }
+                    }
+
+                    // Use local coefficient from nearest observation
+                    let coef_value = result.coefficients[nearest_idx][coef_idx];
+                    let idx = row * cols + col;
+                    output.data.set_f64(idx, coef_value);
+                }
+
+                let progress = (row as f64 + 1.0) / rows as f64;
+                ctx.progress.progress(progress);
+            }
+
+            // Write each coefficient raster
+            let coef_output_path = if coef_idx == 0 {
+                format!("{}_intercept.tif", output_prefix.trim_end_matches(".tif").trim_end_matches(".img").trim_end_matches(".hdf"))
+            } else {
+                format!("{}_{}.tif", output_prefix.trim_end_matches(".tif").trim_end_matches(".img").trim_end_matches(".hdf"), coef_label)
+            };
+
+            ctx.progress.info(&format!("Writing raster {}", coef_label));
+            let locator = GisOverlayCore::store_or_write_output(output, coef_output_path.trim(), ctx)?;
+            outputs.insert(format!("coef_{}", coef_label), json!(locator));
+        }
+
+        ctx.progress.progress(1.0);
+        Ok(ToolRunResult { outputs })
     }
 }

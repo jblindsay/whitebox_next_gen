@@ -94,10 +94,11 @@ Features:
 
 ### Variography
 
-Empirical and theoretical variogram computation for spatial dependence characterization:
+Empirical and theoretical variogram computation for spatial dependence characterization, including anisotropy analysis:
 
 - **Empirical Variogram**: Lag-based semi-variance estimation with configurable bin sizes
-- **Directional Variogram**: Azimuthal/anisotropic analysis (quantify directional dependence)
+- **Directional Variogram**: Azimuthal analysis across multiple directions (0-180°) with tolerance control for detecting and quantifying spatial anisotropy
+- **Anisotropy Modeling**: Automatic detection and fitting of directional variation in spatial continuity with anisotropy ratio and principal direction estimation
 - **Cross-Variogram**: Spatial dependence between primary and auxiliary variables (required for CoKriging)
 - **Robust Variogram Fitting**: Multiple robust loss functions (Cressie, Dowd, Genton)
 - **Variogram Model Families**:
@@ -112,6 +113,8 @@ Features:
 - Nested variogram support for complex spatial structures
 - Automatic nugget effect estimation
 - Cross-variogram fitting for multivariate kriging workflows
+- Directional rose diagrams for visualization
+- Anisotropic distance transformation for directional kriging applications
 
 ### Spatial Autocorrelation
 
@@ -314,12 +317,13 @@ See [examples/](examples/) directory for additional worked examples:
 1. **Kriging**:
    - Ordinary kriging assumes stationarity; non-stationary processes may need trend removal first.
    - Large datasets (>5000 points) may require local kriging or neighborhood selection for performance.
-   - Anisotropy support is via variogram model parameters; geometric anisotropy tensors are not yet supported.
+   - Anisotropy support is integrated via directional variogram analysis and anisotropy transformation; arbitrary geometric anisotropy tensors are not yet supported.
    - CoKriging supports arbitrary number of auxiliary variables but limited to pairwise cross-variogram relationships.
 
 2. **Variography**:
    - Nested (multi-structure) variograms are partially supported; some complex nesting patterns may require post-hoc model fitting.
    - Cross-variograms are supported but currently limited to primary-auxiliary variable pairs.
+   - Directional variogram analysis uses azimuthal binning; tolerance-based directional windows are configurable.
 
 3. **Spatial Regression**:
    - Bayesian spatial models (MCMC, Gibbs sampling) are not yet implemented.
@@ -344,8 +348,8 @@ See [examples/](examples/) directory for additional worked examples:
 
 ### Module Structure
 
-- `variogram/` — Empirical variogram, model families, fitting algorithms, cloud diagnostics
-- `kriging/` — OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, UniversalKriging, SpaceTimeKriging, and result types
+- `variogram/` — Empirical variogram, directional variogram, anisotropy modeling, model families, fitting algorithms, cloud diagnostics
+- `kriging/` — OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, UniversalKriging, SpaceTimeKriging, OrdinaryCoKriging, and result types
 - `cv/` — Leave-one-out and spatial k-fold cross-validation
 - `weights/` — Spatial weights matrices with multiple construction modes (inverse distance, queen, k-nearest)
 - `autocorrelation/` — Global/local Moran's I, Getis-Ord Gi*, significance testing, multiple testing correction

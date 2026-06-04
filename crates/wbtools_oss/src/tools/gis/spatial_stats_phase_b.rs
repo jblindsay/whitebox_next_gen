@@ -26,8 +26,12 @@ impl Tool for OrdinaryKrigingTool {
     fn metadata(&self) -> ToolMetadata {
         ToolMetadata {
             id: "ordinary_kriging",
-            display_name: "Ordinary Kriging",
-            summary: "Interpolates a raster surface using ordinary kriging with estimated variogram.",
+            display_name: "Ordinary Kriging Interpolation",
+            summary: r#"Performs ordinary kriging interpolation to estimate values at unmapped grid cells based on a sample of point measurements. Ordinary kriging is a geostatistical method that leverages spatial autocorrelation structure to provide both predictions and associated kriging variance (prediction uncertainty). The tool automatically estimates an empirical variogram from the input point data and fits a theoretical variogram model (Spherical, Exponential, or Gaussian) to capture spatial dependence.
+
+Ordinary kriging assumes an unknown constant mean across the study area. It is appropriate for continuous spatial phenomena such as ore grades, pollutant concentrations, precipitation, or soil properties. The method uses all available data points for each prediction, making it computationally intensive for large datasets (>5000 points). For large datasets, consider using Local Ordinary Kriging instead.
+
+Outputs include the interpolated raster and kriging variance, which can be used to assess prediction confidence. The kriging variance is independent of actual values and depends only on variogram model and sample configuration. This makes it useful for survey design and identifying areas of high interpolation uncertainty."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -49,8 +53,8 @@ impl Tool for OrdinaryKrigingTool {
         example_args.insert("output".to_string(), json!("ordinary_kriging.tif"));
         ToolManifest {
             id: "ordinary_kriging".to_string(),
-            display_name: "Ordinary Kriging".to_string(),
-            summary: "Interpolates a raster surface using ordinary kriging with estimated variogram.".to_string(),
+            display_name: "Ordinary Kriging Interpolation".to_string(),
+            summary: r#"Performs ordinary kriging interpolation to estimate values at unmapped grid cells based on a sample of point measurements. Ordinary kriging is a geostatistical method that leverages spatial autocorrelation structure to provide both predictions and associated kriging variance (prediction uncertainty). The tool automatically estimates an empirical variogram from the input point data and fits a theoretical variogram model (Spherical, Exponential, or Gaussian) to capture spatial dependence."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -161,7 +165,11 @@ impl Tool for LocalOrdinaryKrigingTool {
         ToolMetadata {
             id: "local_kriging",
             display_name: "Local Ordinary Kriging",
-            summary: "Interpolates a raster surface using local ordinary kriging with k-nearest neighbors.",
+            summary: r#"Performs local ordinary kriging interpolation using k-nearest neighbors, providing efficient spatial estimation for large datasets. This approach is computationally more practical than global ordinary kriging for datasets with thousands of points. For each prediction location, the algorithm fits a separate variogram model using only the k nearest neighbors, dramatically reducing computation while maintaining kriging's geostatistical advantages.
+
+Local kriging is ideal when spatial correlation structure varies across the study area (non-stationary) or when computational resources are limited. The k-neighbors parameter controls the trade-off between accuracy and speed; typical values range from 8-20. Fewer neighbors speed computation but may increase local variance; more neighbors improve stability but increase computation cost.
+
+Output includes both interpolated predictions and kriging variance, useful for identifying areas where predictions are less reliable due to sparse or uneven sampling."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -186,7 +194,7 @@ impl Tool for LocalOrdinaryKrigingTool {
         ToolManifest {
             id: "local_kriging".to_string(),
             display_name: "Local Ordinary Kriging".to_string(),
-            summary: "Interpolates a raster surface using local ordinary kriging with k-nearest neighbors.".to_string(),
+            summary: r#"Performs local ordinary kriging interpolation using k-nearest neighbors, providing efficient spatial estimation for large datasets. This approach is computationally more practical than global ordinary kriging for datasets with thousands of points."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -299,7 +307,11 @@ impl Tool for SimpleKrigingTool {
         ToolMetadata {
             id: "simple_kriging",
             display_name: "Simple Kriging",
-            summary: "Interpolates a raster surface using simple kriging with a known mean.",
+            summary: r#"Performs simple kriging interpolation when the mean of the spatial field is known a priori. This method is a variant of ordinary kriging that assumes a constant, known expected value across the study area. Simple kriging reduces kriging variance and provides more stable predictions when the mean is reliably known from external information or theoretical understanding.
+
+Simple kriging is appropriate when you have strong prior knowledge of the spatial field's mean (e.g., from regional climate normals, geological surveys, or calibration data). The tool automatically estimates and fits an empirical variogram to capture spatial correlation structure. Predictions include both estimated values and kriging variance reflecting prediction uncertainty.
+
+Compare to ordinary kriging when the mean is unknown, or universal kriging when the mean varies spatially (has a trend). Simple kriging generally produces lower prediction variance than ordinary kriging due to the fixed mean assumption."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -324,7 +336,7 @@ impl Tool for SimpleKrigingTool {
         ToolManifest {
             id: "simple_kriging".to_string(),
             display_name: "Simple Kriging".to_string(),
-            summary: "Interpolates a raster surface using simple kriging with a known mean.".to_string(),
+            summary: r#"Performs simple kriging interpolation when the mean of the spatial field is known a priori. This method reduces kriging variance and provides more stable predictions when the mean is reliably known from external information."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -437,7 +449,11 @@ impl Tool for UniversalKrigingTool {
         ToolMetadata {
             id: "universal_kriging",
             display_name: "Universal Kriging",
-            summary: "Interpolates a raster surface using universal kriging with polynomial trend.",
+            summary: r#"Performs universal kriging interpolation when the spatial phenomenon has a systematic trend or drift that varies across the study area. Universal kriging combines kriging with polynomial trend surface estimation to separate the large-scale trend from small-scale spatial variation. This allows modeling situations where values systematically increase or decrease across the region (e.g., elevation trends, temperature gradients).
+
+The trend_order parameter controls the polynomial degree: trend_order=1 fits a linear trend (sloping plane); trend_order=2 fits a quadratic trend (curved surface). After removing the trend, ordinary kriging is applied to the residuals. This two-step approach often produces better predictions than ordinary kriging alone when trends are present.
+
+Universal kriging is appropriate for continuous spatial phenomena with geographic trends (elevation, pollution gradients, resource grades). The tool automatically fits both the trend and variogram model. Outputs include predictions and kriging variance. Use when ordinary kriging residuals show systematic spatial patterns (suggests unmodeled trend)."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -462,7 +478,7 @@ impl Tool for UniversalKrigingTool {
         ToolManifest {
             id: "universal_kriging".to_string(),
             display_name: "Universal Kriging".to_string(),
-            summary: "Interpolates a raster surface using universal kriging with polynomial trend.".to_string(),
+            summary: r#"Performs universal kriging interpolation when the spatial phenomenon has a systematic trend or drift. Combines kriging with polynomial trend surface estimation."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -575,7 +591,11 @@ impl Tool for SpaceTimeKrigingTool {
         ToolMetadata {
             id: "spacetime_kriging",
             display_name: "Space-Time Kriging",
-            summary: "Interpolates a raster surface using space-time kriging with temporal dimension.",
+            summary: r#"Performs space-time kriging interpolation to jointly model spatial and temporal variation in point measurements. This advanced geostatistical method extends ordinary kriging to account for temporal dependence, ideal for spatially-distributed time series data like air quality monitoring, climate stations, or environmental sensor networks.
+
+Space-time kriging simultaneously leverages spatial proximity and temporal continuity. Measurements from nearby times and locations are weighted more heavily than distant measurements. The method estimates a spatio-temporal variogram capturing how correlation decays with both spatial distance and temporal lag.
+
+Applications include gap-filling in sensor networks, interpolating climate data across space and time, and estimating environmental variables at unsampled locations and times. The temporal dimension often reveals non-stationary behavior (seasons, trends) better captured jointly than separately. Output includes predictions and space-time kriging variance."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -600,7 +620,7 @@ impl Tool for SpaceTimeKrigingTool {
         ToolManifest {
             id: "spacetime_kriging".to_string(),
             display_name: "Space-Time Kriging".to_string(),
-            summary: "Interpolates a raster surface using space-time kriging with temporal dimension.".to_string(),
+            summary: r#"Performs space-time kriging interpolation to jointly model spatial and temporal variation in point measurements. Ideal for spatially-distributed time series data."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![

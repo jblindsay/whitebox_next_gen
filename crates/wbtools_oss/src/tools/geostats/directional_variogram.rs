@@ -10,7 +10,11 @@ impl Tool for DirectionalVariogramTool {
         ToolMetadata {
             id: "directional_variogram",
             display_name: "Directional Variogram Analysis",
-            summary: "Computes directional variograms to detect and quantify spatial anisotropy",
+            summary: r#"Computes variograms in multiple directions to detect and quantify spatial anisotropy—directional variation in spatial correlation. Many natural phenomena exhibit anisotropy: geological deposits follow stratification, atmospheric properties align with wind patterns, groundwater flows along gradients. This tool reveals these directional patterns by computing separate variograms for each specified azimuth.
+
+Anisotropy manifests as different ranges, nuggets, or sills in different directions. Omitting anisotropy in kriging introduces systematic bias. The tool computes directional variograms and fits anisotropy models (elliptical) to characterize the pattern. Output includes directional variogram data and optional rose diagram visualization showing spatial continuity direction and magnitude.
+
+Parameters: directions specify azimuths (0-180°) to analyze (common: 0°, 45°, 90°, 135° for cardinal/diagonal); tolerance allows flexibility in direction binning; rose diagram output visualizes anisotropy pattern. Use results to inform universal kriging with anisotropic variogram model."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -40,7 +44,7 @@ impl Tool for DirectionalVariogramTool {
         ToolManifest {
             id: "directional_variogram".to_string(),
             display_name: "Directional Variogram Analysis".to_string(),
-            summary: "Computes variograms in multiple directions to detect spatial anisotropy and directional continuity".to_string(),
+            summary: r#"Computes variograms in multiple directions to detect spatial anisotropy. Reveals directional continuity patterns essential for realistic kriging."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![

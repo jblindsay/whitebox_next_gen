@@ -619,7 +619,11 @@ impl Tool for GlobalMoransITool {
         ToolMetadata {
             id: "global_morans_i",
             display_name: "Global Moran's I",
-            summary: "Computes Global Moran's I with diagnostics and asymptotic or permutation significance testing.",
+            summary: r#"Computes Global Moran's I, a fundamental test of spatial autocorrelation measuring whether similar values cluster together spatially. Moran's I ranges from -1 (perfect negative autocorrelation/dispersed) to +1 (perfect positive autocorrelation/clustered), with 0 indicating random spatial arrangement. Significant positive I indicates clustering; negative I indicates values alternate among neighbors.
+
+The test reveals whether your phenomenon is truly spatially dependent (guides kriging appropriateness, geostatistical method selection). Global Moran's I summarizes entire study area in one index. Both parametric (asymptotic) and permutation-based significance testing are supported. Permutation testing is more robust and recommended for non-normal data or small samples.
+
+Outputs: I statistic, expected I under null hypothesis, variance, z-score, p-value, and interpretation. Optional permutation distribution visualization. Significant global autocorrelation suggests spatial non-stationarity—consider local LISA analysis to identify specific clusters. Use weights parameters (queen/rook/k-nearest/distance) to define neighborhoods."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -662,7 +666,7 @@ impl Tool for GlobalMoransITool {
         ToolManifest {
             id: "global_morans_i".to_string(),
             display_name: "Global Moran's I".to_string(),
-            summary: "Computes Global Moran's I with diagnostics and asymptotic or permutation significance testing.".to_string(),
+            summary: r#"Computes Global Moran's I to test spatial autocorrelation: whether similar values cluster spatially. Essential foundation for geostatistical analysis."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1082,7 +1086,11 @@ impl Tool for LocalMoransILisaTool {
         ToolMetadata {
             id: "local_morans_i_lisa",
             display_name: "Local Moran's I (LISA)",
-            summary: "Computes Local Moran's I (LISA) with permutation or asymptotic significance testing and per-feature cluster classification.",
+            summary: r#"Computes Local Moran's I (LISA) for each feature, identifying statistically significant local spatial clusters and outliers. While Global Moran's I summarizes entire study area, LISA reveals which locations contribute most to global clustering and classifies them into cluster types: HH (high-value clusters), LL (low-value clusters), HL (high outliers), LH (low outliers).
+
+LISA results pinpoint hotspots and coldspots, allowing targeted analysis of cluster drivers. Output includes LISA values, p-values, cluster classification, and optional FDR multiple-testing correction to control false discovery. Both asymptotic and permutation inference are supported; permutation-based p-values are more reliable for non-normal data.
+
+Applications: identifying crime hotspots, disease clusters, pollution zones, or high-value/low-value neighborhoods. Map LISA cluster classifications to visualize spatial structure. Investigate cluster drivers by examining feature attributes within identified clusters. Use weights parameters to define local neighborhoods (k-nearest recommended; vary k for sensitivity analysis)."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1127,7 +1135,7 @@ impl Tool for LocalMoransILisaTool {
         ToolManifest {
             id: "local_morans_i_lisa".to_string(),
             display_name: "Local Moran's I (LISA)".to_string(),
-            summary: "Computes Local Moran's I (LISA) with permutation or asymptotic significance testing and per-feature cluster classification.".to_string(),
+            summary: r#"Computes Local Moran's I for each feature to identify local spatial clusters and outliers with statistical significance testing."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1531,7 +1539,11 @@ impl Tool for GetisOrdGiStarTool {
         ToolMetadata {
             id: "getis_ord_gi_star",
             display_name: "Getis-Ord Gi / Gi*",
-            summary: "Computes Getis-Ord Gi or Gi* z-scores with permutation or asymptotic significance and hotspot/coldspot classification.",
+            summary: r#"Computes Getis-Ord Gi (or Gi* variant) z-scores measuring local concentration of high or low values, with integrated hotspot/coldspot classification. Unlike Moran's I which compares neighbors to global mean, Gi* compares each location's neighborhood sum to study-area average, directly identifying statistically significant hotspots (high-value clusters with z > 0) and coldspots (low-value clusters with z < 0).
+
+Gi* variant (recommended default) includes the feature itself in neighborhood sum, providing stronger signal for isolated clusters. Gi excludes self and emphasizes surrounding context. Both variants output z-scores, p-values (asymptotic or permutation-based), and cluster classification (hotspot/coldspot/insignificant at chosen alpha level).
+
+Applications: identifying retail sales hotspots, disease/crime hotspots, pollution concentration zones, poverty concentration areas. More interpretable than Moran's I for practitioners—positive z-scores directly indicate high-value concentration. Use weights parameters to define neighborhoods; k-nearest recommended. Permutation testing preferable for non-normal or small sample data. Map z-scores for continuous visualization; classifications for categorical interpretation."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1576,7 +1588,7 @@ impl Tool for GetisOrdGiStarTool {
         ToolManifest {
             id: "getis_ord_gi_star".to_string(),
             display_name: "Getis-Ord Gi / Gi*".to_string(),
-            summary: "Computes Getis-Ord Gi or Gi* z-scores with permutation or asymptotic significance and hotspot/coldspot classification.".to_string(),
+            summary: r#"Computes Getis-Ord Gi/Gi* z-scores for local hotspot/coldspot identification. Direct measure of high/low value concentration."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![

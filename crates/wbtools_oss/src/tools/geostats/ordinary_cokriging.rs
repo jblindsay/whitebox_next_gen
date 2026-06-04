@@ -20,7 +20,7 @@ impl Tool for OrdinaryCoKrigingTool {
         ToolMetadata {
             id: "ordinary_cokriging",
             display_name: "Ordinary CoKriging Interpolation",
-            summary: "Interpolates raster grid using Ordinary CoKriging with auxiliary variables for improved predictions",
+            summary: r#"Performs multivariate spatial interpolation using auxiliary variables to improve predictions of a primary variable. Ordinary cokriging extends kriging by leveraging correlations between the primary variable of interest and secondary variables (auxiliary data) available at more locations. This produces lower kriging variance and more accurate predictions than using primary data alone.\n\nCokriging is especially valuable when primary variable samples are sparse but correlated secondary data are abundant. Example: estimating soil contamination (sparse primary data) using auxiliary variables like mineral content (more widely measured), topography (universal), or remote sensing indices (complete coverage). The method automatically estimates cross-variograms capturing variable correlations.\n\nRequires fitting both primary variogram and cross-variogram models. Local neighborhood cokriging (k-nearest) is typically more practical than global cokriging for large datasets. Output includes predictions and kriging variance showing prediction confidence by location."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -50,7 +50,7 @@ impl Tool for OrdinaryCoKrigingTool {
         ToolManifest {
             id: "ordinary_cokriging".to_string(),
             display_name: "Ordinary CoKriging Interpolation".to_string(),
-            summary: "Multivariate spatial interpolation using auxiliary variables and cross-variograms".to_string(),
+            summary: r#"Performs multivariate spatial interpolation using auxiliary variables to improve primary variable predictions. Ideal when primary data are sparse but correlated secondary data are abundant."#.to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![

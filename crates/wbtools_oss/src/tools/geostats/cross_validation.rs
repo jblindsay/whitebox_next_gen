@@ -8,7 +8,11 @@ impl Tool for KrigingCrossValidationTool {
         ToolMetadata {
             id: "kriging_cross_validation",
             display_name: "Kriging Cross-Validation",
-            summary: "Validates kriging model using Leave-One-Out Cross-Validation (LOOCV)",
+            summary: r#"Assesses kriging model performance using Leave-One-Out Cross-Validation (LOOCV), a rigorous validation technique that removes each data point sequentially, predicts its value using surrounding points, and compares prediction to observed value. This process quantifies model goodness-of-fit without requiring independent test data, revealing whether the variogram model and kriging parameters are appropriate.
+
+Cross-validation outputs diagnostic statistics: Mean Error (bias check), Mean Absolute Error (average prediction accuracy), RMSE (emphasizes large errors), and standardized errors (indicates whether variance estimates are realistic). A good model has ME near zero (unbiased), small MAE/RMSE, and standardized errors near normal distribution (mean 0, std dev 1).
+
+Interpret results as validation of variogram model fit. Poor CV statistics suggest: incorrect variogram model, inappropriate kriging variant, or outliers. Use CV diagnostics to iteratively refine variogram model before final interpolation. This prevents overfitting and ensures kriging predictions have reliable uncertainty estimates."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -30,7 +34,7 @@ impl Tool for KrigingCrossValidationTool {
         ToolManifest {
             id: "kriging_cross_validation".to_string(),
             display_name: "Kriging Cross-Validation".to_string(),
-            summary: "Validates kriging model using Leave-One-Out Cross-Validation (LOOCV)".to_string(),
+            summary: r#"Assesses kriging model performance using Leave-One-Out Cross-Validation, computing diagnostic statistics to validate variogram fit and kriging appropriateness."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![

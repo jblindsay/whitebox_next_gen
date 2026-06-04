@@ -7,7 +7,11 @@ impl Tool for FitVariogramTool {
         ToolMetadata {
             id: "fit_variogram",
             display_name: "Fit Variogram Model",
-            summary: "Fits theoretical variogram model to empirical semivariogram data",
+            summary: r#"Fits a theoretical variogram model to empirical semivariogram data, capturing the underlying spatial correlation structure. This tool replaces raw empirical estimates with smooth, continuous functions (Spherical, Exponential, or Gaussian models) that define kriging weights. Theoretical models ensure interpolation remains stable and captures spatial dependence realistically.
+
+Variogram fitting is essential for kriging because empirical variograms contain noise and gaps where no point pairs exist at certain distances. Theoretical models smooth these irregularities while preserving key features: nugget (error + micro-scale variance), sill (maximum correlation distance), and range (distance where correlation plateaus). Different models suit different phenomena: Spherical for abrupt changes, Exponential for gradual decay, Gaussian for smooth processes.
+
+Output includes fitted model parameters used by kriging tools. Workflow: estimate variogram → fit model → cross-validate → interpolate with kriging."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -27,7 +31,7 @@ impl Tool for FitVariogramTool {
         ToolManifest {
             id: "fit_variogram".to_string(),
             display_name: "Fit Variogram Model".to_string(),
-            summary: "Fits theoretical variogram model to empirical semivariogram data".to_string(),
+            summary: r#"Fits theoretical variogram model (Spherical, Exponential, Gaussian) to empirical semivariogram data for use in kriging."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![

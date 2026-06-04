@@ -7,7 +7,11 @@ impl Tool for EstimateVariogramTool {
         ToolMetadata {
             id: "estimate_variogram",
             display_name: "Estimate Variogram",
-            summary: "Computes empirical semivariogram from point observations",
+            summary: r#"Computes an empirical semivariogram from point observations to characterize spatial correlation structure. The semivariogram quantifies how dissimilar values become with increasing distance, providing the foundation for all kriging and geostatistical inference. This tool bins pairwise differences according to distance and averages them to create the empirical variogram.
+
+The empirical variogram reveals key spatial characteristics: nugget (small-scale variance), sill (maximum variance), and range (distance at which correlation becomes negligible). These properties are essential for fitting theoretical variogram models used in kriging. The tool outputs empirical lags suitable for visualization and modeling with Fit Variogram.
+
+Lag parameters control variogram resolution: lag_distance sets bin size; lag_tolerance allows flexibility in distance binning; max_lag_count limits output size. Typical workflow: estimate variogram, visualize, fit model, validate with cross-validation, then perform kriging interpolation."#,
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -33,7 +37,7 @@ impl Tool for EstimateVariogramTool {
         ToolManifest {
             id: "estimate_variogram".to_string(),
             display_name: "Estimate Variogram".to_string(),
-            summary: "Computes empirical semivariogram from point observations".to_string(),
+            summary: r#"Computes an empirical semivariogram from point observations to characterize spatial correlation structure. Essential first step in geostatistical workflow."#.to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![

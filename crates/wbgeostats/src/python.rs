@@ -7,14 +7,11 @@
 use pyo3::prelude::*;
 
 #[cfg(feature = "python")]
-use pyo3::types::PyDict;
-
-#[cfg(feature = "python")]
 use std::sync::Arc;
 
 #[cfg(feature = "python")]
 use crate::variogram::{
-    EmpiricalVariogramBuilder, VariogramModel, VariogramModelFamily, VariogramFitter,
+    EmpiricalVariogramBuilder, VariogramModel, VariogramModelFamily, VariogramFitter, LagBin,
 };
 
 #[cfg(feature = "python")]
@@ -24,10 +21,10 @@ use crate::kriging::OrdinaryKriging;
 use crate::cv::LeaveOneOutCV;
 
 // ──────────────────────────────────────────────────────────────────────────
-// Python Type Wrappers
+// Python Wrapper Types
 // ──────────────────────────────────────────────────────────────────────────
 
-/// Python wrapper for VariogramModel
+/// Python-exposed VariogramModel wrapper
 #[cfg(feature = "python")]
 #[pyclass(name = "VariogramModel")]
 pub struct PyVariogramModel {
@@ -38,24 +35,21 @@ pub struct PyVariogramModel {
 #[pymethods]
 impl PyVariogramModel {
     #[new]
-    fn new(
-        family: &str,
-        nugget: f64,
-        partial_sill: f64,
-        range: f64,
-    ) -> PyResult<Self> {
-        let family = match family.to_lowercase().as_str() {
+    fn new(family: &str, nugget: f64, partial_sill: f64, range: f64) -> PyResult<Self> {
+        let vario_family = match family.to_lowercase().as_str() {
             "spherical" => VariogramModelFamily::Spherical,
             "exponential" => VariogramModelFamily::Exponential,
             "gaussian" => VariogramModelFamily::Gaussian,
-            _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                "Invalid family. Use: spherical, exponential, or gaussian",
-            )),
+            _ => {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    "Invalid family. Use: spherical, exponential, or gaussian",
+                ))
+            }
         };
 
         Ok(PyVariogramModel {
             model: VariogramModel {
-                family,
+                family: vario_family,
                 nugget,
                 partial_sill,
                 range,
@@ -90,11 +84,6 @@ impl PyVariogramModel {
         self.model.nugget + self.model.partial_sill
     }
 
-    #[getter]
-    fn wrss(&self) -> f64 {
-        self.model.wrss
-    }
-
     fn __repr__(&self) -> String {
         format!(
             "VariogramModel(family='{}', nugget={}, psill={}, range={})",
@@ -106,10 +95,9 @@ impl PyVariogramModel {
     }
 }
 
-/// Python wrapper for KrigingResult
+/// Python-exposed KrigingResult wrapper
 #[cfg(feature = "python")]
 #[pyclass(name = "KrigingResult")]
-#[derive(Clone)]
 pub struct PyKrigingResult {
     pub prediction: f64,
     pub variance: f64,
@@ -154,7 +142,7 @@ impl PyKrigingResult {
     }
 }
 
-/// Python wrapper for OrdinaryKriging
+/// Python-exposed OrdinaryKriging wrapper
 #[cfg(feature = "python")]
 #[pyclass(name = "OrdinaryKriging")]
 pub struct PyOrdinaryKriging {
@@ -165,11 +153,7 @@ pub struct PyOrdinaryKriging {
 #[pymethods]
 impl PyOrdinaryKriging {
     #[new]
-    fn new(
-        coords: Vec<(f64, f64)>,
-        values: Vec<f64>,
-        vario: &PyVariogramModel,
-    ) -> PyResult<Self> {
+    fn new(coords: Vec<(f64, f64)>, values: Vec<f64>, vario: &PyVariogramModel) -> PyResult<Self> {
         if coords.len() != values.len() {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "Coordinate and value arrays must have equal length",
@@ -205,10 +189,7 @@ impl PyOrdinaryKriging {
         })
     }
 
-    fn predict_batch(
-        &self,
-        coords: Vec<(f64, f64)>,
-    ) -> PyResult<Vec<PyKrigingResult>> {
+    fn predict_batch(&self, coords: Vec<(f64, f64)>) -> PyResult<Vec<PyKrigingResult>> {
         let results = self
             .kriging
             .predict_batch(&coords)
@@ -235,57 +216,64 @@ impl PyOrdinaryKriging {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Module Functions
+// Functional Python API
 // ──────────────────────────────────────────────────────────────────────────
 
 /// Estimate empirical variogram from point data
 #[cfg(feature = "python")]
 #[pyfunction]
 fn estimate_variogram(
-    coords: Vec<(f64, f64)>,
+    x: Vec<f64>,
+    y: Vec<f64>,
     values: Vec<f64>,
     lag_distance: Option<f64>,
-    num_lags: Option<i32>,
-) -> PyResult<PyObject> {
-    if coords.len() != values.len() {
+    max_lag_count: Option<usize>,
+) -> PyResult<std::collections::HashMap<String, Vec<f64>>> {
+    if x.len() != y.len() || x.len() != values.len() {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "Coordinate and value arrays must have equal length",
+            "x, y, and values must have equal length",
         ));
     }
 
+    let coords: Vec<(f64, f64)> = x.iter().zip(y.iter()).map(|(&a, &b)| (a, b)).collect();
     let mut builder = EmpiricalVariogramBuilder::default();
 
     if let Some(lag) = lag_distance {
         builder = builder.lag_distance(lag);
     }
-    if let Some(n) = num_lags {
-        builder = builder.num_lags(n);
+    if let Some(count) = max_lag_count {
+        builder = builder.max_lag_count(count);
     }
 
-    let vario = builder
-        .build(&coords, &values)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+    let vario = builder.build(&coords, &values).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Variogram estimation failed: {}", e))
+    })?;
 
-    Python::with_gil(|py| {
-        let dict = PyDict::new(py);
-        dict.set_item("num_lags", vario.lags.len())?;
-        dict.set_item("max_lag", vario.max_lag)?;
-        dict.set_item("lags", vario.lags.clone())?;
-        Ok(dict.into())
-    })
+    let distances: Vec<f64> = vario.lags.iter().map(|b| b.distance).collect();
+    let semivariances: Vec<f64> = vario.lags.iter().map(|b| b.semivariance).collect();
+    let pair_counts: Vec<f64> = vario.lags.iter().map(|b| b.pair_count as f64).collect();
+
+    let mut result = std::collections::HashMap::new();
+    result.insert("distances".to_string(), distances);
+    result.insert("semivariances".to_string(), semivariances);
+    result.insert("pair_counts".to_string(), pair_counts);
+    result.insert("max_lag".to_string(), vec![vario.max_lag]);
+
+    Ok(result)
 }
 
 /// Fit theoretical variogram model to empirical data
 #[cfg(feature = "python")]
 #[pyfunction]
 fn fit_variogram(
-    lags: Vec<f64>,
+    distances: Vec<f64>,
     semivariances: Vec<f64>,
+    pair_counts: Vec<i32>,
     model_family: &str,
 ) -> PyResult<PyVariogramModel> {
-    if lags.len() != semivariances.len() {
+    if distances.len() != semivariances.len() || distances.len() != pair_counts.len() {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "Lag and semivariance arrays must have equal length",
+            "distances, semivariances, and pair_counts must have equal length",
         ));
     }
 
@@ -293,15 +281,27 @@ fn fit_variogram(
         "spherical" => VariogramModelFamily::Spherical,
         "exponential" => VariogramModelFamily::Exponential,
         "gaussian" => VariogramModelFamily::Gaussian,
-        _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "Invalid family. Use: spherical, exponential, or gaussian",
-        )),
+        _ => {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "Invalid family. Use: 'spherical', 'exponential', or 'gaussian'",
+            ))
+        }
     };
 
-    let fitter = VariogramFitter::new(lags, semivariances);
-    let model = fitter
-        .fit(family)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+    let lags: Vec<LagBin> = distances
+        .iter()
+        .zip(semivariances.iter())
+        .zip(pair_counts.iter())
+        .map(|((&d, &sv), &pc)| LagBin {
+            distance: d,
+            semivariance: sv,
+            pair_count: pc as usize,
+        })
+        .collect();
+
+    let model = VariogramFitter::fit(&lags, family).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Variogram fitting failed: {}", e))
+    })?;
 
     Ok(PyVariogramModel { model })
 }
@@ -310,31 +310,35 @@ fn fit_variogram(
 #[cfg(feature = "python")]
 #[pyfunction]
 fn cross_validate_kriging(
-    coords: Vec<(f64, f64)>,
+    x: Vec<f64>,
+    y: Vec<f64>,
     values: Vec<f64>,
     vario: &PyVariogramModel,
-) -> PyResult<PyObject> {
-    if coords.len() != values.len() {
+) -> PyResult<std::collections::HashMap<String, f64>> {
+    if x.len() != y.len() || x.len() != values.len() {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "Coordinate and value arrays must have equal length",
+            "x, y, and values must have equal length",
         ));
     }
 
-    let cv = LeaveOneOutCV::new(coords, values, vario.model.clone());
-    let metrics = cv
-        .validate()
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+    let coords: Vec<(f64, f64)> = x.iter().zip(y.iter()).map(|(&x, &y)| (x, y)).collect();
 
-    Python::with_gil(|py| {
-        let dict = PyDict::new(py);
-        dict.set_item("mean_error", metrics.mean_error)?;
-        dict.set_item("rmse", metrics.rmse)?;
-        dict.set_item("rmsse", metrics.rmsse)?;
-        dict.set_item("correlation", metrics.correlation)?;
-        dict.set_item("sample_size", metrics.sample_size)?;
-        dict.set_item("is_well_calibrated", metrics.is_well_calibrated())?;
-        Ok(dict.into())
-    })
+    let metrics = LeaveOneOutCV::validate(&coords, &values, &vario.model).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Cross-validation failed: {}", e))
+    })?;
+
+    let mut result = std::collections::HashMap::new();
+    result.insert("mean_error".to_string(), metrics.mean_error);
+    result.insert("rmse".to_string(), metrics.rmse);
+    result.insert("rmsse".to_string(), metrics.rmsse);
+    result.insert("correlation".to_string(), metrics.correlation);
+    result.insert("sample_size".to_string(), metrics.sample_size as f64);
+    result.insert(
+        "is_well_calibrated".to_string(),
+        if metrics.is_well_calibrated() { 1.0 } else { 0.0 },
+    );
+
+    Ok(result)
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -343,18 +347,13 @@ fn cross_validate_kriging(
 
 #[cfg(feature = "python")]
 #[pymodule]
-pub fn wbgeostats(_py: Python, m: &PyModule) -> PyResult<()> {
+fn wbgeostats(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyVariogramModel>()?;
     m.add_class::<PyKrigingResult>()?;
     m.add_class::<PyOrdinaryKriging>()?;
     m.add_function(wrap_pyfunction!(estimate_variogram, m)?)?;
     m.add_function(wrap_pyfunction!(fit_variogram, m)?)?;
     m.add_function(wrap_pyfunction!(cross_validate_kriging, m)?)?;
-
-    m.add(
-        "__doc__",
-        "Production-grade geostatistics kriging library for Python",
-    )?;
 
     Ok(())
 }

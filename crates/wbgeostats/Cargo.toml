@@ -20,6 +20,7 @@ serde_json = "1.0"
 thiserror = "1.0"
 log = "0.4"
 pyo3 = { version = "0.28.2", features = ["extension-module", "abi3-py39", "macros"], optional = true }
+extendr-api = { version = "0.8", optional = true }
 
 [build-dependencies]
 pyo3-build-config = { version = "0.28.2", optional = true }
@@ -31,3 +32,4 @@ rand = "0.8"
 [features]
 default = []
 python = ["pyo3", "pyo3-build-config"]
+r = ["extendr-api"]

@@ -17,6 +17,9 @@ pub mod cv;
 #[cfg(feature = "python")]
 pub mod python;
 
+#[cfg(feature = "r")]
+pub mod r;
+
 use thiserror::Error;
 
 /// Geostatistics library error type

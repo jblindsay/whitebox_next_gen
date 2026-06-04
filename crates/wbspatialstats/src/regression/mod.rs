@@ -7,10 +7,14 @@ use crate::weights::SpatialWeightsGraph;
 use nalgebra::{DMatrix, DVectorSlice};
 use std::fmt;
 
+pub mod matrix_solvers;
 pub mod spatial_lag;
 pub mod spatial_error;
 pub mod gwr;
 pub mod diagnostics;
+
+#[cfg(test)]
+pub mod test_data;
 
 pub use spatial_lag::SpatialLagRegression;
 pub use spatial_error::SpatialErrorRegression;

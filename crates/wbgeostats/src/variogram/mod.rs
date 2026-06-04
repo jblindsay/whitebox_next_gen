@@ -2,9 +2,11 @@
 
 pub mod empirical;
 pub mod model;
+pub mod robust;
 
 pub use empirical::{EmpiricalVariogram, EmpiricalVariogramBuilder};
 pub use model::{VariogramModel, VariogramModelFamily, VariogramFitter};
+pub use robust::{RobustVariogramFitter, RobustLossFunction};
 
 use serde::{Deserialize, Serialize};
 use std::fmt;

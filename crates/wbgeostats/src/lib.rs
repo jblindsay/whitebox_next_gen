@@ -16,6 +16,7 @@ pub mod cv;
 
 // Re-export key types for convenience
 pub use kriging::{OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, KrigingResult};
+pub use variogram::{VariogramModel, VariogramModelFamily, VariogramFitter, RobustVariogramFitter, RobustLossFunction};
 
 #[cfg(feature = "python")]
 pub mod python;
@@ -39,6 +40,9 @@ pub enum GeostatError {
 
     #[error("Invalid parameters: {0}")]
     InvalidParameters(String),
+
+    #[error("Invalid parameter: {0}")]
+    InvalidParameter(String),
 
     #[error("Insufficient data: {0}")]
     InsufficientData(String),

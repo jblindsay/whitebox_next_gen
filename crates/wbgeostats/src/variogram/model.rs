@@ -4,6 +4,7 @@ use crate::{GeostatError, GeostatResult};
 use serde::{Deserialize, Serialize};
 
 use super::LagBin;
+use super::robust::{RobustVariogramFitter, RobustLossFunction};
 
 /// Supported variogram model families
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -125,6 +126,32 @@ impl VariogramFitter {
             wrss,
             condition_number,
         })
+    }
+
+    /// Fit variogram model using L¹ loss (robust to outliers)
+    ///
+    /// Minimizes: Σ w_i * |model(h_i) - empirical(h_i)|
+    /// where w_i = sqrt(pair_count_i)
+    pub fn fit_l1(
+        lags: &[LagBin],
+        family: VariogramModelFamily,
+    ) -> GeostatResult<VariogramModel> {
+        RobustVariogramFitter::fit(lags, family, RobustLossFunction::L1)
+    }
+
+    /// Fit variogram model using Huber loss (smooth robust alternative)
+    ///
+    /// Combines L² for small residuals and L¹ for large residuals with smooth transition.
+    /// Delta parameter controls the transition threshold (default 0.5).
+    ///
+    /// # Arguments
+    /// * `delta` - Huber loss transition threshold (must be > 0)
+    pub fn fit_huber(
+        lags: &[LagBin],
+        family: VariogramModelFamily,
+        delta: f64,
+    ) -> GeostatResult<VariogramModel> {
+        RobustVariogramFitter::fit(lags, family, RobustLossFunction::Huber(delta))
     }
 
     /// Optimize model parameters (simplified Gauss-Newton iteration)

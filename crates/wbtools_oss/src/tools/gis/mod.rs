@@ -35,6 +35,13 @@ pub use spatial_stats_phase_b::SimpleKrigingTool;
 pub use spatial_stats_phase_b::UniversalKrigingTool;
 pub use spatial_stats_phase_b::SpaceTimeKrigingTool;
 
+mod spatial_stats_phase_d;
+// Experimental Phase D tools (advanced point-pattern diagnostics)
+pub use spatial_stats_phase_d::RipleysKFunctionTool;
+pub use spatial_stats_phase_d::PointPatternEnvelopeTool;
+pub use spatial_stats_phase_d::InhomogeneousBaselineTool;
+pub use spatial_stats_phase_d::HotspotVsProcessTool;
+
 
 fn max_distance_squared(
     (x1, y1): (f64, f64),

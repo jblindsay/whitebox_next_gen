@@ -376,11 +376,17 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::SpatialErrorRegressionRasterTool));
     registry.register(Box::new(tools::GeographicallyWeightedRegressionRasterTool));
     
-    // Phase D Point Process Tools
+    // Phase D Point Process Tools (core)
     registry.register(Box::new(tools::InhomogeneousIntensityTool));
     registry.register(Box::new(tools::RipleysKTool));
     registry.register(Box::new(tools::EnvelopeTestTool));
     registry.register(Box::new(tools::PointProcessResidualsTool));
+    
+    // Phase D Point Process Tools (exploratory/advanced diagnostics)
+    registry.register(Box::new(tools::RipleysKFunctionTool));
+    registry.register(Box::new(tools::PointPatternEnvelopeTool));
+    registry.register(Box::new(tools::InhomogeneousBaselineTool));
+    registry.register(Box::new(tools::HotspotVsProcessTool));
     
     // Phase B Kriging Tools
     registry.register(Box::new(tools::OrdinaryKrigingTool));

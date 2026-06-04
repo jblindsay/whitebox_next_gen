@@ -461,7 +461,11 @@
         "geographically_weighted_regression",
         "ripleys_k_test",
         "envelope_test",
-        "point_process_residuals"
+        "point_process_residuals",
+        "ripleys_k_function",
+        "point_pattern_envelope",
+        "inhomogeneous_baseline",
+        "hotspot_vs_process"
       ]
     },
     {
@@ -2118,6 +2122,10 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
+    "hotspot_vs_process": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "hydrologic_connectivity": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -2195,6 +2203,10 @@
       "source_crate": "wbtools_oss"
     },
     "individual_tree_segmentation": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "inhomogeneous_baseline": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
@@ -3122,6 +3134,10 @@
       "license_tier": "open",
       "source_crate": "unknown"
     },
+    "point_pattern_envelope": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "point_process_residuals": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -3449,6 +3465,10 @@
     "ring_curvature": {
       "license_tier": "open",
       "source_crate": "unknown"
+    },
+    "ripleys_k_function": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
     },
     "ripleys_k_test": {
       "license_tier": "open",

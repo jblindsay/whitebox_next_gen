@@ -463,10 +463,15 @@ tools = [
   "spatial_lag_regression",
   "spatial_error_regression",
   "geographically_weighted_regression",
-  # Phase D: Point Process Analysis
+  # Phase D: Point Process Analysis (core)
   "ripleys_k_test",
   "envelope_test",
   "point_process_residuals",
+  # Phase D: Point Process Analysis (exploratory/advanced diagnostics)
+  "ripleys_k_function",
+  "point_pattern_envelope",
+  "inhomogeneous_baseline",
+  "hotspot_vs_process",
 ]
 
 [[mapping]]

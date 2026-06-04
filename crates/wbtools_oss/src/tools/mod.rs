@@ -554,6 +554,11 @@ pub use gis::InhomogeneousIntensityTool;
 pub use gis::RipleysKTool;
 pub use gis::EnvelopeTestTool;
 pub use gis::PointProcessResidualsTool;
+// Experimental Phase D tools (advanced point-pattern diagnostics)
+pub use gis::RipleysKFunctionTool;
+pub use gis::PointPatternEnvelopeTool;
+pub use gis::InhomogeneousBaselineTool;
+pub use gis::HotspotVsProcessTool;
 pub use gis::OrdinaryKrigingTool;
 pub use gis::LocalOrdinaryKrigingTool;
 pub use gis::SimpleKrigingTool;

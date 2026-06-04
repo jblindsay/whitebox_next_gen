@@ -82,3 +82,12 @@ fn parse_string_arg<'a>(args: &'a ToolArgs, key: &str) -> Result<&'a str, ToolEr
         .filter(|s| !s.is_empty())
         .ok_or_else(|| ToolError::Validation(format!("parameter '{}' is required", key)))
 }
+
+fn parse_optional_string_arg(args: &ToolArgs, key: &str) -> Result<Option<String>, ToolError> {
+    Ok(args
+        .get(key)
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string()))
+}

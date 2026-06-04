@@ -21,6 +21,7 @@ impl Tool for DirectionalVariogramTool {
                 ToolParamSpec { name: "max_distance", description: "Maximum lag distance", required: false },
                 ToolParamSpec { name: "bin_size", description: "Lag bin size", required: false },
                 ToolParamSpec { name: "output_json", description: "Output directional results as JSON", required: true },
+                ToolParamSpec { name: "output_html", description: "Optional HTML rose diagram output path", required: false },
             ],
         }
     }
@@ -34,6 +35,7 @@ impl Tool for DirectionalVariogramTool {
         defaults.insert("max_distance".to_string(), json!(1000.0));
         defaults.insert("bin_size".to_string(), json!(50.0));
         defaults.insert("output_json".to_string(), json!("directional_vgram.json"));
+        defaults.insert("output_html".to_string(), json!("directional_vgram_rose.html"));
 
         ToolManifest {
             id: "directional_variogram".to_string(),
@@ -49,14 +51,15 @@ impl Tool for DirectionalVariogramTool {
                 ToolParamDescriptor { name: "max_distance".to_string(), description: "Maximum lag distance to compute (default 1000)".to_string(), required: false },
                 ToolParamDescriptor { name: "bin_size".to_string(), description: "Size of lag bins (default 50)".to_string(), required: false },
                 ToolParamDescriptor { name: "output_json".to_string(), description: "Output file path for directional variogram results".to_string(), required: true },
+                ToolParamDescriptor { name: "output_html".to_string(), description: "Optional output path for HTML rose diagram visualization".to_string(), required: false },
             ],
             defaults: defaults.clone(),
             examples: vec![ToolExample {
                 name: "directional_variogram_example".to_string(),
-                description: "Compute directional variograms at 4 azimuths (0°, 45°, 90°, 135°)".to_string(),
+                description: "Compute directional variograms at 4 azimuths (0°, 45°, 90°, 135°) with rose diagram".to_string(),
                 args: defaults,
             }],
-            tags: vec!["geostatistics".to_string(), "variography".to_string(), "anisotropy".to_string(), "directional".to_string()],
+            tags: vec!["geostatistics".to_string(), "variography".to_string(), "anisotropy".to_string(), "directional".to_string(), "visualization".to_string()],
             stability: ToolStability::Experimental,
         }
     }
@@ -111,6 +114,11 @@ impl Tool for DirectionalVariogramTool {
         }
 
         let _ = parse_string_arg(args, "output_json")?;
+        if let Some(path_str) = parse_optional_string_arg(args, "output_html")? {
+            if path_str.trim().is_empty() {
+                return Err(ToolError::Validation("output_html path must be non-empty if provided".to_string()));
+            }
+        }
         Ok(())
     }
 
@@ -124,6 +132,8 @@ impl Tool for DirectionalVariogramTool {
         let max_distance = parse_optional_f64_arg(args, "max_distance").unwrap_or(1000.0);
         let bin_size = parse_optional_f64_arg(args, "bin_size").unwrap_or(50.0);
         let output_path = parse_string_arg(args, "output_json")?;
+        let output_html_str = parse_optional_string_arg(args, "output_html")?;
+        let output_html = output_html_str.as_ref().map(|s| std::path::PathBuf::from(s.trim()));
 
         // Parse directions
         let directions: Vec<f64> = directions_str
@@ -250,6 +260,13 @@ impl Tool for DirectionalVariogramTool {
         std::fs::write(output_path, output_str)
             .map_err(|e| ToolError::Execution(format!("Failed to write output: {}", e)))?;
 
+        // Generate rose diagram HTML if requested
+        if let Some(html_path) = &output_html {
+            ctx.progress.info("Generating rose diagram visualization...");
+            generate_rose_diagram(&vgram_bins, &anisotropy, html_path)
+                .map_err(|e| ToolError::Execution(format!("Failed to generate rose diagram: {}", e)))?;
+        }
+
         let mut outputs = BTreeMap::new();
         outputs.insert(
             "directional_variogram_report".to_string(),
@@ -259,6 +276,7 @@ impl Tool for DirectionalVariogramTool {
                 "anisotropy_ratio": anisotropy.ratio,
                 "major_azimuth": anisotropy.major_azimuth,
                 "output_file": output_path,
+                "rose_diagram": output_html.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| "not generated".to_string()),
             }),
         );
 
@@ -267,4 +285,83 @@ impl Tool for DirectionalVariogramTool {
 
         Ok(ToolRunResult { outputs, ..Default::default() })
     }
+}
+
+/// Generate an HTML rose diagram visualization showing directional variogram ranges
+fn generate_rose_diagram(
+    vgram_bins: &[DirectionalVariogramBin],
+    anisotropy: &AnisotropyModel,
+    output_path: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use crate::rendering::RadialLineGraph;
+
+    // Extract azimuths and max semivariances (ranges) for each direction
+    let azimuths: Vec<f64> = vgram_bins.iter().map(|v| v.direction_azimuth).collect();
+    let ranges: Vec<f64> = vgram_bins.iter().map(|v| v.max_semivariance()).collect();
+    
+    // Normalize ranges to 0-1 scale for visual effect
+    let max_range = ranges.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let min_range = ranges.iter().cloned().fold(f64::INFINITY, f64::min);
+    let range_span = if (max_range - min_range).abs() > 1e-10 {
+        max_range - min_range
+    } else {
+        1.0
+    };
+
+    let normalized_ranges: Vec<f64> = ranges
+        .iter()
+        .map(|r| if range_span > 0.0 { (r - min_range) / range_span } else { 0.5 })
+        .collect();
+
+    // Create RadialLineGraph with single series (rose diagram)
+    let data_x = vec![azimuths];
+    let data_y = vec![normalized_ranges];
+    
+    let graph = RadialLineGraph {
+        parent_id: "rose_diagram".to_string(),
+        width: 700.0,
+        height: 600.0,
+        data_x,
+        data_y,
+        series_labels: vec!["Variogram Range".to_string()],
+        x_axis_label: "Azimuth".to_string(),
+        x_symbol: "&theta;".to_string(),
+        y_axis_label: "Normalized Range".to_string(),
+        y_symbol: "&gamma;".to_string(),
+        draw_points: true,
+        draw_gridlines: true,
+        draw_legend: true,
+        draw_grey_background: false,
+        fill_polygons: true,
+    };
+
+    let filename = output_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("rose_diagram");
+    
+    let html = format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Directional Variogram - Rose Diagram</title>{}</head><body><h1>Directional Variogram Rose Diagram</h1><p><strong>Anisotropy Analysis</strong>: Major azimuth = {:.1}°, Ratio = {:.3}<br><strong>Interpretation</strong>: {}</p><div id='rose_diagram' align=\"center\">{}</div><table align=\"center\"><tr><th>Azimuth</th><th>Range (unnormalized)</th></tr>",
+        crate::rendering::html::get_css(),
+        anisotropy.major_azimuth,
+        anisotropy.ratio,
+        if anisotropy.is_anisotropic(0.95) {
+            "Strong directional dependence detected. Use anisotropic kriging."
+        } else {
+            "Weak or no directional dependence. Isotropic kriging is appropriate."
+        },
+        graph.get_svg(),
+    );
+
+    let mut table = html.to_string();
+    for (azimuth, range) in vgram_bins.iter().map(|v| v.direction_azimuth).zip(ranges.iter()) {
+        table.push_str(&format!(
+            "<tr><td>{:.1}°</td><td class=\"numberCell\">{:.4}</td></tr>",
+            azimuth, range
+        ));
+    }
+    table.push_str("</table></body></html>");
+
+    std::fs::write(output_path, table)?;
+    Ok(())
 }

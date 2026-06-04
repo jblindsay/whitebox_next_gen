@@ -82,6 +82,7 @@ Deterministic spatial interpolation with uncertainty quantification (kriging var
 - **Simple Kriging**: Prediction with known, fixed mean
 - **Universal Kriging**: Linear trend-surface integration (drift polynomial: constant, linear, quadratic)
 - **Space-Time Kriging**: Spatio-temporal prediction with optional temporal autocorrelation weighting
+- **Ordinary CoKriging**: Multivariate kriging leveraging auxiliary variables via cross-variograms for improved predictions
 
 Features:
 - Kriging variance estimation for uncertainty quantification
@@ -89,6 +90,7 @@ Features:
 - Neighborhood-size control for scalability
 - Support for Gaussian and exponential variogram models
 - Anisotropic kriging support via variogram anisotropy parameters
+- CoKriging block-structured system matrix for multivariate prediction
 
 ### Variography
 
@@ -96,6 +98,7 @@ Empirical and theoretical variogram computation for spatial dependence character
 
 - **Empirical Variogram**: Lag-based semi-variance estimation with configurable bin sizes
 - **Directional Variogram**: Azimuthal/anisotropic analysis (quantify directional dependence)
+- **Cross-Variogram**: Spatial dependence between primary and auxiliary variables (required for CoKriging)
 - **Robust Variogram Fitting**: Multiple robust loss functions (Cressie, Dowd, Genton)
 - **Variogram Model Families**:
   - Exponential (isotropic and anisotropic)
@@ -108,6 +111,7 @@ Features:
 - Cloud-based semi-variance diagnostics (pairwise analysis for outlier detection)
 - Nested variogram support for complex spatial structures
 - Automatic nugget effect estimation
+- Cross-variogram fitting for multivariate kriging workflows
 
 ### Spatial Autocorrelation
 
@@ -311,10 +315,11 @@ See [examples/](examples/) directory for additional worked examples:
    - Ordinary kriging assumes stationarity; non-stationary processes may need trend removal first.
    - Large datasets (>5000 points) may require local kriging or neighborhood selection for performance.
    - Anisotropy support is via variogram model parameters; geometric anisotropy tensors are not yet supported.
+   - CoKriging supports arbitrary number of auxiliary variables but limited to pairwise cross-variogram relationships.
 
 2. **Variography**:
    - Nested (multi-structure) variograms are partially supported; some complex nesting patterns may require post-hoc model fitting.
-   - Cross-variograms for CoKriging (multivariate kriging) are supported but limited to pairwise relationships.
+   - Cross-variograms are supported but currently limited to primary-auxiliary variable pairs.
 
 3. **Spatial Regression**:
    - Bayesian spatial models (MCMC, Gibbs sampling) are not yet implemented.

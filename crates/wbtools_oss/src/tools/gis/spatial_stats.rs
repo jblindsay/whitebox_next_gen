@@ -93,6 +93,29 @@ fn parse_optional_usize_arg(args: &ToolArgs, key: &str) -> Result<Option<usize>,
     }
 }
 
+fn parse_optional_string_arg(args: &ToolArgs, key: &str) -> Result<Option<String>, ToolError> {
+    match args.get(key) {
+        None => Ok(None),
+        Some(value) => {
+            let Some(s) = value.as_str() else {
+                return Err(ToolError::Validation(format!(
+                    "Expected string for field '{}', got '{}'",
+                    key, value
+                )));
+            };
+            Ok(Some(s.to_string()))
+        }
+    }
+}
+
+fn parse_vector_path_arg(args: &ToolArgs, key: &str) -> Result<String, ToolError> {
+    super::parse_string_arg(args, key).map(|s| s.to_string())
+}
+
+fn parse_raster_path_arg(args: &ToolArgs, key: &str) -> Result<String, ToolError> {
+    super::parse_string_arg(args, key).map(|s| s.to_string())
+}
+
 fn normal_cdf(x: f64) -> f64 {
     let z = x.abs();
     let t = 1.0 / (1.0 + 0.231_641_9 * z);
@@ -1196,7 +1219,7 @@ impl Tool for LocalMoransILisaTool {
             }
         }
 
-        let locator = write_vector_output(&output, output_path.trim())?;
+        let locator = write_vector_output(&output, output_path.as_str())?;
 
         let n_features_used = n_obs - weights.diagnostics.dropped_feature_count - island_count;
 
@@ -1574,7 +1597,7 @@ impl Tool for GetisOrdGiStarTool {
             }
         }
 
-        let locator = write_vector_output(&output, output_path.trim())?;
+        let locator = write_vector_output(&output, output_path.as_str())?;
 
         let n_features_used = n_obs - weights.diagnostics.dropped_feature_count - island_count;
 
@@ -2320,10 +2343,6 @@ impl Tool for QuadratCountTestTool {
 // SPATIAL REGRESSION TOOLS (SAR, SEM, GWR) - Production integration pending
 // ============================================================================
 
-pub struct SpatialLagRegressionTool;
-pub struct SpatialErrorRegressionTool;
-pub struct GeographicallyWeightedRegressionTool;
-
 impl Tool for SpatialLagRegressionTool {
     fn metadata(&self) -> ToolMetadata {
         ToolMetadata {
@@ -2528,7 +2547,7 @@ impl Tool for SpatialLagRegressionTool {
             output_layer.features.push(new_feature);
         }
 
-        let locator = write_vector_output(&output_layer, output_path.trim())?;
+        let locator = write_vector_output(&output_layer, output_path.as_str())?;
 
         let mut outputs = ToolArgs::new();
         outputs.insert("output".to_string(), json!(locator));
@@ -2742,7 +2761,7 @@ impl Tool for SpatialErrorRegressionTool {
             output_layer.features.push(new_feature);
         }
 
-        let locator = write_vector_output(&output_layer, output_path.trim())?;
+        let locator = write_vector_output(&output_layer, output_path.as_str())?;
 
         let mut outputs = ToolArgs::new();
         outputs.insert("output".to_string(), json!(locator));
@@ -2926,7 +2945,7 @@ impl Tool for GeographicallyWeightedRegressionTool {
             output_layer.features.push(new_feature);
         }
 
-        let locator = write_vector_output(&output_layer, output_path.trim())?;
+        let locator = write_vector_output(&output_layer, output_path.as_str())?;
 
         let mut outputs = ToolArgs::new();
         outputs.insert("output".to_string(), json!(locator));
@@ -3047,7 +3066,7 @@ impl Tool for LocalMoransILisaRasterTool {
         }
 
         let _ = IslandPolicy::parse(args)?;
-        let _ = parse_raster_path_arg(args, "output")?;
+        let _ = parse_optional_output_path(args, "output")?;
         Ok(())
     }
 
@@ -3061,7 +3080,7 @@ impl Tool for LocalMoransILisaRasterTool {
         let island_policy = IslandPolicy::parse(args)?;
         let alpha = parse_optional_f64_arg(args, "alpha").unwrap_or(0.05);
         let cell_size = parse_optional_f64_arg(args, "cell_size");
-        let output_path = parse_raster_path_arg(args, "output")?;
+        let output_path = parse_optional_output_path(args, "output")?;
 
         ctx.progress.info("Extracting spatial observations");
         let (observations, dropped) = collect_spatial_observations(&input, &field)?;
@@ -3129,7 +3148,7 @@ impl Tool for LocalMoransILisaRasterTool {
         }
 
         ctx.progress.info("Writing raster output");
-        let locator = GisOverlayCore::store_or_write_output(output, output_path.trim(), ctx)?;
+        let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
 
         let mut outputs = ToolArgs::new();
         outputs.insert("output".to_string(), json!(locator));
@@ -3246,7 +3265,7 @@ impl Tool for GetisOrdGiStarRasterTool {
         }
 
         let _ = IslandPolicy::parse(args)?;
-        let _ = parse_raster_path_arg(args, "output")?;
+        let _ = parse_vector_path_arg(args, "output")?;
         Ok(())
     }
 
@@ -3260,7 +3279,7 @@ impl Tool for GetisOrdGiStarRasterTool {
         let island_policy = IslandPolicy::parse(args)?;
         let alpha = parse_optional_f64_arg(args, "alpha").unwrap_or(0.05);
         let cell_size = parse_optional_f64_arg(args, "cell_size");
-        let output_path = parse_raster_path_arg(args, "output")?;
+        let output_path = parse_optional_output_path(args, "output")?;
 
         ctx.progress.info("Extracting spatial observations");
         let (observations, dropped) = collect_spatial_observations(&input, &field)?;
@@ -3326,7 +3345,7 @@ impl Tool for GetisOrdGiStarRasterTool {
         }
 
         ctx.progress.info("Writing raster output");
-        let locator = GisOverlayCore::store_or_write_output(output, output_path.trim(), ctx)?;
+        let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
 
         let mut outputs = ToolArgs::new();
         outputs.insert("output".to_string(), json!(locator));
@@ -3406,7 +3425,7 @@ impl Tool for SpatialLagRegressionRasterTool {
         let _ = load_vector_arg(args, "input")?;
         let _ = parse_string_arg(args, "response_field")?;
         let _ = parse_string_arg(args, "predictor_fields")?;
-        let _ = parse_raster_path_arg(args, "output")?;
+        let _ = parse_vector_path_arg(args, "output")?;
         Ok(())
     }
 
@@ -3417,7 +3436,7 @@ impl Tool for SpatialLagRegressionRasterTool {
         let input = load_vector_arg(args, "input")?;
         let response_field = parse_string_arg(args, "response_field")?;
         let predictor_str = parse_string_arg(args, "predictor_fields")?;
-        let output_path = parse_raster_path_arg(args, "output")?;
+        let output_path = parse_optional_output_path(args, "output")?;
         let mode = SpatialWeightsMode::parse(args)?;
         let k = parse_optional_usize_arg(args, "k")?.unwrap_or(8);
         let distance = parse_optional_f64_arg(args, "distance").unwrap_or(0.0);
@@ -3508,7 +3527,7 @@ impl Tool for SpatialLagRegressionRasterTool {
                 }
 
                 // Use fitted value from nearest observation
-                let fitted_value = result.base.fitted_values[nearest_idx];
+                let fitted_value = result.base.fitted[nearest_idx];
                 let idx = row * cols + col;
                 output.data.set_f64(idx, fitted_value);
             }
@@ -3518,7 +3537,7 @@ impl Tool for SpatialLagRegressionRasterTool {
         }
 
         ctx.progress.info("Writing raster output");
-        let locator = GisOverlayCore::store_or_write_output(output, output_path.trim(), ctx)?;
+        let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
 
         let mut outputs = ToolArgs::new();
         outputs.insert("output".to_string(), json!(locator));
@@ -3594,7 +3613,7 @@ impl Tool for SpatialErrorRegressionRasterTool {
         let _ = load_vector_arg(args, "input")?;
         let _ = parse_string_arg(args, "response_field")?;
         let _ = parse_string_arg(args, "predictor_fields")?;
-        let _ = parse_raster_path_arg(args, "output")?;
+        let _ = parse_vector_path_arg(args, "output")?;
         Ok(())
     }
 
@@ -3605,7 +3624,7 @@ impl Tool for SpatialErrorRegressionRasterTool {
         let input = load_vector_arg(args, "input")?;
         let response_field = parse_string_arg(args, "response_field")?;
         let predictor_str = parse_string_arg(args, "predictor_fields")?;
-        let output_path = parse_raster_path_arg(args, "output")?;
+        let output_path = parse_optional_output_path(args, "output")?;
         let mode = SpatialWeightsMode::parse(args)?;
         let k = parse_optional_usize_arg(args, "k")?.unwrap_or(8);
         let distance = parse_optional_f64_arg(args, "distance").unwrap_or(0.0);
@@ -3662,7 +3681,7 @@ impl Tool for SpatialErrorRegressionRasterTool {
         )?;
 
         ctx.progress.info("Estimating spatial error model (SEM)");
-        let result = SpatialErrorRegression::estimate(&y, &x, &weights, 100, 1e-6)
+        let result = SpatialErrorRegression::estimate_fgls(&y, &x, &weights, 100, 1e-6)
             .map_err(|e| ToolError::Execution(format!("SEM estimation failed: {}", e)))?;
 
         ctx.progress.info("Building output raster");
@@ -3696,7 +3715,7 @@ impl Tool for SpatialErrorRegressionRasterTool {
                 }
 
                 // Use fitted value from nearest observation
-                let fitted_value = result.base.fitted_values[nearest_idx];
+                let fitted_value = result.base.fitted[nearest_idx];
                 let idx = row * cols + col;
                 output.data.set_f64(idx, fitted_value);
             }
@@ -3706,7 +3725,7 @@ impl Tool for SpatialErrorRegressionRasterTool {
         }
 
         ctx.progress.info("Writing raster output");
-        let locator = GisOverlayCore::store_or_write_output(output, output_path.trim(), ctx)?;
+        let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
 
         let mut outputs = ToolArgs::new();
         outputs.insert("output".to_string(), json!(locator));
@@ -3776,7 +3795,7 @@ impl Tool for GeographicallyWeightedRegressionRasterTool {
         let _ = load_vector_arg(args, "input")?;
         let _ = parse_string_arg(args, "response_field")?;
         let _ = parse_string_arg(args, "predictor_fields")?;
-        let _ = parse_raster_path_arg(args, "output_prefix")?;
+        let _ = parse_optional_output_path(args, "output_prefix")?;
         Ok(())
     }
 
@@ -3787,8 +3806,8 @@ impl Tool for GeographicallyWeightedRegressionRasterTool {
         let input = load_vector_arg(args, "input")?;
         let response_field = parse_string_arg(args, "response_field")?;
         let predictor_str = parse_string_arg(args, "predictor_fields")?;
-        let output_prefix = parse_raster_path_arg(args, "output_prefix")?;
-        let kernel = parse_string_arg(args, "kernel").unwrap_or_else(|_| "bisquare".to_string());
+        let output_prefix = parse_optional_output_path(args, "output_prefix")?;
+        let kernel = parse_string_arg(args, "kernel").unwrap_or_else(|_| "bisquare");
         let cell_size = parse_optional_f64_arg(args, "cell_size");
 
         let predictor_fields: Vec<&str> = predictor_str.split(',').map(|s| s.trim()).collect();
@@ -3827,9 +3846,11 @@ impl Tool for GeographicallyWeightedRegressionRasterTool {
         }
 
         let x = DMatrix::from_column_slice(n, 1 + predictor_fields.len(), &x_data);
+        let coords: Vec<(f64, f64)> = observations.iter().map(|o| (o.x, o.y)).collect();
 
         ctx.progress.info("Estimating GWR model");
-        let result = GeographicallyWeightedRegression::estimate(&y, &x, &observations, &kernel, None)
+        let bandwidth_hint = parse_optional_f64_arg(args, "bandwidth");
+        let result = GeographicallyWeightedRegression::estimate(&y, &x, &coords, bandwidth_hint)
             .map_err(|e| ToolError::Execution(format!("GWR estimation failed: {}", e)))?;
 
         ctx.progress.info("Building output rasters");
@@ -3839,6 +3860,10 @@ impl Tool for GeographicallyWeightedRegressionRasterTool {
         // For each predictor + intercept, create a coefficient raster
         let mut outputs = ToolArgs::new();
         let n_coefs = 1 + predictor_fields.len();
+        
+        // Handle optional output prefix
+        let prefix_str = output_prefix.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| "gwr_coef".to_string());
+        let prefix_base = prefix_str.trim_end_matches(".tif").trim_end_matches(".img").trim_end_matches(".hdf");
 
         for coef_idx in 0..n_coefs {
             let coef_label = if coef_idx == 0 {
@@ -3875,7 +3900,7 @@ impl Tool for GeographicallyWeightedRegressionRasterTool {
                     }
 
                     // Use local coefficient from nearest observation
-                    let coef_value = result.coefficients[nearest_idx][coef_idx];
+                    let coef_value = result.local_coefficients[(nearest_idx, coef_idx)];
                     let idx = row * cols + col;
                     output.data.set_f64(idx, coef_value);
                 }
@@ -3886,13 +3911,13 @@ impl Tool for GeographicallyWeightedRegressionRasterTool {
 
             // Write each coefficient raster
             let coef_output_path = if coef_idx == 0 {
-                format!("{}_intercept.tif", output_prefix.trim_end_matches(".tif").trim_end_matches(".img").trim_end_matches(".hdf"))
+                format!("{}_intercept.tif", prefix_base)
             } else {
-                format!("{}_{}.tif", output_prefix.trim_end_matches(".tif").trim_end_matches(".img").trim_end_matches(".hdf"), coef_label)
+                format!("{}_{}.tif", prefix_base, coef_label)
             };
 
             ctx.progress.info(&format!("Writing raster {}", coef_label));
-            let locator = GisOverlayCore::store_or_write_output(output, coef_output_path.trim(), ctx)?;
+            let locator = GisOverlayCore::store_or_write_output(output, Some(std::path::PathBuf::from(&coef_output_path)), ctx)?;
             outputs.insert(format!("coef_{}", coef_label), json!(locator));
         }
 
@@ -3957,14 +3982,102 @@ impl Tool for InhomogeneousIntensityTool {
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = load_vector_arg(args, "input")?;
-        let _ = parse_raster_path_arg(args, "output")?;
+        let _ = parse_vector_path_arg(args, "output")?;
         Ok(())
     }
 
-    fn run(&self, _args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        Err(ToolError::Execution(
-            "inhomogeneous_intensity_raster is not yet implemented".to_string(),
-        ))
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let kernel = parse_string_arg(args, "kernel").unwrap_or_else(|_| "gaussian");
+        let cell_size = parse_optional_f64_arg(args, "cell_size");
+        let bandwidth = parse_optional_f64_arg(args, "bandwidth");
+        let output_path = parse_optional_output_path(args, "output")?;
+
+        // Extract point coordinates
+        let mut points = Vec::new();
+        for feature in &input.features {
+            if let Some(geom) = &feature.geometry {
+                if let wbvector::Geometry::Point(coord) = geom {
+                    points.push((coord.x, coord.y));
+                }
+            }
+        }
+
+        if points.is_empty() {
+            return Err(ToolError::Execution("No valid point features found".to_string()));
+        }
+
+        ctx.progress.info(&format!("Extracted {} points for KDE", points.len()));
+
+        // Auto-compute bandwidth if not provided (Scott's rule)
+        let h = if let Some(bw) = bandwidth {
+            bw
+        } else {
+            // Scott's rule: h = n^(-1/3)
+            let n = points.len() as f64;
+            n.powf(-1.0 / 3.0) * 10.0 // Scale factor for geographic data
+        };
+
+        ctx.progress.info(&format!("Kernel bandwidth: {:.4}", h));
+
+        // Build output raster with same extent as input layer
+        let samples: Vec<(f64, f64, f64)> = points.iter().map(|(x, y)| (*x, *y, 1.0)).collect();
+        let mut output = super::build_point_interpolation_output(&input, &samples, cell_size, None, DataType::F64)?;
+
+        let rows = output.rows;
+        let cols = output.cols;
+        let x_min = output.x_min;
+        let y_max = output.y_max();
+        let cell_x = output.cell_size_x;
+        let cell_y = output.cell_size_y;
+
+        ctx.progress.info("Computing kernel density estimation");
+        for row in 0..rows {
+            for col in 0..cols {
+                let x = x_min + (col as f64 + 0.5) * cell_x;
+                let y = y_max - (row as f64 + 0.5) * cell_y;
+
+                // Sum kernel contributions from all points
+                let mut density = 0.0;
+                for (px, py) in &points {
+                    let dx = (x - px) / h;
+                    let dy = (y - py) / h;
+                    let dist_sq = dx * dx + dy * dy;
+                    let dist = dist_sq.sqrt();
+
+                    let k_val = if kernel == "bisquare" || kernel == "epanechnikov" {
+                        if dist <= 1.0 {
+                            (3.0 / 4.0) * (1.0 - dist * dist)
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        // Gaussian kernel (default)
+                        (-0.5 * dist_sq).exp() / (2.0 * std::f64::consts::PI).sqrt()
+                    };
+
+                    density += k_val;
+                }
+
+                // Normalize by bandwidth and number of points
+                density /= h * h * points.len() as f64;
+
+                let idx = row * cols + col;
+                output.data.set_f64(idx, density);
+            }
+
+            let progress = (row as f64 + 1.0) / rows as f64;
+            ctx.progress.progress(progress);
+        }
+
+        ctx.progress.info("Writing raster output");
+        let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
+
+        let mut outputs = ToolArgs::new();
+        outputs.insert("output".to_string(), json!(locator));
+
+        ctx.progress.progress(1.0);
+        Ok(ToolRunResult { outputs })
     }
 }
 
@@ -4021,10 +4134,106 @@ impl Tool for RipleysKTool {
         Ok(())
     }
 
-    fn run(&self, _args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        Err(ToolError::Execution(
-            "ripleys_k_test is not yet implemented".to_string(),
-        ))
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let max_distance = parse_optional_f64_arg(args, "max_distance");
+        let step_size = parse_optional_f64_arg(args, "step_size").unwrap_or(1.0);
+
+        // Extract point coordinates
+        let mut points = Vec::new();
+        for feature in &input.features {
+            if let Some(geom) = &feature.geometry {
+                if let wbvector::Geometry::Point(coord) = geom {
+                    points.push((coord.x, coord.y));
+                }
+            }
+        }
+
+        if points.len() < 2 {
+            return Err(ToolError::Execution(
+                "Need at least 2 points for Ripley's K analysis".to_string(),
+            ));
+        }
+
+        ctx.progress.info(&format!("Computing Ripley's K for {} points", points.len()));
+
+        // Compute bounding box
+        let (mut min_x, mut max_x, mut min_y, mut max_y) = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
+        for (x, y) in &points {
+            min_x = min_x.min(*x);
+            max_x = max_x.max(*x);
+            min_y = min_y.min(*y);
+            max_y = max_y.max(*y);
+        }
+
+        let width = max_x - min_x;
+        let height = max_y - min_y;
+        let area = width * height;
+        let lambda = points.len() as f64 / area; // Intensity
+
+        // Determine max distance (use 1/4 of minimum dimension if not provided)
+        let max_dist = max_distance.unwrap_or((width.min(height)) / 4.0);
+
+        // Compute all pairwise distances
+        let n = points.len();
+        let mut distances = Vec::new();
+        for i in 0..n {
+            for j in (i + 1)..n {
+                let dx = points[i].0 - points[j].0;
+                let dy = points[i].1 - points[j].1;
+                let dist = (dx * dx + dy * dy).sqrt();
+                distances.push(dist);
+            }
+        }
+
+        distances.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Create output layer with schema
+        let mut output_layer = input.clone();
+        let mut schema = wbvector::Schema::new();
+
+        // Add K statistic fields for each distance
+        let mut distance_vals = Vec::new();
+        let mut r = step_size;
+        while r <= max_dist {
+            let field_name = format!("k_r_{:.2}", r);
+            schema.add_field(wbvector::FieldDef::new(&field_name, wbvector::FieldType::Float));
+            distance_vals.push(r);
+            r += step_size;
+        }
+
+        output_layer.schema = schema;
+
+        // Compute K(r) for each distance
+        let mut k_values = Vec::new();
+        for &r in &distance_vals {
+            // Count pairs with distance <= r
+            let count = distances.iter().filter(|&&d| d <= r).count();
+            let k_r = (area / (lambda * n as f64 * n as f64)) * (2.0 * count as f64);
+            k_values.push(k_r);
+        }
+
+        // Create a single output feature with K values
+        let mut feature = wbvector::Feature::new();
+        feature.geometry = Some(wbvector::Geometry::point(min_x, min_y)); // Dummy geometry
+
+        for (i, &k_val) in k_values.iter().enumerate() {
+            feature.attributes.insert(
+                i,
+                wbvector::FieldValue::Float(k_val as f64),
+            );
+        }
+
+        output_layer.features.push(feature);
+
+        let locator = write_vector_output(&output_layer, output_path.as_str())?;
+
+        let mut outputs = ToolArgs::new();
+        outputs.insert("output".to_string(), json!(locator));
+
+        ctx.progress.progress(1.0);
+        Ok(ToolRunResult { outputs })
     }
 }
 
@@ -4082,10 +4291,170 @@ impl Tool for EnvelopeTestTool {
         Ok(())
     }
 
-    fn run(&self, _args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        Err(ToolError::Execution(
-            "envelope_test is not yet implemented".to_string(),
-        ))
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        use std::collections::BTreeMap;
+
+        let input = load_vector_arg(args, "input")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let num_sims = parse_optional_usize_arg(args, "num_simulations")?.unwrap_or(99);
+        let max_distance = parse_optional_f64_arg(args, "max_distance");
+        let step_size = 1.0; // Fixed step size for output
+
+        // Extract point coordinates
+        let mut points = Vec::new();
+        for feature in &input.features {
+            if let Some(geom) = &feature.geometry {
+                if let wbvector::Geometry::Point(coord) = geom {
+                    points.push((coord.x, coord.y));
+                }
+            }
+        }
+
+        if points.len() < 2 {
+            return Err(ToolError::Execution(
+                "Need at least 2 points for envelope test".to_string(),
+            ));
+        }
+
+        ctx.progress.info(&format!(
+            "Computing envelope test with {} simulations for {} points",
+            num_sims,
+            points.len()
+        ));
+
+        // Compute bounding box
+        let (mut min_x, mut max_x, mut min_y, mut max_y) = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
+        for (x, y) in &points {
+            min_x = min_x.min(*x);
+            max_x = max_x.max(*x);
+            min_y = min_y.min(*y);
+            max_y = max_y.max(*y);
+        }
+
+        let width = max_x - min_x;
+        let height = max_y - min_y;
+        let area = width * height;
+        let lambda = points.len() as f64 / area;
+        let max_dist = max_distance.unwrap_or((width.min(height)) / 4.0);
+
+        // Compute observed K
+        let n = points.len();
+        let mut obs_distances = Vec::new();
+        for i in 0..n {
+            for j in (i + 1)..n {
+                let dx = points[i].0 - points[j].0;
+                let dy = points[i].1 - points[j].1;
+                let dist = (dx * dx + dy * dy).sqrt();
+                obs_distances.push(dist);
+            }
+        }
+        obs_distances.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Store simulation results keyed by distance
+        let mut sim_k_values: BTreeMap<u32, Vec<f64>> = BTreeMap::new();
+
+        // Run simulations
+        for sim_idx in 0..num_sims {
+            let progress = sim_idx as f64 / num_sims as f64;
+            ctx.progress.progress(progress);
+
+            // Generate random points in same area
+            let mut sim_points = Vec::new();
+            let mut rng = std::num::Wrapping(12345u64 + sim_idx as u64);
+            for _ in 0..n {
+                // Simple LCG random number generator
+                rng = rng * std::num::Wrapping(1103515245) + std::num::Wrapping(12345);
+                let u1 = ((rng.0 / 65536) % 32768) as f64 / 32768.0;
+                rng = rng * std::num::Wrapping(1103515245) + std::num::Wrapping(12345);
+                let u2 = ((rng.0 / 65536) % 32768) as f64 / 32768.0;
+
+                let sim_x = min_x + u1 * width;
+                let sim_y = min_y + u2 * height;
+                sim_points.push((sim_x, sim_y));
+            }
+
+            // Compute K for simulated points
+            let mut sim_distances = Vec::new();
+            for i in 0..n {
+                for j in (i + 1)..n {
+                    let dx = sim_points[i].0 - sim_points[j].0;
+                    let dy = sim_points[i].1 - sim_points[j].1;
+                    let dist = (dx * dx + dy * dy).sqrt();
+                    sim_distances.push(dist);
+                }
+            }
+            sim_distances.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+            // Store K values at each distance
+            let mut r = step_size;
+            while r <= max_dist {
+                let r_key = (r * 100.0) as u32; // Convert to fixed-point key
+                let count = sim_distances.iter().filter(|&&d| d <= r).count();
+                let k_r = (area / (lambda * n as f64 * n as f64)) * (2.0 * count as f64);
+
+                sim_k_values.entry(r_key).or_insert_with(Vec::new).push(k_r);
+                r += step_size;
+            }
+        }
+
+        // Create output schema
+        let mut output_layer = input.clone();
+        let mut schema = wbvector::Schema::new();
+
+        schema.add_field(wbvector::FieldDef::new("distance", wbvector::FieldType::Float));
+        schema.add_field(wbvector::FieldDef::new("k_observed", wbvector::FieldType::Float));
+        schema.add_field(wbvector::FieldDef::new("k_lower", wbvector::FieldType::Float));
+        schema.add_field(wbvector::FieldDef::new("k_upper", wbvector::FieldType::Float));
+
+        output_layer.schema = schema;
+
+        // Create output features with envelope bounds
+        let mut r = step_size;
+        while r <= max_dist {
+            let r_key = (r * 100.0) as u32;
+
+            // Observed K value
+            let count_obs = obs_distances.iter().filter(|&&d| d <= r).count();
+            let k_obs = (area / (lambda * n as f64 * n as f64)) * (2.0 * count_obs as f64);
+
+            // Compute percentiles from simulations
+            let k_lower = if let Some(sims) = sim_k_values.get(&r_key) {
+                let mut sorted = sims.clone();
+                sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                let idx = ((num_sims as f64) * 0.05) as usize;
+                sorted.get(idx).copied().unwrap_or(k_obs)
+            } else {
+                k_obs
+            };
+
+            let k_upper = if let Some(sims) = sim_k_values.get(&r_key) {
+                let mut sorted = sims.clone();
+                sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                let idx = ((num_sims as f64) * 0.95) as usize;
+                sorted.get(idx).copied().unwrap_or(k_obs)
+            } else {
+                k_obs
+            };
+
+            let mut feature = wbvector::Feature::new();
+            feature.geometry = Some(wbvector::Geometry::point(min_x, min_y));
+
+            feature.attributes.insert(0, wbvector::FieldValue::Float(r as f64));
+            feature.attributes.insert(1, wbvector::FieldValue::Float(k_obs as f64));
+            feature.attributes.insert(2, wbvector::FieldValue::Float(k_lower as f64));
+            feature.attributes.insert(3, wbvector::FieldValue::Float(k_upper as f64));
+
+            output_layer.features.push(feature);
+            r += step_size;
+        }
+
+        let locator = write_vector_output(&output_layer, output_path.as_str())?;
+
+        let mut outputs = ToolArgs::new();
+        outputs.insert("output".to_string(), json!(locator));
+
+        ctx.progress.progress(1.0);
+        Ok(ToolRunResult { outputs })
     }
 }
 
@@ -4140,9 +4509,139 @@ impl Tool for PointProcessResidualsTool {
         Ok(())
     }
 
-    fn run(&self, _args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        Err(ToolError::Execution(
-            "point_process_residuals is not yet implemented".to_string(),
-        ))
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let intensity_field = parse_optional_string_arg(args, "intensity_field")?;
+
+        // Extract point coordinates
+        let mut points = Vec::new();
+        let mut fitted_intensities = Vec::new();
+
+        for (idx, feature) in input.features.iter().enumerate() {
+            if let Some(geom) = &feature.geometry {
+                if let wbvector::Geometry::Point(coord) = geom {
+                    points.push((coord.x, coord.y));
+
+                    // Get fitted intensity if field provided
+                    let fitted_int = if let Some(field_name) = &intensity_field {
+                        if let Some(field_idx) = input.schema.field_index(field_name) {
+                            if let Some(attr) = feature.attributes.get(field_idx) {
+                                match attr {
+                                    wbvector::FieldValue::Float(v) => *v as f64,
+                                    wbvector::FieldValue::Integer(v) => *v as f64,
+                                    _ => 0.0,
+                                }
+                            } else {
+                                0.0
+                            }
+                        } else {
+                            return Err(ToolError::Execution(format!(
+                                "Intensity field '{}' not found",
+                                field_name
+                            )));
+                        }
+                    } else {
+                        // Estimate as mean intensity (number of points / area)
+                        1.0 / (points.len() as f64)
+                    };
+
+                    fitted_intensities.push(fitted_int);
+                }
+            }
+        }
+
+        if points.is_empty() {
+            return Err(ToolError::Execution("No valid point features found".to_string()));
+        }
+
+        ctx.progress.info(&format!(
+            "Computing point process residuals for {} points",
+            points.len()
+        ));
+
+        // If intensity field not provided, compute KDE as intensity estimate
+        if intensity_field.is_none() {
+            // Compute bounding box
+            let (mut min_x, mut max_x, mut min_y, mut max_y) = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
+            for (x, y) in &points {
+                min_x = min_x.min(*x);
+                max_x = max_x.max(*x);
+                min_y = min_y.min(*y);
+                max_y = max_y.max(*y);
+            }
+
+            let width = max_x - min_x;
+            let height = max_y - min_y;
+            let area = width * height;
+
+            // Scott's rule bandwidth
+            let n = points.len() as f64;
+            let h = n.powf(-1.0 / 3.0) * 10.0;
+
+            // Compute KDE intensity at each point location
+            for (i, &(x, y)) in points.iter().enumerate() {
+                let mut density = 0.0;
+                for (px, py) in &points {
+                    let dx = (x - px) / h;
+                    let dy = (y - py) / h;
+                    let dist_sq = dx * dx + dy * dy;
+                    let k_val = (-0.5 * dist_sq).exp() / (2.0 * std::f64::consts::PI).sqrt();
+                    density += k_val;
+                }
+                density /= h * h * points.len() as f64;
+                fitted_intensities[i] = density;
+            }
+        }
+
+        // Create output layer
+        let mut output_layer = input.clone();
+        let mut schema = output_layer.schema.clone();
+
+        schema.add_field(wbvector::FieldDef::new("fitted_intensity", wbvector::FieldType::Float));
+        schema.add_field(wbvector::FieldDef::new("raw_residual", wbvector::FieldType::Float));
+        schema.add_field(wbvector::FieldDef::new("std_residual", wbvector::FieldType::Float));
+
+        output_layer.schema = schema;
+
+        // Compute residuals
+        let fitted_intensity_idx = output_layer.schema.field_index("fitted_intensity").unwrap();
+        let raw_residual_idx = output_layer.schema.field_index("raw_residual").unwrap();
+        let std_residual_idx = output_layer.schema.field_index("std_residual").unwrap();
+
+        for (idx, feature) in input.features.iter().enumerate() {
+            let mut new_feature = feature.clone();
+
+            let fitted = fitted_intensities[idx];
+            let raw_residual = 1.0 - fitted; // Observed (1 for point present) - fitted
+            let std_residual = if fitted > 0.0 {
+                raw_residual / fitted.sqrt()
+            } else {
+                raw_residual
+            };
+
+            new_feature.attributes.insert(
+                fitted_intensity_idx,
+                wbvector::FieldValue::Float(fitted as f64),
+            );
+            new_feature.attributes.insert(
+                raw_residual_idx,
+                wbvector::FieldValue::Float(raw_residual as f64),
+            );
+            new_feature.attributes.insert(
+                std_residual_idx,
+                wbvector::FieldValue::Float(std_residual as f64),
+            );
+
+            output_layer.features.push(new_feature);
+        }
+
+        let locator = write_vector_output(&output_layer, output_path.as_str())?;
+
+        let mut outputs = ToolArgs::new();
+        outputs.insert("output".to_string(), json!(locator));
+
+        ctx.progress.progress(1.0);
+        Ok(ToolRunResult { outputs })
     }
 }

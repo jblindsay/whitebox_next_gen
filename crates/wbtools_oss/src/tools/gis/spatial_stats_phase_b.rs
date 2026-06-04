@@ -743,8 +743,10 @@ impl Tool for SpaceTimeKrigingTool {
         for (index, value) in out_values.iter().enumerate() {
             output.data.set_f64(index, *value);
         }
+        
         // Output format determined by file extension (.tif → GeoTIFF, .img → HFA, etc.)
-        // Format detection handled automatically by wbraster via GisOverlayCore.        let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
+        // Format detection handled automatically by wbraster via GisOverlayCore.
+        let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
         ctx.progress.progress(1.0);
         Ok(GisOverlayCore::build_result(locator))
     }

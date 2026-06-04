@@ -389,13 +389,6 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::UniversalKrigingTool));
     registry.register(Box::new(tools::SpaceTimeKrigingTool));
     
-    // Phase D Point-Process Tools
-    registry.register(Box::new(tools::RipleysKFunctionTool));
-    registry.register(Box::new(tools::PointPatternEnvelopeTool));
-    registry.register(Box::new(tools::InhomogeneousBaselineTool));
-    registry.register(Box::new(tools::PointProcessResidualsTool));
-    registry.register(Box::new(tools::HotspotVsProcessTool));
-    
     registry.register(Box::new(tools::SelectByLocationTool));
     registry.register(Box::new(tools::SpatialJoinTool));
     registry.register(Box::new(tools::NearTool));

@@ -18,10 +18,15 @@ pub use spatial_stats::QuadratCountTestTool;
 pub use spatial_stats::SpatialLagRegressionTool;
 pub use spatial_stats::SpatialErrorRegressionTool;
 pub use spatial_stats::GeographicallyWeightedRegressionTool;
-
-mod spatial_stats_phase_a_raster;
-pub use spatial_stats_phase_a_raster::LocalMoransILisaRasterTool;
-pub use spatial_stats_phase_a_raster::LocalGetisOrdGStarRasterTool;
+pub use spatial_stats::LocalMoransILisaRasterTool;
+pub use spatial_stats::GetisOrdGiStarRasterTool;
+pub use spatial_stats::SpatialLagRegressionRasterTool;
+pub use spatial_stats::SpatialErrorRegressionRasterTool;
+pub use spatial_stats::GeographicallyWeightedRegressionRasterTool;
+pub use spatial_stats::InhomogeneousIntensityTool;
+pub use spatial_stats::RipleysKTool;
+pub use spatial_stats::EnvelopeTestTool;
+pub use spatial_stats::PointProcessResidualsTool;
 
 mod spatial_stats_phase_b;
 pub use spatial_stats_phase_b::OrdinaryKrigingTool;
@@ -29,13 +34,6 @@ pub use spatial_stats_phase_b::LocalOrdinaryKrigingTool;
 pub use spatial_stats_phase_b::SimpleKrigingTool;
 pub use spatial_stats_phase_b::UniversalKrigingTool;
 pub use spatial_stats_phase_b::SpaceTimeKrigingTool;
-
-mod spatial_stats_phase_d;
-pub use spatial_stats_phase_d::RipleysKFunctionTool;
-pub use spatial_stats_phase_d::PointPatternEnvelopeTool;
-pub use spatial_stats_phase_d::InhomogeneousBaselineTool;
-pub use spatial_stats_phase_d::PointProcessResidualsTool;
-pub use spatial_stats_phase_d::HotspotVsProcessTool;
 
 
 fn max_distance_squared(

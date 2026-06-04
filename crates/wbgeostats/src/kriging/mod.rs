@@ -12,9 +12,11 @@ use crate::variogram::VariogramModel;
 // Sub-modules
 pub mod local;
 pub mod simple;
+pub mod st_kriging;
 
 pub use local::LocalOrdinaryKriging;
 pub use simple::SimpleKriging;
+pub use st_kriging::SpaceTimeKriging;
 
 /// Ordinary Kriging prediction result
 #[derive(Debug, Clone, Serialize, Deserialize)]

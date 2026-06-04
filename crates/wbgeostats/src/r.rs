@@ -12,7 +12,7 @@ use crate::variogram::{
 };
 
 #[cfg(feature = "r")]
-use crate::kriging::{OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging};
+use crate::kriging::{OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, SpaceTimeKriging};
 
 #[cfg(feature = "r")]
 use crate::cv::LeaveOneOutCV;
@@ -772,6 +772,235 @@ pub fn kriging_predict_grid_simple(
         ci_lower = ci_lowers,
         ci_upper = ci_uppers,
         known_mean = known_mean,
+    )
+    .into())
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Spatio-Temporal Kriging Functions
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Perform spatio-temporal kriging prediction at a single point
+///
+/// # Arguments
+/// - `train_x`, `train_y`: Training spatial coordinates
+/// - `train_t`: Training temporal coordinates
+/// - `train_values`: Training data values
+/// - `pred_x`, `pred_y`: Prediction spatial location
+/// - `pred_t`: Prediction temporal location
+/// - `family_s`, `nugget_s`, `psill_s`, `range_s`: Spatial variogram parameters
+/// - `family_t`, `nugget_t`, `psill_t`, `range_t`: Temporal variogram parameters
+///
+/// # Returns
+/// List with: prediction, variance, std_error, ci_lower, ci_upper
+#[cfg(feature = "r")]
+#[extendr]
+pub fn kriging_predict_spacetime(
+    train_x: Vec<f64>,
+    train_y: Vec<f64>,
+    train_t: Vec<f64>,
+    train_values: Vec<f64>,
+    pred_x: f64,
+    pred_y: f64,
+    pred_t: f64,
+    family_s: &str,
+    nugget_s: f64,
+    psill_s: f64,
+    range_s: f64,
+    family_t: &str,
+    nugget_t: f64,
+    psill_t: f64,
+    range_t: f64,
+) -> Result<Robj> {
+    if train_x.len() != train_y.len() || train_x.len() != train_t.len() || train_x.len() != train_values.len() {
+        return Err(extendr_api::Error::Other(
+            "Training x, y, t, and values must have equal length".to_string(),
+        ));
+    }
+
+    if train_x.len() < 4 {
+        return Err(extendr_api::Error::Other(
+            "At least 4 spatio-temporal training points required".to_string(),
+        ));
+    }
+
+    let vario_family_s = match family_s.to_lowercase().as_str() {
+        "spherical" => VariogramModelFamily::Spherical,
+        "exponential" => VariogramModelFamily::Exponential,
+        "gaussian" => VariogramModelFamily::Gaussian,
+        _ => {
+            return Err(extendr_api::Error::Other(
+                "Invalid spatial family. Use: 'spherical', 'exponential', or 'gaussian'".to_string(),
+            ))
+        }
+    };
+
+    let vario_family_t = match family_t.to_lowercase().as_str() {
+        "spherical" => VariogramModelFamily::Spherical,
+        "exponential" => VariogramModelFamily::Exponential,
+        "gaussian" => VariogramModelFamily::Gaussian,
+        _ => {
+            return Err(extendr_api::Error::Other(
+                "Invalid temporal family. Use: 'spherical', 'exponential', or 'gaussian'".to_string(),
+            ))
+        }
+    };
+
+    let vario_spatial = VariogramModel {
+        family: vario_family_s,
+        nugget: nugget_s,
+        partial_sill: psill_s,
+        range: range_s,
+        wrss: 0.0,
+        condition_number: 1.0,
+    };
+
+    let vario_temporal = VariogramModel {
+        family: vario_family_t,
+        nugget: nugget_t,
+        partial_sill: psill_t,
+        range: range_t,
+        wrss: 0.0,
+        condition_number: 1.0,
+    };
+
+    let train_coords_spatial: Vec<(f64, f64)> = train_x
+        .iter()
+        .zip(train_y.iter())
+        .map(|(&x, &y)| (x, y))
+        .collect();
+
+    let st_kriging = SpaceTimeKriging::new(train_coords_spatial, train_t, train_values, vario_spatial, vario_temporal)
+        .map_err(|e| extendr_api::Error::Other(format!("Space-time kriging initialization failed: {}", e)))?;
+
+    let result = st_kriging.predict(pred_x, pred_y, pred_t).map_err(|e| {
+        extendr_api::Error::Other(format!("Space-time prediction failed: {}", e))
+    })?;
+
+    Ok(list!(
+        prediction = result.prediction,
+        variance = result.variance,
+        std_error = result.std_error,
+        ci_lower = result.ci_lower,
+        ci_upper = result.ci_upper,
+    )
+    .into())
+}
+
+/// Perform spatio-temporal kriging grid prediction (vectorized)
+///
+/// # Arguments
+/// - `train_x`, `train_y`: Training spatial coordinates
+/// - `train_t`: Training temporal coordinates
+/// - `train_values`: Training data values
+/// - `pred_x`, `pred_y`: Grid spatial locations (vectors)
+/// - `pred_t`: Grid temporal locations (vector, same length as pred_x)
+/// - `family_s`, `nugget_s`, `psill_s`, `range_s`: Spatial variogram parameters
+/// - `family_t`, `nugget_t`, `psill_t`, `range_t`: Temporal variogram parameters
+///
+/// # Returns
+/// List with vectors: prediction, variance, std_error, ci_lower, ci_upper
+#[cfg(feature = "r")]
+#[extendr]
+pub fn kriging_predict_grid_spacetime(
+    train_x: Vec<f64>,
+    train_y: Vec<f64>,
+    train_t: Vec<f64>,
+    train_values: Vec<f64>,
+    pred_x: Vec<f64>,
+    pred_y: Vec<f64>,
+    pred_t: Vec<f64>,
+    family_s: &str,
+    nugget_s: f64,
+    psill_s: f64,
+    range_s: f64,
+    family_t: &str,
+    nugget_t: f64,
+    psill_t: f64,
+    range_t: f64,
+) -> Result<Robj> {
+    if train_x.len() != train_y.len() || train_x.len() != train_t.len() || train_x.len() != train_values.len() {
+        return Err(extendr_api::Error::Other(
+            "Training x, y, t, and values must have equal length".to_string(),
+        ));
+    }
+
+    if pred_x.len() != pred_y.len() || pred_x.len() != pred_t.len() {
+        return Err(extendr_api::Error::Other(
+            "Prediction x, y, and t must have equal length".to_string(),
+        ));
+    }
+
+    if train_x.len() < 4 {
+        return Err(extendr_api::Error::Other(
+            "At least 4 spatio-temporal training points required".to_string(),
+        ));
+    }
+
+    let vario_family_s = match family_s.to_lowercase().as_str() {
+        "spherical" => VariogramModelFamily::Spherical,
+        "exponential" => VariogramModelFamily::Exponential,
+        "gaussian" => VariogramModelFamily::Gaussian,
+        _ => {
+            return Err(extendr_api::Error::Other(
+                "Invalid spatial family. Use: 'spherical', 'exponential', or 'gaussian'".to_string(),
+            ))
+        }
+    };
+
+    let vario_family_t = match family_t.to_lowercase().as_str() {
+        "spherical" => VariogramModelFamily::Spherical,
+        "exponential" => VariogramModelFamily::Exponential,
+        "gaussian" => VariogramModelFamily::Gaussian,
+        _ => {
+            return Err(extendr_api::Error::Other(
+                "Invalid temporal family. Use: 'spherical', 'exponential', or 'gaussian'".to_string(),
+            ))
+        }
+    };
+
+    let vario_spatial = VariogramModel {
+        family: vario_family_s,
+        nugget: nugget_s,
+        partial_sill: psill_s,
+        range: range_s,
+        wrss: 0.0,
+        condition_number: 1.0,
+    };
+
+    let vario_temporal = VariogramModel {
+        family: vario_family_t,
+        nugget: nugget_t,
+        partial_sill: psill_t,
+        range: range_t,
+        wrss: 0.0,
+        condition_number: 1.0,
+    };
+
+    let train_coords_spatial: Vec<(f64, f64)> = train_x
+        .iter()
+        .zip(train_y.iter())
+        .map(|(&x, &y)| (x, y))
+        .collect();
+
+    let st_kriging = SpaceTimeKriging::new(train_coords_spatial, train_t, train_values, vario_spatial, vario_temporal)
+        .map_err(|e| extendr_api::Error::Other(format!("Space-time kriging initialization failed: {}", e)))?;
+
+    let results = st_kriging.predict_batch(pred_x.iter().zip(pred_y.iter()).map(|(&x, &y)| (x, y)).collect(), pred_t)
+        .map_err(|e| extendr_api::Error::Other(format!("Space-time batch prediction failed: {}", e)))?;
+
+    let predictions: Vec<f64> = results.iter().map(|r| r.prediction).collect();
+    let variances: Vec<f64> = results.iter().map(|r| r.variance).collect();
+    let std_errors: Vec<f64> = results.iter().map(|r| r.std_error).collect();
+    let ci_lowers: Vec<f64> = results.iter().map(|r| r.ci_lower).collect();
+    let ci_uppers: Vec<f64> = results.iter().map(|r| r.ci_upper).collect();
+
+    Ok(list!(
+        prediction = predictions,
+        variance = variances,
+        std_error = std_errors,
+        ci_lower = ci_lowers,
+        ci_upper = ci_uppers,
     )
     .into())
 }

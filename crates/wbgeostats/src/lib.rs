@@ -6,7 +6,7 @@
 //! # Modules
 //!
 //! - `variogram`: Empirical and modeled semivariograms
-//! - `kriging`: Ordinary, Local, and Simple Kriging predictions and variance estimation
+//! - `kriging`: Ordinary, Local, Simple, and Spatio-Temporal Kriging predictions
 //! - `cv`: Cross-validation diagnostics and metrics
 //! - `python`: Python bindings via PyO3 (requires python feature)
 
@@ -15,7 +15,7 @@ pub mod kriging;
 pub mod cv;
 
 // Re-export key types for convenience
-pub use kriging::{OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, KrigingResult};
+pub use kriging::{OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, SpaceTimeKriging, KrigingResult};
 pub use variogram::{VariogramModel, VariogramModelFamily, VariogramFitter, RobustVariogramFitter, RobustLossFunction};
 
 #[cfg(feature = "python")]

@@ -15,7 +15,7 @@ use crate::variogram::{
 };
 
 #[cfg(feature = "python")]
-use crate::kriging::{OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging};
+use crate::kriging::{OrdinaryKriging, LocalOrdinaryKriging, SimpleKriging, SpaceTimeKriging};
 
 #[cfg(feature = "python")]
 use crate::cv::LeaveOneOutCV;
@@ -396,6 +396,93 @@ impl PySimpleKriging {
     }
 }
 
+/// Python-exposed SpaceTimeKriging wrapper
+#[cfg(feature = "python")]
+#[pyclass(name = "SpaceTimeKriging")]
+pub struct PySpaceTimeKriging {
+    kriging: Arc<SpaceTimeKriging>,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PySpaceTimeKriging {
+    #[new]
+    fn new(
+        coords_spatial: Vec<(f64, f64)>,
+        coords_temporal: Vec<f64>,
+        values: Vec<f64>,
+        vario_spatial: &PyVariogramModel,
+        vario_temporal: &PyVariogramModel,
+    ) -> PyResult<Self> {
+        if coords_spatial.len() != coords_temporal.len() || coords_spatial.len() != values.len() {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "Spatial coords, temporal coords, and values must have equal length",
+            ));
+        }
+
+        if coords_spatial.len() < 4 {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "At least 4 spatio-temporal points required",
+            ));
+        }
+
+        let kriging = SpaceTimeKriging::new(
+            coords_spatial,
+            coords_temporal,
+            values,
+            vario_spatial.model.clone(),
+            vario_temporal.model.clone(),
+        )
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+
+        Ok(PySpaceTimeKriging {
+            kriging: Arc::new(kriging),
+        })
+    }
+
+    fn predict(&self, x: f64, y: f64, t: f64) -> PyResult<PyKrigingResult> {
+        let result = self
+            .kriging
+            .predict(x, y, t)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+
+        Ok(PyKrigingResult {
+            prediction: result.prediction,
+            variance: result.variance,
+            std_error: result.std_error,
+            ci_lower: result.ci_lower,
+            ci_upper: result.ci_upper,
+        })
+    }
+
+    fn predict_batch(&self, coords_spatial: Vec<(f64, f64)>, coords_temporal: Vec<f64>) -> PyResult<Vec<PyKrigingResult>> {
+        let results = self
+            .kriging
+            .predict_batch(coords_spatial, coords_temporal)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+
+        Ok(results
+            .into_iter()
+            .map(|r| PyKrigingResult {
+                prediction: r.prediction,
+                variance: r.variance,
+                std_error: r.std_error,
+                ci_lower: r.ci_lower,
+                ci_upper: r.ci_upper,
+            })
+            .collect())
+    }
+
+    #[getter]
+    fn n_training(&self) -> usize {
+        self.kriging.n_training()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("SpaceTimeKriging(training_points={})", self.kriging.n_training())
+    }
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // Functional Python API
 // ──────────────────────────────────────────────────────────────────────────
@@ -534,6 +621,7 @@ fn wbgeostats(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyOrdinaryKriging>()?;
     m.add_class::<PyLocalOrdinaryKriging>()?;
     m.add_class::<PySimpleKriging>()?;
+    m.add_class::<PySpaceTimeKriging>()?;
     m.add_function(wrap_pyfunction!(estimate_variogram, m)?)?;
     m.add_function(wrap_pyfunction!(fit_variogram, m)?)?;
     m.add_function(wrap_pyfunction!(cross_validate_kriging, m)?)?;

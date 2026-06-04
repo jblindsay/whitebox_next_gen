@@ -6,6 +6,7 @@ use wbcore::{
     ToolParamSpec, ToolRunResult, ToolStability, Tool, LicenseTier,
 };
 use wbvector;
+use wbraster;
 use wbgeostats::{
     variogram::{EmpiricalVariogramBuilder, VariogramModelFamily, VariogramFitter},
     kriging::OrdinaryKriging,

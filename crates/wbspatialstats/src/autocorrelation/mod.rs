@@ -1,4 +1,4 @@
-// Spatial autocorrelation measures (Phase A)
+// Spatial autocorrelation measures (Phase A & Phase A+: Permutation Testing)
 //
 // Provides global and local indicators of spatial association:
 // - Global Moran's I: Overall spatial autocorrelation
@@ -6,9 +6,22 @@
 // - Getis-Ord G and G*: Hot/cold spot analysis
 // - Nearest Neighbor Index (NNI): CSR hypothesis testing
 // - Quadrat Analysis: Count-based spatial pattern analysis
+//
+// Phase A+ adds permutation-based inference (robust, distribution-free):
+// - Permutation testing for Moran's I (global and local)
+// - Permutation testing for Getis-Ord statistics
+// - FDR-BH multiple testing correction
+
+pub mod permutation;
 
 use crate::weights::SpatialWeightsGraph;
 use rayon::prelude::*;
+
+// Re-export key permutation testing types for convenience
+pub use permutation::{
+    apply_fdr_bh_correction, getis_ord_gi_star_permutation, local_morans_i_permutation,
+    morans_i_permutation, LocalPermutationTestResult, PermutationTestResult,
+};
 
 /// Result of global spatial autocorrelation analysis
 #[derive(Debug, Clone)]

@@ -1,0 +1,65 @@
+[
+  {
+    "test_case": "Spherical_Short",
+    "model_family": "spherical",
+    "ground_truth": {
+      "name": "Spherical_Short",
+      "model_family": "spherical",
+      "nugget": 100.0,
+      "partial_sill": 2000.0,
+      "range_param": 500.0,
+      "n_points": 100,
+      "noise_level": 50.0
+    },
+    "data_stats": {
+      "n_points": 100,
+      "value_mean": 13.636160404743789,
+      "value_std": 102.45596226890245,
+      "value_min": -327.5266934895694,
+      "value_max": 217.088626187366
+    },
+    "status": "pending_wbgeostats_comparison"
+  },
+  {
+    "test_case": "Exponential_Medium",
+    "model_family": "exponential",
+    "ground_truth": {
+      "name": "Exponential_Medium",
+      "model_family": "exponential",
+      "nugget": 200.0,
+      "partial_sill": 1500.0,
+      "range_param": 800.0,
+      "n_points": 120,
+      "noise_level": 75.0
+    },
+    "data_stats": {
+      "n_points": 120,
+      "value_mean": -3.0263796264998177,
+      "value_std": 115.6220122255093,
+      "value_min": -322.39612051529264,
+      "value_max": 275.3883274020942
+    },
+    "status": "pending_wbgeostats_comparison"
+  },
+  {
+    "test_case": "Gaussian_Long",
+    "model_family": "gaussian",
+    "ground_truth": {
+      "name": "Gaussian_Long",
+      "model_family": "gaussian",
+      "nugget": 150.0,
+      "partial_sill": 2500.0,
+      "range_param": 1200.0,
+      "n_points": 150,
+      "noise_level": 60.0
+    },
+    "data_stats": {
+      "n_points": 150,
+      "value_mean": -3.0326906108907123,
+      "value_std": 95.51357698413446,
+      "value_min": -228.36661547933724,
+      "value_max": 344.34224031370536
+    },
+    "status": "pending_wbgeostats_comparison"
+  }
+]

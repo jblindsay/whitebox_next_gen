@@ -4130,7 +4130,7 @@ impl Tool for LidarNearestNeighbourGriddingTool {
         ToolMetadata {
             id: "lidar_nearest_neighbour_gridding",
             display_name: "LiDAR Nearest-Neighbour Gridding",
-            summary: "Interpolates a raster from LiDAR points using nearest-neighbour assignment.",
+            summary: "Fast LiDAR gridding: assigns cell value from nearest point within search radius. Minimal interpolation bias, efficient for high-density point clouds. Quick DSM/DEM generation.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4371,7 +4371,7 @@ impl Tool for LidarIdwInterpolationTool {
         ToolMetadata {
             id: "lidar_idw_interpolation",
             display_name: "LiDAR IDW Interpolation",
-            summary: "Interpolates a raster from LiDAR points using inverse-distance weighting.",
+            summary: "Distance-weighted LiDAR gridding: assigns cell value from weighted mean of surrounding points (inverse distance power). Smooth surfaces, control via exponent parameter.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4847,7 +4847,7 @@ impl Tool for LidarTinGriddingTool {
         ToolMetadata {
             id: "lidar_tin_gridding",
             display_name: "LiDAR TIN Gridding",
-            summary: "Interpolates a raster from LiDAR points using Delaunay triangulation.",
+            summary: "Exact LiDAR interpolation via TIN: builds Delaunay triangulation from points, interpolates cell values from triangle planes. Respects point heights, excellent for irregular coverage.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -5411,7 +5411,7 @@ impl Tool for LidarRadialBasisFunctionInterpolationTool {
         ToolMetadata {
             id: "lidar_radial_basis_function_interpolation",
             display_name: "LiDAR Radial Basis Function Interpolation",
-            summary: "Interpolates a raster from LiDAR points using local radial-basis similarity weighting.",
+            summary: "Smooth LiDAR surface via RBF: radial basis functions capture local curvature and micro-topography. High-quality gridding with continuous derivatives across boundaries.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -5734,7 +5734,7 @@ impl Tool for LidarSibsonInterpolationTool {
         ToolMetadata {
             id: "lidar_sibson_interpolation",
             display_name: "LiDAR Sibson Interpolation",
-            summary: "Interpolates a raster from LiDAR points using true Sibson natural-neighbour interpolation.",
+            summary: "Natural-neighbour LiDAR gridding: Voronoi-based interpolation using natural-neighbour weights. Smooth, natural-looking surfaces without slope artifacts at point locations.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6030,7 +6030,7 @@ impl Tool for LidarBlockMaximumTool {
         ToolMetadata {
             id: "lidar_block_maximum",
             display_name: "LiDAR Block Maximum",
-            summary: "Creates a raster by assigning each cell the maximum value of included LiDAR points.",
+            summary: "Raster from max LiDAR attribute: cell value = highest point return (elevation, intensity, class, etc.). DSM generation, canopy top extraction, pulse statistics.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6126,7 +6126,7 @@ impl Tool for LidarBlockMinimumTool {
         ToolMetadata {
             id: "lidar_block_minimum",
             display_name: "LiDAR Block Minimum",
-            summary: "Creates a raster by assigning each cell the minimum value of included LiDAR points.",
+            summary: "Raster from min LiDAR attribute: cell value = lowest point return (elevation, intensity, class). DEM generation, ground surface extraction, terrain baselining.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6223,7 +6223,7 @@ impl Tool for LidarPointDensityTool {
         ToolMetadata {
             id: "lidar_point_density",
             display_name: "LiDAR Point Density",
-            summary: "Computes point density from LiDAR samples within a moving-radius neighbourhood.",
+            summary: "Maps LiDAR sampling intensity: point count per unit area (counts within radius per cell). Data-quality assessment, coverage analysis, acquisition-pattern visualization.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6310,7 +6310,7 @@ impl Tool for LidarDigitalSurfaceModelTool {
         ToolMetadata {
             id: "lidar_digital_surface_model",
             display_name: "LiDAR Digital Surface Model",
-            summary: "Builds a DSM from top-surface LiDAR points and TIN interpolation.",
+            summary: "Generates DSM from LiDAR top-surface returns via TIN: uses local highest-point candidates within radius, then triangulation. Vegetation canopy and feature-top representation.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6391,7 +6391,7 @@ impl Tool for LidarHillshadeTool {
         ToolMetadata {
             id: "lidar_hillshade",
             display_name: "LiDAR Hillshade",
-            summary: "Computes per-point hillshade intensity from local plane normals and stores grayscale RGB in LiDAR output.",
+            summary: "Renders LiDAR surface via hillshade: computes per-point surface normals from local plane-fit, then shades by illumination angle. Stores as RGB for 3D visualization.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6528,7 +6528,7 @@ impl Tool for FilterLidarClassesTool {
         ToolMetadata {
             id: "filter_lidar_classes",
             display_name: "Filter LiDAR Classes",
-            summary: "Removes points that match excluded classification values.",
+            summary: "Removes points by classification: filters out unwanted LAS classes (noise, water, buildings, etc). Essential pre-processing for terrain conditioning workflows.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6589,7 +6589,7 @@ impl Tool for LidarShiftTool {
         ToolMetadata {
             id: "lidar_shift",
             display_name: "LiDAR Shift",
-            summary: "Shifts LiDAR point coordinates by x/y/z offsets.",
+            summary: "Translates point cloud coordinates: x/y/z offsets for datum shifts, registration corrections, or coordinate system transformations. Bulk coordinate adjustment.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6664,7 +6664,7 @@ impl Tool for RemoveDuplicatesTool {
         ToolMetadata {
             id: "remove_duplicates",
             display_name: "Remove Duplicates",
-            summary: "Removes duplicate LiDAR points using x/y and optionally z coordinates.",
+            summary: "Deduplicates point cloud: removes points with identical x/y (optionally z). Handles multiple-scan overlaps and improves processing efficiency.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6754,7 +6754,7 @@ impl Tool for FilterLidarScanAnglesTool {
         ToolMetadata {
             id: "filter_lidar_scan_angles",
             display_name: "Filter LiDAR Scan Angles",
-            summary: "Removes LiDAR points whose absolute scan angle exceeds a threshold.",
+            summary: "Removes oblique LiDAR returns: filters points by scan-angle threshold. Improves vertical accuracy by removing grazing-angle returns with positional error.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6820,7 +6820,7 @@ impl Tool for FilterLidarNoiseTool {
         ToolMetadata {
             id: "filter_lidar_noise",
             display_name: "Filter LiDAR Noise",
-            summary: "Removes low (class 7) and high (class 18) noise-classified points from a LiDAR file.",
+            summary: "Removes ASPRS noise classes: filters class 7 (low noise) and class 18 (high noise). Standard point-cloud cleaning for LAS 1.4 compliant data.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6887,7 +6887,7 @@ impl Tool for LidarThinTool {
         ToolMetadata {
             id: "lidar_thin",
             display_name: "LiDAR Thin",
-            summary: "Thins a LiDAR point cloud by retaining at most one point per grid cell.",
+            summary: "Decimates point cloud density: retains ≤1 point per grid cell using first/last/lowest/highest/nearest strategy. Reduces storage while preserving coverage and topographic complexity.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -7102,7 +7102,7 @@ impl Tool for LidarElevationSliceTool {
         ToolMetadata {
             id: "lidar_elevation_slice",
             display_name: "LiDAR Elevation Slice",
-            summary: "Extracts or reclassifies LiDAR points within a specified elevation range.",
+            summary: "Extracts elevation-band points: filters or reclassifies points within z-range. Isolates specific layers (ground, understory, canopy) or elevation zones.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -7217,7 +7217,7 @@ impl Tool for LidarJoinTool {
         ToolMetadata {
             id: "lidar_join",
             display_name: "LiDAR Join",
-            summary: "Merges multiple LiDAR files into a single output point cloud.",
+            summary: "Merges multiple LiDAR files: concatenates point clouds while preserving attributes and header consistency. Batch processing across tile collections.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -7275,7 +7275,7 @@ impl Tool for LidarThinHighDensityTool {
         ToolMetadata {
             id: "lidar_thin_high_density",
             display_name: "LiDAR Thin High Density",
-            summary: "Thins points in locally high-density areas while preserving lower-density regions.",
+            summary: "Adaptive density decimation: reduces point count in over-dense zones while preserving sparse regions. Equalizes sampling across variable flight-line overlap patterns.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -7501,7 +7501,7 @@ impl Tool for LidarTileTool {
         ToolMetadata {
             id: "lidar_tile",
             display_name: "LiDAR Tile",
-            summary: "Splits an input LiDAR file into a regular tile grid and writes one output per populated tile.",
+            summary: "Splits point cloud into regular grid tiles: partitions by x/y extent with configurable dimensions and minimum point threshold. Standard data distribution and processing.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -7695,7 +7695,7 @@ impl Tool for SortLidarTool {
         ToolMetadata {
             id: "sort_lidar",
             display_name: "Sort LiDAR",
-            summary: "Sorts points by one or more LiDAR properties, with optional bin sizes per criterion.",
+            summary: "Orders points by multiple criteria: x/y/z with bin sizes, plus derived attributes. Optimizes spatial coherence for compression and tile processing.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -7790,7 +7790,7 @@ impl Tool for FilterLidarByPercentileTool {
         ToolMetadata {
             id: "filter_lidar_by_percentile",
             display_name: "Filter LiDAR By Percentile",
-            summary: "Selects one representative point per grid block based on elevation percentile.",
+            summary: "Selects percentile-rank point per cell: retains one point per grid block at specified elevation percentile. Representative-sample decimation.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -7898,7 +7898,7 @@ impl Tool for SplitLidarTool {
         ToolMetadata {
             id: "split_lidar",
             display_name: "Split LiDAR",
-            summary: "Splits LiDAR points into multiple output files based on a grouping criterion.",
+            summary: "Partitions points into separate files by attribute: groups by class, source-id, time window, spatial bin, or point count. Data stratification and distribution.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -8072,7 +8072,7 @@ impl Tool for LidarRemoveOutliersTool {
         ToolMetadata {
             id: "lidar_remove_outliers",
             display_name: "LiDAR Remove Outliers",
-            summary: "Filters or classifies outlier points based on local elevation residuals.",
+            summary: "Detects outlier points via local elevation residuals: compares point to neighborhood mean/median, flags anomalies. Removes erratic blunders and noise.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -8272,7 +8272,7 @@ impl Tool for NormalizeLidarTool {
         ToolMetadata {
             id: "normalize_lidar",
             display_name: "Normalize LiDAR",
-            summary: "Normalizes LiDAR z-values using a raster DTM so elevations become height above ground.",
+            summary: "Converts absolute LiDAR elevations to height above ground: subtracts DTM (raster DEM) from point z values. Creates normalized point cloud for structure analysis.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -8340,7 +8340,7 @@ impl Tool for HeightAboveGroundTool {
         ToolMetadata {
             id: "height_above_ground",
             display_name: "Height Above Ground",
-            summary: "Converts LiDAR elevations to heights above the nearest ground-classified point.",
+            summary: "Normalizes via point-cloud geometry: computes height of each point above nearest lower ground-class neighbor. Local terrain surface without raster reference.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -8413,7 +8413,7 @@ impl Tool for LidarGroundPointFilterTool {
         ToolMetadata {
             id: "lidar_ground_point_filter",
             display_name: "LiDAR Ground-Point Filter",
-            summary: "Slope-based filtering/classification of off-terrain points in LiDAR data.",
+            summary: "Separates terrain from off-ground points: slope-based classification/filtering using local plane geometry and height thresholds. Efficient ground segmentation.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -8689,7 +8689,7 @@ impl Tool for FilterLidarTool {
         ToolMetadata {
             id: "filter_lidar",
             display_name: "Filter LiDAR",
-            summary: "Filters LiDAR points using a boolean expression over point attributes.",
+            summary: "Removes points via expression: boolean logic on attributes (class, elevation, return_number, scan_angle, noise_flag, etc). Flexible point selection.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -8794,7 +8794,7 @@ impl Tool for ModifyLidarTool {
         ToolMetadata {
             id: "modify_lidar",
             display_name: "Modify LiDAR",
-            summary: "Applies assignment expressions to modify LiDAR point attributes.",
+            summary: "Updates point attributes via assignments: z=z+offset, class=reclassify_expr, intensity=scale_factor. Flexible point-level transformations.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -9048,7 +9048,7 @@ impl Tool for FilterLidarByReferenceSurfaceTool {
         ToolMetadata {
             id: "filter_lidar_by_reference_surface",
             display_name: "Filter LiDAR By Reference Surface",
-            summary: "Extracts or classifies points based on z relation to a reference raster surface.",
+            summary: "Extracts points relative to reference surface: z<surface, z>surface, or within threshold. Identifies vegetation above DTM or subsurface points.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -9164,7 +9164,7 @@ impl Tool for ClassifyLidarTool {
         ToolMetadata {
             id: "classify_lidar",
             display_name: "Classify LiDAR",
-            summary: "Performs LiDAR classification into ground, building, and vegetation using neighborhood geometry and segmentation.",
+            summary: "Automated point classification: ground, vegetation, buildings via local geometry (linearity, planarity) and RANSAC plane fitting. Geometry-based segmentation.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -9607,7 +9607,7 @@ impl Tool for LidarClassifySubsetTool {
         ToolMetadata {
             id: "lidar_classify_subset",
             display_name: "LiDAR Classify Subset",
-            summary: "Classifies points in a base LiDAR cloud that spatially match points in a subset cloud.",
+            summary: "Transfers classification: marks base points matching subset cloud locations. Allows spatial reclassification based on auxiliary point sets.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -9699,7 +9699,7 @@ impl Tool for ClipLidarToPolygonTool {
         ToolMetadata {
             id: "clip_lidar_to_polygon",
             display_name: "Clip LiDAR To Polygon",
-            summary: "Retains only LiDAR points that fall within polygon geometry.",
+            summary: "Spatial subset of point cloud: retains points inside polygon boundaries. Vector-based point selection for study-area extraction.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -9797,7 +9797,7 @@ impl Tool for ClassifyOverlapPointsTool {
         ToolMetadata {
             id: "classify_overlap_points",
             display_name: "Classify Overlap Points",
-            summary: "Flags or filters LiDAR points in grid cells containing multiple point source IDs.",
+            summary: "Identifies flight-line overlaps: detects grid cells with multiple point-source IDs, flags or removes overlap points. Quality control for acquisition validation.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -9980,7 +9980,7 @@ impl Tool for LidarSegmentationTool {
         ToolMetadata {
             id: "lidar_segmentation",
             display_name: "LiDAR Segmentation",
-            summary: "Segments a LiDAR cloud into connected components and assigns segment colours.",
+            summary: "Partitions point cloud: RANSAC plane fitting + region-growing creates connected components. Assigns segment IDs stored in RGB. Shape-based point clustering.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -10252,7 +10252,7 @@ impl Tool for IndividualTreeSegmentationTool {
         ToolMetadata {
             id: "individual_tree_segmentation",
             display_name: "Individual Tree Segmentation",
-            summary: "Segments vegetation LiDAR points into individual tree clusters using a mean-shift mode-seeking workflow.",
+            summary: "Segments vegetation points into tree crowns: mean-shift clustering with adaptive bandwidth from local canopy geometry. Inventory-level tree delineation.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -10769,7 +10769,7 @@ impl Tool for IndividualTreeDetectionTool {
         ToolMetadata {
             id: "individual_tree_detection",
             display_name: "Individual Tree Detection",
-            summary: "Identifies tree top points in a LiDAR cloud using local maxima detection.",
+            summary: "Identifies tree tops: local maxima in height-filtered point cloud with adaptive search radius. Returns vector point shapefile of potential stem locations.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -10934,7 +10934,7 @@ impl Tool for LidarSegmentationBasedFilterTool {
         ToolMetadata {
             id: "lidar_segmentation_based_filter",
             display_name: "LiDAR Segmentation Based Filter",
-            summary: "Ground-point filtering based on neighbourhood-connected low-relief segments.",
+            summary: "Ground filtering via low-relief segmentation: grows connected components from locally flat regions, separates terrain from vegetation. Robust ground separation.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -11165,7 +11165,7 @@ impl Tool for LidarColourizeTool {
         ToolMetadata {
             id: "lidar_colourize",
             display_name: "LiDAR Colourize",
-            summary: "Assigns LiDAR point RGB values from an overlapping raster image.",
+            summary: "Assigns point colors from image: samples overlapping orthophoto/georeferenced image at each point location, stores as RGB. Photorealistic point-cloud rendering.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -11226,7 +11226,7 @@ impl Tool for ColourizeBasedOnClassTool {
         ToolMetadata {
             id: "colourize_based_on_class",
             display_name: "Colourize Based On Class",
-            summary: "Sets LiDAR point RGB values based on point classifications.",
+            summary: "Colors points by class: ASPRS standard colors (green=veg, brown=ground, gray=building, etc). Blends with intensity for contrast. Classification visualization.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -11372,7 +11372,7 @@ impl Tool for ColourizeBasedOnPointReturnsTool {
         ToolMetadata {
             id: "colourize_based_on_point_returns",
             display_name: "Colourize Based On Point Returns",
-            summary: "Sets LiDAR point RGB values based on return-type categories.",
+            summary: "Colors points by return order: first/intermediate/last returns use distinct colors. Multi-return pulse structure visualization for processing validation.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -11474,7 +11474,7 @@ impl Tool for ClassifyBuildingsInLidarTool {
         ToolMetadata {
             id: "classify_buildings_in_lidar",
             display_name: "Classify Buildings In LiDAR",
-            summary: "Assigns classification 6 to LiDAR points falling inside building footprint polygons.",
+            summary: "Marks points inside building footprints: assigns class 6 to all points spatially within polygon boundaries. Vector-based building extraction.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![

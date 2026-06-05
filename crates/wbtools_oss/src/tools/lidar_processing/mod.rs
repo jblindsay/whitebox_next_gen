@@ -11528,7 +11528,7 @@ impl Tool for AsciiToLasTool {
         ToolMetadata {
             id: "ascii_to_las",
             display_name: "ASCII To LAS",
-            summary: "Converts one or more ASCII LiDAR point files to LAS.",
+            summary: "Format conversion: CSV→LAS batch processing. Parses space/comma/tab-delimited text files (x,y,z,intensity,class,returns,angle,time) to LAS with EPSG metadata.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -11682,7 +11682,7 @@ impl Tool for LasToAsciiTool {
         ToolMetadata {
             id: "las_to_ascii",
             display_name: "LAS To ASCII",
-            summary: "Converts LiDAR points to CSV ASCII text.",
+            summary: "Format conversion: LAS→CSV output. Exports all point attributes to delimited text for spreadsheet/database import or scripting.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -11744,7 +11744,7 @@ impl Tool for SelectTilesByPolygonTool {
         ToolMetadata {
             id: "select_tiles_by_polygon",
             display_name: "Select Tiles By Polygon",
-            summary: "Copies LiDAR tiles from an input directory to an output directory when tile sample points overlap polygon geometries.",
+            summary: "Batch tile selection: copies LAS/LAZ tiles from directory to output when tile sample points intersect polygon boundaries. AOI-based data extraction.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -11877,7 +11877,7 @@ impl Tool for LidarInfoTool {
         ToolMetadata {
             id: "lidar_info",
             display_name: "LiDAR Info",
-            summary: "Generates a textual or HTML summary report for a LiDAR file.",
+            summary: "Generates metadata summary report: point count, extent, intensity range, class histogram, return distribution. HTML/text output for data documentation.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -12115,7 +12115,7 @@ impl Tool for LidarHistogramTool {
         ToolMetadata {
             id: "lidar_histogram",
             display_name: "LiDAR Histogram",
-            summary: "Builds a simple histogram report for a selected LiDAR attribute.",
+            summary: "Computes attribute distribution: frequency histogram for elevation, intensity, scan-angle, class. Clipped percentiles for outlier suppression. HTML visualization.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -12230,7 +12230,7 @@ impl Tool for LidarPointStatsTool {
         ToolMetadata {
             id: "lidar_point_stats",
             display_name: "LiDAR Point Stats",
-            summary: "Creates one or more raster grids summarizing LiDAR point distributions.",
+            summary: "Creates raster statistics grids: point count, pulse count, avg-points/pulse, z/intensity range, predominant-class per cell. Multi-output analysis.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -12462,7 +12462,7 @@ impl Tool for LidarContourTool {
         ToolMetadata {
             id: "lidar_contour",
             display_name: "LiDAR Contour",
-            summary: "Creates contour vector lines from a LiDAR point cloud using TIN contouring.",
+            summary: "Extracts contour vector lines: TIN-based contouring with interpolation for elevation, intensity, time. Configurable intervals and edge-length filtering.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -12642,7 +12642,7 @@ impl Tool for LidarTileFootprintTool {
         ToolMetadata {
             id: "lidar_tile_footprint",
             display_name: "LiDAR Tile Footprint",
-            summary: "Creates polygon footprints (bounding boxes or convex hulls) for LiDAR tiles.",
+            summary: "Generates footprints: axis-aligned bounding boxes or convex hulls per point cloud. Vector polygon output for spatial indexing and data catalog.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -12809,11 +12809,11 @@ impl Tool for LidarTileFootprintTool {
 
 impl Tool for LidarConstructVectorTinTool {
             fn metadata(&self) -> ToolMetadata {
-                ToolMetadata {
-                    id: "lidar_construct_vector_tin",
-                    display_name: "LiDAR Construct Vector TIN",
-                    summary: "Creates a vector TIN (triangular mesh) from LiDAR points.",
-                    category: ToolCategory::Lidar,
+        ToolMetadata {
+            id: "lidar_construct_vector_tin",
+            display_name: "LiDAR Construct Vector TIN",
+            summary: "Builds 3D mesh: Delaunay triangulation from filtered points outputs as vector polygon layer. Surface representation and topographic analysis.",
+            category: ToolCategory::Lidar,
                     license_tier: LicenseTier::Open,
                     params: vec![
                         ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
@@ -12952,7 +12952,7 @@ impl Tool for LidarConstructVectorTinTool {
                 ToolMetadata {
                     id: "lidar_hex_bin",
                     display_name: "LiDAR Hex Bin",
-                    summary: "Bins LiDAR points into a hexagonal grid and outputs per-cell summary attributes.",
+                    summary: "Aggregates points to hexagons: binning grid with per-cell summaries (count, mean-z, intensity). Uniform sampling and statistical binning.",
                     category: ToolCategory::Lidar,
                     license_tier: LicenseTier::Open,
                     params: vec![
@@ -13125,7 +13125,7 @@ impl Tool for LidarConstructVectorTinTool {
                 ToolMetadata {
                     id: "lidar_point_return_analysis",
                     display_name: "LiDAR Point Return Analysis",
-                    summary: "Runs return-sequence QC analysis and writes a text report; optionally writes a classified QC LiDAR output.",
+                    summary: "QA tool: audits return sequence validity (multi/first/last consistency). Generates report + classified output marking return anomalies. Data integrity check.",
                     category: ToolCategory::Lidar,
                     license_tier: LicenseTier::Open,
                     params: vec![
@@ -13432,7 +13432,7 @@ impl Tool for FlightlineOverlapTool {
         ToolMetadata {
             id: "flightline_overlap",
             display_name: "Flightline Overlap",
-            summary: "Counts distinct point-source IDs per raster cell to identify overlapping flightlines.",
+            summary: "Detects acquisition overlaps: counts distinct point-source IDs per cell. Grid-based overlap visualization for flight-line coverage assessment.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -13583,7 +13583,7 @@ impl Tool for RecoverFlightlineInfoTool {
         ToolMetadata {
             id: "recover_flightline_info",
             display_name: "Recover Flightline Info",
-            summary: "Infers flightlines from GPS-time gaps and writes identifiers to point source ID, user data, and/or RGB.",
+            summary: "Reconstructs flightline IDs from GPS time gaps: infers flight-line boundaries, marks in point-source-ID/user-data/RGB. Flight-path recovery.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -13701,7 +13701,7 @@ impl Tool for FindFlightlineEdgePointsTool {
         ToolMetadata {
             id: "find_flightline_edge_points",
             display_name: "Find Flightline Edge Points",
-            summary: "Extracts only points flagged as edge-of-flightline.",
+            summary: "Filters flight-edge points: extracts only points at acquisition swath boundaries. QA for strip overlap and edge effects.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -13744,7 +13744,7 @@ impl Tool for LidarTophatTransformTool {
         ToolMetadata {
             id: "lidar_tophat_transform",
             display_name: "LiDAR Tophat Transform",
-            summary: "Applies a white top-hat transform to LiDAR elevations to approximate height above local ground.",
+            summary: "Extracts height above ground via morphological white top-hat: erosion + dilation approximates local ground, residual = height. Ground-free normalization.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -13828,7 +13828,7 @@ impl Tool for NormalVectorsTool {
         ToolMetadata {
             id: "normal_vectors",
             display_name: "Normal Vectors",
-            summary: "Estimates local point-cloud normals and stores them in point normals and RGB values.",
+            summary: "Computes per-point surface normals: PCA on local neighborhood estimates plane orientation. Normals stored in point records and RGB visualization.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -14089,7 +14089,7 @@ impl Tool for LidarEigenvalueFeaturesTool {
         ToolMetadata {
             id: "lidar_eigenvalue_features",
             display_name: "LiDAR Eigenvalue Features",
-            summary: "Computes local PCA-based LiDAR neighbourhood features and writes a .eigen binary with JSON sidecar.",
+            summary: "Derives PCA features: eigenvalues/vectors from neighborhoods. Shape descriptors (planarity, linearity, height-variance) for point cloud analysis.",
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![

@@ -524,7 +524,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "feature_preserving_smoothing",
             display_name: "Feature Preserving Smoothing",
-            summary: "Smooths DEM roughness while preserving breaks-in-slope using normal-vector filtering.",
+            summary: "DEM smoothing with edge preservation: filters based on surface normal directions; removes speckle/noise while maintaining ridges, valleys, and breaks-in-slope. Pre-processing for geomorphometric analysis. Applications: DEM de-noising, break-in-slope preservation, feature-aware smoothing.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -713,7 +713,7 @@ impl TerrainWindowCore {
             id: "feature_preserving_smoothing_multiscale",
             display_name: "Feature Preserving Smoothing (Multiscale)",
             summary:
-                "Multiscale coarse-to-fine feature-preserving DEM smoothing with adaptive normal diffusion and screened Poisson reconstruction.",
+                "Coarse-to-fine hierarchical DEM smoothing: multi-scale pyramid diffusion; each scale re-derives normals and applies adaptive normal-field regularization. Progressive refinement smoothing. Applications: hierarchical smoothing, multi-resolution processing, progressive de-noising.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1240,7 +1240,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "fill_missing_data",
             display_name: "Fill Missing Data",
-            summary: "Fills NoData gaps using inverse-distance weighting from valid gap-edge cells.",
+            summary: "NoData interpolation via inverse-distance weighting: fills gaps using valid gap-boundary cells with power-law distance decay. Handles missing/masked data; preserves surrounding terrain structure. Applications: gap-fill for satellite/LIDAR DEMs, void-fill preprocessing.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1257,7 +1257,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "remove_off_terrain_objects",
             display_name: "Remove Off-Terrain Objects",
-            summary: "Removes steep off-terrain objects from DEMs using white top-hat normalization, slope-constrained region growing, and local interpolation.",
+            summary: "Steep feature removal from DEMs: applies white-top-hat morphological filter combined with slope-constrained region growing to identify/remove OTO (buildings, vegetation). Re-interpolates removed regions. Applications: OTO removal, DSM-to-DEM conversion.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1349,7 +1349,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "map_off_terrain_objects",
             display_name: "Map Off-Terrain Objects",
-            summary: "Maps off-terrain object segments in DSMs using slope-constrained region growing and optional minimum feature-size filtering.",
+            summary: "Off-terrain object delineation: region-grows from seed cells to identify elevated features (buildings, trees) in DSMs using slope constraints. Minimum-area filtering removes noise. OTO classification raster output. Applications: automated OTO mapping, DSM feature extraction.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1438,7 +1438,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "embankment_mapping",
             display_name: "Embankment Mapping",
-            summary: "Maps transportation embankments from a DEM and road network, with optional embankment-surface removal via interpolation. Authored by John Lindsay and Nigel VanNieuwenhuizen.",
+            summary: "Transportation embankment extraction: identifies elevated linear features near road networks; optional surface removal via interpolation. Co-authored with Nigel VanNieuwenhuizen. Applications: embankment inventory, transportation infrastructure analysis, slope modification.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2004,7 +2004,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "smooth_vegetation_residual",
             display_name: "Smooth Vegetation Residual",
-            summary: "Reduces canopy residual roughness by masking high local DEV responses at small scales and re-interpolating masked elevations.",
+            summary: "Canopy roughness reduction: masks high local DEV (elevation deviation) responses at small scales and re-interpolates masked elevations. Vegetation texture smoothing. Applications: vegetation-influenced DEM smoothing, canopy removal preprocessing.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2894,7 +2894,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "multiscale_elevated_index",
             display_name: "Multiscale Elevated Index",
-            summary: "Calculates multiscale elevated-index (MsEI) and key-scale rasters using Gaussian scale-space residuals.",
+            summary: "Elevated landform detection: multi-scale Gaussian residual analysis identifies elevated features (peaks, ridges, plateaus); produces MsEI index + key-scale raster. Applications: elevated terrain mapping, peak/ridge detection, scale-dependent prominence.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2941,7 +2941,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "multiscale_low_lying_index",
             display_name: "Multiscale Low-Lying Index",
-            summary: "Calculates multiscale low-lying-index (MsLLI) and key-scale rasters using Gaussian scale-space residuals.",
+            summary: "Low landform detection: multi-scale Gaussian residual analysis identifies depressed features (valleys, basins, depressions); produces MsLLI index + key-scale raster. Applications: low-lying terrain mapping, basin/valley detection, scale-dependent depression detection.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2988,7 +2988,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "local_hypsometric_analysis",
             display_name: "Local Hypsometric Analysis",
-            summary: "Computes the minimum local hypsometric integral across a nonlinearly sampled range of neighbourhood scales.",
+            summary: "Local hypsometric integral computation: minimum hypsometric integral value across multi-scale neighborhoods. Terrain maturity index (low=young/steep, high=old/gentle). Applications: terrain age/maturity assessment, geomorphological stage classification.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3115,7 +3115,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "difference_from_mean_elevation",
             display_name: "Difference From Mean Elevation",
-            summary: "Calculates the difference between each elevation and the local mean elevation.",
+            summary: "Local elevation residual: deviation from neighborhood mean; captures micro-scale relief variability independent of direction. Roughness metric from mean-centered perspective. Applications: microrelief mapping, surface texture analysis.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3162,7 +3162,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "deviation_from_mean_elevation",
             display_name: "Deviation From Mean Elevation",
-            summary: "Calculates the local topographic z-score using local mean and standard deviation.",
+            summary: "Standardized elevation anomaly (z-score): (elevation - neighborhood_mean) / neighborhood_std_dev. Scale-independent terrain position metric. Applications: terrain normalization, anomaly detection, standardized roughness.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3209,7 +3209,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "standard_deviation_of_slope",
             display_name: "Standard Deviation Of Slope",
-            summary: "Calculates local standard deviation of slope as a terrain roughness metric.",
+            summary: "Slope variability in neighborhood: standard deviation of local slope angles. Roughness metric from slope perspective; captures slope angle heterogeneity. Applications: terrain complexity, slope changeability mapping.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3259,7 +3259,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "max_difference_from_mean",
             display_name: "Max Difference From Mean",
-            summary: "Calculates maximum absolute difference-from-mean over a range of neighbourhood scales.",
+            summary: "Peak elevation deviation across scales: maximum |elevation - local_mean| computed at multi-scale windows. Landform prominence metric. Applications: scale-dependent feature detection, multi-scale roughness.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3313,7 +3313,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "max_elevation_deviation",
             display_name: "Max Elevation Deviation",
-            summary: "Calculates maximum standardized elevation deviation (DEVmax) over a range of neighbourhood scales.",
+            summary: "Standardized elevation extremity (DEVmax): maximum |(elevation - mean) / std_dev| across scales. Multi-scale landform position metric; basis for nine-class terrain classification. Applications: landform identification, hierarchical terrain segmentation.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3332,7 +3332,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "multiscale_topographic_position_class",
             display_name: "Multiscale Topographic Position Class",
-            summary: "Classifies each DEM cell into a nine-class broad/local relative topographic position system using two DEVmax scale mosaics.",
+            summary: "Nine-class landform taxonomy: combines local & broad DEVmax scales to classify cells into ridge/shoulder/slope/footslope/valley/plain/pit/peak/depression categories. Hierarchical terrain segmentation. Applications: geomorphological mapping, landform classification systems.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3458,7 +3458,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "topographic_position_animation",
             display_name: "Topographic Position Animation",
-            summary: "Creates an interactive HTML viewer and animated GIF of DEV or DEVmax across nonlinearly sampled scales.",
+            summary: "Interactive scale-space visualization: creates animated GIF + HTML viewer showing elevation deviation (DEV/DEVmax) across nonlinearly sampled scales. Reveals characteristic terrain scales at each location. Applications: scale detection, multi-scale analysis.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3524,7 +3524,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "multiscale_topographic_position_image",
             display_name: "Multiscale Topographic Position Image",
-            summary: "Creates a packed RGB multiscale topographic-position image from local, meso, and broad DEVmax rasters.",
+            summary: "RGB composite landform visualization: packs local, meso (medium), and broad DEVmax scales into R,G,B channels creating color-coded terrain hierarchy. Publication-quality landform image. Applications: geomorphological mapping, multi-scale terrain portrayal.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3578,7 +3578,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "multiscale_elevation_percentile",
             display_name: "Multiscale Elevation Percentile",
-            summary: "Calculates the most extreme local elevation percentile across a range of neighbourhood scales.",
+            summary: "Extreme elevation ranking: percentile rank of cell elevation within multi-scale neighborhoods; identifies cells extreme (high/low) relative to surroundings at multiple scales. Applications: outlier detection, multi-scale ranking metrics.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3640,7 +3640,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "max_anisotropy_dev",
             display_name: "Max Anisotropy Dev",
-            summary: "Calculates maximum anisotropy in elevation deviation over a range of neighbourhood scales. Written by Dan Newman.",
+            summary: "Directional elevation asymmetry across scales: maximum directional anisotropy in standardized elevation deviation. Identifies aspect-dependent terrain patterns (aspect-favoring landforms). Author: Dan Newman. Applications: directional terrain analysis, aspect-dependent feature mapping.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3694,7 +3694,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "multiscale_roughness",
             display_name: "Multiscale Roughness",
-            summary: "Calculates surface roughness over a range of neighbourhood scales.",
+            summary: "Surface complexity across scales: multi-scale roughness computation; integrates local variability at multiple window sizes. Captures fractal-like roughness structure. Applications: surface texture analysis, terrain complexity profiling, scale-dependent roughness.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3806,7 +3806,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "max_anisotropy_dev_signature",
             display_name: "Max Anisotropy Dev Signature",
-            summary: "Calculates multiscale anisotropy signatures for input point sites and writes an HTML report. Written by Dan Newman.",
+            summary: "Directional terrain asymmetry profile: point-sampled multi-scale anisotropy signatures; characterizes aspect-dependent terrain patterns. Author: Dan Newman. Applications: directional terrain profiling, aspect asymmetry analysis.",
             category: ToolCategory::Other,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3861,7 +3861,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "multiscale_roughness_signature",
             display_name: "Multiscale Roughness Signature",
-            summary: "Calculates multiscale roughness signatures for input point sites and writes an HTML report.",
+            summary: "Multi-scale surface texture profile: point-sampled roughness signatures across scale range; shape descriptor for surface characterization. Scale-dependent texture analysis at sites. Applications: site surface characterization, scale-dependent profiling.",
             category: ToolCategory::Other,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3981,7 +3981,7 @@ impl TerrainWindowCore {
         ToolMetadata {
             id: "multiscale_std_dev_normals_signature",
             display_name: "Multiscale Std Dev Normals Signature",
-            summary: "Calculates spherical-standard-deviation scale signatures for input point sites and writes an HTML report.",
+            summary: "Surface orientation variability signature: point-sampled normal-vector scale signatures across multiple scales. Shape descriptor for surface curvature/smoothness patterns. Applications: site surface analysis, multi-scale orientation profiling.",
             category: ToolCategory::Other,
             license_tier: LicenseTier::Open,
             params: vec![

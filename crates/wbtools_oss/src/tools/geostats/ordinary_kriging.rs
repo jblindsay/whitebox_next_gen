@@ -10,7 +10,11 @@ impl Tool for OrdinaryKrigingTool {
         ToolMetadata {
             id: "ordinary_kriging",
             display_name: "Ordinary Kriging Interpolation",
-            summary: "Interpolates raster grid using Ordinary Kriging with optional prediction intervals and anisotropy support",
+            summary: r#"Performs kriging-based spatial interpolation from point observations to a regular grid: estimates values at unsampled locations using weighted linear combination of nearby observed values. Ordinary kriging assumes an unknown constant mean and automatically determines weights from empirical variogram structure, producing both predictions and kriging variance (prediction uncertainty).
+
+Kriging is optimal for continuous spatial data when spatial correlation structure (variogram) is known. Unlike inverse-distance weighting, kriging incorporates spatial autocorrelation, produces unbiased predictions, and provides uncertainty estimates. Workflow: estimate variogram from points → fit theoretical model → validate with cross-validation → perform kriging on grid.
+
+Ordinary kriging is most general-purpose variant (stationary random function, constant but unknown mean). Optional prediction intervals quantify confidence; optional anisotropy accommodates directional correlation patterns (e.g., geological layering, fracture trends). Output: predictions raster + optional kriging variance raster ± confidence bounds."#,
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -55,7 +59,7 @@ impl Tool for OrdinaryKrigingTool {
         ToolManifest {
             id: "ordinary_kriging".to_string(),
             display_name: "Ordinary Kriging Interpolation".to_string(),
-            summary: "Interpolates raster grid using Ordinary Kriging with optional prediction intervals and anisotropic distance metric".to_string(),
+            summary: "Performs kriging-based spatial interpolation from point observations to a regular grid: estimates values at unsampled locations using weighted linear combination of nearby observed values. Ordinary kriging assumes an unknown constant mean and automatically determines weights from empirical variogram structure, producing both predictions and kriging variance (prediction uncertainty).".to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![

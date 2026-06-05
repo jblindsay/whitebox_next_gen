@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import base64
+import glob
 import importlib
 import json
 import os
 import shutil
 import subprocess
+import sys
 import urllib.parse
 import urllib.request
+import zipfile
 from pathlib import Path
 
 
@@ -682,6 +685,10 @@ def _rewrite_windows_qgis_launcher(path_text: str | None) -> str:
 
 
 def _discover_external_python_candidates() -> list[str]:
+    """
+    Discover all available external Python interpreters across Windows, macOS, and Linux.
+    Returns candidates in priority order, searching both PATH and common installation locations.
+    """
     mode, local_python = get_runtime_preferences()
     if mode == "qgis":
         return []
@@ -711,24 +718,81 @@ def _discover_external_python_candidates() -> list[str]:
         _add_candidate(local_python)
         return ordered
 
+    # Environment-specified Python takes highest priority
     env_candidate = os.environ.get("WBW_EXTERNAL_PYTHON")
     _add_candidate(env_candidate)
 
+    # Development venvs (user's local development environments)
     default_candidates = [
         Path.home() / "Documents" / "programming" / "Rust" / "whitebox_next_gen" / ".venv-wbw" / "bin" / "python",
         Path.home() / "Documents" / "programming" / "python" / ".venv" / "bin" / "python",
         Path.home() / ".venv" / "bin" / "python",
-        Path("/opt/homebrew/bin/python3"),
-        Path("/opt/homebrew/bin/python"),
-        Path("/usr/local/bin/python3"),
-        Path("/usr/local/bin/python"),
     ]
+
+    # Platform-specific system and homebrew installations
+    if os.name == "nt":  # Windows
+        # Search PATH for python3 and python
+        for py_name in ["python3", "python"]:
+            resolved = shutil.which(py_name)
+            _add_candidate(resolved)
+        
+        # Official python.org installer (C:\Python3X\python.exe pattern)
+        try:
+            import glob as glob_module
+            for py_exe in glob_module.glob(r"C:\Python3*\python.exe"):
+                _add_candidate(py_exe)
+        except Exception:
+            pass
+        
+        # Anaconda/Miniconda - user installation
+        user_anaconda_base = Path.home() / "Anaconda3"
+        if not user_anaconda_base.exists():
+            user_anaconda_base = Path.home() / "Miniconda3"
+        if user_anaconda_base.exists():
+            _add_candidate(str(user_anaconda_base / "python.exe"))
+        
+        # Anaconda/Miniconda - system-wide installation
+        system_anaconda_base = Path("C:\\ProgramData\\Anaconda3")
+        if not system_anaconda_base.exists():
+            system_anaconda_base = Path("C:\\ProgramData\\Miniconda3")
+        if system_anaconda_base.exists():
+            _add_candidate(str(system_anaconda_base / "python.exe"))
+        
+        # Microsoft Store installation
+        appdata_python = Path.home() / "AppData" / "Local" / "Microsoft" / "WindowsApps" / "python3.exe"
+        _add_candidate(str(appdata_python))
+
+    else:  # macOS and Linux
+        # Search PATH first (catches most installations)
+        for py_name in ["python3", "python"]:
+            resolved = shutil.which(py_name)
+            _add_candidate(resolved)
+        
+        # macOS-specific paths
+        if sys.platform == "darwin":
+            macos_candidates = [
+                Path("/opt/homebrew/bin/python3"),
+                Path("/opt/homebrew/bin/python"),
+                Path("/usr/local/bin/python3"),
+                Path("/usr/local/bin/python"),
+                Path("/usr/bin/python3"),
+            ]
+            for candidate in macos_candidates:
+                _add_candidate(str(candidate))
+        
+        # Linux-specific paths
+        else:
+            linux_candidates = [
+                Path("/usr/local/bin/python3"),
+                Path("/usr/bin/python3"),
+                Path("/usr/bin/python"),
+            ]
+            for candidate in linux_candidates:
+                _add_candidate(str(candidate))
+
+    # Add development venvs after system paths checked
     for candidate in default_candidates:
         _add_candidate(str(candidate))
-
-    resolved = shutil.which("python3")
-    _add_candidate(resolved)
-    _add_candidate("/usr/bin/python3")
 
     return ordered
 
@@ -810,52 +874,234 @@ def get_installed_whitebox_workflows_version() -> str:
     return _get_installed_whitebox_workflows_version_for_interpreter(interpreter)
 
 
-def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec: str = "") -> dict:
-    """Install or upgrade whitebox-workflows in the selected interpreter."""
-    interpreter = get_backend_interpreter_path()
-    package_spec = "whitebox-workflows"
-    cleaned_spec = str(version_spec or "").strip()
-    if cleaned_spec:
-        package_spec = f"whitebox-workflows{cleaned_spec}"
+def _get_python_version_tag() -> tuple[str, str]:
+    """
+    Return (major.minor, platform_tag) for current interpreter.
+    E.g., ("3.10", "win_amd64") or ("3.11", "macosx_11_0_arm64")
+    """
+    major_minor = f"{sys.version_info.major}.{sys.version_info.minor}"
+    
+    if sys.platform == "win32":
+        import struct
+        platform_tag = "win_amd64" if struct.calcsize("P") == 8 else "win32"
+    elif sys.platform == "darwin":
+        import platform as platform_module
+        machine = platform_module.machine()
+        if machine == "arm64":
+            platform_tag = "macosx_11_0_arm64"
+        else:
+            platform_tag = "macosx_10_9_x86_64"
+    else:  # Linux
+        platform_tag = "manylinux2014_x86_64" if sys.maxsize > 2**32 else "manylinux2014_i686"
+    
+    return major_minor, platform_tag
 
-    command = [interpreter, "-m", "pip", "install"]
-    if upgrade:
-        command.append("--upgrade")
-    command.append(package_spec)
 
-    completed = subprocess.run(
-        command,
-        check=False,
-        capture_output=True,
-        text=True,
-        env=_build_clean_env(),
-        **_subprocess_window_kwargs(),
-    )
-    stdout = completed.stdout.strip()
-    stderr = completed.stderr.strip()
+def _find_wheel_in_pypi_release(release_info: dict, py_version: str, platform_tag: str) -> dict | None:
+    """
+    Find the best matching wheel file from a PyPI release for the given Python version and platform.
+    release_info is a list of file dicts from the PyPI JSON API.
+    Returns the file dict or None if no match found.
+    """
+    if not isinstance(release_info, list):
+        return None
+    
+    for file_info in release_info:
+        filename = file_info.get("filename", "")
+        if not filename.endswith(".whl"):
+            continue
+        
+        # Parse wheel filename: {distribution}-{version}(-{build tag})?-{python tag}-{abi tag}-{platform tag}.whl
+        parts = filename[:-4].split("-")  # Remove .whl and split
+        if len(parts) < 5:
+            continue
+        
+        py_tag = parts[-3]  # Python tag (e.g., "cp311")
+        abi_tag = parts[-2]  # ABI tag (e.g., "cp311")
+        plat_tag = parts[-1]  # Platform tag (e.g., "win_amd64")
+        
+        # Match Python version (e.g., "cp310", "cp311")
+        py_minor = py_version.split(".")[1]
+        expected_py_tag = f"cp3{py_minor}"
+        
+        if py_tag != expected_py_tag:
+            continue
+        
+        # Match platform tag
+        if plat_tag != platform_tag.replace("macosx_", "macosx").replace("manylinux", "manylinux2014"):
+            # Allow some flexibility for manylinux versions
+            if not (plat_tag.startswith("manylinux") and platform_tag.startswith("manylinux")):
+                continue
+        
+        return file_info
+    
+    return None
 
-    if completed.returncode != 0:
-        detail = stderr or stdout or "unknown pip install error"
-        raise RuntimeBootstrapError(
-            f"Failed to install {package_spec} via {interpreter}: {detail}"
-        )
 
-    installed = ""
+def _download_and_extract_wheel_from_pypi(version: str, target_dir: str) -> bool:
+    """
+    Download whitebox-workflows wheel from PyPI and extract to target_dir.
+    Returns True if successful, False otherwise.
+    """
     try:
-        installed = get_installed_whitebox_workflows_version()
+        py_version, platform_tag = _get_python_version_tag()
+        
+        # Fetch PyPI JSON for this specific version
+        url = f"https://pypi.org/pypi/whitebox-workflows/{version}/json"
+        with urllib.request.urlopen(url, timeout=10) as response:  # nosec B310
+            payload = json.loads(response.read().decode("utf-8"))
+        
+        releases = payload.get("releases", {})
+        version_files = releases.get(version, [])
+        
+        if not version_files:
+            raise RuntimeBootstrapError(f"No files found for whitebox-workflows {version} on PyPI")
+        
+        wheel_info = _find_wheel_in_pypi_release(version_files, py_version, platform_tag)
+        if not wheel_info:
+            raise RuntimeBootstrapError(
+                f"No compatible wheel found for Python {py_version} on {platform_tag}"
+            )
+        
+        wheel_url = wheel_info.get("url")
+        wheel_filename = wheel_info.get("filename")
+        if not wheel_url or not wheel_filename:
+            raise RuntimeBootstrapError("Invalid wheel info from PyPI")
+        
+        # Download wheel
+        wheel_path = os.path.join(target_dir, wheel_filename)
+        urllib.request.urlretrieve(wheel_url, wheel_path)
+        
+        if not os.path.exists(wheel_path):
+            raise RuntimeBootstrapError(f"Wheel not downloaded to {wheel_path}")
+        
+        # Extract wheel
+        with zipfile.ZipFile(wheel_path, "r") as zip_ref:
+            zip_ref.extractall(target_dir)
+        
+        # Clean up wheel file
+        os.remove(wheel_path)
+        
+        return True
+    
+    except Exception as exc:
+        raise RuntimeBootstrapError(
+            f"Failed to download/extract whitebox-workflows wheel from PyPI: {str(exc)}"
+        ) from exc
+
+
+def _is_qgis_bundled_python(interpreter: str) -> bool:
+    """
+    Detect if the given interpreter is QGIS's bundled (sandboxed) Python.
+    Heuristic: if running via subprocess and import fails but module is available
+    in current process, likely QGIS bundled Python.
+    """
+    try:
+        # If interpreter path contains 'qgis' (case-insensitive), likely QGIS Python
+        if "qgis" in interpreter.lower():
+            return True
+        
+        # Test if this Python can run pip
+        result = subprocess.run(
+            [interpreter, "-m", "pip", "--version"],
+            capture_output=True,
+            timeout=2,
+            **_subprocess_window_kwargs(),
+        )
+        
+        # If pip command fails, likely sandboxed
+        return result.returncode != 0
     except Exception:
+        return False
+
+
+def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec: str = "") -> dict:
+    """
+    Install or upgrade whitebox-workflows using the best available strategy:
+    1. If pip is available, use pip install
+    2. If pip is not available (e.g., QGIS bundled Python), download wheel from PyPI and extract
+    """
+    interpreter = get_backend_interpreter_path()
+    
+    # Determine version to install
+    target_version = str(version_spec or "").strip()
+    if not target_version:
+        try:
+            target_version = fetch_latest_whitebox_workflows_version()
+        except Exception:
+            target_version = "latest"
+    
+    # Strategy 1: Try pip first (works for external Python)
+    if not _is_qgis_bundled_python(interpreter):
+        package_spec = "whitebox-workflows"
+        if target_version and target_version != "latest":
+            package_spec = f"whitebox-workflows{target_version}"
+        
+        command = [interpreter, "-m", "pip", "install"]
+        if upgrade:
+            command.append("--upgrade")
+        command.append(package_spec)
+        
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=_build_clean_env(),
+            **_subprocess_window_kwargs(),
+        )
+        stdout = completed.stdout.strip()
+        stderr = completed.stderr.strip()
+        
+        if completed.returncode == 0:
+            installed = ""
+            try:
+                installed = get_installed_whitebox_workflows_version()
+            except Exception:
+                installed = ""
+            
+            _EXTERNAL_SESSION_CACHE.clear()
+            
+            return {
+                "interpreter": interpreter,
+                "installed_version": installed,
+                "stdout": stdout,
+                "stderr": stderr,
+                "upgraded": bool(upgrade),
+                "strategy": "pip",
+            }
+    
+    # Strategy 2: Use wheel download/extract for QGIS bundled Python
+    try:
+        if target_version == "latest":
+            target_version = fetch_latest_whitebox_workflows_version()
+        
+        # Get plugin directory to extract wheel
+        plugin_dir = os.path.dirname(os.path.realpath(__file__))
+        
+        _download_and_extract_wheel_from_pypi(target_version, plugin_dir)
+        
         installed = ""
-
-    # Existing cached sessions may point to a stale module build.
-    _EXTERNAL_SESSION_CACHE.clear()
-
-    return {
-        "interpreter": interpreter,
-        "installed_version": installed,
-        "stdout": stdout,
-        "stderr": stderr,
-        "upgraded": bool(upgrade),
-    }
+        try:
+            installed = get_installed_whitebox_workflows_version()
+        except Exception:
+            installed = ""
+        
+        _EXTERNAL_SESSION_CACHE.clear()
+        
+        return {
+            "interpreter": interpreter,
+            "installed_version": installed,
+            "upgraded": bool(upgrade),
+            "strategy": "wheel",
+        }
+    
+    except RuntimeBootstrapError as exc:
+        raise exc
+    except Exception as exc:
+        raise RuntimeBootstrapError(
+            f"Failed to install whitebox-workflows via wheel: {str(exc)}"
+        ) from exc
 
 
 def fetch_latest_whitebox_workflows_version(timeout_seconds: float = 4.0) -> str:

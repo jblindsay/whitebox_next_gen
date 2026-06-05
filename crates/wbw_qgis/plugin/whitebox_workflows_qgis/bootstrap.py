@@ -1164,8 +1164,14 @@ def fetch_latest_whitebox_workflows_version(timeout_seconds: float = 4.0) -> str
         )
 
     try:
+        # Create SSL context to handle certificate verification
+        ssl_context = ssl.create_default_context()
+        # Disable SSL verification if needed (for corporate networks, etc.)
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
         # URL is validated above (scheme + host allowlist).
-        with urllib.request.urlopen(url, timeout=float(timeout_seconds)) as response:  # nosec B310
+        with urllib.request.urlopen(url, timeout=float(timeout_seconds), context=ssl_context) as response:  # nosec B310
             payload = response.read().decode("utf-8", errors="replace")
         parsed = json.loads(payload)
         info = parsed.get("info", {}) if isinstance(parsed, dict) else {}

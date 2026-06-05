@@ -6530,7 +6530,7 @@ impl Tool for IdwInterpolationTool {
         ToolMetadata {
             id: "idw_interpolation",
             display_name: "IDW Interpolation",
-            summary: "Interpolates a raster from point samples using inverse-distance weighting.",
+            summary: "Interpolates continuous surfaces from point samples using inverse-distance weighting (IDW). Weights closer points more heavily; parameter tuning controls interpolation smoothness.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6713,7 +6713,7 @@ impl Tool for NearestNeighbourInterpolationTool {
         ToolMetadata {
             id: "nearest_neighbour_interpolation",
             display_name: "Nearest Neighbour Interpolation",
-            summary: "Interpolates a raster from point samples by assigning each cell the nearest sample value.",
+            summary: "Interpolates surfaces using nearest-neighbor assignment (Voronoi tessellation). Produces step-like outputs preserving original sample values exactly.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6854,7 +6854,7 @@ impl Tool for TinInterpolationTool {
         ToolMetadata {
             id: "tin_interpolation",
             display_name: "TIN Interpolation",
-            summary: "Interpolates a raster from point samples using Delaunay triangulation and planar interpolation within each triangle.",
+            summary: "Interpolates continuous surfaces using Delaunay triangulation: each cell interpolated via barycentric coordinates within containing triangle. Produces locally-linear smooth surfaces passing through all samples.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -7051,7 +7051,7 @@ impl Tool for NaturalNeighbourInterpolationTool {
         ToolMetadata {
             id: "natural_neighbour_interpolation",
             display_name: "Natural Neighbour Interpolation",
-            summary: "Interpolates a raster from point samples using true Sibson natural-neighbour area weighting.",
+            summary: "Interpolates surfaces using Sibson natural-neighbor algorithm: area-weights neighbors via Voronoi diagram. Smooth locally-adaptive interpolant without overshooting sample values.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -7224,7 +7224,7 @@ impl Tool for ModifiedShepardInterpolationTool {
         ToolMetadata {
             id: "modified_shepard_interpolation",
             display_name: "Modified Shepard Interpolation",
-            summary: "Interpolates a raster from point samples using locally weighted modified-Shepard blending.",
+            summary: "Interpolates surfaces using locally-weighted modified Shepard method with optional quadratic basis correction. Balances IDW simplicity with improved smoothness and respects original sample values.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -7474,7 +7474,7 @@ impl Tool for RadialBasisFunctionInterpolationTool {
         ToolMetadata {
             id: "radial_basis_function_interpolation",
             display_name: "Radial Basis Function Interpolation",
-            summary: "Interpolates a raster from point samples using local radial-basis similarity weighting.",
+            summary: "Interpolates surfaces using radial basis functions: local weighted combinations of basis functions (thinplate, polyharmonic, Gaussian). High-quality smooth interpolation for scattered data.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![

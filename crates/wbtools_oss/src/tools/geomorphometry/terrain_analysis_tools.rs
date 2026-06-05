@@ -940,7 +940,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "hypsometric_analysis",
             display_name: "Hypsometric Analysis",
-            summary: "Creates a hypsometric (area-elevation) curve HTML report for one or more DEMs.",
+            summary: "Generates area-elevation curves: cumulative area vs elevation distribution showing landform stage. Convex=youthful; linear=mature; concave=old-age terrain. Geomorphologic aging indicator.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1080,7 +1080,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "slope_vs_aspect_plot",
             display_name: "Slope Vs Aspect Plot",
-            summary: "Creates an HTML radial slope-vs-aspect analysis plot for an input DEM.",
+            summary: "Radial plot of slope by aspect: reveals directional slope patterns (steeper on certain exposures). Detects asymmetric terrain (tectonic, structural, solar-driven asymmetry). HTML visualization.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1097,7 +1097,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "profile",
             display_name: "Profile",
-            summary: "Creates an HTML elevation profile plot for one or more input polyline features sampled from a surface raster.",
+            summary: "Extracts elevation profiles: samples surface raster along polyline routes, outputs HTML elevation plot. Useful for route visualization, slope profiling, terrain cross-section analysis.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1940,7 +1940,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "elev_above_pit_dist",
             display_name: "Elev Above Pit Dist",
-            summary: "Compatibility alias for elev_above_pit.",
+            summary: "Equivalent to Elevation Above Pit: drainage-relative relief. Retained for backwards compatibility with legacy scripts and workflows.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1975,7 +1975,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "circular_variance_of_aspect",
             display_name: "Circular Variance Of Aspect",
-            summary: "Calculates local circular variance of aspect within a moving neighbourhood.",
+            summary: "Measures aspect uniformity in neighborhood: 0=uniform slope aspects; 1=highly variable (multi-directional slopes). Detects ridges (low variance), valleys (variable), and planar terrain (high variance).",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2169,7 +2169,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "fetch_analysis",
             display_name: "Fetch Analysis",
-            summary: "Computes upwind distance to the first topographic obstacle along a specified azimuth.",
+            summary: "Calculates wind fetch: distance upwind to terrain barrier exceeding slope threshold. High fetch=exposed (wind-driven erosion/snow); low fetch=sheltered. Critical for aeolian and glacial processes.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2281,7 +2281,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "find_ridges",
             display_name: "Find Ridges",
-            summary: "Identifies potential ridge and peak cells in a DEM, with optional line thinning.",
+            summary: "Extracts ridge crests: local maxima where all neighbors are lower. Optional line thinning to 1-cell width. Ridge skeleton useful for hypsographic analysis and landform mapping.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2439,7 +2439,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "assess_route",
             display_name: "Assess Route",
-            summary: "Segments route lines and evaluates per-segment terrain slope, relief, sinuosity, roughness, and visibility metrics from a DEM.",
+            summary: "Analyzes route terrain characteristics: segments polylines and measures per-segment slope, elevation change, terrain roughness, sinuosity. Useful for route optimization, hazard assessment, accessibility analysis.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3003,7 +3003,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "breakline_mapping",
             display_name: "Breakline Mapping",
-            summary: "Maps breaklines by thresholding log-transformed curvedness and vectorizing thinned linear features.",
+            summary: "Extracts breaks-of-slope: thresholds log-transformed curvedness and traces thinned linear features. Identifies slope discontinuities (escarpments, benches, ridges). Vector breakline output.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3774,7 +3774,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "pennock_landform_classification",
             display_name: "Pennock Landform Classification",
-            summary: "Classifies landform elements into seven Pennock et al. (1987) terrain classes.",
+            summary: "Classifies terrain into 7 landform classes (summit, shoulder, backslope, footslope, valley floor, terrace, depression) using slope and curvature thresholds. Pennock et al. (1987) standard classification.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4000,7 +4000,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "geomorphons",
             display_name: "Geomorphons",
-            summary: "Classifies landforms using 8-direction line-of-sight ternary patterns derived from zenith and nadir angle comparisons, or 10 common geomorphon forms.",
+            summary: "Context-based landform classification: uses 8-direction line-of-sight ternary patterns (peak/ridge/shoulder/hollow/footslope/valley/plain). Scale-independent, terrain-relative classification independent of absolute elevation.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4288,7 +4288,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "viewshed",
             display_name: "Viewshed",
-            summary: "Computes station visibility counts from point stations over a DEM.",
+            summary: "Line-of-sight visibility analysis: counts how many stations can see each cell. Outputs per-cell visibility count. Applications: landscape analysis, telecommunications, archaeology, military.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4428,7 +4428,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "low_points_on_headwater_divides",
             display_name: "Low Points on Headwater Divides",
-            summary: "Locates low pass points along divides between neighboring headwater subbasins.",
+            summary: "Identifies watershed pass points: lowest-elevation cells on divides between adjacent headwater basins. Useful for watershed boundary validation and pass delineation.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4793,7 +4793,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "percent_elev_range",
             display_name: "Percent Elevation Range",
-            summary: "Calculates local topographic position as percent of neighbourhood elevation range.",
+            summary: "Normalizes elevation relative to local relief: (elevation - min) / (max - min) × 100. Expresses topographic position as percentage (0-100) of neighborhood range. Scale-independent position metric for terrain classification.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4887,7 +4887,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "relative_topographic_position",
             display_name: "Relative Topographic Position",
-            summary: "Calculates RTP using neighbourhood min, mean, and max elevation values.",
+            summary: "Computes relative topographic position: (elevation - min) / (max - min). Normalizes terrain position on 0-1 scale where 0=local min, 1=local max. Identifies ridges (→1), valleys (→0), mid-slopes (→0.5). Common in landform classification.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4996,7 +4996,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "num_downslope_neighbours",
             display_name: "Num Downslope Neighbours",
-            summary: "Counts the number of 8-neighbour cells lower than each DEM cell.",
+            summary: "Counts downslope neighbors: 8-connected cells with lower elevation. Values 0-8; high=ridge/peak, low=valley/sink. Flow concentration indicator without full D8 routing.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -5071,7 +5071,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "num_upslope_neighbours",
             display_name: "Num Upslope Neighbours",
-            summary: "Counts the number of 8-neighbour cells higher than each DEM cell.",
+            summary: "Counts upslope neighbors: 8-connected cells with higher elevation. Values 0-8; low=ridge/peak, high=valley/sink. Inverse of downslope neighbors; identifies contributing slopes.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -5146,7 +5146,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "max_downslope_elev_change",
             display_name: "Max Downslope Elev Change",
-            summary: "Calculates the maximum elevation drop to lower neighbouring cells.",
+            summary: "Finds steepest descent: maximum elevation drop among 8 neighbors. Indicates potential flow direction steepness. High values=ridges/peaks; zero=sinks. Coarse slope magnitude without aspect.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -5229,7 +5229,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "max_upslope_elev_change",
             display_name: "Max Upslope Elev Change",
-            summary: "Calculates the maximum elevation gain to higher neighbouring cells.",
+            summary: "Finds steepest ascent: maximum elevation gain among 8 neighbors. Indicates potential source direction. High values=valleys/sinks; zero=peaks/ridges. Inverse of max downslope.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -5312,7 +5312,7 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "min_downslope_elev_change",
             display_name: "Min Downslope Elev Change",
-            summary: "Calculates the minimum non-negative elevation drop to neighbouring cells.",
+            summary: "Finds gentlest descent: minimum elevation drop (≥0) among neighbors. Identifies flow paths of least resistance. Complementary to max descent; useful for low-gradient terrain.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -5613,7 +5613,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
         ToolMetadata {
             id: "downslope_index",
             display_name: "Downslope Index",
-            summary: "Calculates Hjerdt et al. (2004) downslope index using D8 flow directions.",
+            summary: "Computes downslope gradient magnitude along specified azimuth: traverses D8 paths measuring accumulated drop per distance. Useful for slope analysis along specific directions (valley, ridge, aspect-aligned). Output options: tangent, degrees, distance.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -5629,7 +5629,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
         ToolMetadata {
             id: "max_branch_length",
             display_name: "Max Branch Length",
-            summary: "Calculates the maximum branch length between D8 flowpaths initiated from neighbouring cells.",
+            summary: "Identifies flow-path branching structure: longest flowpath distance where neighboring cells start D8 flow. High values=wide dispersal zones; low=narrow/confined flow. Divide complexity indicator.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6024,7 +6024,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
         ToolMetadata {
             id: "elev_above_pit",
             display_name: "Elev Above Pit",
-            summary: "Calculates elevation above the nearest downslope pit cell (or edge sink).",
+            summary: "Measures relative relief: elevation drop from cell to nearest sink/outlet via D8 flowpath. High values=ridge/hilltop; zero=sink. Global drainage-relative position metric.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6146,7 +6146,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
         ToolMetadata {
             id: "directional_relief",
             display_name: "Directional Relief",
-            summary: "Calculates directional relief by ray-tracing elevation in a specified azimuth.",
+            summary: "Measures terrain height in specified direction: ray-traces from cell measuring elevation change along azimuth. Captures wind-side vs lee-side exposure; directional slope component.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6298,7 +6298,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
         ToolMetadata {
             id: "exposure_towards_wind_flux",
             display_name: "Exposure Towards Wind Flux",
-            summary: "Calculates terrain exposure relative to a dominant wind azimuth and upwind horizon angle.",
+            summary: "Quantifies wind exposure: upwind terrain angle relative to dominant wind direction. High=exposed (windward); low=sheltered (leeward). Critical for microclimate, snow transport, erosion modeling.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6592,7 +6592,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
         ToolMetadata {
             id: "relative_aspect",
             display_name: "Relative Aspect",
-            summary: "Calculates terrain aspect relative to a user-specified azimuth (0 to 180 degrees).",
+            summary: "Measures aspect deviation from reference direction: 0°=facing reference azimuth (exposed), 90°=perpendicular, 180°=away from azimuth (sheltered). Slope exposure classification.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6720,7 +6720,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
         ToolMetadata {
             id: "edge_density",
             display_name: "Edge Density",
-            summary: "Calculates local density of breaks-in-slope using angular normal-vector differences.",
+            summary: "Detects terrain breaks: local count of normal-vector direction changes above threshold angle. Identifies ridges, valleys, slope transitions. High density=rugged; low=smooth.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -6924,7 +6924,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
         ToolMetadata {
             id: "spherical_std_dev_of_normals",
             display_name: "Spherical Std Dev Of Normals",
-            summary: "Calculates spherical standard deviation of local surface normals.",
+            summary: "Measures surface roughness: spherical standard deviation of local surface normals. 0°=flat; higher=more irregular terrain. Shape regularity metric independent of scale.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -7055,7 +7055,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
         ToolMetadata {
             id: "average_normal_vector_angular_deviation",
             display_name: "Average Normal Vector Angular Deviation",
-            summary: "Calculates local mean angular deviation between original and smoothed surface normals.",
+            summary: "Measures smoothing impact: mean angle between original and smoothed surface normals. High deviation=high roughness; low=smooth surface. Quantifies terrain irregularity independent of slope/aspect.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -7563,7 +7563,7 @@ Applications: (1) Terrain roughness classification (smooth=near 1.0, rough>2.0),
         ToolMetadata {
             id: "elev_relative_to_min_max",
             display_name: "Elevation Relative to Min/Max",
-            summary: "Expresses each elevation as a percentage (0–100) of the raster's elevation range.",
+            summary: "Normalizes elevation to 0-100 scale: (z - zmin) / (zmax - zmin) × 100. Global-scale relative elevation; independent of data units. Useful for multi-dataset comparison and visualization.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -7705,7 +7705,7 @@ Applications: (1) Terrain roughness classification (smooth=near 1.0, rough>2.0),
         ToolMetadata {
             id: "wetness_index",
             display_name: "Wetness Index",
-            summary: "Calculates the topographic wetness index ln(SCA / tan(slope)).",
+            summary: "Computes topographic wetness index (TWI): ln(specific catchment area / tan(slope)). High TWI=wet/convergent valleys; low TWI=dry/divergent ridges. Predicts water availability and saturation for soil/hydrology.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![

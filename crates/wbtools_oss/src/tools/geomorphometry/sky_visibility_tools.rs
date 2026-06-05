@@ -462,7 +462,7 @@ impl SkyVisibilityCore {
         ToolMetadata {
             id: "horizon_angle",
             display_name: "Horizon Angle",
-            summary: "Calculates horizon angle (maximum slope) along a specified azimuth direction.",
+            summary: "Maximum slope angles along cardinal/intercardinal directions: calculates horizon angle viewing outward from each cell. Applications: solar potential assessment, wind resource mapping, site microclimate characterization.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -631,7 +631,7 @@ impl SkyVisibilityCore {
         ToolMetadata {
             id: "sky_view_factor",
             display_name: "Sky View Factor",
-            summary: "Calculates the proportion of visible sky from a DEM/DSM.",
+            summary: "Sky openness metric: fraction of visible sky hemisphere from terrain/structure surfaces; integrates obstruction angles across all directions. Applications: urban climate modeling, cold-air pooling, radiation budget estimation.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -819,7 +819,7 @@ impl SkyVisibilityCore {
         ToolMetadata {
             id: "visibility_index",
             display_name: "Visibility Index",
-            summary: "Calculates a topography-based visibility index from sampled viewsheds.",
+            summary: "Multi-point terrain viewshed visibility: aggregated visibility scores from sampled observation locations; landscape-scale visibility influence mapping. Applications: scenic resource assessment, visibility zoning, observer positioning.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1362,7 +1362,7 @@ impl SkyVisibilityCore {
         ToolMetadata {
             id: "horizon_area",
             display_name: "Horizon Area",
-            summary: "Calculates area of the horizon polygon (hectares).",
+            summary: "Horizon polygon extent quantification: area enclosed by visible terrain perimeter from observation point; terrain complexity proxy. Applications: visual landscape characterization, viewpoint siting, scenic resource quantification.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1556,7 +1556,7 @@ impl SkyVisibilityCore {
         ToolMetadata {
             id: "average_horizon_distance",
             display_name: "Average Horizon Distance",
-            summary: "Calculates average distance to horizon across azimuth directions.",
+            summary: "Mean horizon distance from observation point: averaged across all viewing directions. Quantifies surrounding landscape proximity/openness; exposure metric. Applications: microclimate analysis, landscape-observer distance characterization.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1619,7 +1619,7 @@ impl SkyVisibilityCore {
         ToolMetadata {
             id: "time_in_daylight",
             display_name: "Time In Daylight",
-            summary: "Calculates the proportion of daytime each cell is illuminated (not in terrain/object shadow).",
+            summary: "Diurnal solar illumination fraction: proportion of daylight hours unobstructed by terrain/object shadows; integrates shadow timing over solar day. Applications: site microclimate assessment, solar resource potential, frost risk mapping.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1717,7 +1717,7 @@ impl SkyVisibilityCore {
         ToolMetadata {
             id: "shadow_image",
             display_name: "Shadow Image",
-            summary: "Generates a terrain shadow intensity raster for a specified date, time, and location.",
+            summary: "Single-epoch solar shadow map: terrain obstruction pattern at specified date/time/location; sun-position computed, ray-casting identifies shadow cells. Applications: site microclimate mapping, solar access assessment, shadow analysis.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2158,7 +2158,7 @@ impl SkyVisibilityCore {
         ToolMetadata {
             id: "shadow_animation",
             display_name: "Shadow Animation",
-            summary: "Creates an interactive HTML viewer and animated GIF showing terrain shadows throughout a day.",
+            summary: "Diurnal shadow dynamics visualization: animated sequence showing shadow progression throughout solar day; interactive HTML viewer with GIF export. Applications: temporal microclimate analysis, solar education, shadow pattern communication.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2645,7 +2645,7 @@ impl SkyVisibilityCore {
         ToolMetadata {
             id: "hypsometrically_tinted_hillshade",
             display_name: "Hypsometrically Tinted Hillshade",
-            summary: "Creates a Swiss-style terrain rendering by blending multi-azimuth hillshade with hypsometric tinting and optional atmospheric haze.",
+            summary: "Swiss cartographic terrain rendering: hypsometric elevation tinting + multi-azimuth hillshade + optional atmospheric haze; publication-quality visualization. Applications: terrain communication, topographic mapping, terrain communication.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3234,7 +3234,7 @@ impl SkyVisibilityCore {
         ToolMetadata {
             id: "topo_render",
             display_name: "Topo Render",
-            summary: "Creates a pseudo-3D topographic rendering using hypsometric tint, hillshade, horizon-based shadowing, and distance attenuation.",
+            summary: "Pseudo-3D topographic visualization: composited layers (hypsometric tint + multi-directional relief + distance attenuation + horizon shadows); enhanced depth perception. Applications: scenic landscape portrayal, terrain communication, 3D terrain illustration.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4366,7 +4366,7 @@ impl SkyVisibilityCore {
         ToolMetadata {
             id: "skyline_analysis",
             display_name: "Skyline Analysis",
-            summary: "Performs skyline analysis for one or more observation points and writes a vector horizon trace plus HTML report.",
+            summary: "Horizon profiling from observation points: extracts visible skyline geometry as vector trace; generates statistical HTML report. Applies viewshed analysis to profile-view extraction. Applications: visual impact assessment, viewshed profiling, landscape characterization.",
             category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![

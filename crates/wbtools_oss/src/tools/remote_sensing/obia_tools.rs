@@ -222,7 +222,7 @@ impl Tool for SegmentSlicSuperpixelsTool {
         ToolMetadata {
             id: "segment_slic_superpixels",
             display_name: "Segment SLIC Superpixels",
-            summary: "Produces compact superpixel-like segments from a multi-band stack (open-core OBIA baseline).",
+            summary: "Produces compact superpixel-like segments using SLIC-inspired seeded-region-growing from multi-band imagery. Balances spatial compactness and spectral homogeneity for efficient object delineation. Open-core baseline for OBIA workflows.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -339,7 +339,7 @@ impl Tool for SegmentGraphFelzenszwalbTool {
         ToolMetadata {
             id: "segment_graph_felzenszwalb",
             display_name: "Segment Graph Felzenszwalb",
-            summary: "Graph-style segmentation baseline for OBIA (open-core), mapped to robust existing segmentation primitives.",
+            summary: "Graph-based segmentation using efficient connected-component analysis with spectral clustering. Balances segmentation scale and detail preservation. Open-core baseline alternative to SLIC for diverse imagery types.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -459,7 +459,7 @@ impl Tool for SegmentsMergeSmallRegionsTool {
         ToolMetadata {
             id: "segments_merge_small_regions",
             display_name: "Segments Merge Small Regions",
-            summary: "Merges undersized segment regions into neighboring larger regions.",
+            summary: "Merges undersized segments into neighboring larger regions using specified merge criteria (longest boundary, largest area, or nearest neighbor). Eliminates noise and ensures minimum mapping unit compliance.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -556,7 +556,7 @@ impl Tool for ObjectFeaturesSpectralBasicTool {
         ToolMetadata {
             id: "object_features_spectral_basic",
             display_name: "Object Features Spectral Basic",
-            summary: "Computes per-segment basic spectral statistics (mean/std/min/max) from input rasters.",
+            summary: "Computes per-segment spectral statistics (mean, standard deviation, min, max) from multi-band imagery. Fundamental feature extraction enabling spectral classification and NDVI-based object analysis.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -729,7 +729,7 @@ impl Tool for ObjectFeaturesShapeBasicTool {
         ToolMetadata {
             id: "object_features_shape_basic",
             display_name: "Object Features Shape Basic",
-            summary: "Computes per-segment basic shape attributes (area, perimeter, compactness, elongation).",
+            summary: "Computes per-segment morphological shape features (area, perimeter, compactness, elongation, form-factor) for object characterization. Shape features enable discrimination between building structures, vegetation canopies, and water bodies.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -889,7 +889,7 @@ impl Tool for ObjectFeaturesTextureGlcmBasicTool {
         ToolMetadata {
             id: "object_features_texture_glcm_basic",
             display_name: "Object Features Texture GLCM Basic",
-            summary: "Computes per-segment basic GLCM texture metrics (contrast, homogeneity, energy, entropy).",
+            summary: "Computes per-segment texture metrics using Gray-Level Co-occurrence Matrix (GLCM): contrast, homogeneity, energy, entropy. Texture features detect surface roughness and fine-scale structure invisible to spectral analysis alone.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1110,7 +1110,7 @@ impl Tool for ClassifyObjectsRandomForestTool {
         ToolMetadata {
             id: "classify_objects_random_forest",
             display_name: "Classify Objects Random Forest",
-            summary: "Classifies object records from feature CSV using random forest and segment-linked training labels.",
+            summary: "Classifies objects from feature CSV using Random Forest trained on labeled segment examples. Robust ensemble method providing class probabilities and feature importance scores for OBIA workflows.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1321,7 +1321,7 @@ impl Tool for EvaluateObjectClassificationAccuracyTool {
         ToolMetadata {
             id: "evaluate_object_classification_accuracy",
             display_name: "Evaluate Object Classification Accuracy",
-            summary: "Evaluates object-level classification predictions against reference labels and outputs OA and kappa.",
+            summary: "Evaluates object classification predictions against reference labels. Outputs confusion matrix, overall accuracy, Cohen's kappa, and per-class precision/recall/F1 metrics for model validation.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1524,7 +1524,7 @@ impl Tool for ObiaPipelineBasicTool {
         ToolMetadata {
             id: "obia_pipeline_basic",
             display_name: "OBIA Pipeline Basic",
-            summary: "Runs a basic open-core OBIA pipeline: segmentation, small-region merge, spectral/shape feature extraction, and object random-forest classification.",
+            summary: "Executes complete end-to-end OBIA workflow: segmentation (SLIC/Graph), small-region merge, spectral/shape feature extraction, and random-forest classification in single operation.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1879,7 +1879,7 @@ impl Tool for SegmentWatershedMarkersTool {
         ToolMetadata {
             id: "segment_watershed_markers",
             display_name: "Segment Watershed Markers",
-            summary: "Marker-driven watershed-like segmentation baseline for OBIA, mapped onto robust segmentation primitives.",
+            summary: "Marker-driven watershed-like segmentation separating objects around identified marker seed regions. Emphasizes boundary preservation while controlling segment size for hierarchical OBIA workflows.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1943,7 +1943,7 @@ impl Tool for SegmentMultiresolutionHierarchicalTool {
         ToolMetadata {
             id: "segment_multiresolution_hierarchical",
             display_name: "Segment Multiresolution Hierarchical",
-            summary: "Builds coarse and fine segmentations and outputs a hierarchy mapping from fine objects to parent coarse objects.",
+            summary: "Generates multi-scale hierarchical segmentations (coarse and fine) with explicit parent-child mappings. Enables scale-dependent feature extraction and multi-level classification workflows.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2027,7 +2027,7 @@ impl Tool for SegmentScaleParameterOptimizerTool {
         ToolMetadata {
             id: "segment_scale_parameter_optimizer",
             display_name: "Segment Scale Parameter Optimizer",
-            summary: "Searches candidate segmentation scales and reports the best scale based on target object count fit.",
+            summary: "Searches candidate segmentation scale parameters to identify optimal scale matching target object count. Automated scale selection eliminates manual tuning for consistent segmentation quality.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2134,7 +2134,7 @@ impl Tool for SegmentsSplitLowCohesionTool {
         ToolMetadata {
             id: "segments_split_low_cohesion",
             display_name: "Segments Split Low Cohesion",
-            summary: "Re-segments low-cohesion objects using finer segmentation settings for improved within-object consistency.",
+            summary: "Re-segments existing low-cohesion objects using finer scale settings to improve spectral homogeneity. Adaptive refinement for problematic zones without affecting well-formed objects.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2195,7 +2195,7 @@ impl Tool for SegmentsToPolygonsTool {
         ToolMetadata {
             id: "segments_to_polygons",
             display_name: "Segments To Polygons",
-            summary: "Converts segment labels raster to polygon vector features for object-level editing and integration.",
+            summary: "Converts raster segment labels to vector polygons for interactive editing, quality control, and GIS integration. Enables seamless transition between raster and vector OBIA representations.",
             category: ToolCategory::Conversion,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2247,7 +2247,7 @@ impl Tool for PolygonsToSegmentsTool {
         ToolMetadata {
             id: "polygons_to_segments",
             display_name: "Polygons To Segments",
-            summary: "Rasterizes polygon objects back to a segment-label raster for round-trip OBIA editing workflows.",
+            summary: "Rasterizes edited polygons back to segment-label raster preserving object IDs or attribute values. Enables iterative OBIA workflows combining automated segmentation with manual refinement.",
             category: ToolCategory::Conversion,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2306,7 +2306,7 @@ impl Tool for ObjectFeaturesContextNeighborsTool {
         ToolMetadata {
             id: "object_features_context_neighbors",
             display_name: "Object Features Context Neighbors",
-            summary: "Computes neighborhood-context features such as adjacent-object counts and shared-boundary metrics.",
+            summary: "Computes spatial context features: adjacent-object counts, shared-boundary lengths, and isolation metrics. Enables neighbor-aware classification capturing object relationships in landscape.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2375,7 +2375,7 @@ impl Tool for ObjectFeaturesTopologyRelationsTool {
         ToolMetadata {
             id: "object_features_topology_relations",
             display_name: "Object Features Topology Relations",
-            summary: "Computes topology-oriented object features including degree, dominant-neighbor strength, and articulation flags.",
+            summary: "Computes graph-topology features: object degree (neighbor count), dominant-neighbor strength, and articulation flags. Captures structural position in object network for hierarchical classification.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2454,7 +2454,7 @@ impl Tool for ClassifyObjectsSvmTool {
         ToolMetadata {
             id: "classify_objects_svm",
             display_name: "Classify Objects SVM",
-            summary: "Classifies objects using an SVM-style workflow (implemented via robust object-classification backend defaults).",
+            summary: "Classifies objects using Support Vector Machine backend for robust non-linear decision boundaries. Alternative to Random Forest with different generalization properties for high-dimensional feature spaces.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: ClassifyObjectsRandomForestTool.metadata().params,
@@ -2527,7 +2527,7 @@ impl Tool for ClassifyObjectsRulesBasicTool {
         ToolMetadata {
             id: "classify_objects_rules_basic",
             display_name: "Classify Objects Rules Basic",
-            summary: "Applies transparent rule-based object classification from a rules CSV.",
+            summary: "Applies transparent rule-based object classification from feature-operator-threshold rules CSV. Fully interpretable decision logic for domain expert workflows and regulatory compliance.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2636,7 +2636,7 @@ impl Tool for ClassifyObjectsRulesHierarchicalTool {
         ToolMetadata {
             id: "classify_objects_rules_hierarchical",
             display_name: "Classify Objects Rules Hierarchical",
-            summary: "Applies hierarchical rule-based object classification; currently uses ordered rules with deterministic fallback.",
+            summary: "Applies hierarchical rule-based classification with ordered rules and priority-based precedence. Enables multi-level decision trees encoding domain knowledge for complex classification scenarios.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: ClassifyObjectsRulesBasicTool.metadata().params,
@@ -2667,7 +2667,7 @@ impl Tool for ObjectClassProbabilityMapsTool {
         ToolMetadata {
             id: "object_class_probability_maps",
             display_name: "Object Class Probability Maps",
-            summary: "Builds object-level class probability outputs from predictions for downstream uncertainty analysis.",
+            summary: "Converts predictions to per-class probability maps enabling raster-based uncertainty visualization and confidence-based filtering. Supports downstream confidence thresholding and multi-label scenarios.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2823,7 +2823,7 @@ impl Tool for BuildObjectHierarchyMultiscaleTool {
         ToolMetadata {
             id: "build_object_hierarchy_multiscale",
             display_name: "Build Object Hierarchy Multiscale",
-            summary: "Builds parent-child relationships between fine and coarse object segmentations.",
+            summary: "Builds parent-child hierarchy mappings between coarse and fine segmentations. Enables scale-dependent feature extraction and multi-level classification with inheritance-based label propagation.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2878,7 +2878,7 @@ impl Tool for PropagateLabelsAcrossHierarchyTool {
         ToolMetadata {
             id: "propagate_labels_across_hierarchy",
             display_name: "Propagate Labels Across Hierarchy",
-            summary: "Propagates parent-level class labels to unlabeled child objects using a hierarchy mapping.",
+            summary: "Propagates coarse-level class labels to fine-level child objects via hierarchy mappings. Enables efficient labeling of nested hierarchies and inheritance-based refinement workflows.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2978,7 +2978,7 @@ impl Tool for ObjectsEnforceMinMappingUnitTool {
         ToolMetadata {
             id: "objects_enforce_min_mapping_unit",
             display_name: "Objects Enforce Min Mapping Unit",
-            summary: "Enforces a minimum mapping unit by merging undersized object segments.",
+            summary: "Enforces minimum mapping unit policy by merging undersized objects into neighbors. Regulatory compliance for land-cover maps and consistent cartographic representation.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: SegmentsMergeSmallRegionsTool.metadata().params,

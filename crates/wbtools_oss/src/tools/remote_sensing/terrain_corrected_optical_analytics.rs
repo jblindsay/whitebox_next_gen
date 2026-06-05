@@ -643,7 +643,7 @@ impl Tool for TerrainCorrectedOpticalTool {
         ToolMetadata {
             id: "terrain_corrected_optical_analytics",
             display_name: "Terrain-Corrected Optical Prep",
-            summary: "Applies topographic illumination correction (C-correction) to multispectral optical imagery using a DEM-derived slope/aspect model, producing surface-reflectance-corrected bands, a cloud/shadow mask, a topographic correction factor raster, and a quality confidence raster.",
+            summary: "Applies topographic illumination correction (C-correction) to multispectral optical imagery using DEM-derived slope/aspect. Produces surface-reflectance-corrected bands, cloud/shadow masks, correction factors, and quality confidence scores. Auto-resolves Sentinel-2, Landsat, and DIMAP metadata when bundle provided.",
                 category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![

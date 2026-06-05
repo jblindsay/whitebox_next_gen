@@ -283,7 +283,7 @@ impl Tool for OrthorectificationTool {
         ToolMetadata {
             id: "orthorectification",
             display_name: "Orthorectification",
-            summary: "Applies DEM-based geometric correction to raw satellite or aerial imagery to remove terrain relief displacement and sensor geometry distortion. Uses Rational Polynomial Coefficients (RPC) from embedded image metadata or a sidecar file. Outputs a georeferenced orthoimage.",
+            summary: "Applies DEM-based geometric correction to raw satellite/aerial imagery via RPC (Rational Polynomial Coefficients) to remove terrain relief displacement and sensor distortion. Transforms raw image to georeferenced orthographic projection aligned to map coordinates. Essential for GIS integration and accurate measurement.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![

@@ -588,7 +588,7 @@ impl Tool for DarkObjectSubtractionTool {
         ToolMetadata {
             id: "dark_object_subtraction",
             display_name: "Dark Object Subtraction",
-            summary: "Applies percentile-based haze offset subtraction per input raster band.",
+            summary: "Performs Dark Object Subtraction (DOS) atmospheric correction by identifying darkest pixels in each band and subtracting their DN values as haze offset. Essential for accurate radiometric analysis, change detection, and classification. Enables comparison across time, sensors, and regions. Applications: quick-look atmospheric correction, historical image correction, NDVI preprocessing, multi-temporal change detection, cross-sensor harmonization.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -855,7 +855,7 @@ impl Tool for DnToToaReflectanceTool {
         ToolMetadata {
             id: "dn_to_toa_reflectance",
             display_name: "DN to TOA Reflectance",
-            summary: "Converts DN rasters to top-of-atmosphere reflectance using per-band coefficients.",
+            summary: "Converts Digital Numbers (DN) to Top-of-Atmosphere (TOA) reflectance using per-band coefficients with optional solar zenith angle correction. Auto-derives coefficients from Landsat/Sentinel-2 metadata or user-supplied calibration. Standard physical product enabling spectral indices and cross-sensor comparison.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1130,7 +1130,7 @@ impl Tool for NdviBasedEmissivityTool {
         ToolMetadata {
             id: "ndvi_based_emissivity",
             display_name: "NDVI Based Emissivity",
-            summary: "Estimates land surface emissivity from red and NIR bands using NDVI-derived fractional vegetation cover.",
+            summary: "Estimates land surface emissivity (LSE) from NDVI for thermal remote sensing. Emissivity-NDVI relationships avoid complex spectral matching while leveraging widely-available vegetation fraction. Critical for Land Surface Temperature calculation and radiation budget modeling.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1368,7 +1368,7 @@ impl Tool for PcaBasedChangeDetectionTool {
         ToolMetadata {
             id: "pca_based_change_detection",
             display_name: "PCA Based Change Detection",
-            summary: "Performs PCA on per-pixel spectral change vectors (t2 - t1) and outputs principal-component change magnitude.",
+            summary: "Detects multi-band changes using Principal Component Analysis (PCA) on per-pixel spectral change vectors (t2-t1). Automatically weights all bands to maximize change variance, detecting subtle shifts missed by single-band analysis. Change magnitude in PC space reveals total spectral transformation.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1807,7 +1807,7 @@ impl Tool for ImageDifferenceChangeDetectionTool {
         ToolMetadata {
             id: "image_difference_change_detection",
             display_name: "Image Difference Change Detection",
-            summary: "Computes magnitude and signed spectral difference between two dates with optional sigma-threshold mask and dedicated absolute/signed outputs.",
+            summary: "Performs simple differencing-based change detection by computing magnitude or signed spectral differences between bitemporal stacks. Optional sigma-threshold masking identifies significant changes. Intuitive, computationally efficient, and suitable for real-time monitoring and rapid assessment.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2166,7 +2166,7 @@ impl Tool for PostClassificationChangeTool {
         ToolMetadata {
             id: "post_classification_change",
             display_name: "Post Classification Change",
-            summary: "Compares two classified rasters and returns transition-coded raster with class transition matrix.",
+            summary: "Compares two classified rasters and generates transition-coded output with class transition matrix. Reveals where specific transitions occur most frequently. Enables change trajectory analysis and assessment of net gains/losses per land cover class.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2443,7 +2443,7 @@ impl Tool for LandSurfaceTemperatureSingleChannelTool {
         ToolMetadata {
             id: "land_surface_temperature_single_channel",
             display_name: "Land Surface Temperature (Single Channel)",
-            summary: "Computes single-channel LST from thermal DN or brightness temperature with emissivity correction.",
+            summary: "Computes Land Surface Temperature (LST) from single thermal band using radiative transfer equation. Converts thermal DN to radiance, then brightness temperature, with emissivity weighting for physical LST in Kelvin. Practical for rapid processing with accuracy dependent on emissivity input.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -2801,7 +2801,7 @@ impl Tool for LandSurfaceTemperatureSplitWindowTool {
         ToolMetadata {
             id: "land_surface_temperature_split_window",
             display_name: "Land Surface Temperature (Split Window)",
-            summary: "Computes split-window LST from two thermal bands using configurable coefficients and emissivity terms.",
+            summary: "Computes Land Surface Temperature (LST) using split-window method with two thermal bands. Accounts for atmospheric water vapor and emissivity differences using sensor-specific or user-supplied coefficients. More accurate than single-channel by leveraging atmospheric differential absorption.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3415,7 +3415,7 @@ impl Tool for SpectralAngleMapperTool {
         ToolMetadata {
             id: "spectral_angle_mapper",
             display_name: "Spectral Angle Mapper",
-            summary: "Classifies pixels by minimum spectral angle to supplied endmember signatures.",
+            summary: "Classifies pixels by minimum spectral angle to supplied endmember signatures. Robust to illumination variations as it measures spectral similarity regardless of magnitude. Each pixel spectrum treated as vector; minimum angle to endmembers determines class membership.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3676,7 +3676,7 @@ impl Tool for ContinuumRemovalTool {
         ToolMetadata {
             id: "continuum_removal",
             display_name: "Continuum Removal",
-            summary: "Normalizes spectra by dividing each band by its upper-hull continuum estimate.",
+            summary: "Normalizes multispectral spectra by dividing each band by its upper-hull (convex) continuum estimate. Removes continuum trends and enhances absorption features for mineral and material identification. Standard preprocessing for hyperspectral analysis.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -3883,7 +3883,7 @@ impl Tool for LinearSpectralUnmixingTool {
         ToolMetadata {
             id: "linear_spectral_unmixing",
             display_name: "Linear Spectral Unmixing",
-            summary: "Estimates endmember fractions using non-negative linear unmixing with optional sum-to-one normalization.",
+            summary: "Estimates endmember fractions via non-negative least-squares linear unmixing. Each pixel decomposed as linear combination of endmember spectra with optional sum-to-one normalization. Provides per-pixel material/class abundance estimates and enables sub-pixel classification.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4153,7 +4153,7 @@ impl Tool for MinimumNoiseFractionTool {
         ToolMetadata {
             id: "minimum_noise_fraction",
             display_name: "Minimum Noise Fraction",
-            summary: "Performs MNF transform by noise whitening followed by PCA in whitened space.",
+            summary: "Performs Minimum Noise Fraction (MNF) transform via noise whitening followed by PCA in whitened space. Separates signal from noise by identifying noise correlation structure. MNF components ordered by signal-to-noise ratio with noise concentrating in later components.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4645,7 +4645,7 @@ impl Tool for SpectralLibraryMatchingTool {
         ToolMetadata {
             id: "spectral_library_matching",
             display_name: "Spectral Library Matching",
-            summary: "Matches each pixel spectrum to the closest spectral library signature using SAM or Euclidean distance.",
+            summary: "Matches each pixel spectrum to closest spectral library signature using SAM or Euclidean distance. Returns class membership (best match library ID) and match score (angle/distance). Enables rapid automated material/class identification without manual threshold tuning.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -4981,7 +4981,7 @@ impl Tool for CloudePottierDecompositionTool {
         ToolMetadata {
             id: "cloude_pottier_decomposition",
             display_name: "Cloude-Pottier Decomposition",
-            summary: "Computes Cloude-Pottier H/A/alpha parameters from real symmetric 3x3 covariance/coherency inputs.",
+            summary: "Computes Cloude-Pottier polarimetric decomposition (H, A, alpha) from symmetric 3x3 covariance/coherency matrices. Extracts entropy, anisotropy, and mean-scattering-angle alpha to classify scattering mechanisms. Model-independent approach enables robust characterization across diverse terrain.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -5262,7 +5262,7 @@ impl Tool for FreemanDurdenDecompositionTool {
         ToolMetadata {
             id: "freeman_durden_decomposition",
             display_name: "Freeman-Durden Decomposition",
-            summary: "Computes surface, double-bounce, and volume scattering powers from C3-style inputs with non-physical clipping diagnostics.",
+            summary: "Computes Freeman-Durden 3-component scattering decomposition (surface, double-bounce, volume powers) from C3-style inputs via non-negative least-squares. Includes clipping diagnostics revealing decomposition validity. Physically interpretable for forest height, biomass, and urban characterization.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -5530,7 +5530,7 @@ impl Tool for YamaguchiDecompositionTool {
         ToolMetadata {
             id: "yamaguchi_4component_decomposition",
             display_name: "Yamaguchi 4-Component Decomposition",
-            summary: "Computes 4-component scattering powers (surface, double-bounce, volume, helix) by extending Freeman-Durden with residual helix component.",
+            summary: "Computes Yamaguchi 4-component scattering decomposition (surface, double-bounce, volume, helix) extending Freeman-Durden with residual helix component. More physically complete than 3-component approaches, capturing complex scattering and revealing oriented structures like tilted buildings and vegetation.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![

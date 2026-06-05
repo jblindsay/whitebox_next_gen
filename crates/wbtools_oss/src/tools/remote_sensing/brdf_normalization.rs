@@ -114,7 +114,7 @@ impl Tool for BrdfNormalizationTool {
         ToolMetadata {
             id: "brdf_normalization",
             display_name: "BRDF Normalization",
-            summary: "Normalizes directional reflectance (BRDF) effects in a single optical scene using DEM-derived slope/aspect geometry and C-factor or Minnaert correction. Outputs a normalized reflectance band (or stack) and a per-pixel normalization delta.",
+            summary: "Normalizes directional reflectance (BRDF) effects within single optical scene using DEM-derived slope/aspect and C-factor or Minnaert correction. Removes topographic illumination bias (2-3 NDVI units) that dwarf real spectral differences. Output includes normalized bands and per-pixel correction magnitude.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![

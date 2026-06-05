@@ -976,7 +976,7 @@ impl FlipImageTool {
                 args: example_args,
             }],
             tags: op.tags(),
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3178,7 +3178,7 @@ impl Tool for SplitColourCompositeTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "raster".to_string(), "split_colour_composite".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3284,7 +3284,7 @@ impl Tool for RgbToIhsTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "raster".to_string(), "rgb_to_ihs".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3409,7 +3409,7 @@ impl Tool for IhsToRgbTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "raster".to_string(), "ihs_to_rgb".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3514,7 +3514,7 @@ impl Tool for ChangeVectorAnalysisTool {
                 "change_vector_analysis".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3650,7 +3650,7 @@ impl Tool for WriteFunctionMemoryInsertionTool {
                 "write_function_memory_insertion".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3791,7 +3791,7 @@ impl Tool for PanchromaticSharpeningTool {
                 "panchromatic_sharpening".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3924,7 +3924,7 @@ impl Tool for MosaicTool {
                 "mosaic".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4047,7 +4047,7 @@ impl Tool for MosaicWithFeatheringTool {
                 "mosaic_with_feathering".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4169,7 +4169,7 @@ impl Tool for ResampleTool {
                 "resample".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4337,7 +4337,7 @@ impl Tool for KMeansClusteringTool {
                 "k_means_clustering".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4537,7 +4537,7 @@ impl Tool for ModifiedKMeansClusteringTool {
                 "modified_k_means_clustering".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4726,7 +4726,7 @@ impl Tool for CorrectVignettingTool {
                 "correct_vignetting".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4832,7 +4832,7 @@ impl Tool for ImageStackProfileTool {
                 "image_stack_profile".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4954,7 +4954,7 @@ impl Tool for PiecewiseContrastStretchTool {
                 "piecewise_contrast_stretch".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5077,7 +5077,7 @@ impl Tool for GeneralizeClassifiedRasterTool {
                 "generalize_classified_raster".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5233,7 +5233,7 @@ impl Tool for ImageSliderTool {
                 "image_slider".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -8259,7 +8259,7 @@ impl Tool for MinDistClassificationTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "raster".to_string(), "classification".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -8492,7 +8492,7 @@ impl Tool for ParallelepipedClassificationTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "raster".to_string(), "classification".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -8684,7 +8684,7 @@ impl Tool for CannyEdgeDetectionTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "raster".to_string(), "filter".to_string(), "edge_detection".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -9152,7 +9152,7 @@ impl Tool for EvaluateTrainingSitesTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "classification".to_string(), "report".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -9365,7 +9365,7 @@ impl Tool for GeneralizeWithSimilarityTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "classification".to_string(), "generalization".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -9657,7 +9657,7 @@ impl Tool for ImageSegmentationTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "segmentation".to_string(), "raster".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -10484,7 +10484,7 @@ impl Tool for KnnClassificationTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "classification".to_string(), "knn".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -10698,7 +10698,7 @@ impl Tool for KnnRegressionTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "regression".to_string(), "knn".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -10887,7 +10887,7 @@ impl Tool for FuzzyKnnClassificationTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "classification".to_string(), "knn".to_string(), "fuzzy".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -11094,7 +11094,7 @@ impl Tool for RandomForestClassificationTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "classification".to_string(), "random_forest".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -11266,7 +11266,7 @@ impl Tool for RandomForestRegressionTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "regression".to_string(), "random_forest".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -11969,7 +11969,7 @@ impl Tool for LogisticRegressionTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "classification".to_string(), "logistic_regression".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -12124,7 +12124,7 @@ impl Tool for SvmClassificationTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "classification".to_string(), "svm".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -12337,7 +12337,7 @@ impl Tool for SvmRegressionTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "regression".to_string(), "svm".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -12503,7 +12503,7 @@ impl Tool for NndClassificationTool {
                 args: example,
             }],
             tags: vec!["remote_sensing".to_string(), "classification".to_string(), "nnd".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

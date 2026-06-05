@@ -453,7 +453,7 @@ impl FastAlmostGaussianFilterTool {
                 op.id().to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

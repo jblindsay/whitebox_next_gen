@@ -215,7 +215,7 @@ impl Tool for BilateralFilterTool {
                 "edge-preserving".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -509,7 +509,7 @@ impl Tool for HighPassBilateralFilterTool {
                 "high-pass".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

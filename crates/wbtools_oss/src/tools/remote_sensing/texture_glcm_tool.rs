@@ -427,7 +427,7 @@ impl Tool for GlcmTextureTool {
                 "glcm".to_string(),
                 "raster".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

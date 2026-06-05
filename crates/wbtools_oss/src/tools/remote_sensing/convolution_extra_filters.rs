@@ -715,7 +715,7 @@ impl ScharrFilterTool {
                 args: ex,
             }],
             tags: op.tags(),
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 }

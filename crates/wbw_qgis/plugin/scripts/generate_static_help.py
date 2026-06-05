@@ -457,6 +457,7 @@ def _workflow_pro_license_notice(tool_id: str, pro_marketing: dict[str, dict], i
 
 def generate_html(manifest: dict, curated: dict | None, pro_marketing: dict[str, dict]) -> str:
     tool_id = manifest.get("id", "")
+    display_name = manifest.get("display_name", "")
     summary = manifest.get("summary", "No description available.")
     params = manifest.get("params", [])
     defaults = manifest.get("defaults", {})
@@ -479,6 +480,7 @@ def generate_html(manifest: dict, curated: dict | None, pro_marketing: dict[str,
 
     return (
         f"{_badges(is_pro, stability)}"
+        f"<h1>{display_name or tool_id}</h1>\n"
         f"<p>{effective_summary}</p>\n"
         f"{_tags_line(tags)}"
         f"{pro_narrative}"

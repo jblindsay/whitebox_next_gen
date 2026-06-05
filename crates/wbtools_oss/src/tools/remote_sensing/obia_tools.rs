@@ -288,7 +288,7 @@ impl Tool for SegmentSlicSuperpixelsTool {
                 "segmentation".to_string(),
                 "open-core".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -407,7 +407,7 @@ impl Tool for SegmentGraphFelzenszwalbTool {
                 "segmentation".to_string(),
                 "open-core".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -514,7 +514,7 @@ impl Tool for SegmentsMergeSmallRegionsTool {
                 "postprocess".to_string(),
                 "open-core".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -608,7 +608,7 @@ impl Tool for ObjectFeaturesSpectralBasicTool {
                 "spectral".to_string(),
                 "open-core".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -778,7 +778,7 @@ impl Tool for ObjectFeaturesShapeBasicTool {
                 "shape".to_string(),
                 "open-core".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -945,7 +945,7 @@ impl Tool for ObjectFeaturesTextureGlcmBasicTool {
                 "glcm".to_string(),
                 "open-core".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1166,7 +1166,7 @@ impl Tool for ClassifyObjectsRandomForestTool {
                 "random_forest".to_string(),
                 "open-core".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1377,7 +1377,7 @@ impl Tool for EvaluateObjectClassificationAccuracyTool {
                 "accuracy".to_string(),
                 "open-core".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1580,7 +1580,7 @@ impl Tool for ObiaPipelineBasicTool {
                 "workflow".to_string(),
                 "open-core".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1911,7 +1911,7 @@ impl Tool for SegmentWatershedMarkersTool {
             defaults,
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "segmentation".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1974,7 +1974,7 @@ impl Tool for SegmentMultiresolutionHierarchicalTool {
             defaults,
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "segmentation".to_string(), "hierarchy".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2057,7 +2057,7 @@ impl Tool for SegmentScaleParameterOptimizerTool {
             defaults,
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "segmentation".to_string(), "optimizer".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2164,7 +2164,7 @@ impl Tool for SegmentsSplitLowCohesionTool {
             defaults,
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "segmentation".to_string(), "postprocess".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2221,7 +2221,7 @@ impl Tool for SegmentsToPolygonsTool {
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "conversion".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2275,7 +2275,7 @@ impl Tool for PolygonsToSegmentsTool {
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "conversion".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2332,7 +2332,7 @@ impl Tool for ObjectFeaturesContextNeighborsTool {
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "features".to_string(), "context".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2401,7 +2401,7 @@ impl Tool for ObjectFeaturesTopologyRelationsTool {
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "features".to_string(), "topology".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2555,7 +2555,7 @@ impl Tool for ClassifyObjectsRulesBasicTool {
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "classification".to_string(), "rules".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2693,7 +2693,7 @@ impl Tool for ObjectClassProbabilityMapsTool {
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "classification".to_string(), "uncertainty".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2763,7 +2763,7 @@ impl Tool for ObjectUncertaintyDiagnosticsProTool {
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "uncertainty".to_string(), "qa".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2850,7 +2850,7 @@ impl Tool for BuildObjectHierarchyMultiscaleTool {
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "hierarchy".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2906,7 +2906,7 @@ impl Tool for PropagateLabelsAcrossHierarchyTool {
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "hierarchy".to_string(), "classification".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3037,7 +3037,7 @@ impl Tool for ObjectsBoundaryRefinementProTool {
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "postprocess".to_string(), "boundary".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3106,7 +3106,7 @@ impl Tool for EvaluateSegmentationQualityProTool {
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "qa".to_string(), "segmentation".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3255,7 +3255,7 @@ impl Tool for ObiaBatchOrchestratorProTool {
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "workflow".to_string(), "batch".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3361,7 +3361,7 @@ impl Tool for ObiaAuditReportProTool {
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["remote_sensing".to_string(), "obia".to_string(), "workflow".to_string(), "audit".to_string(), "open-core".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

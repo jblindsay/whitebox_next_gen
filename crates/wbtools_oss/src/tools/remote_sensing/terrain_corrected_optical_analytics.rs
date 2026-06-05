@@ -740,7 +740,7 @@ impl Tool for TerrainCorrectedOpticalTool {
                 "remote_sensing".to_string(),
                 "pro".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

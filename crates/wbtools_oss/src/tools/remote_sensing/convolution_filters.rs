@@ -267,7 +267,7 @@ impl HighPassFilterTool {
                 args: example_args,
             }],
             tags: op.tags(),
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

@@ -677,7 +677,7 @@ impl Tool for DarkObjectSubtractionTool {
                 "dos".to_string(),
                 "atmospheric_correction".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -958,7 +958,7 @@ impl Tool for DnToToaReflectanceTool {
                 "landsat".to_string(),
                 "sentinel2".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1229,7 +1229,7 @@ impl Tool for NdviBasedEmissivityTool {
                 "emissivity".to_string(),
                 "ndvi".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1472,7 +1472,7 @@ impl Tool for PcaBasedChangeDetectionTool {
                 "change_detection".to_string(),
                 "pca".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1911,7 +1911,7 @@ impl Tool for ImageDifferenceChangeDetectionTool {
                 "change_detection".to_string(),
                 "image_difference".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2257,7 +2257,7 @@ impl Tool for PostClassificationChangeTool {
                 "change_detection".to_string(),
                 "post_classification".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2572,7 +2572,7 @@ impl Tool for LandSurfaceTemperatureSingleChannelTool {
                 "lst".to_string(),
                 "single_channel".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3003,7 +3003,7 @@ impl Tool for LandSurfaceTemperatureSplitWindowTool {
                 "lst".to_string(),
                 "split_window".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3514,7 +3514,7 @@ impl Tool for SpectralAngleMapperTool {
                 "hyperspectral".to_string(),
                 "sam".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3750,7 +3750,7 @@ impl Tool for ContinuumRemovalTool {
                 "hyperspectral".to_string(),
                 "continuum".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3994,7 +3994,7 @@ impl Tool for LinearSpectralUnmixingTool {
                 "unmixing".to_string(),
                 "nnls".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4238,7 +4238,7 @@ impl Tool for MinimumNoiseFractionTool {
                 "mnf".to_string(),
                 "noise_whitening".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4751,7 +4751,7 @@ impl Tool for SpectralLibraryMatchingTool {
                 "classification".to_string(),
                 "spectral_library".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5053,7 +5053,7 @@ impl Tool for CloudePottierDecompositionTool {
                 "polsar".to_string(),
                 "decomposition".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5340,7 +5340,7 @@ impl Tool for FreemanDurdenDecompositionTool {
                 "polsar".to_string(),
                 "decomposition".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5602,7 +5602,7 @@ impl Tool for YamaguchiDecompositionTool {
                 "polsar".to_string(),
                 "decomposition".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5836,7 +5836,7 @@ impl Tool for HAlphaWisartClassificationTool {
                 "polsar".to_string(),
                 "classification".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6072,7 +6072,7 @@ impl Tool for WishartIterativeClusteringTool {
                 "clustering".to_string(),
                 "unsupervised".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

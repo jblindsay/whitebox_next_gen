@@ -3156,7 +3156,7 @@ impl Tool for BreachDepressionsLeastCostTool {
 		ToolMetadata {
 			id: "breach_depressions_least_cost",
 			display_name: "Breach Depressions Least Cost",
-			summary: "Breaches depressions in a DEM using a constrained least-cost pathway search.",
+			summary: "Breaches depressions by carving minimal-elevation pathways to neighboring outlets. Efficient terrain correction preserving drainage network connectivity while minimizing vertical impact.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -3264,7 +3264,7 @@ impl Tool for BreachSingleCellPitsTool {
 		ToolMetadata {
 			id: "breach_single_cell_pits",
 			display_name: "Breach Single-Cell Pits",
-			summary: "Breaches single-cell pits in a DEM by carving one-cell channels.",
+			summary: "Quickly eliminates single-cell pits via minimal one-cell carving. Fast targeted approach for isolated pit removal without global terrain modification.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -3318,7 +3318,7 @@ impl Tool for FillDepressionsTool {
 		ToolMetadata {
 			id: "fill_depressions",
 			display_name: "Fill Depressions",
-			summary: "Fills depressions in a DEM using a priority-flood strategy with optional flat resolution.",
+			summary: "Fills depressions via priority-flood algorithm: iteratively fills boundary cells from lowest elevation. Corrects sinks ensuring downslope continuity for hydrologic modeling.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -3393,7 +3393,7 @@ impl Tool for FillDepressionsPlanchonAndDarbouxTool {
 		ToolMetadata {
 			id: "fill_depressions_planchon_and_darboux",
 			display_name: "Fill Depressions (Planchon and Darboux)",
-			summary: "Fills depressions in a DEM with a Planchon-and-Darboux-compatible interface.",
+			summary: "Fills depressions using Planchon-Darboux algorithm: watershed-based flat resolution with minimal elevation increase. Legacy-compatible interface.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -3519,7 +3519,7 @@ impl Tool for FillPitsTool {
 		ToolMetadata {
 			id: "fill_pits",
 			display_name: "Fill Pits",
-			summary: "Fills single-cell pits in a DEM.",
+			summary: "Fills isolated single-cell pits by elevation averaging. Minimal, targeted correction for artifact elimination.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -3575,7 +3575,7 @@ impl Tool for DepthInSinkTool {
 		ToolMetadata {
 			id: "depth_in_sink",
 			display_name: "Depth in Sink",
-			summary: "Measures the depth each DEM cell lies below a depression-filled surface.",
+			summary: "Quantifies sink depth: vertical distance from each cell to depression-filled surface. Indicates depression severity and modification cost.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -3642,7 +3642,7 @@ impl Tool for SinkTool {
 		ToolMetadata {
 			id: "sink",
 			display_name: "Sink",
-			summary: "Identifies cells that belong to topographic depressions in a DEM.",
+			summary: "Delineates sink cells: identifies topographic depressions with no downslope flow path. Critical DEM quality diagnostics.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -3708,7 +3708,7 @@ impl Tool for FlowAccumFullWorkflowTool {
 		ToolMetadata {
 			id: "flow_accum_full_workflow",
 			display_name: "Flow Accum Full Workflow",
-			summary: "Runs a full non-divergent flow-accumulation workflow and returns breached DEM, flow-direction pointer, and accumulation.",
+			summary: "End-to-end flow-accumulation pipeline: breaches DEM, computes D8 flow directions, accumulates to all pixels. Produces corrected DEM, pointer grid, and accumulation raster.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -4147,7 +4147,7 @@ impl Tool for NumInflowingNeighboursTool {
 		ToolMetadata {
 			id: "num_inflowing_neighbours",
 			display_name: "Num Inflowing Neighbours",
-			summary: "Counts the number of inflowing D8 neighbours for each DEM cell.",
+			summary: "Computes in-degree of D8 flow network: counts upslope neighbors contributing flow to each cell. Identifies convergent areas and confluence points.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -4205,7 +4205,7 @@ impl Tool for FindParallelFlowTool {
 		ToolMetadata {
 			id: "find_parallel_flow",
 			display_name: "Find Parallel Flow",
-			summary: "Identifies stream cells that possess parallel D8 flow directions.",
+			summary: "Detects stream cells with multiple D8 neighbors flowing through same direction cell. Flags artificial flow divergence and anomalous DEM artifacts.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -4315,7 +4315,7 @@ impl Tool for EdgeContaminationTool {
 		ToolMetadata {
 			id: "edge_contamination",
 			display_name: "Edge Contamination",
-			summary: "Identifies DEM cells that are edge-contaminated for D8, MFD/FD8, or D-Infinity flow routing.",
+			summary: "Identifies cells affected by edge contamination (unreliable flow routing due to proximity to DEM boundary). Critical validation check before flow analysis.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -4679,7 +4679,7 @@ impl Tool for D8MassFluxTool {
 		ToolMetadata {
 			id: "d8_mass_flux",
 			display_name: "D8 Mass Flux",
-			summary: "Routes mass downslope using D8 flow directions derived from a DEM.",
+			summary: "Routes mass (particles, contaminants, sediment) downslope via D8 directions with efficiency/absorption loss. Simulates material transport in hydrologic systems.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -4863,7 +4863,7 @@ impl Tool for DInfMassFluxTool {
 		ToolMetadata {
 			id: "dinf_mass_flux",
 			display_name: "DInf Mass Flux",
-			summary: "Routes mass downslope using D-Infinity flow directions derived from a DEM.",
+			summary: "Routes mass downslope via D-Infinity multidirectional flow: distributes mass proportionally to all downslope neighbors. More realistic than D8 for divergent terrain.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -5060,7 +5060,7 @@ impl Tool for FlowLengthDiffTool {
 		ToolMetadata {
 			id: "flow_length_diff",
 			display_name: "Flow Length Diff",
-			summary: "Calculates the local maximum absolute difference in downslope flowpath length.",
+			summary: "Quantifies local flowpath divergence: maximum difference in downslope path length among neighbors. Identifies divergent ridges and convergent valleys.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -5233,7 +5233,7 @@ impl Tool for DownslopeFlowpathLengthTool {
 		ToolMetadata {
 			id: "downslope_flowpath_length",
 			display_name: "Downslope Flowpath Length",
-			summary: "Computes downslope flowpath length from each cell to an outlet in a D8 pointer raster.",
+			summary: "Measures distance from each cell downslope to outlet via D8 routing. Cumulative path length along steepest-descent direction.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -5438,7 +5438,7 @@ impl Tool for MaxUpslopeFlowpathLengthTool {
 		ToolMetadata {
 			id: "max_upslope_flowpath_length",
 			display_name: "Max Upslope Flowpath Length",
-			summary: "Computes the maximum upslope flowpath length passing through each DEM cell.",
+			summary: "Measures longest upslope flowpath converging to each cell. Indicates catchment area extent and flow-accumulation potential.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -5553,7 +5553,7 @@ impl Tool for AverageUpslopeFlowpathLengthTool {
 		ToolMetadata {
 			id: "average_upslope_flowpath_length",
 			display_name: "Average Upslope Flowpath Length",
-			summary: "Computes the average upslope flowpath length passing through each DEM cell.",
+			summary: "Measures mean upslope flowpath length to each cell: average path length from all contributing upslope areas. Captures distributed catchment structure.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -5797,7 +5797,7 @@ impl Tool for ElevationAboveStreamTool {
 		ToolMetadata {
 			id: "elevation_above_stream",
 			display_name: "Elevation Above Stream",
-			summary: "Computes elevation above nearest stream measured along downslope flow paths.",
+			summary: "Measures vertical relief: elevation difference from each cell to nearest downstream stream via D8 routing. Captures hillslope elevation structure.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -5914,7 +5914,7 @@ impl Tool for ElevationAboveStreamEuclideanTool {
 		ToolMetadata {
 			id: "elevation_above_stream_euclidean",
 			display_name: "Elevation Above Stream Euclidean",
-			summary: "Computes elevation above nearest stream using straight-line (Euclidean) proximity.",
+			summary: "Measures vertical relief via Euclidean distance: elevation difference to nearest stream (spatial, not flow-path distance). Fast proxy for hydrologic connectivity.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -6046,7 +6046,7 @@ impl Tool for DownslopeDistanceToStreamTool {
 		ToolMetadata {
 			id: "downslope_distance_to_stream",
 			display_name: "Downslope Distance To Stream",
-			summary: "Computes downslope distance from each DEM cell to nearest stream along flow paths.",
+			summary: "Measures travel distance along downslope flowpaths from each cell to nearest downstream stream. Captures flow-following proximity.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -6256,7 +6256,7 @@ impl Tool for DepthToWaterTool {
 		ToolMetadata {
 			id: "depth_to_water",
 			display_name: "Depth To Water",
-			summary: "Computes cartographic depth-to-water using least-cost accumulation from stream/lake source features.",
+			summary: "Computes cartographic depth-to-water: least-cost distance from each cell to nearest stream/lake feature. Integrates vector sources with raster terrain.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -6409,7 +6409,7 @@ impl Tool for FillBurnTool {
 		ToolMetadata {
 			id: "fill_burn",
 			display_name: "Fill Burn",
-			summary: "Hydro-enforces a DEM by burning streams and then filling depressions.",
+			summary: "Hydro-enforces DEM: burns stream vector into elevation model then fills depressions. Ensures channel continuity and hydrologically sound flow paths.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -6500,7 +6500,7 @@ impl Tool for BurnStreamsAtRoadsTool {
 		ToolMetadata {
 			id: "burn_streams_at_roads",
 			display_name: "Burn Streams At Roads",
-			summary: "Lowers stream elevations near stream-road crossings to breach road embankments in a DEM.",
+			summary: "Breaches road embankments in DEM: lowers stream elevations at road crossings to restore hydrologic connectivity across infrastructure.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -9461,7 +9461,7 @@ impl Tool for BasinsTool {
 		ToolMetadata {
 			id: "basins",
 			display_name: "Basins",
-			summary: "Delineates all D8 drainage basins that drain to valid-data edges.",
+			summary: "Delineates drainage basins: each pixel labeled by outlet basin ID following D8 flow network. Fundamental hydrologic unit for catchment analysis.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -9545,7 +9545,7 @@ impl Tool for WatershedFromRasterPourPointsTool {
 		ToolMetadata {
 			id: "watershed_from_raster_pour_points",
 			display_name: "Watershed from Raster Pour Points",
-			summary: "Delineates watersheds from a D8 pointer and a raster of pour-point outlet IDs.",
+			summary: "Delineates watersheds for point outlets identified in raster (outlet ID in cell value). Batch watershed extraction for multiple pour points.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -9635,7 +9635,7 @@ impl Tool for WatershedTool {
 		ToolMetadata {
 			id: "watershed",
 			display_name: "Watershed",
-			summary: "Delineates watersheds from a D8 pointer and vector pour points.",
+			summary: "Delineates watersheds for each outlet point from vector pour-points and D8 flow network. Standard hydrologic unit extraction tool.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -10149,7 +10149,7 @@ impl Tool for SubbasinsTool {
 		ToolMetadata {
 			id: "subbasins",
 			display_name: "Subbasins",
-			summary: "Identifies the catchment area of each stream link (sub-basins) in a D8 stream network.",
+			summary: "Delineates stream-segment catchments: each stream link labeled with contributing upslope area. Enables stream-network analysis and reach-level hydrology.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -10235,7 +10235,7 @@ impl Tool for HillslopesTool {
 		ToolMetadata {
 			id: "hillslopes",
 			display_name: "Hillslopes",
-			summary: "Identifies hillslope regions draining to each stream link, separating left- and right-bank areas.",
+			summary: "Separates hillslope regions adjacent to streams: left- and right-bank hillslopes draining to each stream reach. Enables distributed hillslope analysis.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -10399,7 +10399,7 @@ impl Tool for StrahlerOrderBasinsTool {
 		ToolMetadata {
 			id: "strahler_order_basins",
 			display_name: "Strahler Order Basins",
-			summary: "Delineates watershed basins labelled by the Horton-Strahler order of their draining stream link.",
+			summary: "Classifies watersheds by Horton-Strahler stream order: labels basins by magnitude of main draining stream. Enables hierarchical stream-network analysis.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -10628,7 +10628,7 @@ impl Tool for IsobasinsTool {
 		ToolMetadata {
 			id: "isobasins",
 			display_name: "Isobasins",
-			summary: "Divides a landscape into approximately equal-sized watersheds (isobasins) based on a target area threshold.",
+			summary: "Partitions landscape into approximately equal-area basins (isobasins) meeting target size threshold. Standardized units for regional hydrologic analysis.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![

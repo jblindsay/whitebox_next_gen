@@ -1191,6 +1191,59 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
         }
     
     except RuntimeBootstrapError as exc:
+        # Strategy 3 (Fallback): If whiteboxgeo.com fails, try external Python with pip
+        try:
+            external_candidates = _discover_external_python_candidates()
+            for external_py in external_candidates:
+                try:
+                    # Test if this Python has pip
+                    test = subprocess.run(
+                        [external_py, "-m", "pip", "--version"],
+                        capture_output=True,
+                        timeout=2,
+                        **_subprocess_window_kwargs(),
+                    )
+                    if test.returncode != 0:
+                        continue
+                    
+                    # Found a working pip, try to install
+                    package_spec = "whitebox-workflows"
+                    command = [external_py, "-m", "pip", "install"]
+                    if upgrade:
+                        command.append("--upgrade")
+                    command.append(package_spec)
+                    
+                    completed = subprocess.run(
+                        command,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        env=_build_clean_env(),
+                        **_subprocess_window_kwargs(),
+                    )
+                    
+                    if completed.returncode == 0:
+                        installed = ""
+                        try:
+                            installed = _get_installed_whitebox_workflows_version_for_interpreter(external_py)
+                        except Exception:
+                            installed = ""
+                        
+                        _EXTERNAL_SESSION_CACHE.clear()
+                        
+                        return {
+                            "interpreter": external_py,
+                            "installed_version": installed,
+                            "upgraded": bool(upgrade),
+                            "strategy": "pip_fallback",
+                            "note": f"Installed via external Python: {external_py}",
+                        }
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        
+        # All strategies failed
         raise exc
     except Exception as exc:
         raise RuntimeBootstrapError(

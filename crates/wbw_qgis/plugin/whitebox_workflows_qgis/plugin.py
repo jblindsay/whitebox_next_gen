@@ -1422,7 +1422,7 @@ class WhiteboxWorkflowsPlugin:
         if not self._confirm(
             "Install Whitebox Workflows Backend",
             "The whitebox_workflows backend is not installed.\n\n"
-            "Install it now using pip?\n\n"
+            "Install it now?\n\n"
             f"{detail}",
         ):
             return False

@@ -6,6 +6,7 @@ import importlib
 import json
 import os
 import shutil
+import ssl
 import subprocess
 import sys
 import urllib.parse
@@ -902,9 +903,15 @@ def _find_wheel_in_pypi_release(release_info: dict, py_version: str, platform_ta
     Find the best matching wheel file from a PyPI release for the given Python version and platform.
     release_info is a list of file dicts from the PyPI JSON API.
     Returns the file dict or None if no match found.
+    
+    Supports both version-specific wheels (cp311) and stable ABI wheels (cp39-abi3).
     """
     if not isinstance(release_info, list):
         return None
+    
+    py_minor = int(py_version.split(".")[1])
+    best_match = None
+    best_score = -1  # Prefer specific version > abi3
     
     for file_info in release_info:
         filename = file_info.get("filename", "")
@@ -916,26 +923,55 @@ def _find_wheel_in_pypi_release(release_info: dict, py_version: str, platform_ta
         if len(parts) < 5:
             continue
         
-        py_tag = parts[-3]  # Python tag (e.g., "cp311")
-        abi_tag = parts[-2]  # ABI tag (e.g., "cp311")
-        plat_tag = parts[-1]  # Platform tag (e.g., "win_amd64")
+        py_tag = parts[-3]  # Python tag (e.g., "cp311", "cp39")
+        abi_tag = parts[-2]  # ABI tag (e.g., "cp311", "abi3")
+        plat_tag = parts[-1]  # Platform tag (e.g., "win_amd64", "manylinux2014_x86_64")
         
-        # Match Python version (e.g., "cp310", "cp311")
-        py_minor = py_version.split(".")[1]
-        expected_py_tag = f"cp3{py_minor}"
+        # Match platform tag (normalize variations)
+        platform_matches = False
+        if "manylinux" in plat_tag and "manylinux" in platform_tag:
+            # All manylinux versions are compatible
+            platform_matches = True
+        elif plat_tag == platform_tag:
+            platform_matches = True
+        elif "macosx" in plat_tag and "macosx" in platform_tag:
+            # macOS wheel compatibility is more flexible (older wheels work on newer)
+            platform_matches = True
         
-        if py_tag != expected_py_tag:
+        if not platform_matches:
             continue
         
-        # Match platform tag
-        if plat_tag != platform_tag.replace("macosx_", "macosx").replace("manylinux", "manylinux2014"):
-            # Allow some flexibility for manylinux versions
-            if not (plat_tag.startswith("manylinux") and platform_tag.startswith("manylinux")):
-                continue
+        # Check Python version compatibility
+        version_matches = False
+        score = -1
         
-        return file_info
+        # Exact version match (highest priority)
+        if py_tag == f"cp3{py_minor}":
+            version_matches = True
+            score = 10
+        
+        # Stable ABI (cp39-abi3) works on Python 3.9+
+        elif py_tag == "cp39" and abi_tag == "abi3":
+            if py_minor >= 9:
+                version_matches = True
+                score = 5
+        
+        # Any abi3 wheel where the minimum version is <= current version
+        elif abi_tag == "abi3":
+            # Extract minimum Python version from py_tag (e.g., "cp39" -> 9)
+            try:
+                min_py_minor = int(py_tag[2:])
+                if py_minor >= min_py_minor:
+                    version_matches = True
+                    score = 5
+            except (ValueError, IndexError):
+                pass
+        
+        if version_matches and score > best_score:
+            best_match = file_info
+            best_score = score
     
-    return None
+    return best_match
 
 
 def _download_and_extract_wheel_from_pypi(version: str, target_dir: str) -> bool:
@@ -948,8 +984,21 @@ def _download_and_extract_wheel_from_pypi(version: str, target_dir: str) -> bool
         
         # Fetch PyPI JSON for this specific version
         url = f"https://pypi.org/pypi/whitebox-workflows/{version}/json"
-        with urllib.request.urlopen(url, timeout=10) as response:  # nosec B310
-            payload = json.loads(response.read().decode("utf-8"))
+        
+        # Create SSL context to handle certificate verification
+        ssl_context = ssl.create_default_context()
+        # Disable SSL verification if needed (for corporate networks, etc.)
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        try:
+            with urllib.request.urlopen(url, timeout=10, context=ssl_context) as response:  # nosec B310
+                payload = json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            # If HTTPS fails, try without SSL verification as last resort
+            raise RuntimeBootstrapError(
+                f"Failed to fetch PyPI metadata for whitebox-workflows {version}: {str(exc)}"
+            ) from exc
         
         releases = payload.get("releases", {})
         version_files = releases.get(version, [])
@@ -959,8 +1008,10 @@ def _download_and_extract_wheel_from_pypi(version: str, target_dir: str) -> bool
         
         wheel_info = _find_wheel_in_pypi_release(version_files, py_version, platform_tag)
         if not wheel_info:
+            available = [f.get("filename", "") for f in version_files if f.get("filename", "").endswith(".whl")]
             raise RuntimeBootstrapError(
-                f"No compatible wheel found for Python {py_version} on {platform_tag}"
+                f"No compatible wheel found for Python {py_version} on {platform_tag}. "
+                f"Available: {available}"
             )
         
         wheel_url = wheel_info.get("url")

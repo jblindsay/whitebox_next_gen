@@ -3456,7 +3456,7 @@ impl Tool for FillDepressionsWangAndLiuTool {
 		ToolMetadata {
 			id: "fill_depressions_wang_and_liu",
 			display_name: "Fill Depressions (Wang and Liu)",
-			summary: "Fills depressions in a DEM with a Wang-and-Liu-compatible interface.",
+			summary: "Implements Wang-and-Liu depression-filling algorithm: efficient iteration eliminating sinks without excessive elevation changes. Alternative method for hydrologic conditioning.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -6574,7 +6574,7 @@ impl Tool for TraceDownslopeFlowpathsTool {
 		ToolMetadata {
 			id: "trace_downslope_flowpaths",
 			display_name: "Trace Downslope Flowpaths",
-			summary: "Traces downslope D8 flowpaths from seed points and outputs a visit-count raster.",
+			summary: "Routes flow paths downslope from seed point sources via D8 pointer. Outputs visit-count raster: cells weighted by number of source-initiated paths flowing through them.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -6681,7 +6681,7 @@ impl Tool for FloodOrderTool {
 		ToolMetadata {
 			id: "flood_order",
 			display_name: "Flood Order",
-			summary: "Computes flood order as the priority-flood visitation order from DEM edges inward.",
+			summary: "Computes priority-flood processing order: sequence in which cells are visited processing from DEM boundaries inward. Enables efficient hydrologic algorithms.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -6812,7 +6812,7 @@ impl Tool for InsertDamsTool {
 		ToolMetadata {
 			id: "insert_dams",
 			display_name: "Insert Dams",
-			summary: "Inserts local dam embankments at point locations using a maximum dam length.",
+			summary: "Constructs dam embankments at point locations with maximum length constraint. Modifies elevation profile to create impoundments for water-retention analysis.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -7050,7 +7050,7 @@ impl Tool for RaiseWallsTool {
 		ToolMetadata {
 			id: "raise_walls",
 			display_name: "Raise Walls",
-			summary: "Raises DEM elevations along wall line features, with optional breach lines.",
+			summary: "Raises DEM elevations along wall line features (embankments, levees). Optional breach lines allow controlled spillover points in wall networks.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -7191,7 +7191,7 @@ impl Tool for TopologicalBreachBurnTool {
 		ToolMetadata {
 			id: "topological_breach_burn",
 			display_name: "Topological Breach Burn",
-			summary: "Performs stream burning with topological safeguards and returns streams, burned DEM, D8 pointer, and D8 accumulation outputs.",
+			summary: "Integrates stream burning with complete workflow: burns stream network, conditions DEM, computes D8 flow routing and accumulation. Enforces hydrologic validity throughout.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -7535,7 +7535,7 @@ impl Tool for StochasticDepressionAnalysisTool {
 		ToolMetadata {
 			id: "stochastic_depression_analysis",
 			display_name: "Stochastic Depression Analysis",
-			summary: "Estimates per-cell probability of depression occurrence under a stochastic DEM error model.",
+			summary: "Quantifies depression uncertainty: Monte Carlo sampling of DEM error model (RMSE, spatial autocorrelation) estimates per-cell depression probability. Confidence metric for pit-filling.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -7665,7 +7665,7 @@ impl Tool for UnnestBasinsTool {
 		ToolMetadata {
 			id: "unnest_basins",
 			display_name: "Unnest Basins",
-			summary: "Delineates complete nested basins for pour points and returns one raster per nesting order.",
+			summary: "Extracts nested basin hierarchy for each pour point: generates separate raster for each nesting level from outlet to upstream source. Multi-scale watershed analysis.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -7832,7 +7832,7 @@ impl Tool for UpslopeDepressionStorageTool {
 		ToolMetadata {
 			id: "upslope_depression_storage",
 			display_name: "Upslope Depression Storage",
-			summary: "Estimates average upslope depression-storage depth from a DEM.",
+			summary: "Maps average depression-storage depth available in upslope regions. Captures subsurface runoff-delay and infiltration-retention capacity of upstream catchment.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -7967,7 +7967,7 @@ impl Tool for FlattenLakesTool {
 		ToolMetadata {
 			id: "flatten_lakes",
 			display_name: "Flatten Lakes",
-			summary: "Sets lake-polygon interior elevations to each lake's minimum perimeter elevation.",
+			summary: "Flattens lake surfaces: sets each polygon interior to outlet elevation (minimum of perimeter). Creates hydrologically consistent open-water surface representation.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -8072,7 +8072,7 @@ impl Tool for HydrologicConnectivityTool {
 		ToolMetadata {
 			id: "hydrologic_connectivity",
 			display_name: "Hydrologic Connectivity",
-			summary: "Calculates downslope unsaturated length (DUL) and upslope disconnected saturated area (UDSA).",
+			summary: "Quantifies hydrologic connectivity: downslope unsaturated length (DUL) to streams and upslope disconnected saturated area (UDSA) in runoff generation zones.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -8473,7 +8473,7 @@ impl Tool for ImpoundmentSizeIndexTool {
 		ToolMetadata {
 			id: "impoundment_size_index",
 			display_name: "Impoundment Size Index",
-			summary: "Estimates impoundment metrics for potential dams of a maximum length at each DEM cell.",
+			summary: "Evaluates dam potential: estimates flood-surface area, volume, depth, and dam height for dams of maximum length at each cell. Spatial water-retention assessment.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -8920,7 +8920,7 @@ impl Tool for AverageFlowpathSlopeTool {
 		ToolMetadata {
 			id: "average_flowpath_slope",
 			display_name: "Average Flowpath Slope",
-			summary: "Calculates average slope gradient of flowpaths passing through each DEM cell.",
+			summary: "Averages flowpath gradient: mean slope of all D8 paths passing through each cell from ridges to outlets. Captures flow-velocity potential and terrain declivity.",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -9067,7 +9067,7 @@ impl Tool for MaxUpslopeValueTool {
 		ToolMetadata {
 			id: "max_upslope_value",
 			display_name: "Max Upslope Value",
-			summary: "Propagates maximum upslope value along D8 flowpaths over a DEM.",
+			summary: "Routes maximum upslope attribute: propagates maximum value from all upslope cells through D8 network. Captures worst-case upstream conditions (pollution, precipitation, relief).",
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -9194,7 +9194,7 @@ impl Tool for LongestFlowpathTool {
 		ToolMetadata {
 			id: "longest_flowpath",
 			display_name: "Longest Flowpath",
-			summary: "Delineates longest flowpath lines for each basin in a basin raster.",
+			summary: "Extracts longest flowpath for each basin: single vector line from furthest upslope source to basin outlet. Hydrologic axis representing maximum travel distance.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -9727,7 +9727,7 @@ impl Tool for JensonSnapPourPointsTool {
 		ToolMetadata {
 			id: "jenson_snap_pour_points",
 			display_name: "Jenson Snap Pour Points",
-			summary: "Snaps each pour point to the nearest stream cell within a search distance, preserving all input attributes.",
+			summary: "Relocates pour points to nearest stream within search radius (Jenson method). Aligns observation locations with active drainage network while preserving attributes.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![
@@ -9864,7 +9864,7 @@ impl Tool for SnapPourPointsTool {
 		ToolMetadata {
 			id: "snap_pour_points",
 			display_name: "Snap Pour Points",
-			summary: "Snaps pour points to the highest flow-accumulation cell within a search distance.",
+			summary: "Relocates pour points to peak flow-accumulation cells within search radius. Aligns outlets with highest-concentration flow paths for accurate watershed delineation.",
 			category: ToolCategory::Hydrology,
 			license_tier: LicenseTier::Open,
 			params: vec![

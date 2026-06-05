@@ -9,6 +9,7 @@ import shutil
 import ssl
 import subprocess
 import sys
+import tempfile
 import urllib.parse
 import urllib.request
 import zipfile
@@ -974,70 +975,115 @@ def _find_wheel_in_pypi_release(release_info: dict, py_version: str, platform_ta
     return best_match
 
 
-def _download_and_extract_wheel_from_pypi(version: str, target_dir: str) -> bool:
+def _get_os_wheel_platform() -> str:
     """
-    Download whitebox-workflows wheel from PyPI and extract to target_dir.
-    Returns True if successful, False otherwise.
+    Return the OS identifier for whiteboxgeo.com wheel downloads.
+    Returns: "macos", "ubuntu", or "windows"
+    """
+    if sys.platform == "win32":
+        return "windows"
+    elif sys.platform == "darwin":
+        return "macos"
+    else:  # Linux
+        return "ubuntu"
+
+
+def _download_and_extract_wheel_from_whiteboxgeo(target_dir: str) -> bool:
+    """
+    Download whitebox-workflows wheel from whiteboxgeo.com and extract to target_dir.
+    
+    Strategy:
+    1. Determine OS (macos, ubuntu, windows)
+    2. Download the OS-specific ZIP file from whiteboxgeo.com
+    3. Extract the wheel from the ZIP
+    4. Find and extract the matching wheel to target_dir
     """
     try:
-        py_version, platform_tag = _get_python_version_tag()
+        os_platform = _get_os_wheel_platform()
+        py_version, _ = _get_python_version_tag()
         
-        # Fetch PyPI JSON for this specific version
-        url = f"https://pypi.org/pypi/whitebox-workflows/{version}/json"
+        # Construct download URL for OS-specific ZIP
+        zip_url = f"https://www.whiteboxgeo.com/wbw_wheels/wbw-python-pro-{os_platform}-latest.zip"
         
-        # Create SSL context to handle certificate verification
+        # Create SSL context
         ssl_context = ssl.create_default_context()
-        # Disable SSL verification if needed (for corporate networks, etc.)
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
         
-        try:
-            with urllib.request.urlopen(url, timeout=10, context=ssl_context) as response:  # nosec B310
-                payload = json.loads(response.read().decode("utf-8"))
-        except Exception as exc:
-            # If HTTPS fails, try without SSL verification as last resort
-            raise RuntimeBootstrapError(
-                f"Failed to fetch PyPI metadata for whitebox-workflows {version}: {str(exc)}"
-            ) from exc
-        
-        releases = payload.get("releases", {})
-        version_files = releases.get(version, [])
-        
-        if not version_files:
-            raise RuntimeBootstrapError(f"No files found for whitebox-workflows {version} on PyPI")
-        
-        wheel_info = _find_wheel_in_pypi_release(version_files, py_version, platform_tag)
-        if not wheel_info:
-            available = [f.get("filename", "") for f in version_files if f.get("filename", "").endswith(".whl")]
-            raise RuntimeBootstrapError(
-                f"No compatible wheel found for Python {py_version} on {platform_tag}. "
-                f"Available: {available}"
-            )
-        
-        wheel_url = wheel_info.get("url")
-        wheel_filename = wheel_info.get("filename")
-        if not wheel_url or not wheel_filename:
-            raise RuntimeBootstrapError("Invalid wheel info from PyPI")
-        
-        # Download wheel
-        wheel_path = os.path.join(target_dir, wheel_filename)
-        urllib.request.urlretrieve(wheel_url, wheel_path)
-        
-        if not os.path.exists(wheel_path):
-            raise RuntimeBootstrapError(f"Wheel not downloaded to {wheel_path}")
-        
-        # Extract wheel
-        with zipfile.ZipFile(wheel_path, "r") as zip_ref:
-            zip_ref.extractall(target_dir)
-        
-        # Clean up wheel file
-        os.remove(wheel_path)
+        # Download ZIP file
+        with tempfile.TemporaryDirectory() as temp_dir:
+            zip_path = os.path.join(temp_dir, f"wbw-wheels-{os_platform}.zip")
+            urllib.request.urlretrieve(zip_url, zip_path)
+            
+            if not os.path.exists(zip_path):
+                raise RuntimeBootstrapError(f"Failed to download wheel package from {zip_url}")
+            
+            # Extract ZIP to temp directory
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_ref.extractall(temp_dir)
+            
+            # Find all wheel files in the extracted contents
+            wheel_files = []
+            for root, dirs, files in os.walk(temp_dir):
+                for file in files:
+                    if file.endswith(".whl"):
+                        wheel_files.append(os.path.join(root, file))
+            
+            if not wheel_files:
+                raise RuntimeBootstrapError(
+                    f"No wheel files found in downloaded package from {zip_url}"
+                )
+            
+            # Find the best matching wheel for current Python version
+            # Try to find an exact or abi3 match
+            best_wheel = None
+            py_minor = int(py_version.split(".")[1])
+            
+            for wheel_path in wheel_files:
+                wheel_filename = os.path.basename(wheel_path)
+                
+                # Parse wheel filename: {dist}-{version}-{python tag}-{abi tag}-{platform tag}.whl
+                parts = wheel_filename[:-4].split("-")
+                if len(parts) < 5:
+                    continue
+                
+                py_tag = parts[-3]
+                abi_tag = parts[-2]
+                
+                # Check for exact version match or abi3 wheel
+                if py_tag == f"cp3{py_minor}":
+                    best_wheel = wheel_path
+                    break
+                elif py_tag == "cp39" and abi_tag == "abi3" and not best_wheel:
+                    # Keep abi3 wheel as fallback
+                    best_wheel = wheel_path
+                elif abi_tag == "abi3":
+                    # Any abi3 wheel where min version <= current version
+                    try:
+                        min_py_minor = int(py_tag[2:])
+                        if py_minor >= min_py_minor and not best_wheel:
+                            best_wheel = wheel_path
+                    except (ValueError, IndexError):
+                        pass
+            
+            if not best_wheel:
+                available = [os.path.basename(f) for f in wheel_files]
+                raise RuntimeBootstrapError(
+                    f"No compatible wheel found for Python {py_version}. "
+                    f"Available: {available}"
+                )
+            
+            # Extract the selected wheel to target_dir
+            with zipfile.ZipFile(best_wheel, "r") as wheel_ref:
+                wheel_ref.extractall(target_dir)
         
         return True
     
+    except RuntimeBootstrapError:
+        raise
     except Exception as exc:
         raise RuntimeBootstrapError(
-            f"Failed to download/extract whitebox-workflows wheel from PyPI: {str(exc)}"
+            f"Failed to download/extract whitebox-workflows from whiteboxgeo.com: {str(exc)}"
         ) from exc
 
 
@@ -1122,15 +1168,12 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
                 "strategy": "pip",
             }
     
-    # Strategy 2: Use wheel download/extract for QGIS bundled Python
+    # Strategy 2: Use wheel download/extract from whiteboxgeo.com for QGIS bundled Python
     try:
-        if target_version == "latest":
-            target_version = fetch_latest_whitebox_workflows_version()
-        
         # Get plugin directory to extract wheel
         plugin_dir = os.path.dirname(os.path.realpath(__file__))
         
-        _download_and_extract_wheel_from_pypi(target_version, plugin_dir)
+        _download_and_extract_wheel_from_whiteboxgeo(plugin_dir)
         
         installed = ""
         try:
@@ -1144,14 +1187,14 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
             "interpreter": interpreter,
             "installed_version": installed,
             "upgraded": bool(upgrade),
-            "strategy": "wheel",
+            "strategy": "wheel_whiteboxgeo",
         }
     
     except RuntimeBootstrapError as exc:
         raise exc
     except Exception as exc:
         raise RuntimeBootstrapError(
-            f"Failed to install whitebox-workflows via wheel: {str(exc)}"
+            f"Failed to install whitebox-workflows from whiteboxgeo.com: {str(exc)}"
         ) from exc
 
 

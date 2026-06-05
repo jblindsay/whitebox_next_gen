@@ -1353,7 +1353,7 @@ impl Tool for TopographicHachuresTool {
         ToolMetadata {
             id: "topographic_hachures",
             display_name: "Topographic Hachures",
-            summary: "Creates topographic hachure polylines from a raster surface.",
+            summary: "Topographic hachure generation: creates directional line patterns indicating slope steepness from DEM; line density/orientation encodes terrain angle. Publication-quality terrain visualization. Applications: topographic mapping, slope visualization, terrain communication.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1531,7 +1531,7 @@ impl Tool for ContoursFromRasterTool {
         ToolMetadata {
             id: "contours_from_raster",
             display_name: "Contours From Raster",
-            summary: "Creates contour polylines from an input raster surface.",
+            summary: "Contour line extraction: generates elevation contours from raster DEM at specified interval; polyline output preserves elevation topology with smooth interpolation. Applications: hypsographic mapping, elevation analysis, 3D terrain models.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -1638,7 +1638,7 @@ impl Tool for ContoursFromPointsTool {
         ToolMetadata {
             id: "contours_from_points",
             display_name: "Contours From Points",
-            summary: "Creates contour polylines from point elevations using Delaunay triangulation.",
+            summary: "Contour generation from point clouds: interpolates point elevations via Delaunay TIN; extracts contours at specified interval. Point-to-surface-to-contour workflow. Applications: sparse elevation data, surveyed points, interpolated surfaces.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![

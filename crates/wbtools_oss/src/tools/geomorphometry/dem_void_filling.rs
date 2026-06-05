@@ -92,7 +92,7 @@ impl DemVoidFillingCore {
         ToolMetadata {
             id: "dem_void_filling",
             display_name: "DEM Void Filling",
-            summary: "Fills voids in a DEM by fusing elevations from a secondary fill DEM with seamless edge transitions.",
+            summary: "DEM void filling via secondary surface fusion: interpolates missing data using fill DEM; applies blending at void boundaries for seamless integration. Applications: gap-fill for satellite/LIDAR DEMs, multi-source DEM fusion.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![

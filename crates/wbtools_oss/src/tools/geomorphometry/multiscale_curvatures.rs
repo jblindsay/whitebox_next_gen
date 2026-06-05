@@ -1051,7 +1051,7 @@ impl Tool for MultiscaleCurvaturesTool {
         ToolMetadata {
             id: "multiscale_curvatures",
             display_name: "Multiscale Curvatures",
-            summary: "Calculates multiscale curvatures and curvature indices using Gaussian scale-space smoothing.",
+            summary: "Scale-dependent curvature analysis: computes multiple curvature types across Gaussian smoothing scales; reveals characteristic terrain scales. Applications: landform classification, scale-dependent feature detection, terrain characterization.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![

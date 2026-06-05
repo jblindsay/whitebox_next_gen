@@ -86,7 +86,7 @@ impl HydrologicIndexCore {
         ToolMetadata {
             id: "relative_stream_power_index",
             display_name: "Relative Stream Power Index",
-            summary: "Calculates the relative stream power index from specific catchment area and slope.",
+            summary: "Stream power potential index: product of specific catchment area and slope; predicts erosive energy within drainage network. Applications: gully erosion prediction, stream network delineation, erosion hotspot mapping.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -136,7 +136,7 @@ impl HydrologicIndexCore {
         ToolMetadata {
             id: "sediment_transport_index",
             display_name: "Sediment Transport Index",
-            summary: "Calculates the sediment transport index (LS factor) from specific catchment area and slope.",
+            summary: "Sediment transport capacity (LS factor): hillslope length-steepness factor; predicts erosion susceptibility from flow accumulation/slope exponents. Applications: USLE soil loss prediction, erosion vulnerability assessment, sediment budget modeling.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -189,7 +189,7 @@ impl HydrologicIndexCore {
         ToolMetadata {
             id: "elev_relative_to_watershed_min_max",
             display_name: "Elev Relative To Watershed Min Max",
-            summary: "Calculates a DEM cell's relative elevation position within each watershed as a percentage.",
+            summary: "Watershed relative elevation: normalized position of cell between min/max within watershed (0-100% scale); hypsometric position metric. Applications: flowpath characterization, watershed stratification, elevation zoning.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![

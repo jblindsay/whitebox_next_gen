@@ -1124,14 +1124,16 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
     
     Strategy 3: If both fail, return error with manual install instructions
     
-    Returns dict with 'installed_version' and 'strategy' keys.
+    Returns dict with 'installed_version', 'strategy', and 'diagnostics' keys.
     """
     interpreter = get_backend_interpreter_path()
     plugin_dir = os.path.dirname(os.path.realpath(__file__))
+    diagnostics = []
     
     # ===========================================================================
     # STRATEGY 1: Always try whiteboxgeo.com first (QGIS Python is guaranteed)
     # ===========================================================================
+    diagnostics.append("Strategy 1: Attempting whiteboxgeo.com wheel download/extract...")
     try:
         _download_and_extract_wheel_from_whiteboxgeo(plugin_dir)
         
@@ -1142,6 +1144,7 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
             installed = ""
         
         _EXTERNAL_SESSION_CACHE.clear()
+        diagnostics.append("✓ Strategy 1 succeeded (whiteboxgeo.com)")
         
         return {
             "interpreter": interpreter,
@@ -1149,18 +1152,22 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
             "upgraded": bool(upgrade),
             "strategy": "whiteboxgeo_wheel",
             "location": "QGIS bundled Python (plugin directory)",
+            "diagnostics": "\n".join(diagnostics),
         }
     
     except Exception as strategy1_error:
-        pass  # Fall through to Strategy 2
+        diagnostics.append(f"✗ Strategy 1 failed: {str(strategy1_error)[:200]}")
     
     # ===========================================================================
     # STRATEGY 2: If whiteboxgeo.com fails, search for system Python + pip
     # ===========================================================================
+    diagnostics.append("Strategy 2: Searching for external Python with pip...")
     try:
         external_candidates = _discover_external_python_candidates()
+        diagnostics.append(f"  Found {len(external_candidates)} external Python candidate(s)")
         
-        for external_py in external_candidates:
+        for idx, external_py in enumerate(external_candidates, 1):
+            diagnostics.append(f"  Candidate {idx}: {external_py}")
             try:
                 # Test if this Python has pip
                 test = subprocess.run(
@@ -1170,7 +1177,10 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
                     **_subprocess_window_kwargs(),
                 )
                 if test.returncode != 0:
+                    diagnostics.append(f"    → No pip (return code {test.returncode})")
                     continue
+                
+                diagnostics.append(f"    → Has pip, installing...")
                 
                 # Found a working pip—try to install from PyPI
                 package_spec = "whitebox-workflows"
@@ -1196,6 +1206,7 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
                         installed = ""
                     
                     _EXTERNAL_SESSION_CACHE.clear()
+                    diagnostics.append(f"✓ Strategy 2 succeeded (pip via {external_py})")
                     
                     return {
                         "interpreter": external_py,
@@ -1203,19 +1214,25 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
                         "upgraded": bool(upgrade),
                         "strategy": "pip_system_python",
                         "location": f"System Python: {external_py}",
+                        "diagnostics": "\n".join(diagnostics),
                     }
-            except Exception:
+                else:
+                    diagnostics.append(f"    → pip install failed (return code {completed.returncode})")
+            except Exception as e:
+                diagnostics.append(f"    → Exception: {str(e)[:100]}")
                 continue
-    except Exception:
-        pass  # Fall through to Strategy 3
+    except Exception as e:
+        diagnostics.append(f"Strategy 2 exception: {str(e)[:200]}")
     
     # ===========================================================================
     # STRATEGY 3: Both failed—provide helpful manual install instructions
     # ===========================================================================
+    diagnostics.append("✗ All strategies failed")
     manual_instructions = _generate_manual_install_instructions()
     
     raise RuntimeBootstrapError(
         f"Failed to automatically install whitebox-workflows.\n\n"
+        f"Diagnostic details:\n{chr(10).join(diagnostics)}\n\n"
         f"Manual install options:\n{manual_instructions}"
     )
 

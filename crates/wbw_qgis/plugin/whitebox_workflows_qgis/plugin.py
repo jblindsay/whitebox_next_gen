@@ -1431,7 +1431,11 @@ class WhiteboxWorkflowsPlugin:
             result = install_or_upgrade_whitebox_workflows(upgrade=False)
             version = str(result.get("installed_version", "")).strip()
             version_text = f" (version {version})" if version else ""
-            self._notify_info(f"Installed whitebox_workflows{version_text}.")
+            strategy = str(result.get("strategy", "")).strip()
+            location = str(result.get("location", "")).strip()
+            strategy_text = f" via {strategy}" if strategy else ""
+            location_text = f" → {location}" if location else ""
+            self._notify_info(f"Installed whitebox_workflows{version_text}{strategy_text}{location_text}.")
             return True
         except Exception as exc:
             self._notify_warning(f"Backend install failed: {exc}")
@@ -1507,9 +1511,13 @@ class WhiteboxWorkflowsPlugin:
         try:
             result = install_or_upgrade_whitebox_workflows(upgrade=True)
             version = str(result.get("installed_version", "")).strip() or latest
+            strategy = str(result.get("strategy", "")).strip()
+            location = str(result.get("location", "")).strip()
+            strategy_text = f" via {strategy}" if strategy else ""
+            location_text = f" → {location}" if location else ""
             self._skipped_update_version = ""
             self._save_backend_preferences()
-            self._notify_info(f"Updated whitebox_workflows to {version}.")
+            self._notify_info(f"Updated whitebox_workflows to {version}{strategy_text}{location_text}.")
             self._refresh_catalog(silent=True)
         except Exception as exc:
             self._notify_warning(f"Backend update failed: {exc}")

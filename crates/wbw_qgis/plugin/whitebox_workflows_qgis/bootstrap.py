@@ -1971,7 +1971,7 @@ def run_projection_wrapper(
 def get_latest_wheel_version(timeout_seconds: float = 4.0) -> str:
     """Fetch latest whitebox-workflows wheel version from whiteboxgeo.com."""
     try:
-        url = "https://whiteboxgeo.com/wbw_wheels/version.json"
+        url = "https://www.whiteboxgeo.com/wbw_wheels/version.json"
         req = urllib.request.Request(url)
         ctx = ssl.create_default_context()
         with urllib.request.urlopen(req, context=ctx, timeout=timeout_seconds) as response:
@@ -2032,12 +2032,14 @@ def download_and_install_wheels(version_spec: str = "") -> dict:
             result["message"] = "Could not determine latest wheel version"
             return result
     
-    # Download wheel zip
-    wheel_url = f"https://whiteboxgeo.com/wbw_wheels/wbw-python-pro-{platform_name}-{version_to_download}.zip"
+    # Download wheel zip - NOTE: Always use "latest", not version number
+    # The version.json tells us what version is in the latest.zip
+    wheel_url = f"https://www.whiteboxgeo.com/wbw_wheels/wbw-python-pro-{platform_name}-latest.zip"
     result["version"] = version_to_download
     
     # Debug logging to console
     print(f"[WbW Plugin] Downloading wheels from: {wheel_url}")
+    print(f"[WbW Plugin] Expected version in wheels: {version_to_download}")
     
     try:
         req = urllib.request.Request(wheel_url)

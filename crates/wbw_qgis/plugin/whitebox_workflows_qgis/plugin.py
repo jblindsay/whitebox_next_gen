@@ -5,10 +5,14 @@ import os
 from datetime import datetime
 
 from .bootstrap import (
-    backend_install_status,
-    backend_update_status,
-    install_or_upgrade_whitebox_workflows,
-    set_runtime_preferences,
+    get_qgis_bundled_python,
+    get_wbw_python_to_use,
+    refresh_backend_status,
+    get_backend_python_for_operations,
+    install_whitebox_workflows,
+    set_plugin_folder,
+    ensure_wheels_in_sys_path,
+    discover_python_candidates,
 )
 from .diagnostics import diagnostics_text, gather_runtime_diagnostics
 from .host_api import (
@@ -152,6 +156,11 @@ except Exception:  # pragma: no cover
 
 class WhiteboxWorkflowsPlugin:
     def __init__(self, iface):
+        # Initialize plugin folder management for wheel discovery
+        plugin_dir = os.path.dirname(__file__)
+        set_plugin_folder(plugin_dir)
+        ensure_wheels_in_sys_path()
+        
         self.iface = iface
         self.provider = WhiteboxProcessingProvider(iface=iface)
         self._provider_registered = False
@@ -185,14 +194,12 @@ class WhiteboxWorkflowsPlugin:
         self._settings_key_search_text = "whitebox_workflows/search_text"
         self._settings_key_focus_area = "whitebox_workflows/focus_area"
         self._settings_key_last_tool = "whitebox_workflows/last_tool_id"
-        self._settings_key_runtime_mode = "whitebox_workflows/runtime_mode"
-        self._settings_key_local_python = "whitebox_workflows/local_python"
         self._settings_key_auto_install_backend = "whitebox_workflows/auto_install_backend"
         self._settings_key_auto_check_updates = "whitebox_workflows/auto_check_updates"
-        self._settings_key_skip_auto_update_checks_local_mode = "whitebox_workflows/skip_auto_update_checks_local_mode"
         self._settings_key_last_update_check_unix = "whitebox_workflows/last_update_check_unix"
         self._settings_key_skipped_update_version = "whitebox_workflows/skipped_update_version"
-        self._settings_key_installation_strategy = "whitebox_workflows/installation_strategy"
+        self._settings_key_python_override_path = "whitebox_workflows/python_override_path"
+        self._settings_key_python_version_cached = "whitebox_workflows/python_version_cached"
         self._panel_visible = True
         self._panel_width = 320
         self._panel_show_available = True
@@ -202,14 +209,12 @@ class WhiteboxWorkflowsPlugin:
         self._panel_focus_area = "search"
         self._last_tool_id = ""
         self._last_runtime_warning_signature = ""
-        self._runtime_mode = "auto"
-        self._runtime_local_python = ""
         self._auto_install_backend = True
         self._auto_check_backend_updates = True
-        self._skip_auto_update_checks_in_local_mode = True
         self._last_update_check_unix = 0
         self._skipped_update_version = ""
-        self._installation_strategy = ""  # whiteboxgeo_wheel, pip_system_python, or empty
+        self._python_override_path = ""  # User-provided path override
+        self._python_version_cached = ""  # Cached version from last refresh
 
     def _plugin_icon(self):
         base_dir = os.path.dirname(__file__)
@@ -279,7 +284,6 @@ class WhiteboxWorkflowsPlugin:
         self._load_favorite_tools()
         self._load_runtime_preferences()
         self._load_backend_preferences()
-        self._apply_runtime_preferences_to_bootstrap()
         self._load_quick_open_preference()
         self._load_panel_ui_state()
         self._load_last_tool()
@@ -1031,11 +1035,14 @@ class WhiteboxWorkflowsPlugin:
             self.provider.tier = self.provider.tier or "open"
 
     def _load_backend_preferences(self):
+        """Load backend Python settings from QSettings.
+        
+        Simplified design: only python_override_path and python_version_cached.
+        """
         try:
             settings = QSettings()
-            mode = str(settings.value(self._settings_key_runtime_mode, "auto")).strip().lower()
-            self._runtime_mode = mode if mode in ("auto", "local", "qgis") else "auto"
-            self._runtime_local_python = str(settings.value(self._settings_key_local_python, "")).strip()
+            self._python_override_path = str(settings.value(self._settings_key_python_override_path, "")).strip()
+            self._python_version_cached = str(settings.value(self._settings_key_python_version_cached, "")).strip()
             self._auto_install_backend = self._coerce_bool(
                 settings.value(self._settings_key_auto_install_backend, True),
                 True,
@@ -1044,27 +1051,19 @@ class WhiteboxWorkflowsPlugin:
                 settings.value(self._settings_key_auto_check_updates, True),
                 True,
             )
-            self._skip_auto_update_checks_in_local_mode = self._coerce_bool(
-                settings.value(self._settings_key_skip_auto_update_checks_local_mode, True),
-                True,
-            )
             self._last_update_check_unix = int(
                 float(settings.value(self._settings_key_last_update_check_unix, 0) or 0)
             )
             self._skipped_update_version = str(
                 settings.value(self._settings_key_skipped_update_version, "")
             ).strip()
-            strategy = str(settings.value(self._settings_key_installation_strategy, "")).strip().lower()
-            self._installation_strategy = strategy if strategy in ("whiteboxgeo_wheel", "pip_system_python") else ""
         except Exception:
-            self._runtime_mode = "auto"
-            self._runtime_local_python = ""
+            self._python_override_path = ""
+            self._python_version_cached = ""
             self._auto_install_backend = True
             self._auto_check_backend_updates = True
-            self._skip_auto_update_checks_in_local_mode = True
             self._last_update_check_unix = 0
             self._skipped_update_version = ""
-            self._installation_strategy = ""
 
     def _initialize_entitlement_runtime_defaults(self) -> None:
         """Set first-run runtime prefs from discovered runtime capabilities.
@@ -1100,24 +1099,17 @@ class WhiteboxWorkflowsPlugin:
         self._save_runtime_preferences()
 
     def _save_backend_preferences(self):
+        """Save backend Python settings to QSettings."""
         try:
             settings = QSettings()
-            settings.setValue(self._settings_key_runtime_mode, self._runtime_mode)
-            settings.setValue(self._settings_key_local_python, self._runtime_local_python)
+            settings.setValue(self._settings_key_python_override_path, self._python_override_path)
+            settings.setValue(self._settings_key_python_version_cached, self._python_version_cached)
             settings.setValue(self._settings_key_auto_install_backend, self._auto_install_backend)
             settings.setValue(self._settings_key_auto_check_updates, self._auto_check_backend_updates)
-            settings.setValue(
-                self._settings_key_skip_auto_update_checks_local_mode,
-                self._skip_auto_update_checks_in_local_mode,
-            )
             settings.setValue(self._settings_key_last_update_check_unix, int(self._last_update_check_unix))
             settings.setValue(self._settings_key_skipped_update_version, self._skipped_update_version)
-            settings.setValue(self._settings_key_installation_strategy, self._installation_strategy)
         except Exception:
             pass
-
-    def _apply_runtime_preferences_to_bootstrap(self):
-        set_runtime_preferences(mode=self._runtime_mode, local_python=self._runtime_local_python)
 
     def _load_panel_ui_state(self):
         try:
@@ -1257,6 +1249,7 @@ class WhiteboxWorkflowsPlugin:
             self._save_panel_ui_state()
 
     def _show_settings(self, *_args):
+        """Show plugin settings dialog with simplified backend configuration."""
         current = WhiteboxPluginSettings(
             include_pro=self.provider.include_pro,
             tier=self.provider.tier,
@@ -1265,11 +1258,9 @@ class WhiteboxWorkflowsPlugin:
             panel_show_locked=self._panel_show_locked,
             panel_show_locked_recipes=self._panel_show_locked_recipes,
             panel_width=self._panel_width,
-            runtime_mode=self._runtime_mode,
-            local_python_path=self._runtime_local_python,
+            python_override_path=self._python_override_path,
             auto_install_backend=self._auto_install_backend,
             auto_check_backend_updates=self._auto_check_backend_updates,
-            skip_auto_update_checks_in_local_mode=self._skip_auto_update_checks_in_local_mode,
         )
         try:
             dlg = WhiteboxSettingsDialog(current, parent=self.iface.mainWindow())
@@ -1278,8 +1269,11 @@ class WhiteboxWorkflowsPlugin:
         run_dialog(dlg)
         if not dlg.was_accepted():
             return
+        
+        # Get updated settings from dialog
         updated = dlg.read_settings()
-        # Apply panel-side preferences immediately.
+        
+        # Apply panel-side preferences immediately
         self._quick_open_top_match = updated.quick_open_top_match
         self._panel_show_available = updated.panel_show_available
         self._panel_show_locked = updated.panel_show_locked
@@ -1295,44 +1289,42 @@ class WhiteboxWorkflowsPlugin:
                 height_fn = getattr(self._dock_panel, "height", None)
                 h = int(height_fn()) if callable(height_fn) else 600
                 resize(updated.panel_width, h)
-        # Save panel state.
-        self._save_quick_open_preference()
-        self._save_panel_ui_state()
-        # Apply runtime discovery preferences; refresh catalog if they changed.
+        
+        # Check if backend override path changed
+        python_override_changed = (updated.python_override_path != self._python_override_path)
+        
+        # Update backend settings
+        self._python_override_path = updated.python_override_path
+        self._auto_install_backend = updated.auto_install_backend
+        self._auto_check_backend_updates = updated.auto_check_backend_updates
+        
+        # Check if runtime/tier changed
         runtime_changed = any(
             (
                 updated.include_pro != self.provider.include_pro,
                 updated.tier != self.provider.tier,
-                updated.runtime_mode != self._runtime_mode,
-                updated.local_python_path != self._runtime_local_python,
             )
         )
-        backend_policy_changed = any(
-            (
-                updated.auto_install_backend != self._auto_install_backend,
-                updated.auto_check_backend_updates != self._auto_check_backend_updates,
-                updated.skip_auto_update_checks_in_local_mode != self._skip_auto_update_checks_in_local_mode,
-            )
-        )
-
-        self._runtime_mode = updated.runtime_mode
-        self._runtime_local_python = updated.local_python_path
-        self._auto_install_backend = updated.auto_install_backend
-        self._auto_check_backend_updates = updated.auto_check_backend_updates
-        self._skip_auto_update_checks_in_local_mode = updated.skip_auto_update_checks_in_local_mode
+        
+        # Save all preferences
+        self._save_quick_open_preference()
+        self._save_panel_ui_state()
         self._save_backend_preferences()
-        self._apply_runtime_preferences_to_bootstrap()
-
+        
+        # If backend override changed, refresh the backend status
+        if python_override_changed:
+            status = refresh_backend_status(self._python_override_path)
+            self._python_version_cached = status.get("version", "")
+            self._save_backend_preferences()
+            self._notify_info("Backend Python path updated and refreshed.")
+        
+        # If runtime/tier changed, refresh catalog
         if runtime_changed:
             self.provider.include_pro = updated.include_pro
             self.provider.tier = updated.tier
             self._save_runtime_preferences()
             if self._ensure_backend_available(interactive=True):
                 self._refresh_catalog()
-            return
-
-        if backend_policy_changed:
-            self._notify_info("Backend install/update preferences saved.")
 
     def _manual_check_backend_updates(self, *_args):
         self._check_backend_updates(manual=True)
@@ -1402,40 +1394,34 @@ class WhiteboxWorkflowsPlugin:
             return "cancel"
 
     def _ensure_backend_available(self, interactive: bool) -> bool:
+        """Ensure WhiteboxWorkflows backend is installed and usable."""
+        # Refresh backend status to get latest info
         try:
-            status = backend_install_status()
+            interpreter, version = get_backend_python_for_operations(
+                self._python_override_path, 
+                self._python_version_cached
+            )
         except Exception as exc:
-            self._notify_warning(f"Unable to inspect whitebox_workflows backend: {exc}")
+            self._notify_warning(f"Unable to detect whitebox_workflows backend: {exc}")
             return False
-
-        installed = str(status.get("installed_version", "")).strip()
-        interpreter = str(status.get("interpreter", "")).strip()
-        error_text = str(status.get("error", "")).strip()
-
-        if installed:
+        
+        # If version is cached and known, backend is available
+        if version:
             return True
-
-        if self._runtime_mode == "local" and not self._auto_install_backend:
-            if interactive:
-                self._notify_warning(
-                    "whitebox_workflows is not installed in the configured local interpreter. "
-                    "Install it manually or enable auto-install in Plugin Settings."
-                )
-            return False
-
+        
+        # Backend not installed; ask if user wants to install
         if not self._auto_install_backend:
             if interactive:
                 self._notify_warning(
                     "whitebox_workflows is not installed. Enable auto-install in Plugin Settings or install manually."
                 )
             return False
-
+        
         if not interactive:
             return False
-
+        
+        qgis_python = get_qgis_bundled_python()
         detail = f"Target interpreter: {interpreter or 'unknown'}"
-        if error_text:
-            detail = f"{detail}\nDetail: {error_text}"
         if not self._confirm(
             "Install Whitebox Workflows Backend",
             "The whitebox_workflows backend is not installed.\n\n"
@@ -1443,139 +1429,74 @@ class WhiteboxWorkflowsPlugin:
             f"{detail}",
         ):
             return False
-
+        
         try:
-            result = install_or_upgrade_whitebox_workflows(upgrade=False)
-            version = str(result.get("installed_version", "")).strip()
-            version_text = f" (version {version})" if version else ""
-            strategy = str(result.get("strategy", "")).strip()
-            location = str(result.get("location", "")).strip()
-            strategy_text = f" via {strategy}" if strategy else ""
-            location_text = f" → {location}" if location else ""
+            result = install_whitebox_workflows(
+                override_path=self._python_override_path,
+                qgis_python=qgis_python
+            )
             
-            # Log Strategy 1 failure details if Strategy 2 was used
-            if strategy == "pip_system_python":
-                failure_details = str(result.get("strategy1_failure_details", "")).strip()
-                if failure_details:
-                    QgsMessageLog.logMessage(
-                        f"Whitebox Workflows: Strategy 1 (whiteboxgeo.com) failed, falling back to pip.\n\n{failure_details}",
-                        "Whitebox Workflows",
-                        Qgis.Warning
-                    )
-            
-            # Save the installation strategy for future update checks
-            self._installation_strategy = strategy
-            self._save_backend_preferences()
-            
-            self._notify_info(f"Installed whitebox_workflows{version_text}{strategy_text}{location_text}.")
-            return True
+            if result.get("installed"):
+                version = result.get("version", "")
+                location = result.get("location", "")
+                strategy = result.get("strategy", "")
+                
+                version_text = f" (version {version})" if version else ""
+                strategy_text = f" via {strategy}" if strategy else ""
+                location_text = f" → {location}" if location else ""
+                
+                # Cache the version
+                self._python_version_cached = version
+                self._save_backend_preferences()
+                
+                self._notify_info(f"Installed whitebox_workflows{version_text}{strategy_text}{location_text}.")
+                return True
+            else:
+                error_msg = result.get("error", "Unknown error")
+                self._notify_warning(f"Backend install failed: {error_msg}")
+                return False
         except Exception as exc:
             self._notify_warning(f"Backend install failed: {exc}")
             return False
 
     def _check_backend_updates(self, manual: bool = False):
+        """Check for backend updates (simplified for new architecture).
+        
+        In the simplified design, update checking is deferred. The user can
+        manually refresh backend status via settings dialog.
+        """
         if not manual:
             if not self._auto_check_backend_updates:
-                return
-            if self._runtime_mode == "local" and self._skip_auto_update_checks_in_local_mode:
                 return
             now_unix = int(datetime.now().timestamp())
             check_interval_seconds = 24 * 60 * 60
             if self._last_update_check_unix > 0 and (now_unix - self._last_update_check_unix) < check_interval_seconds:
                 return
-
-        try:
-            status = backend_update_status(self._installation_strategy)
-        except Exception as exc:
-            if manual:
-                self._notify_warning(f"Backend update check failed: {exc}")
-            return
-
+        
+        # In the simplified design, update checks are deferred.
+        # The user should manually refresh via Settings dialog.
         self._last_update_check_unix = int(datetime.now().timestamp())
         self._save_backend_preferences()
-
-        error_text = str(status.get("error", "")).strip()
-        if error_text:
-            if manual:
-                self._notify_warning(f"Backend update check failed: {error_text}")
-            return
-
-        latest = str(status.get("latest_version", "")).strip()
-        installed = str(status.get("installed_version", "")).strip()
-        interpreter = str(status.get("interpreter", "")).strip()
-        update_available = bool(status.get("update_available", False))
-
-        if not update_available:
-            if manual:
-                if installed:
-                    self._notify_info(f"whitebox_workflows is up to date ({installed}).")
-                else:
-                    self._notify_warning("whitebox_workflows is not currently installed.")
-            return
-
-        if latest and latest == self._skipped_update_version and not manual:
-            return
-
-        prompt = (
-            "A newer whitebox_workflows backend is available.\n\n"
-            f"Installed: {installed or '(not installed)'}\n"
-            f"Latest: {latest or 'unknown'}\n"
-            f"Interpreter: {interpreter or 'unknown'}\n\n"
-            "Choose an action below."
-        )
-        action = self._prompt_backend_update_action("Update Whitebox Workflows Backend", prompt)
-        if action in ("cancel", "remind"):
-            if manual:
-                self._notify_info("Backend update deferred.")
-            return
-
-        if action == "skip":
-            if latest:
-                self._skipped_update_version = latest
-                self._save_backend_preferences()
-            if manual:
-                self._notify_info("Backend update skipped for this version.")
-            return
-
-        if action != "update":
-            return
-
-        try:
-            result = install_or_upgrade_whitebox_workflows(upgrade=True)
-            version = str(result.get("installed_version", "")).strip() or latest
-            strategy = str(result.get("strategy", "")).strip()
-            location = str(result.get("location", "")).strip()
-            strategy_text = f" via {strategy}" if strategy else ""
-            location_text = f" → {location}" if location else ""
-            
-            # Log Strategy 1 failure details if Strategy 2 was used
-            if strategy == "pip_system_python":
-                failure_details = str(result.get("strategy1_failure_details", "")).strip()
-                if failure_details:
-                    QgsMessageLog.logMessage(
-                        f"Whitebox Workflows: Strategy 1 (whiteboxgeo.com) failed, falling back to pip.\n\n{failure_details}",
-                        "Whitebox Workflows",
-                        Qgis.Warning
-                    )
-            
-            # Save the installation strategy for future update checks
-            self._installation_strategy = strategy
-            self._skipped_update_version = ""
-            self._save_backend_preferences()
-            self._notify_info(f"Updated whitebox_workflows to {version}{strategy_text}{location_text}.")
-            self._refresh_catalog(silent=True)
-        except Exception as exc:
-            self._notify_warning(f"Backend update failed: {exc}")
+        
+        if manual:
+            self._notify_info(
+                "Backend update checks are performed in the Settings dialog. "
+                "Click 'Refresh Backend Status' to check for updates."
+            )
 
     def _show_diagnostics(self, *_args):
         payload = gather_runtime_diagnostics(
             include_pro=self.provider.include_pro,
             tier=self.provider.tier,
+            backend_wbw_path="",
+            backend_wbw_version=self._python_version_cached,
+            backend_installation_source="",
         )
         text = diagnostics_text(payload)
         update_policy = (
-            f"Backend update policy:\n"
-            f"  runtime_mode: {self._runtime_mode}\n"
+            f"Backend configuration:\n"
+            f"  python_override_path: {self._python_override_path or '(Using QGIS bundled Python)'}\n"
+            f"  python_version_cached: {self._python_version_cached or '(Unknown)'}\n"
             f"  auto_check_backend_updates: {self._auto_check_backend_updates}\n"
             f"  skip_auto_update_checks_in_local_mode: {self._skip_auto_update_checks_in_local_mode}"
         )
@@ -1620,6 +1541,9 @@ class WhiteboxWorkflowsPlugin:
         payload = gather_runtime_diagnostics(
             include_pro=self.provider.include_pro,
             tier=self.provider.tier,
+            backend_wbw_path="",
+            backend_wbw_version=self._python_version_cached,
+            backend_installation_source="",
         )
         caps = payload.get("capabilities") if isinstance(payload, dict) else None
         effective_tier = "unknown"

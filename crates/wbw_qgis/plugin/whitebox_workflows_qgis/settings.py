@@ -16,8 +16,10 @@ try:
         QDialogButtonBox,
         QFormLayout,
         QGroupBox,
+        QHBoxLayout,
         QLabel,
         QLineEdit,
+        QPushButton,
         QSpinBox,
         QVBoxLayout,
         QWidget,
@@ -81,8 +83,10 @@ except Exception:  # pragma: no cover
     QComboBox = _Dummy  # type: ignore[misc]
     QSpinBox = _Dummy  # type: ignore[misc]
     QVBoxLayout = _Dummy  # type: ignore[misc]
+    QHBoxLayout = _Dummy  # type: ignore[misc]
     QWidget = _Dummy  # type: ignore[misc]
     QLineEdit = _Dummy  # type: ignore[misc]
+    QPushButton = _Dummy  # type: ignore[misc]
     Qt = object()  # type: ignore[assignment]
 
 
@@ -135,11 +139,9 @@ class WhiteboxPluginSettings:
         panel_show_locked: bool = True,
         panel_show_locked_recipes: bool = True,
         panel_width: int = 320,
-        runtime_mode: str = "auto",
-        local_python_path: str = "",
+        python_override_path: str = "",
         auto_install_backend: bool = True,
         auto_check_backend_updates: bool = True,
-        skip_auto_update_checks_in_local_mode: bool = True,
         installation_strategy: str = "",
     ):
         self.include_pro = bool(include_pro)
@@ -149,12 +151,10 @@ class WhiteboxPluginSettings:
         self.panel_show_locked = bool(panel_show_locked)
         self.panel_show_locked_recipes = bool(panel_show_locked_recipes)
         self.panel_width = max(220, min(520, int(panel_width)))
-        normalized_mode = str(runtime_mode).strip().lower()
-        self.runtime_mode = normalized_mode if normalized_mode in {"auto", "local", "qgis"} else "auto"
-        self.local_python_path = str(local_python_path).strip()
+        # Empty string = use QGIS bundled Python; filled = use override path
+        self.python_override_path = str(python_override_path).strip()
         self.auto_install_backend = bool(auto_install_backend)
         self.auto_check_backend_updates = bool(auto_check_backend_updates)
-        self.skip_auto_update_checks_in_local_mode = bool(skip_auto_update_checks_in_local_mode)
         # Track which installation strategy was last used (whiteboxgeo_wheel, pip_system_python, etc.)
         normalized_strategy = str(installation_strategy).strip().lower()
         self.installation_strategy = normalized_strategy if normalized_strategy in {"whiteboxgeo_wheel", "pip_system_python"} else ""
@@ -168,11 +168,9 @@ class WhiteboxPluginSettings:
             "panel_show_locked": self.panel_show_locked,
             "panel_show_locked_recipes": self.panel_show_locked_recipes,
             "panel_width": self.panel_width,
-            "runtime_mode": self.runtime_mode,
-            "local_python_path": self.local_python_path,
+            "python_override_path": self.python_override_path,
             "auto_install_backend": self.auto_install_backend,
             "auto_check_backend_updates": self.auto_check_backend_updates,
-            "skip_auto_update_checks_in_local_mode": self.skip_auto_update_checks_in_local_mode,
             "installation_strategy": self.installation_strategy,
         }
 
@@ -202,10 +200,11 @@ class WhiteboxSettingsDialog(QDialog):
     def _build_ui(self, s: WhiteboxPluginSettings) -> None:
         outer = QVBoxLayout(self)
 
-        # --- Runtime group ---
-        runtime_group = QGroupBox("Runtime Discovery")
+        # --- Runtime/Python group ---
+        runtime_group = QGroupBox("Python & Backend")
         runtime_form = QFormLayout(runtime_group)
 
+        # Include Pro and Tier
         self._include_pro_check = QCheckBox()
         self._include_pro_check.setChecked(s.include_pro)
 
@@ -217,51 +216,64 @@ class WhiteboxSettingsDialog(QDialog):
         except Exception:
             pass
 
-        self._runtime_mode_combo = QComboBox()
-        runtime_modes = [
-            ("auto", "Auto (recommended)"),
-            ("local", "Force local interpreter"),
-            ("qgis", "Force QGIS Python"),
-        ]
-        for mode_key, mode_label in runtime_modes:
-            self._runtime_mode_combo.addItem(mode_label, mode_key)
-        mode_index = 0
-        for idx, (mode_key, _mode_label) in enumerate(runtime_modes):
-            if mode_key == s.runtime_mode:
-                mode_index = idx
-                break
-        if hasattr(self._runtime_mode_combo, "setCurrentIndex"):
-            self._runtime_mode_combo.setCurrentIndex(mode_index)
+        # Python interpreter selection: dropdown + manual path
+        self._python_combo = QComboBox()
+        self._python_candidates: list[tuple[str, str]] = []
+        self._python_manual_edit = QLineEdit()
+        if hasattr(self._python_manual_edit, "setPlaceholderText"):
+            self._python_manual_edit.setPlaceholderText("Leave empty for QGIS bundled Python")
 
-        current_index_changed = getattr(self._runtime_mode_combo, "currentIndexChanged", None)
-        if current_index_changed is not None:
-            try:
-                current_index_changed.connect(self._on_runtime_mode_changed)
-            except Exception:
-                pass
+        # Try to import bootstrap to discover Python candidates
+        try:
+            from . import bootstrap
+            if hasattr(bootstrap, "discover_python_candidates"):
+                self._python_candidates = bootstrap.discover_python_candidates()
+        except Exception:
+            pass
 
-        self._local_python_edit = QLineEdit()
-        if hasattr(self._local_python_edit, "setText"):
-            self._local_python_edit.setText(s.local_python_path)
-        self._update_local_python_enabled_state()
+        # Populate dropdown with discovered candidates
+        if self._python_candidates:
+            self._python_combo.addItem("(select from discovered)", "")
+            for path, label in self._python_candidates:
+                display = f"{label}: {path}" if label else path
+                self._python_combo.addItem(display, path)
+            self._python_combo.addItem("(or enter path below)", "")
+        else:
+            self._python_combo.addItem("(enter path below)", "")
 
+        # Set current value
+        if s.python_override_path:
+            if hasattr(self._python_manual_edit, "setText"):
+                self._python_manual_edit.setText(s.python_override_path)
+
+        # Python info display: path, version, install status
+        self._python_path_label = QLabel()
+        self._python_version_label = QLabel()
+        self._python_status_label = QLabel()
+        for label in [self._python_path_label, self._python_version_label, self._python_status_label]:
+            if hasattr(label, "setWordWrap"):
+                label.setWordWrap(True)
+            if hasattr(label, "setStyleSheet"):
+                label.setStyleSheet("color: #616161; font-size: 9pt;")
+
+        # Auto-install backend
         self._auto_install_backend_check = QCheckBox()
         self._auto_install_backend_check.setChecked(s.auto_install_backend)
 
+        # Auto-check updates
         self._auto_check_updates_check = QCheckBox()
         self._auto_check_updates_check.setChecked(s.auto_check_backend_updates)
-
-        self._skip_local_auto_updates_check = QCheckBox()
-        self._skip_local_auto_updates_check.setChecked(s.skip_auto_update_checks_in_local_mode)
 
         if hasattr(runtime_form, "addRow"):
             runtime_form.addRow("Include Pro catalog", self._include_pro_check)
             runtime_form.addRow("Requested tier", self._tier_combo)
-            runtime_form.addRow("Runtime interpreter mode", self._runtime_mode_combo)
-            runtime_form.addRow("Local Python path", self._local_python_edit)
+            runtime_form.addRow("Python interpreter", self._python_combo)
+            runtime_form.addRow("Manual path", self._python_manual_edit)
+            runtime_form.addRow("Current path:", self._python_path_label)
+            runtime_form.addRow("Detected version:", self._python_version_label)
+            runtime_form.addRow("Backend status:", self._python_status_label)
             runtime_form.addRow("Auto-install backend when missing", self._auto_install_backend_check)
             runtime_form.addRow("Auto-check backend updates", self._auto_check_updates_check)
-            runtime_form.addRow("Skip auto-update checks in Local mode", self._skip_local_auto_updates_check)
 
         # --- Panel group ---
         panel_group = QGroupBox("Panel Behaviour")
@@ -338,21 +350,6 @@ class WhiteboxSettingsDialog(QDialog):
         if callable(close):
             close()
 
-    def _on_runtime_mode_changed(self, *_args):
-        self._update_local_python_enabled_state()
-
-    def _update_local_python_enabled_state(self):
-        combo = getattr(self, "_runtime_mode_combo", None)
-        local_edit = getattr(self, "_local_python_edit", None)
-        if combo is None or local_edit is None:
-            return
-
-        mode = str(combo.currentData() or "auto").strip().lower()
-        enable_local_path = mode == "local"
-        set_enabled = getattr(local_edit, "setEnabled", None)
-        if callable(set_enabled):
-            set_enabled(enable_local_path)
-
     def _on_reject(self):
         close = getattr(self, "reject", None)
         if callable(close):
@@ -363,6 +360,9 @@ class WhiteboxSettingsDialog(QDialog):
 
     def read_settings(self) -> WhiteboxPluginSettings:
         """Return a settings snapshot populated from the current dialog state."""
+        # Get Python override path from manual edit field
+        python_path = str(self._python_manual_edit.text()).strip()
+        
         return WhiteboxPluginSettings(
             include_pro=bool(self._include_pro_check.isChecked()),
             tier=str(self._tier_combo.currentText()).strip() or "open",
@@ -371,9 +371,7 @@ class WhiteboxSettingsDialog(QDialog):
             panel_show_locked=bool(self._show_locked_check.isChecked()),
             panel_show_locked_recipes=bool(self._show_locked_recipes_check.isChecked()),
             panel_width=int(self._panel_width_spin.value()),
-            runtime_mode=str(self._runtime_mode_combo.currentData() or "auto").strip().lower() or "auto",
-            local_python_path=str(self._local_python_edit.text()).strip(),
+            python_override_path=python_path,
             auto_install_backend=bool(self._auto_install_backend_check.isChecked()),
             auto_check_backend_updates=bool(self._auto_check_updates_check.isChecked()),
-            skip_auto_update_checks_in_local_mode=bool(self._skip_local_auto_updates_check.isChecked()),
         )

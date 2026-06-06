@@ -157,12 +157,23 @@ except Exception:  # pragma: no cover
 class WhiteboxWorkflowsPlugin:
     def __init__(self, iface):
         # Initialize plugin folder management for wheel discovery
-        plugin_dir = os.path.dirname(__file__)
-        set_plugin_folder(plugin_dir)
-        ensure_wheels_in_sys_path()
+        try:
+            plugin_dir = os.path.dirname(__file__)
+            set_plugin_folder(plugin_dir)
+        except Exception as e:
+            print(f"[WbW Plugin] WARNING: Failed to set plugin folder: {e}")
+        
+        try:
+            ensure_wheels_in_sys_path()
+        except Exception as e:
+            print(f"[WbW Plugin] WARNING: Failed to ensure wheels in sys.path: {e}")
         
         self.iface = iface
-        self.provider = WhiteboxProcessingProvider(iface=iface)
+        try:
+            self.provider = WhiteboxProcessingProvider(iface=iface)
+        except Exception as e:
+            print(f"[WbW Plugin] ERROR: Failed to create provider: {e}")
+            self.provider = None
         self._provider_registered = False
         self._menu_label = "&Whitebox Workflows"
         self._diagnostics_action = None
@@ -259,6 +270,20 @@ class WhiteboxWorkflowsPlugin:
         return self._plugin_icon_named("WbW_refresh")
 
     def initGui(self):
+        try:
+            self._initGui_impl()
+        except Exception as e:
+            print(f"[WbW Plugin] CRITICAL: Exception in initGui: {e}")
+            import traceback
+            traceback.print_exc()
+            push_host_message(
+                self.iface,
+                "Whitebox Workflows",
+                f"Plugin initialization failed: {e}. Check QGIS console for details.",
+                level="critical",
+            )
+    
+    def _initGui_impl(self):
         # Support QGIS 3/4 from one codebase; unsupported majors are rejected.
         host_info = host_capabilities(self.iface)
         major = int(host_info.get("major", 0) or 0)
@@ -300,7 +325,8 @@ class WhiteboxWorkflowsPlugin:
 
         # Ensure backend install/activation checks run before provider
         # registration, because addProvider() may eagerly call provider.load().
-        if not register_provider(self.iface, self.provider):
+        if not self.provider or not register_provider(self.iface, self.provider):
+            print(f"[WbW Plugin] Provider registration failed")
             return
         self._provider_registered = True
 
@@ -1008,6 +1034,8 @@ class WhiteboxWorkflowsPlugin:
             self._quick_open_top_match = True
 
     def _load_runtime_preferences(self):
+        if not self.provider:
+            return
         try:
             settings = QSettings()
             include_exists = self._settings_contains(settings, self._settings_key_include_pro)
@@ -1031,8 +1059,9 @@ class WhiteboxWorkflowsPlugin:
 
             self.provider.tier = str(tier_value).strip().lower() or default_requested_tier
         except Exception:
-            self.provider.include_pro = False
-            self.provider.tier = self.provider.tier or "open"
+            if self.provider:
+                self.provider.include_pro = False
+                self.provider.tier = self.provider.tier or "open"
 
     def _load_backend_preferences(self):
         """Load backend Python settings from QSettings.
@@ -1513,6 +1542,10 @@ class WhiteboxWorkflowsPlugin:
         )
 
     def _refresh_catalog(self, *_args, silent: bool = False):
+        if not self.provider:
+            if not silent:
+                self._notify_warning("Provider not initialized")
+            return
         # Pull recents from persisted settings so tools run from the Processing
         # toolbox also appear in panel recents.
         self._load_recent_tools()

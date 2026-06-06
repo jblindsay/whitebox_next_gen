@@ -192,6 +192,8 @@ class WhiteboxSettingsDialog(QDialog):
         self._update_in_progress = False
         self._current_version = ""
         self._available_version = ""
+        self._detected_python_path = ""
+        self._detected_python_version = ""
 
         try:
             if hasattr(self, "setWindowTitle"):
@@ -202,6 +204,17 @@ class WhiteboxSettingsDialog(QDialog):
             pass
 
         self._build_ui(settings)
+        
+        # Trigger backend detection when dialog is created
+        try:
+            timer = QTimer()
+            timer.singleShot(200, self._refresh_python_backend_status)  # type: ignore[attr-defined]
+        except Exception:
+            # If QTimer isn't available, try direct call
+            try:
+                self._refresh_python_backend_status()
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     def _build_ui(self, s: WhiteboxPluginSettings) -> None:
@@ -270,6 +283,15 @@ class WhiteboxSettingsDialog(QDialog):
         # Auto-check updates
         self._auto_check_updates_check = QCheckBox()
         self._auto_check_updates_check.setChecked(s.auto_check_backend_updates)
+
+        # Connect signals to refresh backend detection when user changes settings
+        try:
+            if hasattr(self._python_combo, "currentIndexChanged"):
+                self._python_combo.currentIndexChanged.connect(self._on_python_combo_changed)  # type: ignore[union-attr]
+            if hasattr(self._python_manual_edit, "textChanged"):
+                self._python_manual_edit.textChanged.connect(self._refresh_python_backend_status)  # type: ignore[union-attr]
+        except Exception:
+            pass
 
         if hasattr(runtime_form, "addRow"):
             runtime_form.addRow("Include Pro catalog", self._include_pro_check)
@@ -386,6 +408,90 @@ class WhiteboxSettingsDialog(QDialog):
     # ------------------------------------------------------------------
     # Version checking and update management
     # ------------------------------------------------------------------
+    
+    def _on_python_combo_changed(self) -> None:
+        """Handle combo box selection change - update manual edit and trigger detection."""
+        try:
+            if hasattr(self._python_combo, "currentData"):
+                selected_path = self._python_combo.currentData()  # type: ignore[attr-defined]
+                if selected_path:  # Only update if something was actually selected
+                    if hasattr(self._python_manual_edit, "setText"):
+                        self._python_manual_edit.setText(selected_path)  # type: ignore[attr-defined]
+                    # Detection will be triggered by textChanged signal
+        except Exception:
+            pass
+    
+    def _refresh_python_backend_status(self) -> None:
+        """Refresh Python backend detection and populate Current path/Detected version/Backend status fields."""
+        try:
+            # Schedule in background to avoid blocking UI
+            timer = QTimer()
+            timer.singleShot(50, self._detect_python_backend_thread)  # type: ignore[attr-defined]
+        except Exception:
+            # Fallback to direct call
+            self._detect_python_backend_thread()
+    
+    def _detect_python_backend_thread(self) -> None:
+        """Detect Python backend in background thread."""
+        try:
+            from . import bootstrap
+            import sys
+            
+            # Read manual path from UI (capture in this thread before backgrounding)
+            try:
+                manual_path = str(self._python_manual_edit.text()).strip()
+            except Exception:
+                manual_path = ""
+            
+            # Determine which Python to use
+            if manual_path:
+                python_to_use = manual_path
+            else:
+                python_to_use = sys.executable
+            
+            # Detect version in the selected Python
+            detected_version = bootstrap.get_whitebox_workflows_version_for_interpreter(python_to_use)
+            
+            # Store results (will update UI in main thread)
+            self._detected_python_path = python_to_use
+            self._detected_python_version = detected_version
+            
+            # Update UI from main thread
+            try:
+                timer = QTimer()
+                timer.singleShot(0, self._update_python_backend_display)  # type: ignore[attr-defined]
+            except Exception:
+                self._update_python_backend_display()
+        except Exception as e:
+            print(f"[WbW Plugin] Exception in _detect_python_backend_thread: {e}")
+    
+    def _update_python_backend_display(self) -> None:
+        """Update Python Backend status display fields."""
+        try:
+            # Update "Current path:" label
+            if hasattr(self._python_path_label, "setText"):
+                self._python_path_label.setText(self._detected_python_path or "(auto-detected)")
+            
+            # Update "Detected version:" label
+            if hasattr(self._python_version_label, "setText"):
+                if self._detected_python_version:
+                    self._python_version_label.setText(self._detected_python_version)
+                else:
+                    self._python_version_label.setText("(not found)")
+            
+            # Update "Backend status:" label with color
+            if hasattr(self._python_status_label, "setText"):
+                if self._detected_python_version:
+                    self._python_status_label.setText("✓ Installed")
+                    if hasattr(self._python_status_label, "setStyleSheet"):
+                        self._python_status_label.setStyleSheet("color: #1B5E20; font-weight: bold;")  # green
+                else:
+                    self._python_status_label.setText("✗ Not installed")
+                    if hasattr(self._python_status_label, "setStyleSheet"):
+                        self._python_status_label.setStyleSheet("color: #E65100; font-weight: bold;")  # orange
+        except Exception as e:
+            print(f"[WbW Plugin] Exception in _update_python_backend_display: {e}")
+    
     def _schedule_version_fetch(self) -> None:
         """Schedule version info fetching in background thread."""
         try:

@@ -15,6 +15,7 @@ _EXTERNAL_SESSION_CACHE: dict[tuple[str, bool, str], "ExternalRuntimeSession"] =
 _RUNTIME_MODE = "auto"
 _RUNTIME_LOCAL_PYTHON = ""
 _NEXT_GEN_MIN_VERSION = "2.0.0"
+_WBW_PIP_TARGET_DIR = ""  # cached pip --target directory
 
 
 def _subprocess_window_kwargs() -> dict:
@@ -671,13 +672,114 @@ def _discover_external_python_candidates() -> list[str]:
     return ordered
 
 
+def _get_pip_target_dir() -> str:
+    """Return a writable per-profile directory for pip --target installs.
+
+    Uses the QGIS profile's python directory when available so that the
+    installed package persists across QGIS sessions and is isolated from
+    the (read-only) QGIS app bundle site-packages.
+    """
+    global _WBW_PIP_TARGET_DIR
+    if _WBW_PIP_TARGET_DIR:
+        return _WBW_PIP_TARGET_DIR
+
+    target: Path | None = None
+
+    # Prefer the QGIS profile directory - available when running inside QGIS.
+    try:
+        from qgis.core import QgsApplication  # type: ignore[import]
+        config_path = QgsApplication.qgisSettingsDirPath()
+        if config_path:
+            target = Path(config_path) / "python" / "whitebox_workflows_lib"
+    except Exception:
+        pass
+
+    # Fallback: user home directory.
+    if target is None:
+        target = Path.home() / ".whitebox_workflows_lib"
+
+    target.mkdir(parents=True, exist_ok=True)
+    _WBW_PIP_TARGET_DIR = str(target)
+    return _WBW_PIP_TARGET_DIR
+
+
+def _ensure_pip_target_on_sys_path() -> None:
+    """Add the pip --target directory to sys.path if not already present."""
+    import sys
+    target = _get_pip_target_dir()
+    if target and target not in sys.path:
+        sys.path.insert(0, target)
+
+
+def _install_whitebox_workflows_via_pip(target_dir: str) -> None:
+    """Install whitebox-workflows into *target_dir* using the QGIS Python pip.
+
+    Uses sys.executable (the QGIS Python) and preserves the full process
+    environment so that PYTHONHOME is correctly inherited on macOS/Linux
+    bundled distributions.
+    """
+    import sys
+    completed = subprocess.run(
+        [
+            sys.executable, "-m", "pip", "install",
+            "--target", target_dir,
+            "--upgrade",
+            "whitebox-workflows",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=dict(os.environ),  # keep full env - PYTHONHOME required for bundled Python
+        **_subprocess_window_kwargs(),
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or "unknown pip error"
+        raise RuntimeBootstrapError(
+            f"pip install whitebox-workflows failed: {detail}"
+        )
+
+
 def load_whitebox_workflows():
+    import sys
+
+    # First attempt: direct import (already on sys.path).
+    try:
+        return importlib.import_module("whitebox_workflows")
+    except ImportError:
+        pass
+
+    # Second attempt: add the pip target dir to sys.path and retry.
+    # This covers the case where a previous install already ran but the
+    # target dir wasn't on sys.path yet (e.g. after a QGIS restart).
+    _ensure_pip_target_on_sys_path()
+    try:
+        return importlib.import_module("whitebox_workflows")
+    except ImportError:
+        pass
+
+    # Third attempt: run pip install into the target dir, then import.
+    target_dir = _get_pip_target_dir()
+    try:
+        _install_whitebox_workflows_via_pip(target_dir)
+    except RuntimeBootstrapError:
+        raise
+    except Exception as exc:
+        raise RuntimeBootstrapError(
+            "Automatic installation of whitebox-workflows failed. "
+            f"Try: pip install whitebox-workflows. Detail: {exc}"
+        ) from exc
+
+    # Invalidate stale import cache entries and retry.
+    for key in list(sys.modules.keys()):
+        if key == "whitebox_workflows" or key.startswith("whitebox_workflows."):
+            del sys.modules[key]
+
     try:
         return importlib.import_module("whitebox_workflows")
     except ImportError as exc:
         raise RuntimeBootstrapError(
-            "The whitebox_workflows package is not available in this Python environment. "
-            "Install or activate a QGIS-compatible WbW-Py build before loading the plugin."
+            "whitebox-workflows was installed but could not be imported. "
+            f"Restart QGIS and try again. Detail: {exc}"
         ) from exc
 
 
@@ -720,6 +822,7 @@ def get_backend_interpreter_path() -> str:
 
 
 def _get_installed_whitebox_workflows_version_for_interpreter(interpreter: str) -> str:
+    import sys as _sys
     runner = (
         "import importlib.metadata as md\n"
         "try:\n"
@@ -727,12 +830,24 @@ def _get_installed_whitebox_workflows_version_for_interpreter(interpreter: str) 
         "except Exception:\n"
         "    print('')\n"
     )
+    # When querying sys.executable (the QGIS Python), keep the full process
+    # environment so PYTHONHOME is inherited correctly on bundled distributions.
+    # For external interpreters, strip PYTHONHOME to avoid cross-contamination.
+    is_inprocess = (interpreter == str(_sys.executable))
+    env = dict(os.environ) if is_inprocess else _build_clean_env()
+    # For --target installs, also add the target dir to PYTHONPATH so the
+    # subprocess can find the package that was installed there.
+    if is_inprocess:
+        target = _get_pip_target_dir()
+        if target:
+            existing = env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = f"{target}{os.pathsep}{existing}" if existing else target
     completed = subprocess.run(
         [interpreter, "-c", runner],
         check=False,
         capture_output=True,
         text=True,
-        env=_build_clean_env(),
+        env=env,
         **_subprocess_window_kwargs(),
     )
     if completed.returncode != 0:
@@ -1052,16 +1167,10 @@ def create_runtime_session(include_pro: bool = True, tier: str = "open"):
             f"Tried: {', '.join(external_candidates)}. Detail: {detail}"
         )
 
-    # Prefer a discovered external runtime first. In environments where QGIS
-    # ships with a different embedded Python package set, this avoids silently
-    # binding to a stale in-process whitebox_workflows install.
-    try:
-        return _external_session(prefer_pro=include_pro, allow_downgrade=True)
-    except RuntimeBootstrapError:
-        # Fall back to the current Python runtime if an external runtime is not
-        # available or cannot provide a valid Next Gen session.
-        pass
-
+    # Prefer in-process first: load_whitebox_workflows() will auto-install via
+    # the QGIS Python pip if whitebox_workflows is not yet present. This is the
+    # correct default because the QGIS Python IS the execution environment and
+    # always has pip available (bundled since QGIS 3.x).
     try:
         wbw = load_whitebox_workflows()
         try:

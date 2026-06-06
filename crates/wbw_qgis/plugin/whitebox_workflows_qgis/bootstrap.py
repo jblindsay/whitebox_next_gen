@@ -25,6 +25,52 @@ _PLUGIN_FOLDER = ""
 _WHEELS_FOLDER = ""
 
 
+def _get_qgis_config_wheels_path() -> str:
+    """Get the QGIS config directory wheels folder (outside plugin directory).
+    
+    IMPORTANT: Wheels must be stored OUTSIDE the plugin folder to avoid
+    triggering QGIS plugin reloads when files are downloaded/extracted.
+    
+    QGIS monitors its plugin directory for changes and reloads the plugin
+    when files change. By storing wheels in the QGIS config directory
+    (not the plugins directory), we avoid multiple unwanted reloads during
+    the wheel installation process.
+    
+    Returns path like:
+    - Linux: ~/.local/share/QGIS/QGIS3/python/plugins_wheels/
+    - macOS: ~/Library/Application Support/QGIS/QGIS3/python/plugins_wheels/
+    - Windows: %APPDATA%/QGIS/QGIS3/python/plugins_wheels/
+    """
+    # Try to get the real QGIS config path via QGIS API
+    try:
+        from qgis.core import QgsApplication
+        qgis_config_path = QgsApplication.qgisSettingsDirPath()
+        if qgis_config_path and Path(qgis_config_path).exists():
+            wheels_path = Path(qgis_config_path) / "python" / "plugins_wheels"
+            return str(wheels_path)
+    except ImportError:
+        pass
+    
+    # Fallback to standard QGIS config paths by platform
+    home = Path.home()
+    
+    if sys.platform == "darwin":  # macOS
+        qgis_config = home / "Library" / "Application Support" / "QGIS" / "QGIS3"
+    elif sys.platform == "win32":  # Windows
+        appdata = os.environ.get("APPDATA", str(home / "AppData" / "Roaming"))
+        qgis_config = Path(appdata) / "QGIS" / "QGIS3"
+    else:  # Linux and others
+        # Check XDG_CONFIG_HOME first, then default
+        xdg_config = os.environ.get("XDG_CONFIG_HOME")
+        if xdg_config:
+            qgis_config = Path(xdg_config) / "QGIS" / "QGIS3"
+        else:
+            qgis_config = home / ".config" / "QGIS" / "QGIS3"
+    
+    wheels_path = qgis_config / "python" / "plugins_wheels"
+    return str(wheels_path)
+
+
 def _subprocess_window_kwargs() -> dict:
     """Return platform-safe subprocess kwargs that avoid transient console windows."""
     if os.name != "nt":
@@ -126,13 +172,17 @@ def get_whitebox_workflows_version_for_interpreter(interpreter: str) -> str:
 
 
 def set_plugin_folder(folder_path: str) -> None:
-    """Set the plugin folder path (where wheels will be stored)."""
+    """Set the plugin folder path.
+    
+    NOTE: The actual wheels are stored in QGIS config directory
+    (via _get_qgis_config_wheels_path()), not in the plugin folder.
+    This prevents QGIS from reloading the plugin when wheels are
+    downloaded/extracted.
+    """
     global _PLUGIN_FOLDER, _WHEELS_FOLDER
     _PLUGIN_FOLDER = str(folder_path or "").strip()
-    if _PLUGIN_FOLDER:
-        _WHEELS_FOLDER = str(Path(_PLUGIN_FOLDER) / "wheels")
-    else:
-        _WHEELS_FOLDER = ""
+    # Always use QGIS config path for wheels, not plugin folder
+    _WHEELS_FOLDER = _get_qgis_config_wheels_path()
 
 
 def get_plugin_folder() -> str:

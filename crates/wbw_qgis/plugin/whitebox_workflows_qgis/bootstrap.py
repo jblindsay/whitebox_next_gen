@@ -1,19 +1,13 @@
 from __future__ import annotations
 
 import base64
-import glob
 import importlib
 import json
 import os
-import platform
 import shutil
-import ssl
 import subprocess
-import sys
-import tempfile
 import urllib.parse
 import urllib.request
-import zipfile
 from pathlib import Path
 
 
@@ -21,54 +15,6 @@ _EXTERNAL_SESSION_CACHE: dict[tuple[str, bool, str], "ExternalRuntimeSession"] =
 _RUNTIME_MODE = "auto"
 _RUNTIME_LOCAL_PYTHON = ""
 _NEXT_GEN_MIN_VERSION = "2.0.0"
-_PLUGIN_FOLDER = ""
-_WHEELS_FOLDER = ""
-
-
-def _get_qgis_config_wheels_path() -> str:
-    """Get the QGIS config directory wheels folder (outside plugin directory).
-    
-    IMPORTANT: Wheels must be stored OUTSIDE the plugin folder to avoid
-    triggering QGIS plugin reloads when files are downloaded/extracted.
-    
-    QGIS monitors its plugin directory for changes and reloads the plugin
-    when files change. By storing wheels in the QGIS config directory
-    (not the plugins directory), we avoid multiple unwanted reloads during
-    the wheel installation process.
-    
-    Returns path like:
-    - Linux: ~/.local/share/QGIS/QGIS3/python/plugins_wheels/
-    - macOS: ~/Library/Application Support/QGIS/QGIS3/python/plugins_wheels/
-    - Windows: %APPDATA%/QGIS/QGIS3/python/plugins_wheels/
-    """
-    # Try to get the real QGIS config path via QGIS API
-    try:
-        from qgis.core import QgsApplication
-        qgis_config_path = QgsApplication.qgisSettingsDirPath()
-        if qgis_config_path and Path(qgis_config_path).exists():
-            wheels_path = Path(qgis_config_path) / "python" / "plugins_wheels"
-            return str(wheels_path)
-    except ImportError:
-        pass
-    
-    # Fallback to standard QGIS config paths by platform
-    home = Path.home()
-    
-    if sys.platform == "darwin":  # macOS
-        qgis_config = home / "Library" / "Application Support" / "QGIS" / "QGIS3"
-    elif sys.platform == "win32":  # Windows
-        appdata = os.environ.get("APPDATA", str(home / "AppData" / "Roaming"))
-        qgis_config = Path(appdata) / "QGIS" / "QGIS3"
-    else:  # Linux and others
-        # Check XDG_CONFIG_HOME first, then default
-        xdg_config = os.environ.get("XDG_CONFIG_HOME")
-        if xdg_config:
-            qgis_config = Path(xdg_config) / "QGIS" / "QGIS3"
-        else:
-            qgis_config = home / ".config" / "QGIS" / "QGIS3"
-    
-    wheels_path = qgis_config / "python" / "plugins_wheels"
-    return str(wheels_path)
 
 
 def _subprocess_window_kwargs() -> dict:
@@ -116,205 +62,9 @@ def get_runtime_preferences() -> tuple[str, str]:
     return _RUNTIME_MODE, _RUNTIME_LOCAL_PYTHON
 
 
-def _compare_versions_semantic(v1: str, v2: str) -> bool:
-    """Compare two semantic versions. Returns True if v1 > v2.
-    
-    Uses tuple comparison of integer parts: (major, minor, patch).
-    Falls back to lexical comparison if parsing fails.
-    """
-    try:
-        parts1 = tuple(int(x) for x in str(v1 or "").split(".")[:3])
-        parts2 = tuple(int(x) for x in str(v2 or "").split(".")[:3])
-        return parts1 > parts2
-    except (ValueError, TypeError):
-        return str(v1 or "") > str(v2 or "")  # Fallback to lexical
-
-
-def can_import_whitebox_workflows(interpreter: str) -> bool:
-    """Check if whitebox_workflows can be imported in the given Python."""
-    if not interpreter or not Path(interpreter).exists():
-        return False
-    
-    try:
-        result = subprocess.run(
-            [interpreter, "-c", "import whitebox_workflows; print('ok')"],
-            capture_output=True,
-            text=True,
-            timeout=3,
-            **_subprocess_window_kwargs(),
-        )
-        return result.returncode == 0 and "ok" in result.stdout
-    except Exception:
-        return False
-
-
-def get_whitebox_workflows_version_for_interpreter(interpreter: str) -> str:
-    """Get installed whitebox_workflows version from Python interpreter."""
-    if not interpreter or not Path(interpreter).exists():
-        return ""
-    
-    try:
-        # Prepare environment for subprocess to find local wheels
-        env = os.environ.copy()
-        wheels_folder = get_wheels_folder()
-        if wheels_folder and Path(wheels_folder).exists():
-            # Add wheels folder to PYTHONPATH so subprocess can find our local wheels
-            existing_pythonpath = env.get("PYTHONPATH", "")
-            if existing_pythonpath:
-                env["PYTHONPATH"] = f"{wheels_folder}:{existing_pythonpath}"
-            else:
-                env["PYTHONPATH"] = wheels_folder
-            print(f"[WbW Plugin] Subprocess PYTHONPATH: {env['PYTHONPATH']}")
-        
-        result = subprocess.run(
-            [interpreter, "-c", "import whitebox_workflows; print(whitebox_workflows.WbEnvironment().version())"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            env=env,
-            **_subprocess_window_kwargs(),
-        )
-        if result.returncode == 0:
-            version = result.stdout.strip()
-            if version:
-                print(f"[WbW Plugin] Detected whitebox_workflows version {version} in {interpreter}")
-                return version
-        else:
-            print(f"[WbW Plugin] Version detection failed: {result.stderr}")
-    except Exception as e:
-        print(f"[WbW Plugin] Exception detecting version: {e}")
-    
-    return ""
-
-
-def set_plugin_folder(folder_path: str) -> None:
-    """Set the plugin folder path.
-    
-    NOTE: The actual wheels are stored in QGIS config directory
-    (via _get_qgis_config_wheels_path()), not in the plugin folder.
-    This prevents QGIS from reloading the plugin when wheels are
-    downloaded/extracted.
-    """
-    global _PLUGIN_FOLDER, _WHEELS_FOLDER
-    _PLUGIN_FOLDER = str(folder_path or "").strip()
-    # Always use QGIS config path for wheels, not plugin folder
-    _WHEELS_FOLDER = _get_qgis_config_wheels_path()
-
-
-def get_plugin_folder() -> str:
-    """Get the plugin folder path."""
-    return _PLUGIN_FOLDER
-
-
-def get_wheels_folder() -> str:
-    """Get the wheels folder path."""
-    return _WHEELS_FOLDER
-
-
-def ensure_wheels_in_sys_path() -> None:
-    """Ensure wheels folder is at position 0 in sys.path for priority import resolution.
-    
-    This is critical: we want the plugin's wheels to take precedence over any system-wide
-    installation of whitebox_workflows. If the user has a system version installed, we 
-    need to make absolutely sure our local version is found first.
-    """
-    wheels = get_wheels_folder()
-    if not wheels or not Path(wheels).exists():
-        print(f"[WbW Plugin] Warning: wheels folder not found or doesn't exist: {wheels}")
-        return
-    
-    wheels_path = str(Path(wheels).resolve())
-    
-    # Remove any existing copies of this path from sys.path
-    sys.path = [p for p in sys.path if str(Path(p).resolve()) != wheels_path]
-    
-    # Add it to position 0 so it's searched first
-    sys.path.insert(0, wheels_path)
-    print(f"[WbW Plugin] Ensured wheels folder at sys.path[0]: {wheels_path}")
-
-
 class RuntimeBootstrapError(RuntimeError):
     pass
 
-
-
-def discover_python_candidates() -> list[tuple[str, str]]:
-    """
-    Discover Python installations on the system.
-    Returns list of (path, label) tuples in priority order.
-    """
-    candidates: list[tuple[str, str]] = []
-    seen_paths: set[str] = set()
-    
-    def _add_candidate(path_text: str | None, label: str) -> None:
-        p_text = str(path_text or "").strip()
-        if not p_text:
-            return
-        try:
-            p = Path(p_text).expanduser().resolve()
-            if not p.exists() or not os.access(p, os.X_OK):
-                return
-            p_str = str(p)
-            if p_str not in seen_paths:
-                candidates.append((p_str, label))
-                seen_paths.add(p_str)
-        except Exception:
-            return
-    
-    system = platform.system()
-    
-    # macOS candidates
-    if system == "Darwin":
-        for candidate in ["/opt/homebrew/bin/python3", "/usr/local/bin/python3", "/usr/bin/python3"]:
-            _add_candidate(candidate, "System Python")
-        pyenv_root = Path.home() / ".pyenv" / "versions"
-        if pyenv_root.exists():
-            try:
-                for version_dir in sorted(pyenv_root.iterdir(), reverse=True):
-                    py_exe = version_dir / "bin" / "python3"
-                    if py_exe.exists():
-                        _add_candidate(str(py_exe), f"pyenv {version_dir.name}")
-                        break
-            except Exception:
-                pass
-        for candidate in [Path.home() / ".miniconda3" / "bin" / "python", Path.home() / "miniconda3" / "bin" / "python"]:
-            _add_candidate(candidate, "Miniconda")
-    
-    # Linux candidates  
-    elif system == "Linux":
-        for candidate in ["/usr/bin/python3", "/usr/local/bin/python3"]:
-            _add_candidate(candidate, "System Python")
-        pyenv_root = Path.home() / ".pyenv" / "versions"
-        if pyenv_root.exists():
-            try:
-                for version_dir in sorted(pyenv_root.iterdir(), reverse=True):
-                    py_exe = version_dir / "bin" / "python3"
-                    if py_exe.exists():
-                        _add_candidate(str(py_exe), f"pyenv {version_dir.name}")
-                        break
-            except Exception:
-                pass
-        _add_candidate(Path.home() / ".miniconda3" / "bin" / "python", "Miniconda")
-        _add_candidate("/opt/miniconda3/bin/python", "Miniconda (opt)")
-    
-    # Windows candidates
-    elif system == "Windows":
-        for version in ["310", "311", "312", "313"]:
-            _add_candidate(f"C:\\Python{version}\\python.exe", "System Python")
-        _add_candidate(r"C:\OSGeo4W\apps\Python39\python.exe", "OSGeo4W")
-        _add_candidate(Path.home() / "Anaconda3" / "python.exe", "Anaconda")
-    
-    # Universal venv candidates
-    for venv_path in [Path.home() / ".venv", Path.home() / "venv", Path.cwd() / ".venv"]:
-        _add_candidate(venv_path / "bin" / "python", f"{venv_path.name}")
-    
-    # PATH fallback
-    for cmd in ["python3", "python"]:
-        resolved = shutil.which(cmd)
-        if resolved:
-            _add_candidate(resolved, f"PATH ({cmd})")
-    
-    return candidates
 
 def _next_gen_required_message(detail: str = "") -> str:
     base = (
@@ -535,79 +285,17 @@ class ExternalRuntimeSession:
             "    tool_id = str(p.get('tool_id', ''))\n"
             "    args = json.loads(str(p.get('args_json', '{}')))\n"
             "    wbe = wbw.WbEnvironment()\n"
-            "    def _to_optional_bool(v):\n"
-            "        if v is None:\n"
-            "            return None\n"
-            "        if isinstance(v, bool):\n"
-            "            return v\n"
-            "        if isinstance(v, str):\n"
-            "            t = v.strip().lower()\n"
-            "            if t in ('true', '1', 'yes', 'y', 'on'):\n"
-            "                return True\n"
-            "            if t in ('false', '0', 'no', 'n', 'off'):\n"
-            "                return False\n"
-            "            return None\n"
-            "        return bool(v)\n"
             "    epsg = int(args.get('epsg'))\n"
             "    in_path = str(args.get('input', ''))\n"
             "    out_path = str(args.get('output', ''))\n"
-            "    coordinate_epoch = args.get('coordinate_epoch', None)\n"
-            "    source_reference_epoch = args.get('source_reference_epoch', None)\n"
-            "    target_reference_epoch = args.get('target_reference_epoch', None)\n"
-            "    operation_code = args.get('operation_code', None)\n"
-            "    prefer_official_operation = _to_optional_bool(args.get('prefer_official_operation', None))\n"
-            "    epoch_policy = args.get('epoch_policy', None)\n"
             "    if tool_id == 'reproject_raster':\n"
             "        resample = str(args.get('resample', 'bilinear')).strip() or 'bilinear'\n"
             "        src = wbe.read_raster(in_path)\n"
-            "        kwargs = {'dst_epsg': epsg, 'resample': resample}\n"
-            "        if coordinate_epoch is not None:\n"
-            "            kwargs['coordinate_epoch'] = float(coordinate_epoch)\n"
-            "        if source_reference_epoch is not None:\n"
-            "            kwargs['source_reference_epoch'] = float(source_reference_epoch)\n"
-            "        if target_reference_epoch is not None:\n"
-            "            kwargs['target_reference_epoch'] = float(target_reference_epoch)\n"
-            "        if operation_code is not None:\n"
-            "            kwargs['operation_code'] = int(operation_code)\n"
-            "        if prefer_official_operation is not None:\n"
-            "            kwargs['prefer_official_operation'] = prefer_official_operation\n"
-            "        if epoch_policy is not None and str(epoch_policy).strip():\n"
-            "            kwargs['epoch_policy'] = str(epoch_policy)\n"
-            "        out_obj = wbe.reproject_raster(src, **kwargs)\n"
+            "        out_obj = wbe.reproject_raster(src, dst_epsg=epsg, resample=resample)\n"
             "        wbe.write_raster(out_obj, out_path)\n"
-            "    elif tool_id == 'reproject_vector':\n"
-            "        src = wbe.read_vector(in_path)\n"
-            "        kwargs = {'dst_epsg': epsg}\n"
-            "        if coordinate_epoch is not None:\n"
-            "            kwargs['coordinate_epoch'] = float(coordinate_epoch)\n"
-            "        if source_reference_epoch is not None:\n"
-            "            kwargs['source_reference_epoch'] = float(source_reference_epoch)\n"
-            "        if target_reference_epoch is not None:\n"
-            "            kwargs['target_reference_epoch'] = float(target_reference_epoch)\n"
-            "        if operation_code is not None:\n"
-            "            kwargs['operation_code'] = int(operation_code)\n"
-            "        if prefer_official_operation is not None:\n"
-            "            kwargs['prefer_official_operation'] = prefer_official_operation\n"
-            "        if epoch_policy is not None and str(epoch_policy).strip():\n"
-            "            kwargs['epoch_policy'] = str(epoch_policy)\n"
-            "        out_obj = wbe.reproject_vector(src, **kwargs)\n"
-            "        wbe.write_vector(out_obj, out_path)\n"
             "    elif tool_id == 'reproject_lidar':\n"
             "        src = wbe.read_lidar(in_path)\n"
-            "        kwargs = {'dst_epsg': epsg}\n"
-            "        if coordinate_epoch is not None:\n"
-            "            kwargs['coordinate_epoch'] = float(coordinate_epoch)\n"
-            "        if source_reference_epoch is not None:\n"
-            "            kwargs['source_reference_epoch'] = float(source_reference_epoch)\n"
-            "        if target_reference_epoch is not None:\n"
-            "            kwargs['target_reference_epoch'] = float(target_reference_epoch)\n"
-            "        if operation_code is not None:\n"
-            "            kwargs['operation_code'] = int(operation_code)\n"
-            "        if prefer_official_operation is not None:\n"
-            "            kwargs['prefer_official_operation'] = prefer_official_operation\n"
-            "        if epoch_policy is not None and str(epoch_policy).strip():\n"
-            "            kwargs['epoch_policy'] = str(epoch_policy)\n"
-            "        out_obj = wbe.reproject_lidar(src, **kwargs)\n"
+            "        out_obj = wbe.reproject_lidar(src, dst_epsg=epsg)\n"
             "        wbe.write_lidar(out_obj, out_path)\n"
             "    elif tool_id == 'assign_projection_raster':\n"
             "        src = wbe.read_raster(in_path)\n"
@@ -932,10 +620,6 @@ def _rewrite_windows_qgis_launcher(path_text: str | None) -> str:
 
 
 def _discover_external_python_candidates() -> list[str]:
-    """
-    Discover all available external Python interpreters across Windows, macOS, and Linux.
-    Returns candidates in priority order, searching both PATH and common installation locations.
-    """
     mode, local_python = get_runtime_preferences()
     if mode == "qgis":
         return []
@@ -965,81 +649,24 @@ def _discover_external_python_candidates() -> list[str]:
         _add_candidate(local_python)
         return ordered
 
-    # Environment-specified Python takes highest priority
     env_candidate = os.environ.get("WBW_EXTERNAL_PYTHON")
     _add_candidate(env_candidate)
 
-    # Development venvs (user's local development environments)
     default_candidates = [
         Path.home() / "Documents" / "programming" / "Rust" / "whitebox_next_gen" / ".venv-wbw" / "bin" / "python",
         Path.home() / "Documents" / "programming" / "python" / ".venv" / "bin" / "python",
         Path.home() / ".venv" / "bin" / "python",
+        Path("/opt/homebrew/bin/python3"),
+        Path("/opt/homebrew/bin/python"),
+        Path("/usr/local/bin/python3"),
+        Path("/usr/local/bin/python"),
     ]
-
-    # Platform-specific system and homebrew installations
-    if os.name == "nt":  # Windows
-        # Search PATH for python3 and python
-        for py_name in ["python3", "python"]:
-            resolved = shutil.which(py_name)
-            _add_candidate(resolved)
-        
-        # Official python.org installer (C:\Python3X\python.exe pattern)
-        try:
-            import glob as glob_module
-            for py_exe in glob_module.glob(r"C:\Python3*\python.exe"):
-                _add_candidate(py_exe)
-        except Exception:
-            pass
-        
-        # Anaconda/Miniconda - user installation
-        user_anaconda_base = Path.home() / "Anaconda3"
-        if not user_anaconda_base.exists():
-            user_anaconda_base = Path.home() / "Miniconda3"
-        if user_anaconda_base.exists():
-            _add_candidate(str(user_anaconda_base / "python.exe"))
-        
-        # Anaconda/Miniconda - system-wide installation
-        system_anaconda_base = Path("C:\\ProgramData\\Anaconda3")
-        if not system_anaconda_base.exists():
-            system_anaconda_base = Path("C:\\ProgramData\\Miniconda3")
-        if system_anaconda_base.exists():
-            _add_candidate(str(system_anaconda_base / "python.exe"))
-        
-        # Microsoft Store installation
-        appdata_python = Path.home() / "AppData" / "Local" / "Microsoft" / "WindowsApps" / "python3.exe"
-        _add_candidate(str(appdata_python))
-
-    else:  # macOS and Linux
-        # Search PATH first (catches most installations)
-        for py_name in ["python3", "python"]:
-            resolved = shutil.which(py_name)
-            _add_candidate(resolved)
-        
-        # macOS-specific paths
-        if sys.platform == "darwin":
-            macos_candidates = [
-                Path("/opt/homebrew/bin/python3"),
-                Path("/opt/homebrew/bin/python"),
-                Path("/usr/local/bin/python3"),
-                Path("/usr/local/bin/python"),
-                Path("/usr/bin/python3"),
-            ]
-            for candidate in macos_candidates:
-                _add_candidate(str(candidate))
-        
-        # Linux-specific paths
-        else:
-            linux_candidates = [
-                Path("/usr/local/bin/python3"),
-                Path("/usr/bin/python3"),
-                Path("/usr/bin/python"),
-            ]
-            for candidate in linux_candidates:
-                _add_candidate(str(candidate))
-
-    # Add development venvs after system paths checked
     for candidate in default_candidates:
         _add_candidate(str(candidate))
+
+    resolved = shutil.which("python3")
+    _add_candidate(resolved)
+    _add_candidate("/usr/bin/python3")
 
     return ordered
 
@@ -1121,427 +748,52 @@ def get_installed_whitebox_workflows_version() -> str:
     return _get_installed_whitebox_workflows_version_for_interpreter(interpreter)
 
 
-def _get_python_version_tag() -> tuple[str, str]:
-    """
-    Return (major.minor, platform_tag) for current interpreter.
-    E.g., ("3.10", "win_amd64") or ("3.11", "macosx_11_0_arm64")
-    """
-    major_minor = f"{sys.version_info.major}.{sys.version_info.minor}"
-    
-    if sys.platform == "win32":
-        import struct
-        platform_tag = "win_amd64" if struct.calcsize("P") == 8 else "win32"
-    elif sys.platform == "darwin":
-        import platform as platform_module
-        machine = platform_module.machine()
-        if machine == "arm64":
-            platform_tag = "macosx_11_0_arm64"
-        else:
-            platform_tag = "macosx_10_9_x86_64"
-    else:  # Linux
-        platform_tag = "manylinux2014_x86_64" if sys.maxsize > 2**32 else "manylinux2014_i686"
-    
-    return major_minor, platform_tag
-
-
-def _find_wheel_in_pypi_release(release_info: dict, py_version: str, platform_tag: str) -> dict | None:
-    """
-    Find the best matching wheel file from a PyPI release for the given Python version and platform.
-    release_info is a list of file dicts from the PyPI JSON API.
-    Returns the file dict or None if no match found.
-    
-    Supports both version-specific wheels (cp311) and stable ABI wheels (cp39-abi3).
-    """
-    if not isinstance(release_info, list):
-        return None
-    
-    py_minor = int(py_version.split(".")[1])
-    best_match = None
-    best_score = -1  # Prefer specific version > abi3
-    
-    for file_info in release_info:
-        filename = file_info.get("filename", "")
-        if not filename.endswith(".whl"):
-            continue
-        
-        # Parse wheel filename: {distribution}-{version}(-{build tag})?-{python tag}-{abi tag}-{platform tag}.whl
-        parts = filename[:-4].split("-")  # Remove .whl and split
-        if len(parts) < 5:
-            continue
-        
-        py_tag = parts[-3]  # Python tag (e.g., "cp311", "cp39")
-        abi_tag = parts[-2]  # ABI tag (e.g., "cp311", "abi3")
-        plat_tag = parts[-1]  # Platform tag (e.g., "win_amd64", "manylinux2014_x86_64")
-        
-        # Match platform tag (normalize variations)
-        platform_matches = False
-        if "manylinux" in plat_tag and "manylinux" in platform_tag:
-            # All manylinux versions are compatible
-            platform_matches = True
-        elif plat_tag == platform_tag:
-            platform_matches = True
-        elif "macosx" in plat_tag and "macosx" in platform_tag:
-            # macOS wheel compatibility is more flexible (older wheels work on newer)
-            platform_matches = True
-        
-        if not platform_matches:
-            continue
-        
-        # Check Python version compatibility
-        version_matches = False
-        score = -1
-        
-        # Exact version match (highest priority)
-        if py_tag == f"cp3{py_minor}":
-            version_matches = True
-            score = 10
-        
-        # Stable ABI (cp39-abi3) works on Python 3.9+
-        elif py_tag == "cp39" and abi_tag == "abi3":
-            if py_minor >= 9:
-                version_matches = True
-                score = 5
-        
-        # Any abi3 wheel where the minimum version is <= current version
-        elif abi_tag == "abi3":
-            # Extract minimum Python version from py_tag (e.g., "cp39" -> 9)
-            try:
-                min_py_minor = int(py_tag[2:])
-                if py_minor >= min_py_minor:
-                    version_matches = True
-                    score = 5
-            except (ValueError, IndexError):
-                pass
-        
-        if version_matches and score > best_score:
-            best_match = file_info
-            best_score = score
-    
-    return best_match
-
-
-def _get_os_wheel_platform() -> str:
-    """
-    Return the OS identifier for whiteboxgeo.com wheel downloads.
-    Returns: "macos", "ubuntu", or "windows"
-    """
-    if sys.platform == "win32":
-        return "windows"
-    elif sys.platform == "darwin":
-        return "macos"
-    else:  # Linux
-        return "ubuntu"
-
-
-def _download_and_extract_wheel_from_whiteboxgeo(target_dir: str) -> bool:
-    """
-    Download whitebox-workflows wheel from whiteboxgeo.com and extract to target_dir.
-    
-    Strategy:
-    1. Determine OS (macos, ubuntu, windows)
-    2. Download the OS-specific ZIP file from whiteboxgeo.com
-    3. Extract the wheel from the ZIP
-    4. Find and extract the matching wheel to target_dir
-    """
-    try:
-        os_platform = _get_os_wheel_platform()
-        py_version, _ = _get_python_version_tag()
-        
-        # Construct download URL for OS-specific ZIP
-        zip_url = f"https://www.whiteboxgeo.com/wbw_wheels/wbw-python-pro-{os_platform}-latest.zip"
-        
-        # Create SSL context
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-        
-        # Download ZIP file
-        with tempfile.TemporaryDirectory() as temp_dir:
-            zip_path = os.path.join(temp_dir, f"wbw-wheels-{os_platform}.zip")
-            urllib.request.urlretrieve(zip_url, zip_path)
-            
-            if not os.path.exists(zip_path):
-                raise RuntimeBootstrapError(f"Failed to download wheel package from {zip_url}")
-            
-            # Extract ZIP to temp directory
-            with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                zip_ref.extractall(temp_dir)
-            
-            # Find all wheel files in the extracted contents
-            wheel_files = []
-            for root, dirs, files in os.walk(temp_dir):
-                for file in files:
-                    if file.endswith(".whl"):
-                        wheel_files.append(os.path.join(root, file))
-            
-            if not wheel_files:
-                raise RuntimeBootstrapError(
-                    f"No wheel files found in downloaded package from {zip_url}"
-                )
-            
-            # Find the best matching wheel for current Python version
-            # Try to find an exact or abi3 match
-            best_wheel = None
-            py_minor = int(py_version.split(".")[1])
-            
-            for wheel_path in wheel_files:
-                wheel_filename = os.path.basename(wheel_path)
-                
-                # Parse wheel filename: {dist}-{version}-{python tag}-{abi tag}-{platform tag}.whl
-                parts = wheel_filename[:-4].split("-")
-                if len(parts) < 5:
-                    continue
-                
-                py_tag = parts[-3]
-                abi_tag = parts[-2]
-                
-                # Check for exact version match or abi3 wheel
-                if py_tag == f"cp3{py_minor}":
-                    best_wheel = wheel_path
-                    break
-                elif py_tag == "cp39" and abi_tag == "abi3" and not best_wheel:
-                    # Keep abi3 wheel as fallback
-                    best_wheel = wheel_path
-                elif abi_tag == "abi3":
-                    # Any abi3 wheel where min version <= current version
-                    try:
-                        min_py_minor = int(py_tag[2:])
-                        if py_minor >= min_py_minor and not best_wheel:
-                            best_wheel = wheel_path
-                    except (ValueError, IndexError):
-                        pass
-            
-            if not best_wheel:
-                available = [os.path.basename(f) for f in wheel_files]
-                raise RuntimeBootstrapError(
-                    f"No compatible wheel found for Python {py_version}. "
-                    f"Available: {available}"
-                )
-            
-            # Extract the selected wheel to target_dir
-            with zipfile.ZipFile(best_wheel, "r") as wheel_ref:
-                wheel_ref.extractall(target_dir)
-        
-        return True
-    
-    except RuntimeBootstrapError:
-        raise
-    except Exception as exc:
-        raise RuntimeBootstrapError(
-            f"Failed to download/extract whitebox-workflows from whiteboxgeo.com: {str(exc)}"
-        ) from exc
-
-
-def _is_qgis_bundled_python(interpreter: str) -> bool:
-    """
-    Detect if the given interpreter is QGIS's bundled (sandboxed) Python.
-    Heuristic: if running via subprocess and import fails but module is available
-    in current process, likely QGIS bundled Python.
-    """
-    try:
-        # If interpreter path contains 'qgis' (case-insensitive), likely QGIS Python
-        if "qgis" in interpreter.lower():
-            return True
-        
-        # Test if this Python can run pip
-        result = subprocess.run(
-            [interpreter, "-m", "pip", "--version"],
-            capture_output=True,
-            timeout=2,
-            **_subprocess_window_kwargs(),
-        )
-        
-        # If pip command fails, likely sandboxed
-        return result.returncode != 0
-    except Exception:
-        return False
-
-
 def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec: str = "") -> dict:
-    """
-    Install or upgrade whitebox-workflows using a logical priority strategy:
-    
-    Strategy 1: Download wheels from whiteboxgeo.com and extract to QGIS Python
-               (Guaranteed to work—QGIS Python always exists)
-    
-    Strategy 2: If Strategy 1 fails, search for system Python with pip
-               and install from PyPI
-    
-    Strategy 3: If both fail, return error with manual install instructions
-    
-    Returns dict with 'installed_version', 'strategy', and 'diagnostics' keys.
-    """
+    """Install or upgrade whitebox-workflows in the selected interpreter."""
     interpreter = get_backend_interpreter_path()
-    plugin_dir = os.path.dirname(os.path.realpath(__file__))
-    diagnostics = []
-    strategy1_error_details = ""
-    
-    # ===========================================================================
-    # STRATEGY 1: Always try whiteboxgeo.com first (QGIS Python is guaranteed)
-    # ===========================================================================
-    diagnostics.append("Strategy 1: Attempting whiteboxgeo.com wheel download/extract...")
-    try:
-        _download_and_extract_wheel_from_whiteboxgeo(plugin_dir)
-        
-        installed = ""
-        try:
-            installed = get_installed_whitebox_workflows_version()
-        except Exception:
-            installed = ""
-        
-        _EXTERNAL_SESSION_CACHE.clear()
-        diagnostics.append("✓ Strategy 1 succeeded (whiteboxgeo.com)")
-        
-        return {
-            "interpreter": interpreter,
-            "installed_version": installed,
-            "upgraded": bool(upgrade),
-            "strategy": "whiteboxgeo_wheel",
-            "location": "QGIS bundled Python (plugin directory)",
-            "diagnostics": "\n".join(diagnostics),
-        }
-    
-    except Exception as strategy1_error:
-        import traceback
-        strategy1_error_details = traceback.format_exc()
-        diagnostics.append(f"✗ Strategy 1 failed:")
-        diagnostics.append(f"  Error type: {type(strategy1_error).__name__}")
-        diagnostics.append(f"  Error message: {str(strategy1_error)}")
-        diagnostics.append("  Full traceback:")
-        for line in strategy1_error_details.split("\n"):
-            if line.strip():
-                diagnostics.append(f"    {line}")
-    
-    # ===========================================================================
-    # STRATEGY 2: If whiteboxgeo.com fails, search for system Python + pip
-    # ===========================================================================
-    diagnostics.append("Strategy 2: Searching for external Python with pip...")
-    try:
-        external_candidates = _discover_external_python_candidates()
-        diagnostics.append(f"  Found {len(external_candidates)} external Python candidate(s)")
-        
-        for idx, external_py in enumerate(external_candidates, 1):
-            diagnostics.append(f"  Candidate {idx}: {external_py}")
-            try:
-                # Test if this Python has pip
-                test = subprocess.run(
-                    [external_py, "-m", "pip", "--version"],
-                    capture_output=True,
-                    timeout=2,
-                    **_subprocess_window_kwargs(),
-                )
-                if test.returncode != 0:
-                    diagnostics.append(f"    → No pip (return code {test.returncode})")
-                    continue
-                
-                diagnostics.append(f"    → Has pip, installing...")
-                
-                # Found a working pip—try to install from PyPI
-                package_spec = "whitebox-workflows"
-                command = [external_py, "-m", "pip", "install"]
-                if upgrade:
-                    command.append("--upgrade")
-                command.append(package_spec)
-                
-                completed = subprocess.run(
-                    command,
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                    env=_build_clean_env(),
-                    **_subprocess_window_kwargs(),
-                )
-                
-                if completed.returncode == 0:
-                    installed = ""
-                    try:
-                        installed = _get_installed_whitebox_workflows_version_for_interpreter(external_py)
-                    except Exception:
-                        installed = ""
-                    
-                    _EXTERNAL_SESSION_CACHE.clear()
-                    diagnostics.append(f"✓ Strategy 2 succeeded (pip via {external_py})")
-                    
-                    return {
-                        "interpreter": external_py,
-                        "installed_version": installed,
-                        "upgraded": bool(upgrade),
-                        "strategy": "pip_system_python",
-                        "location": f"System Python: {external_py}",
-                        "diagnostics": "\n".join(diagnostics),
-                        "strategy1_failure_details": strategy1_error_details,
-                    }
-                else:
-                    diagnostics.append(f"    → pip install failed (return code {completed.returncode})")
-            except Exception as e:
-                diagnostics.append(f"    → Exception: {str(e)[:100]}")
-                continue
-    except Exception as e:
-        diagnostics.append(f"Strategy 2 exception: {str(e)[:200]}")
-    
-    # ===========================================================================
-    # STRATEGY 3: Both failed—provide helpful manual install instructions
-    # ===========================================================================
-    diagnostics.append("✗ All strategies failed")
-    manual_instructions = _generate_manual_install_instructions()
-    
-    raise RuntimeBootstrapError(
-        f"Failed to automatically install whitebox-workflows.\n\n"
-        f"Diagnostic details:\n{chr(10).join(diagnostics)}\n\n"
-        f"Manual install options:\n{manual_instructions}"
+    package_spec = "whitebox-workflows"
+    cleaned_spec = str(version_spec or "").strip()
+    if cleaned_spec:
+        package_spec = f"whitebox-workflows{cleaned_spec}"
+
+    command = [interpreter, "-m", "pip", "install"]
+    if upgrade:
+        command.append("--upgrade")
+    command.append(package_spec)
+
+    completed = subprocess.run(
+        command,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_build_clean_env(),
+        **_subprocess_window_kwargs(),
     )
+    stdout = completed.stdout.strip()
+    stderr = completed.stderr.strip()
 
-
-def _generate_manual_install_instructions() -> str:
-    """
-    Generate platform-specific manual installation instructions.
-    Includes download URL for wheels and instructions for configuring QGIS Python.
-    """
-    os_platform = _get_os_wheel_platform()
-    py_version, platform_tag = _get_python_version_tag()
-    
-    instructions = (
-        f"Your system (Python {py_version}, {platform_tag}):\n\n"
-        f"Option A: Download wheel from whiteboxgeo.com\n"
-        f"  1. Download: https://www.whiteboxgeo.com/wbw_wheels/\n"
-        f"  2. Unzip the wbw-python-pro-{os_platform}-latest.zip\n"
-        f"  3. Find the wheel file (.whl) matching your Python version\n"
-        f"  4. Place it in the QGIS plugin directory\n"
-        f"  5. Manually import the wheel into QGIS Python\n\n"
-        f"Option B: Install with system Python (if available)\n"
-        f"  1. Open terminal/command prompt\n"
-        f"  2. Run: python -m pip install whitebox-workflows\n"
-        f"  3. Configure QGIS to use that Python in Plugin Settings\n\n"
-        f"For detailed help, visit: https://www.whiteboxgeo.com"
-    )
-    
-    return instructions
-
-
-def get_whiteboxgeo_version() -> str:
-    """
-    Fetch latest version from whiteboxgeo.com version.json.
-    Useful for checking if updates are available for whiteboxgeo.com installations.
-    """
-    try:
-        url = "https://www.whiteboxgeo.com/wbw_wheels/version.json"
-        
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-        
-        with urllib.request.urlopen(url, timeout=10, context=ssl_context) as response:  # nosec B310
-            payload = json.loads(response.read().decode("utf-8"))
-        
-        version = payload.get("version", "").strip()
-        if not version:
-            raise RuntimeBootstrapError("No version found in whiteboxgeo.com version.json")
-        return version
-    
-    except Exception as exc:
+    if completed.returncode != 0:
+        detail = stderr or stdout or "unknown pip install error"
         raise RuntimeBootstrapError(
-            f"Failed to fetch version from whiteboxgeo.com: {str(exc)}"
-        ) from exc
+            f"Failed to install {package_spec} via {interpreter}: {detail}"
+        )
+
+    installed = ""
+    try:
+        installed = get_installed_whitebox_workflows_version()
+    except Exception:
+        installed = ""
+
+    # Existing cached sessions may point to a stale module build.
+    _EXTERNAL_SESSION_CACHE.clear()
+
+    return {
+        "interpreter": interpreter,
+        "installed_version": installed,
+        "stdout": stdout,
+        "stderr": stderr,
+        "upgraded": bool(upgrade),
+    }
 
 
 def fetch_latest_whitebox_workflows_version(timeout_seconds: float = 4.0) -> str:
@@ -1553,14 +805,8 @@ def fetch_latest_whitebox_workflows_version(timeout_seconds: float = 4.0) -> str
         )
 
     try:
-        # Create SSL context to handle certificate verification
-        ssl_context = ssl.create_default_context()
-        # Disable SSL verification if needed (for corporate networks, etc.)
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-        
         # URL is validated above (scheme + host allowlist).
-        with urllib.request.urlopen(url, timeout=float(timeout_seconds), context=ssl_context) as response:  # nosec B310
+        with urllib.request.urlopen(url, timeout=float(timeout_seconds)) as response:  # nosec B310
             payload = response.read().decode("utf-8", errors="replace")
         parsed = json.loads(payload)
         info = parsed.get("info", {}) if isinstance(parsed, dict) else {}
@@ -1568,40 +814,6 @@ def fetch_latest_whitebox_workflows_version(timeout_seconds: float = 4.0) -> str
         return version
     except Exception as exc:
         raise RuntimeBootstrapError(f"Unable to query latest whitebox-workflows version from PyPI: {exc}")
-
-
-def get_latest_whitebox_workflows_version(installation_strategy: str = "") -> str:
-    """
-    Get latest whitebox-workflows version using path-aware strategy.
-    
-    If installation_strategy is provided and valid (whiteboxgeo_wheel or pip_system_python),
-    use the appropriate version source. Otherwise, try both sources.
-    
-    Args:
-        installation_strategy: Installation path used ("whiteboxgeo_wheel", "pip_system_python", or "")
-    
-    Returns:
-        Latest version string or empty string if unable to determine
-    """
-    normalized_strategy = str(installation_strategy or "").strip().lower()
-    
-    # If whiteboxgeo.com was used for installation, check whiteboxgeo.com for updates
-    if normalized_strategy == "whiteboxgeo_wheel":
-        try:
-            return get_whiteboxgeo_version()
-        except Exception:
-            # Fall back to PyPI if whiteboxgeo fails
-            pass
-    
-    # If pip was used for installation, or strategy unknown, check PyPI
-    try:
-        return fetch_latest_whitebox_workflows_version()
-    except Exception:
-        # Last resort: try whiteboxgeo.com
-        try:
-            return get_whiteboxgeo_version()
-        except Exception:
-            return ""
 
 
 def _normalize_version_for_compare(raw: str) -> tuple:
@@ -1645,12 +857,8 @@ def _ensure_next_gen_min_version(installed_version: str, runtime_label: str) -> 
         )
 
 
-def backend_update_status(installation_strategy: str = "") -> dict:
+def backend_update_status() -> dict:
     """Return installed/latest version status for whitebox-workflows.
-
-    Args:
-        installation_strategy: Installation path used (whiteboxgeo_wheel, pip_system_python, or "").
-                              If provided, uses path-aware version checking.
 
     This function never raises; failures are captured in an error field.
     """
@@ -1664,8 +872,7 @@ def backend_update_status(installation_strategy: str = "") -> dict:
     try:
         result["interpreter"] = get_backend_interpreter_path()
         result["installed_version"] = get_installed_whitebox_workflows_version()
-        # Use path-aware version checking if strategy is known
-        result["latest_version"] = get_latest_whitebox_workflows_version(installation_strategy)
+        result["latest_version"] = fetch_latest_whitebox_workflows_version()
         installed = str(result.get("installed_version", "")).strip()
         latest = str(result.get("latest_version", "")).strip()
         if installed and latest:
@@ -1933,66 +1140,15 @@ def run_projection_wrapper(
 
     wbw = load_whitebox_workflows()
     wbe = wbw.WbEnvironment()
-
-    def _to_optional_bool(v):
-        if v is None:
-            return None
-        if isinstance(v, bool):
-            return v
-        if isinstance(v, str):
-            t = v.strip().lower()
-            if t in {"true", "1", "yes", "y", "on"}:
-                return True
-            if t in {"false", "0", "no", "n", "off"}:
-                return False
-            return None
-        return bool(v)
-
     epsg = int(args.get("epsg"))
     in_path = str(args.get("input", ""))
     out_path = str(args.get("output", ""))
-    coordinate_epoch = args.get("coordinate_epoch", None)
-    source_reference_epoch = args.get("source_reference_epoch", None)
-    target_reference_epoch = args.get("target_reference_epoch", None)
-    operation_code = args.get("operation_code", None)
-    prefer_official_operation = _to_optional_bool(args.get("prefer_official_operation", None))
-    epoch_policy = args.get("epoch_policy", None)
 
     if tool_id == "reproject_raster":
         resample = str(args.get("resample", "bilinear")).strip() or "bilinear"
         src = wbe.read_raster(in_path)
-        kwargs = {"dst_epsg": epsg, "resample": resample}
-        if coordinate_epoch is not None:
-            kwargs["coordinate_epoch"] = float(coordinate_epoch)
-        if source_reference_epoch is not None:
-            kwargs["source_reference_epoch"] = float(source_reference_epoch)
-        if target_reference_epoch is not None:
-            kwargs["target_reference_epoch"] = float(target_reference_epoch)
-        if operation_code is not None:
-            kwargs["operation_code"] = int(operation_code)
-        if prefer_official_operation is not None:
-            kwargs["prefer_official_operation"] = prefer_official_operation
-        if epoch_policy is not None and str(epoch_policy).strip():
-            kwargs["epoch_policy"] = str(epoch_policy)
-        out_obj = wbe.reproject_raster(src, **kwargs)
+        out_obj = wbe.reproject_raster(src, dst_epsg=epsg, resample=resample)
         wbe.write_raster(out_obj, out_path)
-    elif tool_id == "reproject_vector":
-        src = wbe.read_vector(in_path)
-        kwargs = {"dst_epsg": epsg}
-        if coordinate_epoch is not None:
-            kwargs["coordinate_epoch"] = float(coordinate_epoch)
-        if source_reference_epoch is not None:
-            kwargs["source_reference_epoch"] = float(source_reference_epoch)
-        if target_reference_epoch is not None:
-            kwargs["target_reference_epoch"] = float(target_reference_epoch)
-        if operation_code is not None:
-            kwargs["operation_code"] = int(operation_code)
-        if prefer_official_operation is not None:
-            kwargs["prefer_official_operation"] = prefer_official_operation
-        if epoch_policy is not None and str(epoch_policy).strip():
-            kwargs["epoch_policy"] = str(epoch_policy)
-        out_obj = wbe.reproject_vector(src, **kwargs)
-        wbe.write_vector(out_obj, out_path)
     elif tool_id == "georeference_raster_from_control_points":
         resample = str(args.get("resample", "bilinear")).strip() or "bilinear"
         src = wbe.read_raster(in_path)
@@ -2007,20 +1163,7 @@ def run_projection_wrapper(
         )
     elif tool_id == "reproject_lidar":
         src = wbe.read_lidar(in_path)
-        kwargs = {"dst_epsg": epsg}
-        if coordinate_epoch is not None:
-            kwargs["coordinate_epoch"] = float(coordinate_epoch)
-        if source_reference_epoch is not None:
-            kwargs["source_reference_epoch"] = float(source_reference_epoch)
-        if target_reference_epoch is not None:
-            kwargs["target_reference_epoch"] = float(target_reference_epoch)
-        if operation_code is not None:
-            kwargs["operation_code"] = int(operation_code)
-        if prefer_official_operation is not None:
-            kwargs["prefer_official_operation"] = prefer_official_operation
-        if epoch_policy is not None and str(epoch_policy).strip():
-            kwargs["epoch_policy"] = str(epoch_policy)
-        out_obj = wbe.reproject_lidar(src, **kwargs)
+        out_obj = wbe.reproject_lidar(src, dst_epsg=epsg)
         wbe.write_lidar(out_obj, out_path)
     elif tool_id == "assign_projection_raster":
         src = wbe.read_raster(in_path)
@@ -2044,222 +1187,3 @@ def run_projection_wrapper(
         raise RuntimeBootstrapError(f"Unsupported projection wrapper tool: {tool_id}")
 
     return {"outputs": {"output": out_path or in_path}}
-
-
-def get_latest_wheel_version(timeout_seconds: float = 4.0) -> str:
-    """Fetch latest whitebox-workflows wheel version from whiteboxgeo.com."""
-    try:
-        url = "https://www.whiteboxgeo.com/wbw_wheels/version.json"
-        req = urllib.request.Request(url)
-        ctx = ssl.create_default_context()
-        with urllib.request.urlopen(req, context=ctx, timeout=timeout_seconds) as response:
-            data = json.loads(response.read().decode("utf-8"))
-            if isinstance(data, dict) and "version" in data:
-                version = str(data["version"]).strip()
-                # Debug logging to console (visible in QGIS Python console)
-                print(f"[WbW Plugin] Latest wheel version from whiteboxgeo.com: {version}")
-                return version
-    except Exception as e:
-        # Debug logging to console
-        print(f"[WbW Plugin] Failed to fetch latest version: {e}")
-    return ""
-
-
-def download_and_install_wheels(version_spec: str = "") -> dict:
-    """
-    Download and install whitebox-workflows wheels to plugin wheels folder.
-    Returns dict with keys: success (bool), version (str), message (str), wheels_folder (str)
-    """
-    result = {
-        "success": False,
-        "version": "",
-        "message": "",
-        "wheels_folder": get_wheels_folder(),
-    }
-    
-    if not result["wheels_folder"]:
-        result["message"] = "Plugin folder not initialized. Call set_plugin_folder() first."
-        return result
-    
-    # Create wheels folder if needed
-    wheels_path = Path(result["wheels_folder"])
-    try:
-        wheels_path.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
-        result["message"] = f"Failed to create wheels folder: {e}"
-        return result
-    
-    # Determine platform
-    system = platform.system()
-    if system == "Darwin":
-        platform_name = "macos"
-    elif system == "Linux":
-        platform_name = "ubuntu"
-    elif system == "Windows":
-        platform_name = "windows"
-    else:
-        result["message"] = f"Unsupported platform: {system}"
-        return result
-    
-    # Determine version to download
-    if version_spec:
-        version_to_download = version_spec
-    else:
-        version_to_download = get_latest_wheel_version()
-        if not version_to_download:
-            result["message"] = "Could not determine latest wheel version"
-            return result
-    
-    # Download wheel zip - NOTE: Always use "latest", not version number
-    # The version.json tells us what version is in the latest.zip
-    wheel_url = f"https://www.whiteboxgeo.com/wbw_wheels/wbw-python-pro-{platform_name}-latest.zip"
-    result["version"] = version_to_download
-    
-    # Debug logging to console
-    print(f"[WbW Plugin] Downloading wheels from: {wheel_url}")
-    print(f"[WbW Plugin] Expected version in wheels: {version_to_download}")
-    
-    try:
-        req = urllib.request.Request(wheel_url)
-        ctx = ssl.create_default_context()
-        
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-                with urllib.request.urlopen(req, context=ctx, timeout=30) as response:
-                    tmp.write(response.read())
-                tmp_path = tmp.name
-        except urllib.error.HTTPError as http_err:
-            result["message"] = (
-                f"HTTP {http_err.code} error downloading wheels.\\n"
-                f"URL: {wheel_url}\\n"
-                f"Please verify this URL exists and is accessible."
-            )
-            return result
-        
-        # Extract wheels
-        print(f"[WbW Plugin] Extracting wheels to: {wheels_path}")
-        with zipfile.ZipFile(tmp_path, "r") as zf:
-            zf.extractall(str(wheels_path))
-        
-        os.unlink(tmp_path)
-        
-        # Find and extract any .whl files inside the extracted contents
-        # The downloaded zip may contain .whl files that need to be extracted
-        print(f"[WbW Plugin] Looking for .whl files in: {wheels_path}")
-        for whl_file in wheels_path.glob("*.whl"):
-            print(f"[WbW Plugin] Found wheel file: {whl_file.name}, extracting contents...")
-            try:
-                with zipfile.ZipFile(str(whl_file), "r") as whl_zf:
-                    whl_zf.extractall(str(wheels_path))
-                print(f"[WbW Plugin] Extracted {whl_file.name} successfully")
-                # Remove the .whl file after extraction - we don't need the file itself
-                whl_file.unlink()
-                print(f"[WbW Plugin] Removed {whl_file.name} (contents now in directory)")
-            except Exception as e:
-                print(f"[WbW Plugin] Warning: Could not extract {whl_file.name}: {e}")
-        
-        # Verify installation by checking if whitebox_workflows directory exists
-        wbw_package = wheels_path / "whitebox_workflows"
-        if wbw_package.exists() and wbw_package.is_dir():
-            print(f"[WbW Plugin] ✓ Package directory exists at: {wbw_package}")
-        else:
-            print(f"[WbW Plugin] ⚠ Warning: Package directory not found at: {wbw_package}")
-            print(f"[WbW Plugin] Contents of {wheels_path}:")
-            try:
-                for item in wheels_path.iterdir():
-                    print(f"[WbW Plugin]   - {item.name}")
-            except:
-                pass
-        
-        # Ensure wheels folder is in sys.path at position 0
-        ensure_wheels_in_sys_path()
-        
-        # Verify installation by checking if wheels can be imported
-        ensure_wheels_in_sys_path()
-        # Don't verify with sys.executable (QGIS bundled Python) - just trust extraction worked
-        # The wheels are now in sys.path, so subsequent imports will find them
-        result["success"] = True
-        result["message"] = f"Successfully installed whitebox_workflows {version_to_download}"
-        
-    except Exception as e:
-        result["message"] = (
-            f"Failed to download/install wheels: {e}\\n"
-            f"URL attempted: {wheel_url}"
-        )
-        print(f"[WbW Plugin] Exception during wheel install: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    return result
-def get_qgis_bundled_python() -> str:
-    """Return path to QGIS's bundled Python interpreter (sys.executable)."""
-    import sys
-    return sys.executable
-
-
-def get_wbw_python_to_use() -> str:
-    """Return the Python interpreter selected for whitebox_workflows operations.
-    
-    Priority:
-    1. python_override_path if set (from settings)
-    2. QGIS bundled Python (sys.executable)
-    """
-    import sys
-    # Check if override is set via runtime preferences
-    mode, local_python = get_runtime_preferences()
-    if mode == "local" and local_python:
-        return local_python
-    return sys.executable
-
-
-def refresh_backend_status(python_override_path: str = "") -> dict:
-    """Refresh and return backend installation status.
-    
-    Args:
-        python_override_path: Optional override path to Python interpreter
-        
-    Returns:
-        dict with keys: version, installed, error
-    """
-    result = {
-        "version": "",
-        "installed": False,
-        "error": "",
-    }
-    try:
-        interpreter = python_override_path or get_wbw_python_to_use()
-        version = get_whitebox_workflows_version_for_interpreter(interpreter)
-        result["version"] = version
-        result["installed"] = bool(version)
-    except Exception as exc:
-        result["error"] = str(exc)
-    return result
-
-
-def get_backend_python_for_operations(override_path: str = "") -> tuple[str, str]:
-    """Get the Python interpreter and whitebox_workflows version for backend operations.
-    
-    Args:
-        override_path: Optional override path to Python interpreter
-        
-    Returns:
-        tuple of (interpreter_path, version_string)
-    """
-    interpreter = override_path or get_wbw_python_to_use()
-    try:
-        version = get_whitebox_workflows_version_for_interpreter(interpreter)
-    except Exception:
-        version = ""
-    return (interpreter, version)
-
-
-def install_whitebox_workflows(version: str = "", *args, **kwargs) -> dict:
-    """Install or upgrade whitebox_workflows wheels.
-    
-    Args:
-        version: Specific version to install (empty = latest)
-        
-    Returns:
-        dict with installation result: {success, version, message, ...}
-    """
-    return download_and_install_wheels(version)

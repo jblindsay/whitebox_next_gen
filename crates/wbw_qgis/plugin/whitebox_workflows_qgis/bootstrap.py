@@ -2045,3 +2045,81 @@ def download_and_install_wheels(version_spec: str = "") -> dict:
         result["message"] = f"Failed to download/install wheels: {e}"
     
     return result
+
+
+# ==============================================================================
+# Compatibility functions for plugin.py integration
+# ==============================================================================
+
+def get_qgis_bundled_python() -> str:
+    """Return path to QGIS's bundled Python interpreter (sys.executable)."""
+    import sys
+    return sys.executable
+
+
+def get_wbw_python_to_use() -> str:
+    """Return the Python interpreter selected for whitebox_workflows operations.
+    
+    Priority:
+    1. python_override_path if set (from settings)
+    2. QGIS bundled Python (sys.executable)
+    """
+    import sys
+    # Check if override is set via runtime preferences
+    mode, local_python = get_runtime_preferences()
+    if mode == "local" and local_python:
+        return local_python
+    return sys.executable
+
+
+def refresh_backend_status(python_override_path: str = "") -> dict:
+    """Refresh and return backend installation status.
+    
+    Args:
+        python_override_path: Optional override path to Python interpreter
+        
+    Returns:
+        dict with keys: version, installed, error
+    """
+    result = {
+        "version": "",
+        "installed": False,
+        "error": "",
+    }
+    try:
+        interpreter = python_override_path or get_wbw_python_to_use()
+        version = get_whitebox_workflows_version_for_interpreter(interpreter)
+        result["version"] = version
+        result["installed"] = bool(version)
+    except Exception as exc:
+        result["error"] = str(exc)
+    return result
+
+
+def get_backend_python_for_operations(override_path: str = "") -> tuple[str, str]:
+    """Get the Python interpreter and whitebox_workflows version for backend operations.
+    
+    Args:
+        override_path: Optional override path to Python interpreter
+        
+    Returns:
+        tuple of (interpreter_path, version_string)
+    """
+    interpreter = override_path or get_wbw_python_to_use()
+    try:
+        version = get_whitebox_workflows_version_for_interpreter(interpreter)
+    except Exception:
+        version = ""
+    return (interpreter, version)
+
+
+def install_whitebox_workflows(version: str = "", *args, **kwargs) -> dict:
+    """Install or upgrade whitebox_workflows wheels.
+    
+    Args:
+        version: Specific version to install (empty = latest)
+        
+    Returns:
+        dict with installation result: {success, version, message, ...}
+    """
+    return download_and_install_wheels(version)

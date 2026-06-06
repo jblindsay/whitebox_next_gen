@@ -808,7 +808,25 @@ def get_backend_interpreter_path() -> str:
 
 
 def _get_installed_whitebox_workflows_version_for_interpreter(interpreter: str) -> str:
+    """Get the installed whitebox-workflows version.
+
+    For the in-process (QGIS Python) case we query importlib.metadata directly —
+    no subprocess. sys.executable inside QGIS is the QGIS binary, not Python,
+    so subprocess.run([sys.executable, ...]) would launch QGIS, not Python.
+    """
     import sys as _sys
+    is_inprocess = (interpreter == str(_sys.executable))
+
+    if is_inprocess:
+        # Fast in-process path: no subprocess needed.
+        _ensure_pip_target_on_sys_path()
+        try:
+            import importlib.metadata as _md
+            return _md.version("whitebox-workflows")
+        except Exception:
+            return ""
+
+    # External interpreter path (unchanged from original).
     runner = (
         "import importlib.metadata as md\n"
         "try:\n"
@@ -816,24 +834,12 @@ def _get_installed_whitebox_workflows_version_for_interpreter(interpreter: str) 
         "except Exception:\n"
         "    print('')\n"
     )
-    # When querying sys.executable (the QGIS Python), keep the full process
-    # environment so PYTHONHOME is inherited correctly on bundled distributions.
-    # For external interpreters, strip PYTHONHOME to avoid cross-contamination.
-    is_inprocess = (interpreter == str(_sys.executable))
-    env = dict(os.environ) if is_inprocess else _build_clean_env()
-    # For --target installs, also add the target dir to PYTHONPATH so the
-    # subprocess can find the package that was installed there.
-    if is_inprocess:
-        target = _get_pip_target_dir()
-        if target:
-            existing = env.get("PYTHONPATH", "")
-            env["PYTHONPATH"] = f"{target}{os.pathsep}{existing}" if existing else target
     completed = subprocess.run(
         [interpreter, "-c", runner],
         check=False,
         capture_output=True,
         text=True,
-        env=env,
+        env=_build_clean_env(),
         **_subprocess_window_kwargs(),
     )
     if completed.returncode != 0:
@@ -850,67 +856,72 @@ def get_installed_whitebox_workflows_version() -> str:
 
 
 def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec: str = "") -> dict:
-    """Install or upgrade whitebox-workflows using the QGIS Python pip.
+    """Install or upgrade whitebox-workflows using pip in-process.
 
-    Installs into the per-profile pip --target directory so the package is
-    isolated from the (often read-only) QGIS app bundle site-packages.
+    Runs pip via its internal Python API (no subprocess) so that:
+    - sys.executable does not need to be a Python binary (it isn't in QGIS)
+    - No stdout/stderr capture issues inside QGIS
+    - No hang from subprocess waiting for QGIS to exit
 
-    NOTE: This function blocks until pip completes. Call it from a background
-    thread (see install_whitebox_workflows_async) to avoid freezing the UI.
+    Installs into the per-profile pip --target directory.
+    NOTE: Blocks until pip completes. Call via install_whitebox_workflows_async
+    from the UI to avoid freezing Qt.
     """
-    import sys
-    interpreter = str(sys.executable)
     target_dir = _get_pip_target_dir()
     package_spec = "whitebox-workflows"
     cleaned_spec = str(version_spec or "").strip()
     if cleaned_spec:
         package_spec = f"whitebox-workflows{cleaned_spec}"
 
-    command = [interpreter, "-m", "pip", "install", "--target", target_dir]
+    args = ["install", "--target", target_dir]
     if upgrade:
-        command.append("--upgrade")
-    command.append(package_spec)
+        args.append("--upgrade")
+    args.append(package_spec)
 
-    completed = subprocess.run(
-        command,
-        check=False,
-        capture_output=True,
-        text=True,
-        env=dict(os.environ),  # preserve PYTHONHOME for bundled QGIS Python
-        **_subprocess_window_kwargs(),
-    )
-    stdout = completed.stdout.strip()
-    stderr = completed.stderr.strip()
-
-    if completed.returncode != 0:
-        detail = stderr or stdout or "unknown pip install error"
+    try:
+        from pip._internal.cli.main import main as pip_main  # type: ignore[import]
+    except ImportError:
         raise RuntimeBootstrapError(
-            f"Failed to install {package_spec}: {detail}"
+            "pip is not available in this Python environment. "
+            "Install whitebox-workflows manually and restart QGIS."
         )
 
-    # Ensure the target dir is on sys.path for the current session.
-    _ensure_pip_target_on_sys_path()
+    import io
+    captured = io.StringIO()
+    exit_code = 1
+    try:
+        # pip calls sys.exit() on completion; catch it.
+        exit_code = pip_main(args)
+    except SystemExit as exc:
+        exit_code = int(exc.code) if exc.code is not None else 0
+    except Exception as exc:
+        raise RuntimeBootstrapError(f"pip install failed: {exc}") from exc
 
-    # Clear any stale cached import so the next import picks up the new version.
+    if exit_code not in (0, None):
+        raise RuntimeBootstrapError(
+            f"pip install {package_spec} failed with exit code {exit_code}. "
+            "Check the QGIS Python console for details."
+        )
+
+    # Add target dir to sys.path and clear stale import cache.
+    _ensure_pip_target_on_sys_path()
     import sys as _sys
     for key in list(_sys.modules.keys()):
         if key == "whitebox_workflows" or key.startswith("whitebox_workflows."):
             del _sys.modules[key]
-
     _EXTERNAL_SESSION_CACHE.clear()
 
     installed = ""
     try:
-        installed = _get_installed_whitebox_workflows_version_for_interpreter(interpreter)
+        installed = _get_installed_whitebox_workflows_version_for_interpreter(str(_sys.executable))
     except Exception:
         installed = ""
 
+    import sys
     return {
-        "interpreter": interpreter,
+        "interpreter": str(sys.executable),
         "target_dir": target_dir,
         "installed_version": installed,
-        "stdout": stdout,
-        "stderr": stderr,
         "upgraded": bool(upgrade),
     }
 

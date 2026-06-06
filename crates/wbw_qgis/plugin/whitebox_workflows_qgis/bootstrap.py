@@ -1325,6 +1325,40 @@ def fetch_latest_whitebox_workflows_version(timeout_seconds: float = 4.0) -> str
         raise RuntimeBootstrapError(f"Unable to query latest whitebox-workflows version from PyPI: {exc}")
 
 
+def get_latest_whitebox_workflows_version(installation_strategy: str = "") -> str:
+    """
+    Get latest whitebox-workflows version using path-aware strategy.
+    
+    If installation_strategy is provided and valid (whiteboxgeo_wheel or pip_system_python),
+    use the appropriate version source. Otherwise, try both sources.
+    
+    Args:
+        installation_strategy: Installation path used ("whiteboxgeo_wheel", "pip_system_python", or "")
+    
+    Returns:
+        Latest version string or empty string if unable to determine
+    """
+    normalized_strategy = str(installation_strategy or "").strip().lower()
+    
+    # If whiteboxgeo.com was used for installation, check whiteboxgeo.com for updates
+    if normalized_strategy == "whiteboxgeo_wheel":
+        try:
+            return get_whiteboxgeo_version()
+        except Exception:
+            # Fall back to PyPI if whiteboxgeo fails
+            pass
+    
+    # If pip was used for installation, or strategy unknown, check PyPI
+    try:
+        return fetch_latest_whitebox_workflows_version()
+    except Exception:
+        # Last resort: try whiteboxgeo.com
+        try:
+            return get_whiteboxgeo_version()
+        except Exception:
+            return ""
+
+
 def _normalize_version_for_compare(raw: str) -> tuple:
     text = str(raw or "").strip().lower()
     if not text:
@@ -1366,8 +1400,12 @@ def _ensure_next_gen_min_version(installed_version: str, runtime_label: str) -> 
         )
 
 
-def backend_update_status() -> dict:
+def backend_update_status(installation_strategy: str = "") -> dict:
     """Return installed/latest version status for whitebox-workflows.
+
+    Args:
+        installation_strategy: Installation path used (whiteboxgeo_wheel, pip_system_python, or "").
+                              If provided, uses path-aware version checking.
 
     This function never raises; failures are captured in an error field.
     """
@@ -1381,7 +1419,8 @@ def backend_update_status() -> dict:
     try:
         result["interpreter"] = get_backend_interpreter_path()
         result["installed_version"] = get_installed_whitebox_workflows_version()
-        result["latest_version"] = fetch_latest_whitebox_workflows_version()
+        # Use path-aware version checking if strategy is known
+        result["latest_version"] = get_latest_whitebox_workflows_version(installation_strategy)
         installed = str(result.get("installed_version", "")).strip()
         latest = str(result.get("latest_version", "")).strip()
         if installed and latest:

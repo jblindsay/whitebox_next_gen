@@ -192,6 +192,7 @@ class WhiteboxWorkflowsPlugin:
         self._settings_key_skip_auto_update_checks_local_mode = "whitebox_workflows/skip_auto_update_checks_local_mode"
         self._settings_key_last_update_check_unix = "whitebox_workflows/last_update_check_unix"
         self._settings_key_skipped_update_version = "whitebox_workflows/skipped_update_version"
+        self._settings_key_installation_strategy = "whitebox_workflows/installation_strategy"
         self._panel_visible = True
         self._panel_width = 320
         self._panel_show_available = True
@@ -208,6 +209,7 @@ class WhiteboxWorkflowsPlugin:
         self._skip_auto_update_checks_in_local_mode = True
         self._last_update_check_unix = 0
         self._skipped_update_version = ""
+        self._installation_strategy = ""  # whiteboxgeo_wheel, pip_system_python, or empty
 
     def _plugin_icon(self):
         base_dir = os.path.dirname(__file__)
@@ -1052,6 +1054,8 @@ class WhiteboxWorkflowsPlugin:
             self._skipped_update_version = str(
                 settings.value(self._settings_key_skipped_update_version, "")
             ).strip()
+            strategy = str(settings.value(self._settings_key_installation_strategy, "")).strip().lower()
+            self._installation_strategy = strategy if strategy in ("whiteboxgeo_wheel", "pip_system_python") else ""
         except Exception:
             self._runtime_mode = "auto"
             self._runtime_local_python = ""
@@ -1060,6 +1064,7 @@ class WhiteboxWorkflowsPlugin:
             self._skip_auto_update_checks_in_local_mode = True
             self._last_update_check_unix = 0
             self._skipped_update_version = ""
+            self._installation_strategy = ""
 
     def _initialize_entitlement_runtime_defaults(self) -> None:
         """Set first-run runtime prefs from discovered runtime capabilities.
@@ -1107,6 +1112,7 @@ class WhiteboxWorkflowsPlugin:
             )
             settings.setValue(self._settings_key_last_update_check_unix, int(self._last_update_check_unix))
             settings.setValue(self._settings_key_skipped_update_version, self._skipped_update_version)
+            settings.setValue(self._settings_key_installation_strategy, self._installation_strategy)
         except Exception:
             pass
 
@@ -1457,6 +1463,10 @@ class WhiteboxWorkflowsPlugin:
                         Qgis.Warning
                     )
             
+            # Save the installation strategy for future update checks
+            self._installation_strategy = strategy
+            self._save_backend_preferences()
+            
             self._notify_info(f"Installed whitebox_workflows{version_text}{strategy_text}{location_text}.")
             return True
         except Exception as exc:
@@ -1475,7 +1485,7 @@ class WhiteboxWorkflowsPlugin:
                 return
 
         try:
-            status = backend_update_status()
+            status = backend_update_status(self._installation_strategy)
         except Exception as exc:
             if manual:
                 self._notify_warning(f"Backend update check failed: {exc}")
@@ -1548,6 +1558,8 @@ class WhiteboxWorkflowsPlugin:
                         Qgis.Warning
                     )
             
+            # Save the installation strategy for future update checks
+            self._installation_strategy = strategy
             self._skipped_update_version = ""
             self._save_backend_preferences()
             self._notify_info(f"Updated whitebox_workflows to {version}{strategy_text}{location_text}.")

@@ -140,6 +140,7 @@ class WhiteboxPluginSettings:
         auto_install_backend: bool = True,
         auto_check_backend_updates: bool = True,
         skip_auto_update_checks_in_local_mode: bool = True,
+        installation_strategy: str = "",
     ):
         self.include_pro = bool(include_pro)
         self.tier = str(tier).strip() or "open"
@@ -154,6 +155,9 @@ class WhiteboxPluginSettings:
         self.auto_install_backend = bool(auto_install_backend)
         self.auto_check_backend_updates = bool(auto_check_backend_updates)
         self.skip_auto_update_checks_in_local_mode = bool(skip_auto_update_checks_in_local_mode)
+        # Track which installation strategy was last used (whiteboxgeo_wheel, pip_system_python, etc.)
+        normalized_strategy = str(installation_strategy).strip().lower()
+        self.installation_strategy = normalized_strategy if normalized_strategy in {"whiteboxgeo_wheel", "pip_system_python"} else ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -169,6 +173,7 @@ class WhiteboxPluginSettings:
             "auto_install_backend": self.auto_install_backend,
             "auto_check_backend_updates": self.auto_check_backend_updates,
             "skip_auto_update_checks_in_local_mode": self.skip_auto_update_checks_in_local_mode,
+            "installation_strategy": self.installation_strategy,
         }
 
 

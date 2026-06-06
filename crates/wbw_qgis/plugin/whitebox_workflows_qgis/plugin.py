@@ -1403,29 +1403,23 @@ class WhiteboxWorkflowsPlugin:
         return False
 
     def _build_install_command(self) -> str:
-        """Return the pip install command for the QGIS Python Console, platform-aware."""
-        import sys
+        """Return a single-line exec() command safe to paste into the QGIS Python Console."""
         import os
-        version_tag = f"{sys.version_info.major}.{sys.version_info.minor}"
-
         if os.name == "nt":
-            # Windows / OSGeo4W: --user installs to a location that may not be
-            # on sys.path; without it pip installs directly into OSGeo4W site-packages.
-            args = "['pip', 'install', 'whitebox-workflows']"
+            pip_args = "['pip','install','whitebox-workflows']"
         else:
-            # macOS / Linux: --user installs to ~/.local/lib/pythonX.Y/site-packages
-            # which QGIS already includes on sys.path.
-            args = "['pip', 'install', '--user', 'whitebox-workflows']"
+            pip_args = "['pip','install','--user','whitebox-workflows']"
 
-        return (
-            f"import runpy, sys\n"
-            f"sys.argv = {args}\n"
-            f"try:\n"
-            f"    runpy.run_module('pip', run_name='__main__', alter_sys=True)\n"
-            f"except SystemExit:\n"
-            f"    pass\n"
-            f"print('Done — restart QGIS to activate the Whitebox Workflows plugin.')"
+        inner = (
+            "import runpy,sys\\n"
+            f"sys.argv={pip_args}\\n"
+            "try:\\n"
+            "    runpy.run_module('pip',run_name='__main__',alter_sys=True)\\n"
+            "except SystemExit:\\n"
+            "    pass\\n"
+            "print('Done. Restart QGIS to activate Whitebox Workflows.')"
         )
+        return f'exec("{inner}")'
 
     def _show_backend_install_instructions(self) -> None:
         """Show a dialog with step-by-step installation instructions."""

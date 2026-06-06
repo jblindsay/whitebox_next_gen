@@ -742,45 +742,31 @@ def _install_whitebox_workflows_via_pip(target_dir: str) -> None:
 def load_whitebox_workflows():
     import sys
 
-    # First attempt: direct import (already on sys.path).
+    # Attempt 1: direct import (already on sys.path).
     try:
         return importlib.import_module("whitebox_workflows")
     except ImportError:
         pass
 
-    # Second attempt: add the pip target dir to sys.path and retry.
-    # This covers the case where a previous install already ran but the
-    # target dir wasn't on sys.path yet (e.g. after a QGIS restart).
+    # Attempt 2: add the pip target dir to sys.path and retry.
+    # Covers the case where a previous install ran but the dir wasn't on sys.path.
     _ensure_pip_target_on_sys_path()
     try:
         return importlib.import_module("whitebox_workflows")
     except ImportError:
         pass
 
-    # Third attempt: run pip install into the target dir, then import.
-    target_dir = _get_pip_target_dir()
-    try:
-        _install_whitebox_workflows_via_pip(target_dir)
-    except RuntimeBootstrapError:
-        raise
-    except Exception as exc:
-        raise RuntimeBootstrapError(
-            "Automatic installation of whitebox-workflows failed. "
-            f"Try: pip install whitebox-workflows. Detail: {exc}"
-        ) from exc
+    # Not installed. Raise a specific sentinel so callers can offer to install.
+    raise RuntimeBootstrapError(
+        "BACKEND_NOT_INSTALLED: whitebox-workflows is not installed. "
+        "The plugin can install it automatically — please use "
+        "Plugins → Whitebox Workflows → Plugin Settings to install the backend."
+    )
 
-    # Invalidate stale import cache entries and retry.
-    for key in list(sys.modules.keys()):
-        if key == "whitebox_workflows" or key.startswith("whitebox_workflows."):
-            del sys.modules[key]
 
-    try:
-        return importlib.import_module("whitebox_workflows")
-    except ImportError as exc:
-        raise RuntimeBootstrapError(
-            "whitebox-workflows was installed but could not be imported. "
-            f"Restart QGIS and try again. Detail: {exc}"
-        ) from exc
+def is_backend_not_installed_error(exc: Exception) -> bool:
+    """Return True if *exc* is the specific 'backend not installed' sentinel."""
+    return str(exc).startswith("BACKEND_NOT_INSTALLED:")
 
 
 def _effective_python_for_backend_ops() -> str | None:
@@ -864,14 +850,23 @@ def get_installed_whitebox_workflows_version() -> str:
 
 
 def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec: str = "") -> dict:
-    """Install or upgrade whitebox-workflows in the selected interpreter."""
-    interpreter = get_backend_interpreter_path()
+    """Install or upgrade whitebox-workflows using the QGIS Python pip.
+
+    Installs into the per-profile pip --target directory so the package is
+    isolated from the (often read-only) QGIS app bundle site-packages.
+
+    NOTE: This function blocks until pip completes. Call it from a background
+    thread (see install_whitebox_workflows_async) to avoid freezing the UI.
+    """
+    import sys
+    interpreter = str(sys.executable)
+    target_dir = _get_pip_target_dir()
     package_spec = "whitebox-workflows"
     cleaned_spec = str(version_spec or "").strip()
     if cleaned_spec:
         package_spec = f"whitebox-workflows{cleaned_spec}"
 
-    command = [interpreter, "-m", "pip", "install"]
+    command = [interpreter, "-m", "pip", "install", "--target", target_dir]
     if upgrade:
         command.append("--upgrade")
     command.append(package_spec)
@@ -881,7 +876,7 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
         check=False,
         capture_output=True,
         text=True,
-        env=_build_clean_env(),
+        env=dict(os.environ),  # preserve PYTHONHOME for bundled QGIS Python
         **_subprocess_window_kwargs(),
     )
     stdout = completed.stdout.strip()
@@ -890,25 +885,65 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
     if completed.returncode != 0:
         detail = stderr or stdout or "unknown pip install error"
         raise RuntimeBootstrapError(
-            f"Failed to install {package_spec} via {interpreter}: {detail}"
+            f"Failed to install {package_spec}: {detail}"
         )
+
+    # Ensure the target dir is on sys.path for the current session.
+    _ensure_pip_target_on_sys_path()
+
+    # Clear any stale cached import so the next import picks up the new version.
+    import sys as _sys
+    for key in list(_sys.modules.keys()):
+        if key == "whitebox_workflows" or key.startswith("whitebox_workflows."):
+            del _sys.modules[key]
+
+    _EXTERNAL_SESSION_CACHE.clear()
 
     installed = ""
     try:
-        installed = get_installed_whitebox_workflows_version()
+        installed = _get_installed_whitebox_workflows_version_for_interpreter(interpreter)
     except Exception:
         installed = ""
 
-    # Existing cached sessions may point to a stale module build.
-    _EXTERNAL_SESSION_CACHE.clear()
-
     return {
         "interpreter": interpreter,
+        "target_dir": target_dir,
         "installed_version": installed,
         "stdout": stdout,
         "stderr": stderr,
         "upgraded": bool(upgrade),
     }
+
+
+def install_whitebox_workflows_async(
+    on_success,   # callable(result_dict)
+    on_error,     # callable(error_message: str)
+    *,
+    upgrade: bool = False,
+) -> None:
+    """Run install_or_upgrade_whitebox_workflows in a background thread.
+
+    *on_success* and *on_error* are called from the background thread.
+    If you need to update Qt widgets, use a signal/slot or QMetaObject.invokeMethod
+    in those callbacks.
+    """
+    import threading
+
+    def _worker():
+        try:
+            result = install_or_upgrade_whitebox_workflows(upgrade=upgrade)
+            try:
+                on_success(result)
+            except Exception:
+                pass
+        except Exception as exc:
+            try:
+                on_error(str(exc))
+            except Exception:
+                pass
+
+    thread = threading.Thread(target=_worker, daemon=True)
+    thread.start()
 
 
 def fetch_latest_whitebox_workflows_version(timeout_seconds: float = 4.0) -> str:
@@ -1000,15 +1035,16 @@ def backend_update_status() -> dict:
 
 
 def backend_install_status() -> dict:
-    """Return local installation status without querying remote package indexes."""
+    """Return local installation status using the QGIS Python (sys.executable)."""
+    import sys
     result = {
-        "interpreter": "",
+        "interpreter": str(sys.executable),
         "installed_version": "",
         "error": "",
     }
     try:
-        result["interpreter"] = get_backend_interpreter_path()
-        result["installed_version"] = get_installed_whitebox_workflows_version()
+        _ensure_pip_target_on_sys_path()
+        result["installed_version"] = _get_installed_whitebox_workflows_version_for_interpreter(str(sys.executable))
     except Exception as exc:
         result["error"] = str(exc)
     return result

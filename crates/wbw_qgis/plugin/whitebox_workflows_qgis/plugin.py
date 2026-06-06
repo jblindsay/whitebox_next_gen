@@ -8,6 +8,8 @@ from .bootstrap import (
     backend_install_status,
     backend_update_status,
     install_or_upgrade_whitebox_workflows,
+    install_whitebox_workflows_async,
+    is_backend_not_installed_error,
     set_runtime_preferences,
 )
 from .diagnostics import diagnostics_text, gather_runtime_diagnostics
@@ -1392,50 +1394,62 @@ class WhiteboxWorkflowsPlugin:
             return False
 
         installed = str(status.get("installed_version", "")).strip()
-        interpreter = str(status.get("interpreter", "")).strip()
-        error_text = str(status.get("error", "")).strip()
 
         if installed:
             return True
 
-        if self._runtime_mode == "local" and not self._auto_install_backend:
-            if interactive:
-                self._notify_warning(
-                    "whitebox_workflows is not installed in the configured local interpreter. "
-                    "Install it manually or enable auto-install in Plugin Settings."
-                )
-            return False
-
-        if not self._auto_install_backend:
-            if interactive:
-                self._notify_warning(
-                    "whitebox_workflows is not installed. Enable auto-install in Plugin Settings or install manually."
-                )
-            return False
-
         if not interactive:
             return False
 
-        detail = f"Target interpreter: {interpreter or 'unknown'}"
-        if error_text:
-            detail = f"{detail}\nDetail: {error_text}"
+        # Ask for consent before installing.
         if not self._confirm(
             "Install Whitebox Workflows Backend",
             "The whitebox_workflows backend is not installed.\n\n"
-            "Install it now using pip?\n\n"
-            f"{detail}",
+            "The plugin will download and install it now using pip "
+            "(~30 seconds, requires internet access).\n\n"
+            "Proceed?",
         ):
             return False
 
-        try:
-            result = install_or_upgrade_whitebox_workflows(upgrade=False)
+        # Run pip install in a background thread so the UI stays responsive.
+        # Show a progress message in the QGIS message bar while it runs.
+        self._notify_info(
+            "Installing whitebox-workflows backend — please wait (~30 seconds)..."
+        )
+
+        def _on_success(result):
             version = str(result.get("installed_version", "")).strip()
-            version_text = f" (version {version})" if version else ""
-            self._notify_info(f"Installed whitebox_workflows{version_text}.")
-            return True
-        except Exception as exc:
-            self._notify_warning(f"Backend install failed: {exc}")
-            return False
+            version_text = f" {version}" if version else ""
+            # Schedule UI updates back on the main thread via Qt.
+            try:
+                from qgis.PyQt.QtCore import QMetaObject, Qt
+                QMetaObject.invokeMethod(  # type: ignore[call-arg]
+                    self._main_window_or_none(),
+                    "_wbw_backend_install_done",
+                    Qt.QueuedConnection,
+                )
+            except Exception:
+                pass
+            self._notify_info(f"whitebox-workflows{version_text} installed. Reload the plugin to activate.")
+
+        def _on_error(error_msg):
+            self._notify_warning(f"Backend install failed: {error_msg}")
+
+        install_whitebox_workflows_async(
+            on_success=_on_success,
+            on_error=_on_error,
+            upgrade=False,
+        )
+
+        # Return False for now — caller should reload catalog after install completes.
+        # The success callback notifies the user to reload.
+        return False
+
+    def _main_window_or_none(self):
+        try:
+            return self.iface.mainWindow()
+        except Exception:
+            return None
 
     def _check_backend_updates(self, manual: bool = False):
         if not manual:

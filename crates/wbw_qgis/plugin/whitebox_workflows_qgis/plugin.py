@@ -1403,7 +1403,11 @@ class WhiteboxWorkflowsPlugin:
         return False
 
     def _build_install_command(self) -> str:
-        """Return a single-line exec() command safe to paste into the QGIS Python Console."""
+        """Return a single-line exec() command safe to paste into the QGIS Python Console.
+
+        Installs whitebox-workflows via pip then reloads the plugin in-place,
+        so the user never needs to restart QGIS.
+        """
         import os
         if os.name == "nt":
             pip_args = "['pip','install','whitebox-workflows']"
@@ -1417,7 +1421,11 @@ class WhiteboxWorkflowsPlugin:
             "    runpy.run_module('pip',run_name='__main__',alter_sys=True)\\n"
             "except SystemExit:\\n"
             "    pass\\n"
-            "print('Done. Restart QGIS to activate Whitebox Workflows.')"
+            "import qgis.utils\\n"
+            "qgis.utils.unloadPlugin('whitebox_workflows_qgis')\\n"
+            "qgis.utils.loadPlugin('whitebox_workflows_qgis')\\n"
+            "qgis.utils.startPlugin('whitebox_workflows_qgis')\\n"
+            "print('Whitebox Workflows backend installed and plugin reloaded.')"
         )
         return f'exec("{inner}")'
 
@@ -1454,7 +1462,8 @@ class WhiteboxWorkflowsPlugin:
                 "To install it:<ol>"
                 f"<li>Open the QGIS Python Console:<br>&nbsp;&nbsp;&nbsp;<b>{console_path}</b></li>"
                 "<li>Paste the command below into the console and press <b>Enter</b>.</li>"
-                "<li><b>Restart QGIS.</b> The plugin will load automatically.</li>"
+                "<li>The backend will install and the plugin will reload automatically — "
+                "no restart needed.</li>"
                 "</ol>"
             )
             if alt_note:

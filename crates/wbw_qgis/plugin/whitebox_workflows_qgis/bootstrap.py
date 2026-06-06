@@ -196,13 +196,25 @@ def get_wheels_folder() -> str:
 
 
 def ensure_wheels_in_sys_path() -> None:
-    """Add wheels folder to sys.path if it exists and is not already there."""
+    """Ensure wheels folder is at position 0 in sys.path for priority import resolution.
+    
+    This is critical: we want the plugin's wheels to take precedence over any system-wide
+    installation of whitebox_workflows. If the user has a system version installed, we 
+    need to make absolutely sure our local version is found first.
+    """
     wheels = get_wheels_folder()
     if not wheels or not Path(wheels).exists():
+        print(f"[WbW Plugin] Warning: wheels folder not found or doesn't exist: {wheels}")
         return
+    
     wheels_path = str(Path(wheels).resolve())
-    if wheels_path not in sys.path:
-        sys.path.insert(0, wheels_path)
+    
+    # Remove any existing copies of this path from sys.path
+    sys.path = [p for p in sys.path if str(Path(p).resolve()) != wheels_path]
+    
+    # Add it to position 0 so it's searched first
+    sys.path.insert(0, wheels_path)
+    print(f"[WbW Plugin] Ensured wheels folder at sys.path[0]: {wheels_path}")
 
 
 class RuntimeBootstrapError(RuntimeError):
@@ -2109,10 +2121,42 @@ def download_and_install_wheels(version_spec: str = "") -> dict:
             return result
         
         # Extract wheels
+        print(f"[WbW Plugin] Extracting wheels to: {wheels_path}")
         with zipfile.ZipFile(tmp_path, "r") as zf:
             zf.extractall(str(wheels_path))
         
         os.unlink(tmp_path)
+        
+        # Find and extract any .whl files inside the extracted contents
+        # The downloaded zip may contain .whl files that need to be extracted
+        print(f"[WbW Plugin] Looking for .whl files in: {wheels_path}")
+        for whl_file in wheels_path.glob("*.whl"):
+            print(f"[WbW Plugin] Found wheel file: {whl_file.name}, extracting contents...")
+            try:
+                with zipfile.ZipFile(str(whl_file), "r") as whl_zf:
+                    whl_zf.extractall(str(wheels_path))
+                print(f"[WbW Plugin] Extracted {whl_file.name} successfully")
+                # Remove the .whl file after extraction - we don't need the file itself
+                whl_file.unlink()
+                print(f"[WbW Plugin] Removed {whl_file.name} (contents now in directory)")
+            except Exception as e:
+                print(f"[WbW Plugin] Warning: Could not extract {whl_file.name}: {e}")
+        
+        # Verify installation by checking if whitebox_workflows directory exists
+        wbw_package = wheels_path / "whitebox_workflows"
+        if wbw_package.exists() and wbw_package.is_dir():
+            print(f"[WbW Plugin] ✓ Package directory exists at: {wbw_package}")
+        else:
+            print(f"[WbW Plugin] ⚠ Warning: Package directory not found at: {wbw_package}")
+            print(f"[WbW Plugin] Contents of {wheels_path}:")
+            try:
+                for item in wheels_path.iterdir():
+                    print(f"[WbW Plugin]   - {item.name}")
+            except:
+                pass
+        
+        # Ensure wheels folder is in sys.path at position 0
+        ensure_wheels_in_sys_path()
         
         # Verify installation by checking if wheels can be imported
         ensure_wheels_in_sys_path()

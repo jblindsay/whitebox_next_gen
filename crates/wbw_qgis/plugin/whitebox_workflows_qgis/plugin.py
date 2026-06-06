@@ -1429,64 +1429,64 @@ class WhiteboxWorkflowsPlugin:
 
     def _show_backend_install_instructions(self) -> None:
         """Show a dialog with step-by-step installation instructions."""
-        import sys
         import os
 
         command = self._build_install_command()
 
-        # Build platform-specific instructions
         if os.name == "nt":
-            console_location = "Plugins menu → Python Console"
-            note = (
-                "On Windows, you can also open the OSGeo4W Shell and run:\n"
-                "  python -m pip install whitebox-workflows"
-            )
+            console_path = "Plugins  ▸  Python Console"
+            alt_note = "Alternatively, open the OSGeo4W Shell and run:\n  python -m pip install whitebox-workflows"
         else:
-            console_location = "Plugins menu → Python Console"
-            note = ""
-
-        message = (
-            "The whitebox-workflows backend is not installed.\n\n"
-            "To install it:\n\n"
-            f"  1. Open the QGIS Python Console:\n"
-            f"     {console_location}\n\n"
-            f"  2. Paste and run the command shown below.\n\n"
-            f"  3. Restart QGIS.\n\n"
-            f"After restarting, the plugin will load automatically."
-        )
-        if note:
-            message += f"\n\n{note}"
+            console_path = "Plugins  ▸  Python Console"
+            alt_note = ""
 
         try:
-            from qgis.PyQt.QtWidgets import QDialog, QVBoxLayout, QLabel, QPlainTextEdit, QPushButton, QHBoxLayout, QDialogButtonBox
-            from qgis.PyQt.QtCore import Qt
+            from qgis.PyQt.QtWidgets import (
+                QDialog, QVBoxLayout, QHBoxLayout,
+                QLabel, QPlainTextEdit, QPushButton,
+            )
             from qgis.PyQt.QtGui import QFont
 
             dlg = QDialog(self.iface.mainWindow())
             dlg.setWindowTitle("Whitebox Workflows — Backend Not Installed")
-            dlg.setMinimumWidth(600)
+            dlg.setMinimumWidth(620)
 
             layout = QVBoxLayout(dlg)
+            layout.setSpacing(10)
 
-            # Instruction text
-            lbl = QLabel(message)
+            # Instructions
+            instructions = (
+                "<b>The whitebox-workflows backend is not installed.</b><br><br>"
+                "To install it:<ol>"
+                f"<li>Open the QGIS Python Console:<br>&nbsp;&nbsp;&nbsp;<b>{console_path}</b></li>"
+                "<li>Paste the command below into the console and press <b>Enter</b>.</li>"
+                "<li><b>Restart QGIS.</b> The plugin will load automatically.</li>"
+                "</ol>"
+            )
+            if alt_note:
+                instructions += f"<br><i>{alt_note}</i>"
+
+            lbl = QLabel(instructions)
             lbl.setWordWrap(True)
+            lbl.setOpenExternalLinks(False)
             layout.addWidget(lbl)
 
-            # Command box
-            cmd_label = QLabel("Command to run in the QGIS Python Console:")
-            layout.addWidget(cmd_label)
+            # Command label
+            layout.addWidget(QLabel("<b>Command to paste in the Python Console:</b>"))
 
+            # Command box
             cmd_edit = QPlainTextEdit(command)
             cmd_edit.setReadOnly(True)
-            mono = QFont("Courier New" if os.name == "nt" else "Menlo")
-            mono.setPointSize(10)
-            cmd_edit.setFont(mono)
-            cmd_edit.setFixedHeight(130)
+            font = QFont()
+            font.setFamily("Courier New" if os.name == "nt" else "Menlo")
+            font.setPointSize(10)
+            cmd_edit.setFont(font)
+            cmd_edit.setFixedHeight(140)
             layout.addWidget(cmd_edit)
 
-            # Copy button
+            # Button row
             btn_row = QHBoxLayout()
+
             copy_btn = QPushButton("Copy command to clipboard")
             def _copy():
                 try:
@@ -1498,22 +1498,23 @@ class WhiteboxWorkflowsPlugin:
             copy_btn.clicked.connect(_copy)
             btn_row.addWidget(copy_btn)
             btn_row.addStretch()
+
+            close_btn = QPushButton("Close")
+            close_btn.setDefault(True)
+            close_btn.clicked.connect(dlg.accept)
+            btn_row.addWidget(close_btn)
+
             layout.addLayout(btn_row)
 
-            # Close button
-            buttons = QDialogButtonBox(QDialogButtonBox.Close)
-            buttons.rejected.connect(dlg.reject)
-            layout.addWidget(buttons)
+            dlg.exec() if hasattr(dlg, "exec") and callable(dlg.exec) else dlg.exec_()
 
-            dlg.exec() if hasattr(dlg, 'exec') else dlg.exec_()
-
-        except Exception:
-            # Fallback to plain message box if Qt widgets fail for any reason
+        except Exception as exc:
+            # Last-resort: plain notification. Sanitise to one readable line.
             self._notify_warning(
                 "whitebox-workflows is not installed. "
-                "Open the QGIS Python Console and run: "
+                f"Open the QGIS Python Console ({console_path}) and run: "
                 "import runpy, sys; sys.argv=['pip','install','--user','whitebox-workflows']; "
-                "[runpy.run_module('pip',run_name='__main__',alter_sys=True) if True else None]"
+                "runpy.run_module('pip', run_name='__main__', alter_sys=True)"
             )
 
     def _main_window_or_none(self):

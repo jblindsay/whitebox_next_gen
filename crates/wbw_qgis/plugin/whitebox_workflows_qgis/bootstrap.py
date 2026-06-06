@@ -1046,7 +1046,12 @@ def backend_update_status() -> dict:
 
 
 def backend_install_status() -> dict:
-    """Return local installation status using the QGIS Python (sys.executable)."""
+    """Return local installation status using the QGIS Python (sys.executable).
+
+    installed_version is only populated if the version meets the minimum
+    Next Gen requirement (>= 2.0.0). A legacy v0.x or v1.x package is
+    treated as absent so the user is prompted to install the correct version.
+    """
     import sys
     result = {
         "interpreter": str(sys.executable),
@@ -1055,7 +1060,14 @@ def backend_install_status() -> dict:
     }
     try:
         _ensure_pip_target_on_sys_path()
-        result["installed_version"] = _get_installed_whitebox_workflows_version_for_interpreter(str(sys.executable))
+        version = _get_installed_whitebox_workflows_version_for_interpreter(str(sys.executable))
+        if version and _normalize_version_for_compare(version) >= _normalize_version_for_compare(_NEXT_GEN_MIN_VERSION):
+            result["installed_version"] = version
+        elif version:
+            result["error"] = (
+                f"Found whitebox_workflows {version} but require >= {_NEXT_GEN_MIN_VERSION}. "
+                "The plugin will reinstall the correct version."
+            )
     except Exception as exc:
         result["error"] = str(exc)
     return result

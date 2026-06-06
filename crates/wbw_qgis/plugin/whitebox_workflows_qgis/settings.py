@@ -1,14 +1,15 @@
-"""Whitebox Workflows QGIS Plugin – Settings Dialog (Phase 3).
+"""Whitebox Workflows QGIS Plugin – Settings Dialog (Phase 4).
 
-Exposes practical runtime configuration and panel preferences without
-duplicating backend licensing authority.
+Exposes practical runtime configuration, panel preferences, and backend version checking
+without duplicating backend licensing authority.
 """
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 try:
-    from qgis.PyQt.QtCore import Qt
+    from qgis.PyQt.QtCore import Qt, QTimer
     from qgis.PyQt.QtWidgets import (
         QCheckBox,
         QComboBox,
@@ -19,6 +20,7 @@ try:
         QHBoxLayout,
         QLabel,
         QLineEdit,
+        QProgressBar,
         QPushButton,
         QSpinBox,
         QVBoxLayout,
@@ -87,6 +89,8 @@ except Exception:  # pragma: no cover
     QWidget = _Dummy  # type: ignore[misc]
     QLineEdit = _Dummy  # type: ignore[misc]
     QPushButton = _Dummy  # type: ignore[misc]
+    QProgressBar = _Dummy  # type: ignore[misc]
+    QTimer = _Dummy  # type: ignore[misc]
     Qt = object()  # type: ignore[assignment]
 
 
@@ -185,6 +189,9 @@ class WhiteboxSettingsDialog(QDialog):
         super().__init__(parent)
         self._settings = settings
         self._accepted = False
+        self._update_in_progress = False
+        self._current_version = ""
+        self._available_version = ""
 
         try:
             if hasattr(self, "setWindowTitle"):
@@ -303,6 +310,35 @@ class WhiteboxSettingsDialog(QDialog):
             panel_form.addRow("Include locked recipes", self._show_locked_recipes_check)
             panel_form.addRow("Panel width (px)", self._panel_width_spin)
 
+        # --- Backend Updates group ---
+        updates_group = QGroupBox("Backend Updates")
+        updates_form = QFormLayout(updates_group)
+        
+        self._current_version_label = QLabel()
+        self._available_version_label = QLabel()
+        self._update_status_label = QLabel()
+        
+        for label in [self._current_version_label, self._available_version_label, self._update_status_label]:
+            if hasattr(label, "setWordWrap"):
+                label.setWordWrap(True)
+        
+        self._update_button = QPushButton("Check for Updates")
+        if hasattr(self._update_button, "clicked"):
+            try:
+                self._update_button.clicked.connect(self._on_check_updates)
+            except Exception:
+                pass
+        
+        self._update_progress = QProgressBar()
+        self._update_progress.setVisible(False)
+        
+        if hasattr(updates_form, "addRow"):
+            updates_form.addRow("Current version:", self._current_version_label)
+            updates_form.addRow("Available version:", self._available_version_label)
+            updates_form.addRow("Status:", self._update_status_label)
+            updates_form.addRow(self._update_button)
+            updates_form.addRow(self._update_progress)
+
         # --- Entitlement notice ---
         self._entitlement_label = QLabel(
             "Changes to Include Pro / Tier take effect after the next Catalog Refresh."
@@ -336,12 +372,190 @@ class WhiteboxSettingsDialog(QDialog):
         if hasattr(outer, "addWidget"):
             outer.addWidget(runtime_group)
             outer.addWidget(panel_group)
+            outer.addWidget(updates_group)
             outer.addWidget(self._entitlement_label)
             if buttons is not None:
                 outer.addWidget(buttons)
 
         if hasattr(self, "setLayout"):
             self.setLayout(outer)
+        
+        # Fetch version info in background after dialog is shown
+        self._schedule_version_fetch()
+
+    # ------------------------------------------------------------------
+    # Version checking and update management
+    # ------------------------------------------------------------------
+    def _schedule_version_fetch(self) -> None:
+        """Schedule version info fetching in background thread."""
+        try:
+            timer = QTimer()
+            timer.singleShot(100, self._start_version_fetch_thread)  # type: ignore[attr-defined]
+        except Exception:
+            # Qt not available or timer failed; try direct fetch
+            self._fetch_versions_thread()
+
+    def _start_version_fetch_thread(self) -> None:
+        """Start background thread to fetch versions."""
+        thread = threading.Thread(target=self._fetch_versions_thread, daemon=True)
+        thread.start()
+
+    def _fetch_versions_thread(self) -> None:
+        """Fetch current and available versions in background."""
+        try:
+            from . import bootstrap
+            
+            # Get installed version
+            python_path = str(self._python_manual_edit.text()).strip()
+            if python_path:
+                self._current_version = bootstrap.get_whitebox_workflows_version_for_interpreter(python_path)
+            else:
+                # Use current Python (QGIS bundled)
+                import sys
+                self._current_version = bootstrap.get_whitebox_workflows_version_for_interpreter(sys.executable)
+            
+            # Get available version
+            self._available_version = bootstrap.get_latest_wheel_version()
+            
+            # Update UI from main thread
+            try:
+                timer = QTimer()
+                timer.singleShot(0, self._update_version_display)  # type: ignore[attr-defined]
+            except Exception:
+                self._update_version_display()
+        except Exception:
+            pass
+
+    def _update_version_display(self) -> None:
+        """Update version display labels with fetched info."""
+        try:
+            current = self._current_version or "(not installed)"
+            available = self._available_version or "(check failed)"
+            
+            if hasattr(self._current_version_label, "setText"):
+                self._current_version_label.setText(current)
+            if hasattr(self._available_version_label, "setText"):
+                self._available_version_label.setText(available)
+            
+            # Determine status
+            if not self._current_version:
+                status_text = "Not installed – click Update to install"
+                status_color = "color: #E65100; font-weight: bold;"  # warning orange
+            elif not self._available_version:
+                status_text = "Unable to check for updates"
+                status_color = "color: #616161;"  # neutral gray
+            elif self._available_version > self._current_version:
+                status_text = f"Update available ({self._available_version})"
+                status_color = "color: #1565C0; font-weight: bold;"  # info blue
+                # Update button text to "Update Available"
+                if hasattr(self._update_button, "setText"):
+                    self._update_button.setText("Update to " + self._available_version)
+            else:
+                status_text = "Up to date"
+                status_color = "color: #1B5E20; font-weight: bold;"  # ok green
+                # Disable update button
+                if hasattr(self._update_button, "setEnabled"):
+                    self._update_button.setEnabled(False)
+            
+            if hasattr(self._update_status_label, "setText"):
+                self._update_status_label.setText(status_text)
+            if hasattr(self._update_status_label, "setStyleSheet"):
+                self._update_status_label.setStyleSheet(status_color)
+        except Exception:
+            pass
+
+    def _on_check_updates(self) -> None:
+        """Handle Check/Update button click."""
+        if self._update_in_progress:
+            return
+        
+        self._update_in_progress = True
+        
+        try:
+            if hasattr(self._update_button, "setEnabled"):
+                self._update_button.setEnabled(False)
+            if hasattr(self._update_progress, "setVisible"):
+                self._update_progress.setVisible(True)
+            if hasattr(self._update_status_label, "setText"):
+                self._update_status_label.setText("Downloading and installing...")
+        except Exception:
+            pass
+        
+        # Start update in background thread
+        thread = threading.Thread(target=self._perform_update_thread, daemon=True)
+        thread.start()
+
+    def _perform_update_thread(self) -> None:
+        """Download and install wheels in background."""
+        try:
+            from . import bootstrap
+            
+            # Get version to download
+            version = self._available_version or ""
+            
+            # Download and install
+            result = bootstrap.download_and_install_wheels(version)
+            
+            # Update display from main thread
+            try:
+                timer = QTimer()
+                timer.singleShot(0, lambda: self._update_install_result(result))  # type: ignore[attr-defined]
+            except Exception:
+                self._update_install_result(result)
+        except Exception as exc:
+            error_msg = str(exc)
+            try:
+                timer = QTimer()
+                timer.singleShot(0, lambda: self._update_install_error(error_msg))  # type: ignore[attr-defined]
+            except Exception:
+                self._update_install_error(error_msg)
+
+    def _update_install_result(self, result: dict) -> None:
+        """Update UI after installation attempt."""
+        self._update_in_progress = False
+        try:
+            success = result.get("success", False)
+            message = result.get("message", "")
+            
+            if hasattr(self._update_progress, "setVisible"):
+                self._update_progress.setVisible(False)
+            
+            if success:
+                # Refresh version display
+                self._current_version = result.get("version", "")
+                self._update_version_display()
+                if hasattr(self._update_status_label, "setText"):
+                    self._update_status_label.setText("✓ Installation successful – restart QGIS to load new version")
+                if hasattr(self._update_status_label, "setStyleSheet"):
+                    self._update_status_label.setStyleSheet("color: #1B5E20; font-weight: bold;")
+                if hasattr(self._update_button, "setText"):
+                    self._update_button.setText("Check for Updates")
+                if hasattr(self._update_button, "setEnabled"):
+                    self._update_button.setEnabled(False)
+            else:
+                if hasattr(self._update_status_label, "setText"):
+                    self._update_status_label.setText(f"✗ Installation failed: {message}")
+                if hasattr(self._update_status_label, "setStyleSheet"):
+                    self._update_status_label.setStyleSheet("color: #B71C1C; font-weight: bold;")
+                if hasattr(self._update_button, "setEnabled"):
+                    self._update_button.setEnabled(True)
+        except Exception:
+            pass
+
+    def _update_install_error(self, error_msg: str) -> None:
+        """Update UI after installation error."""
+        self._update_in_progress = False
+        try:
+            if hasattr(self._update_progress, "setVisible"):
+                self._update_progress.setVisible(False)
+            if hasattr(self._update_status_label, "setText"):
+                self._update_status_label.setText(f"✗ Error: {error_msg[:60]}")
+            if hasattr(self._update_status_label, "setStyleSheet"):
+                self._update_status_label.setStyleSheet("color: #B71C1C; font-weight: bold;")
+            if hasattr(self._update_button, "setEnabled"):
+                self._update_button.setEnabled(True)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     def _on_accept(self):

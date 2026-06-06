@@ -1114,65 +1114,25 @@ def _is_qgis_bundled_python(interpreter: str) -> bool:
 
 def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec: str = "") -> dict:
     """
-    Install or upgrade whitebox-workflows using the best available strategy:
-    1. If pip is available, use pip install
-    2. If pip is not available (e.g., QGIS bundled Python), download wheel from PyPI and extract
+    Install or upgrade whitebox-workflows using a logical priority strategy:
+    
+    Strategy 1: Download wheels from whiteboxgeo.com and extract to QGIS Python
+               (Guaranteed to work—QGIS Python always exists)
+    
+    Strategy 2: If Strategy 1 fails, search for system Python with pip
+               and install from PyPI
+    
+    Strategy 3: If both fail, return error with manual install instructions
+    
+    Returns dict with 'installed_version' and 'strategy' keys.
     """
     interpreter = get_backend_interpreter_path()
+    plugin_dir = os.path.dirname(os.path.realpath(__file__))
     
-    # Determine version to install
-    target_version = str(version_spec or "").strip()
-    if not target_version:
-        try:
-            target_version = fetch_latest_whitebox_workflows_version()
-        except Exception:
-            target_version = "latest"
-    
-    # Strategy 1: Try pip first (works for external Python)
-    if not _is_qgis_bundled_python(interpreter):
-        package_spec = "whitebox-workflows"
-        if target_version and target_version != "latest":
-            package_spec = f"whitebox-workflows{target_version}"
-        
-        command = [interpreter, "-m", "pip", "install"]
-        if upgrade:
-            command.append("--upgrade")
-        command.append(package_spec)
-        
-        completed = subprocess.run(
-            command,
-            check=False,
-            capture_output=True,
-            text=True,
-            env=_build_clean_env(),
-            **_subprocess_window_kwargs(),
-        )
-        stdout = completed.stdout.strip()
-        stderr = completed.stderr.strip()
-        
-        if completed.returncode == 0:
-            installed = ""
-            try:
-                installed = get_installed_whitebox_workflows_version()
-            except Exception:
-                installed = ""
-            
-            _EXTERNAL_SESSION_CACHE.clear()
-            
-            return {
-                "interpreter": interpreter,
-                "installed_version": installed,
-                "stdout": stdout,
-                "stderr": stderr,
-                "upgraded": bool(upgrade),
-                "strategy": "pip",
-            }
-    
-    # Strategy 2: Use wheel download/extract from whiteboxgeo.com for QGIS bundled Python
+    # ===========================================================================
+    # STRATEGY 1: Always try whiteboxgeo.com first (QGIS Python is guaranteed)
+    # ===========================================================================
     try:
-        # Get plugin directory to extract wheel
-        plugin_dir = os.path.dirname(os.path.realpath(__file__))
-        
         _download_and_extract_wheel_from_whiteboxgeo(plugin_dir)
         
         installed = ""
@@ -1187,67 +1147,128 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
             "interpreter": interpreter,
             "installed_version": installed,
             "upgraded": bool(upgrade),
-            "strategy": "wheel_whiteboxgeo",
+            "strategy": "whiteboxgeo_wheel",
+            "location": "QGIS bundled Python (plugin directory)",
         }
     
-    except RuntimeBootstrapError as exc:
-        # Strategy 3 (Fallback): If whiteboxgeo.com fails, try external Python with pip
-        try:
-            external_candidates = _discover_external_python_candidates()
-            for external_py in external_candidates:
-                try:
-                    # Test if this Python has pip
-                    test = subprocess.run(
-                        [external_py, "-m", "pip", "--version"],
-                        capture_output=True,
-                        timeout=2,
-                        **_subprocess_window_kwargs(),
-                    )
-                    if test.returncode != 0:
-                        continue
-                    
-                    # Found a working pip, try to install
-                    package_spec = "whitebox-workflows"
-                    command = [external_py, "-m", "pip", "install"]
-                    if upgrade:
-                        command.append("--upgrade")
-                    command.append(package_spec)
-                    
-                    completed = subprocess.run(
-                        command,
-                        check=False,
-                        capture_output=True,
-                        text=True,
-                        env=_build_clean_env(),
-                        **_subprocess_window_kwargs(),
-                    )
-                    
-                    if completed.returncode == 0:
-                        installed = ""
-                        try:
-                            installed = _get_installed_whitebox_workflows_version_for_interpreter(external_py)
-                        except Exception:
-                            installed = ""
-                        
-                        _EXTERNAL_SESSION_CACHE.clear()
-                        
-                        return {
-                            "interpreter": external_py,
-                            "installed_version": installed,
-                            "upgraded": bool(upgrade),
-                            "strategy": "pip_fallback",
-                            "note": f"Installed via external Python: {external_py}",
-                        }
-                except Exception:
-                    continue
-        except Exception:
-            pass
+    except Exception as strategy1_error:
+        pass  # Fall through to Strategy 2
+    
+    # ===========================================================================
+    # STRATEGY 2: If whiteboxgeo.com fails, search for system Python + pip
+    # ===========================================================================
+    try:
+        external_candidates = _discover_external_python_candidates()
         
-        # All strategies failed
-        raise exc
+        for external_py in external_candidates:
+            try:
+                # Test if this Python has pip
+                test = subprocess.run(
+                    [external_py, "-m", "pip", "--version"],
+                    capture_output=True,
+                    timeout=2,
+                    **_subprocess_window_kwargs(),
+                )
+                if test.returncode != 0:
+                    continue
+                
+                # Found a working pip—try to install from PyPI
+                package_spec = "whitebox-workflows"
+                command = [external_py, "-m", "pip", "install"]
+                if upgrade:
+                    command.append("--upgrade")
+                command.append(package_spec)
+                
+                completed = subprocess.run(
+                    command,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    env=_build_clean_env(),
+                    **_subprocess_window_kwargs(),
+                )
+                
+                if completed.returncode == 0:
+                    installed = ""
+                    try:
+                        installed = _get_installed_whitebox_workflows_version_for_interpreter(external_py)
+                    except Exception:
+                        installed = ""
+                    
+                    _EXTERNAL_SESSION_CACHE.clear()
+                    
+                    return {
+                        "interpreter": external_py,
+                        "installed_version": installed,
+                        "upgraded": bool(upgrade),
+                        "strategy": "pip_system_python",
+                        "location": f"System Python: {external_py}",
+                    }
+            except Exception:
+                continue
+    except Exception:
+        pass  # Fall through to Strategy 3
+    
+    # ===========================================================================
+    # STRATEGY 3: Both failed—provide helpful manual install instructions
+    # ===========================================================================
+    manual_instructions = _generate_manual_install_instructions()
+    
+    raise RuntimeBootstrapError(
+        f"Failed to automatically install whitebox-workflows.\n\n"
+        f"Manual install options:\n{manual_instructions}"
+    )
+
+
+def _generate_manual_install_instructions() -> str:
+    """
+    Generate platform-specific manual installation instructions.
+    Includes download URL for wheels and instructions for configuring QGIS Python.
+    """
+    os_platform = _get_os_wheel_platform()
+    py_version, platform_tag = _get_python_version_tag()
+    
+    instructions = (
+        f"Your system (Python {py_version}, {platform_tag}):\n\n"
+        f"Option A: Download wheel from whiteboxgeo.com\n"
+        f"  1. Download: https://www.whiteboxgeo.com/wbw_wheels/\n"
+        f"  2. Unzip the wbw-python-pro-{os_platform}-latest.zip\n"
+        f"  3. Find the wheel file (.whl) matching your Python version\n"
+        f"  4. Place it in the QGIS plugin directory\n"
+        f"  5. Manually import the wheel into QGIS Python\n\n"
+        f"Option B: Install with system Python (if available)\n"
+        f"  1. Open terminal/command prompt\n"
+        f"  2. Run: python -m pip install whitebox-workflows\n"
+        f"  3. Configure QGIS to use that Python in Plugin Settings\n\n"
+        f"For detailed help, visit: https://www.whiteboxgeo.com"
+    )
+    
+    return instructions
+
+
+def get_whiteboxgeo_version() -> str:
+    """
+    Fetch latest version from whiteboxgeo.com version.json.
+    Useful for checking if updates are available for whiteboxgeo.com installations.
+    """
+    try:
+        url = "https://www.whiteboxgeo.com/wbw_wheels/version.json"
+        
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        with urllib.request.urlopen(url, timeout=10, context=ssl_context) as response:  # nosec B310
+            payload = json.loads(response.read().decode("utf-8"))
+        
+        version = payload.get("version", "").strip()
+        if not version:
+            raise RuntimeBootstrapError("No version found in whiteboxgeo.com version.json")
+        return version
+    
     except Exception as exc:
         raise RuntimeBootstrapError(
-            f"Failed to install whitebox-workflows from whiteboxgeo.com: {str(exc)}"
+            f"Failed to fetch version from whiteboxgeo.com: {str(exc)}"
         ) from exc
 
 

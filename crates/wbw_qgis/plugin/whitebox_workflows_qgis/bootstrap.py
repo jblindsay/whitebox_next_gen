@@ -154,19 +154,35 @@ def get_whitebox_workflows_version_for_interpreter(interpreter: str) -> str:
         return ""
     
     try:
+        # Prepare environment for subprocess to find local wheels
+        env = os.environ.copy()
+        wheels_folder = get_wheels_folder()
+        if wheels_folder and Path(wheels_folder).exists():
+            # Add wheels folder to PYTHONPATH so subprocess can find our local wheels
+            existing_pythonpath = env.get("PYTHONPATH", "")
+            if existing_pythonpath:
+                env["PYTHONPATH"] = f"{wheels_folder}:{existing_pythonpath}"
+            else:
+                env["PYTHONPATH"] = wheels_folder
+            print(f"[WbW Plugin] Subprocess PYTHONPATH: {env['PYTHONPATH']}")
+        
         result = subprocess.run(
             [interpreter, "-c", "import whitebox_workflows; print(whitebox_workflows.WbEnvironment().version())"],
             capture_output=True,
             text=True,
             timeout=5,
+            env=env,
             **_subprocess_window_kwargs(),
         )
         if result.returncode == 0:
             version = result.stdout.strip()
             if version:
+                print(f"[WbW Plugin] Detected whitebox_workflows version {version} in {interpreter}")
                 return version
-    except Exception:
-        pass
+        else:
+            print(f"[WbW Plugin] Version detection failed: {result.stderr}")
+    except Exception as e:
+        print(f"[WbW Plugin] Exception detecting version: {e}")
     
     return ""
 

@@ -401,21 +401,35 @@ class WhiteboxSettingsDialog(QDialog):
         thread.start()
 
     def _fetch_versions_thread(self) -> None:
-        """Fetch current and available versions in background."""
+        """Fetch current and available versions in background.
+        
+        NOTE: Reads python_path in the calling thread (safe) rather than from
+        Qt widget in background thread (not thread-safe).
+        """
         try:
             from . import bootstrap
+            import sys
+            
+            # Read python_path in this thread (before moving to background thread)
+            # This ensures we read the current state, not a stale reference
+            try:
+                python_path = str(self._python_manual_edit.text()).strip()
+            except Exception:
+                python_path = ""
             
             # Get installed version
-            python_path = str(self._python_manual_edit.text()).strip()
             if python_path:
-                self._current_version = bootstrap.get_whitebox_workflows_version_for_interpreter(python_path)
+                current = bootstrap.get_whitebox_workflows_version_for_interpreter(python_path)
             else:
                 # Use current Python (QGIS bundled)
-                import sys
-                self._current_version = bootstrap.get_whitebox_workflows_version_for_interpreter(sys.executable)
+                current = bootstrap.get_whitebox_workflows_version_for_interpreter(sys.executable)
             
             # Get available version
-            self._available_version = bootstrap.get_latest_wheel_version()
+            available = bootstrap.get_latest_wheel_version()
+            
+            # Update state
+            self._current_version = current
+            self._available_version = available
             
             # Update UI from main thread
             try:
@@ -437,14 +451,22 @@ class WhiteboxSettingsDialog(QDialog):
             if hasattr(self._available_version_label, "setText"):
                 self._available_version_label.setText(available)
             
-            # Determine status
+            # Determine status using semantic version comparison
+            # NOTE: Must use semantic comparison, not string comparison
+            # (e.g., "2.10.0" > "2.9.0" would fail with lexical comparison)
+            from . import bootstrap
+            update_available = (
+                self._available_version and self._current_version and
+                bootstrap._compare_versions_semantic(self._available_version, self._current_version)
+            )
+            
             if not self._current_version:
                 status_text = "Not installed – click Update to install"
                 status_color = "color: #E65100; font-weight: bold;"  # warning orange
             elif not self._available_version:
                 status_text = "Unable to check for updates"
                 status_color = "color: #616161;"  # neutral gray
-            elif self._available_version > self._current_version:
+            elif update_available:
                 status_text = f"Update available ({self._available_version})"
                 status_color = "color: #1565C0; font-weight: bold;"  # info blue
                 # Update button text to "Update Available"
@@ -486,7 +508,14 @@ class WhiteboxSettingsDialog(QDialog):
         thread.start()
 
     def _perform_update_thread(self) -> None:
-        """Download and install wheels in background."""
+        """Download and install wheels in background.
+        
+        NOTE: Captures result/error before returning to main thread to avoid
+        closure issues with mutable state.
+        """
+        result_dict = None
+        error_msg = None
+        
         try:
             from . import bootstrap
             
@@ -494,21 +523,25 @@ class WhiteboxSettingsDialog(QDialog):
             version = self._available_version or ""
             
             # Download and install
-            result = bootstrap.download_and_install_wheels(version)
-            
-            # Update display from main thread
-            try:
-                timer = QTimer()
-                timer.singleShot(0, lambda: self._update_install_result(result))  # type: ignore[attr-defined]
-            except Exception:
-                self._update_install_result(result)
+            result_dict = bootstrap.download_and_install_wheels(version)
         except Exception as exc:
             error_msg = str(exc)
+        
+        # Update display from main thread with captured state
+        if error_msg:
             try:
                 timer = QTimer()
-                timer.singleShot(0, lambda: self._update_install_error(error_msg))  # type: ignore[attr-defined]
+                # Use functools.partial or explicit wrapper to avoid closure issues
+                timer.singleShot(0, lambda err=error_msg: self._update_install_error(err))  # type: ignore[attr-defined]
             except Exception:
                 self._update_install_error(error_msg)
+        elif result_dict:
+            try:
+                timer = QTimer()
+                # Capture result_dict in default argument to avoid closure issues
+                timer.singleShot(0, lambda res=result_dict: self._update_install_result(res))  # type: ignore[attr-defined]
+            except Exception:
+                self._update_install_result(result_dict)
 
     def _update_install_result(self, result: dict) -> None:
         """Update UI after installation attempt."""

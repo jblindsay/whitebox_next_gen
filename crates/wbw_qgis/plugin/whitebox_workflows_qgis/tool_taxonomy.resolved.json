@@ -449,28 +449,6 @@
     },
     {
       "category": "vector",
-      "subcategory": "spatial_statistics",
-      "tools": [
-        "global_morans_i",
-        "getis_ord_gi_star",
-        "local_morans_i_lisa",
-        "nearest_neighbour_index",
-        "quadrat_count_test",
-        "spatial_lag_regression",
-        "spatial_error_regression",
-        "geographically_weighted_regression",
-        "ripleys_k_test",
-        "envelope_test",
-        "point_process_residuals",
-        "ripleys_k_function",
-        "point_pattern_envelope",
-        "inhomogeneous_baseline",
-        "hotspot_vs_process",
-        "point_process_residuals_comparison"
-      ]
-    },
-    {
-      "category": "vector",
       "subcategory": "sampling_gridding",
       "tools": [
         "construct_vector_tin",
@@ -719,23 +697,6 @@
         "vector_lines_to_raster",
         "vector_points_to_raster",
         "vector_polygons_to_raster"
-      ]
-    },
-    {
-      "category": "raster",
-      "subcategory": "spatial_statistics",
-      "tools": [
-        "local_morans_i_lisa_raster",
-        "getis_ord_gi_star_raster",
-        "ordinary_kriging",
-        "local_kriging",
-        "simple_kriging",
-        "universal_kriging",
-        "spacetime_kriging",
-        "spatial_lag_regression_raster",
-        "spatial_error_regression_raster",
-        "geographically_weighted_regression_raster",
-        "inhomogeneous_intensity_raster"
       ]
     },
     {
@@ -1059,7 +1020,6 @@
         "corridor_mapping_intelligence",
         "landslide_susceptibility_assessment",
         "river_corridor_health_assessment",
-        "baseline_matching_and_diagnostics_assessment",
         "carbon_sequestration_verification_audit",
         "wildfire_fuel_loading_and_risk_matrix",
         "mine_site_reclamation_compliance_tracker",
@@ -1210,10 +1170,6 @@
     "balance_contrast_enhancement": {
       "license_tier": "open",
       "source_crate": "unknown"
-    },
-    "baseline_matching_and_diagnostics_assessment": {
-      "license_tier": "pro",
-      "source_crate": "wbtools_pro"
     },
     "basins": {
       "license_tier": "open",
@@ -1691,10 +1647,6 @@
       "license_tier": "open",
       "source_crate": "unknown"
     },
-    "envelope_test": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
     "equal_to": {
       "license_tier": "open",
       "source_crate": "unknown"
@@ -1765,7 +1717,7 @@
     },
     "extract_streams": {
       "license_tier": "open",
-      "source_crate": "wbtools_oss"
+      "source_crate": "unknown"
     },
     "extract_valleys": {
       "license_tier": "open",
@@ -1995,14 +1947,6 @@
       "license_tier": "open",
       "source_crate": "unknown"
     },
-    "geographically_weighted_regression": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "geographically_weighted_regression_raster": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
     "geomorphons": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -2011,19 +1955,7 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
-    "getis_ord_gi_star": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "getis_ord_gi_star_raster": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
     "glcm_texture": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "global_morans_i": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
@@ -2123,10 +2055,6 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
-    "hotspot_vs_process": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
     "hydrologic_connectivity": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -2204,14 +2132,6 @@
       "source_crate": "wbtools_oss"
     },
     "individual_tree_segmentation": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "inhomogeneous_baseline": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "inhomogeneous_intensity_raster": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
@@ -2547,18 +2467,6 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
-    "local_kriging": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "local_morans_i_lisa": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "local_morans_i_lisa_raster": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
     "locate_points_along_routes": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -2891,10 +2799,6 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
-    "nearest_neighbour_index": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
     "nearest_neighbour_interpolation": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -3051,10 +2955,6 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
-    "ordinary_kriging": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
     "orthorectification": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -3134,18 +3034,6 @@
     "plan_curvature": {
       "license_tier": "open",
       "source_crate": "unknown"
-    },
-    "point_pattern_envelope": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "point_process_residuals": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "point_process_residuals_comparison": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
     },
     "points_along_lines": {
       "license_tier": "open",
@@ -3228,10 +3116,6 @@
       "source_crate": "wbtools_oss"
     },
     "qin_flow_accumulation": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "quadrat_count_test": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
@@ -3471,14 +3355,6 @@
       "license_tier": "open",
       "source_crate": "unknown"
     },
-    "ripleys_k_function": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "ripleys_k_test": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
     "river_centerlines": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -3663,10 +3539,6 @@
       "license_tier": "open",
       "source_crate": "unknown"
     },
-    "simple_kriging": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
     "simplify_features": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -3747,27 +3619,7 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
-    "spacetime_kriging": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "spatial_error_regression": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "spatial_error_regression_raster": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
     "spatial_join": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "spatial_lag_regression": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
-    "spatial_lag_regression_raster": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
@@ -4023,10 +3875,6 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
-    "universal_kriging": {
-      "license_tier": "open",
-      "source_crate": "wbtools_oss"
-    },
     "unnest_basins": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -4085,7 +3933,7 @@
     },
     "vector_stream_network_analysis": {
       "license_tier": "open",
-      "source_crate": "wbtools_oss"
+      "source_crate": "unknown"
     },
     "vector_summary_statistics": {
       "license_tier": "open",

@@ -1397,15 +1397,15 @@ class WhiteboxWorkflowsPlugin:
         """Ensure WhiteboxWorkflows backend is installed and usable."""
         # Refresh backend status to get latest info
         try:
+            # NOTE: get_backend_python_for_operations returns (interpreter, version) tuple
             interpreter, version = get_backend_python_for_operations(
-                self._python_override_path, 
-                self._python_version_cached
+                override_path=self._python_override_path
             )
         except Exception as exc:
             self._notify_warning(f"Unable to detect whitebox_workflows backend: {exc}")
             return False
         
-        # If version is cached and known, backend is available
+        # If version is known, backend is available
         if version:
             return True
         
@@ -1420,7 +1420,6 @@ class WhiteboxWorkflowsPlugin:
         if not interactive:
             return False
         
-        qgis_python = get_qgis_bundled_python()
         detail = f"Target interpreter: {interpreter or 'unknown'}"
         if not self._confirm(
             "Install Whitebox Workflows Backend",
@@ -1431,28 +1430,24 @@ class WhiteboxWorkflowsPlugin:
             return False
         
         try:
+            # NOTE: install_whitebox_workflows returns dict from download_and_install_wheels
+            # Keys: success, version, message, wheels_folder
             result = install_whitebox_workflows(
-                override_path=self._python_override_path,
-                qgis_python=qgis_python
+                version=""  # Empty = latest version
             )
             
-            if result.get("installed"):
+            if result.get("success"):
                 version = result.get("version", "")
-                location = result.get("location", "")
-                strategy = result.get("strategy", "")
-                
-                version_text = f" (version {version})" if version else ""
-                strategy_text = f" via {strategy}" if strategy else ""
-                location_text = f" → {location}" if location else ""
+                message = result.get("message", "")
                 
                 # Cache the version
                 self._python_version_cached = version
                 self._save_backend_preferences()
                 
-                self._notify_info(f"Installed whitebox_workflows{version_text}{strategy_text}{location_text}.")
+                self._notify_info(f"Installed whitebox_workflows {version}. {message}")
                 return True
             else:
-                error_msg = result.get("error", "Unknown error")
+                error_msg = result.get("message", "Unknown error")
                 self._notify_warning(f"Backend install failed: {error_msg}")
                 return False
         except Exception as exc:

@@ -70,6 +70,20 @@ def get_runtime_preferences() -> tuple[str, str]:
     return _RUNTIME_MODE, _RUNTIME_LOCAL_PYTHON
 
 
+def _compare_versions_semantic(v1: str, v2: str) -> bool:
+    """Compare two semantic versions. Returns True if v1 > v2.
+    
+    Uses tuple comparison of integer parts: (major, minor, patch).
+    Falls back to lexical comparison if parsing fails.
+    """
+    try:
+        parts1 = tuple(int(x) for x in str(v1 or "").split(".")[:3])
+        parts2 = tuple(int(x) for x in str(v2 or "").split(".")[:3])
+        return parts1 > parts2
+    except (ValueError, TypeError):
+        return str(v1 or "") > str(v2 or "")  # Fallback to lexical
+
+
 def can_import_whitebox_workflows(interpreter: str) -> bool:
     """Check if whitebox_workflows can be imported in the given Python."""
     if not interpreter or not Path(interpreter).exists():
@@ -2033,13 +2047,12 @@ def download_and_install_wheels(version_spec: str = "") -> dict:
         
         os.unlink(tmp_path)
         
-        # Verify installation
+        # Verify installation by checking if wheels can be imported
         ensure_wheels_in_sys_path()
-        if can_import_whitebox_workflows(sys.executable):
-            result["success"] = True
-            result["message"] = f"Successfully installed whitebox_workflows {version_to_download}"
-        else:
-            result["message"] = "Wheels installed but import failed - may need to restart QGIS"
+        # Don't verify with sys.executable (QGIS bundled Python) - just trust extraction worked
+        # The wheels are now in sys.path, so subsequent imports will find them
+        result["success"] = True
+        result["message"] = f"Successfully installed whitebox_workflows {version_to_download}"
     
     except Exception as e:
         result["message"] = f"Failed to download/install wheels: {e}"

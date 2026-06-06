@@ -521,11 +521,22 @@ class WhiteboxSettingsDialog(QDialog):
             
             # Get version to download
             version = self._available_version or ""
-            
-            # Download and install
-            result_dict = bootstrap.download_and_install_wheels(version)
+            if not version:
+                error_msg = "Could not determine version to download"
+            else:
+                # Download and install
+                result_dict = bootstrap.download_and_install_wheels(version)
+                
+                # Ensure we got a valid result dict
+                if result_dict is None:
+                    error_msg = "Download returned no result"
+                elif not isinstance(result_dict, dict):
+                    error_msg = f"Download returned invalid type: {type(result_dict)}"
         except Exception as exc:
             error_msg = str(exc)
+            import traceback
+            print(f"[WbW Plugin] Exception during wheel download: {exc}")
+            traceback.print_exc()
         
         # Update display from main thread with captured state
         if error_msg:
@@ -535,13 +546,17 @@ class WhiteboxSettingsDialog(QDialog):
                 timer.singleShot(0, lambda err=error_msg: self._update_install_error(err))  # type: ignore[attr-defined]
             except Exception:
                 self._update_install_error(error_msg)
-        elif result_dict:
+        elif result_dict and isinstance(result_dict, dict):
             try:
                 timer = QTimer()
                 # Capture result_dict in default argument to avoid closure issues
                 timer.singleShot(0, lambda res=result_dict: self._update_install_result(res))  # type: ignore[attr-defined]
-            except Exception:
+            except Exception as e:
+                print(f"[WbW Plugin] Exception calling _update_install_result: {e}")
                 self._update_install_result(result_dict)
+        else:
+            # Fallback error case
+            self._update_install_error(f"Unexpected error: result_dict={result_dict} (type={type(result_dict)})")
 
     def _update_install_result(self, result: dict) -> None:
         """Update UI after installation attempt."""

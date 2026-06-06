@@ -2076,6 +2076,11 @@ def download_and_install_wheels(version_spec: str = "") -> dict:
             f"Failed to download/install wheels: {e}\\n"
             f"URL attempted: {wheel_url}"
         )
+        print(f"[WbW Plugin] Exception during wheel install: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    return result
 def get_qgis_bundled_python() -> str:
     """Return path to QGIS's bundled Python interpreter (sys.executable)."""
     import sys

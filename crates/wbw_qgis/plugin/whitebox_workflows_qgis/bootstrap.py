@@ -5,6 +5,7 @@ import glob
 import importlib
 import json
 import os
+import platform
 import shutil
 import ssl
 import subprocess
@@ -20,6 +21,8 @@ _EXTERNAL_SESSION_CACHE: dict[tuple[str, bool, str], "ExternalRuntimeSession"] =
 _RUNTIME_MODE = "auto"
 _RUNTIME_LOCAL_PYTHON = ""
 _NEXT_GEN_MIN_VERSION = "2.0.0"
+_PLUGIN_FOLDER = ""
+_WHEELS_FOLDER = ""
 
 
 def _subprocess_window_kwargs() -> dict:
@@ -67,9 +70,159 @@ def get_runtime_preferences() -> tuple[str, str]:
     return _RUNTIME_MODE, _RUNTIME_LOCAL_PYTHON
 
 
+def can_import_whitebox_workflows(interpreter: str) -> bool:
+    """Check if whitebox_workflows can be imported in the given Python."""
+    if not interpreter or not Path(interpreter).exists():
+        return False
+    
+    try:
+        result = subprocess.run(
+            [interpreter, "-c", "import whitebox_workflows; print('ok')"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            **_subprocess_window_kwargs(),
+        )
+        return result.returncode == 0 and "ok" in result.stdout
+    except Exception:
+        return False
+
+
+def get_whitebox_workflows_version_for_interpreter(interpreter: str) -> str:
+    """Get installed whitebox_workflows version from Python interpreter."""
+    if not interpreter or not Path(interpreter).exists():
+        return ""
+    
+    try:
+        result = subprocess.run(
+            [interpreter, "-c", "import whitebox_workflows; print(whitebox_workflows.WbEnvironment().version())"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            **_subprocess_window_kwargs(),
+        )
+        if result.returncode == 0:
+            version = result.stdout.strip()
+            if version:
+                return version
+    except Exception:
+        pass
+    
+    return ""
+
+
+def set_plugin_folder(folder_path: str) -> None:
+    """Set the plugin folder path (where wheels will be stored)."""
+    global _PLUGIN_FOLDER, _WHEELS_FOLDER
+    _PLUGIN_FOLDER = str(folder_path or "").strip()
+    if _PLUGIN_FOLDER:
+        _WHEELS_FOLDER = str(Path(_PLUGIN_FOLDER) / "wheels")
+    else:
+        _WHEELS_FOLDER = ""
+
+
+def get_plugin_folder() -> str:
+    """Get the plugin folder path."""
+    return _PLUGIN_FOLDER
+
+
+def get_wheels_folder() -> str:
+    """Get the wheels folder path."""
+    return _WHEELS_FOLDER
+
+
+def ensure_wheels_in_sys_path() -> None:
+    """Add wheels folder to sys.path if it exists and is not already there."""
+    wheels = get_wheels_folder()
+    if not wheels or not Path(wheels).exists():
+        return
+    wheels_path = str(Path(wheels).resolve())
+    if wheels_path not in sys.path:
+        sys.path.insert(0, wheels_path)
+
+
 class RuntimeBootstrapError(RuntimeError):
     pass
 
+
+
+def discover_python_candidates() -> list[tuple[str, str]]:
+    """
+    Discover Python installations on the system.
+    Returns list of (path, label) tuples in priority order.
+    """
+    candidates: list[tuple[str, str]] = []
+    seen_paths: set[str] = set()
+    
+    def _add_candidate(path_text: str | None, label: str) -> None:
+        p_text = str(path_text or "").strip()
+        if not p_text:
+            return
+        try:
+            p = Path(p_text).expanduser().resolve()
+            if not p.exists() or not os.access(p, os.X_OK):
+                return
+            p_str = str(p)
+            if p_str not in seen_paths:
+                candidates.append((p_str, label))
+                seen_paths.add(p_str)
+        except Exception:
+            return
+    
+    system = platform.system()
+    
+    # macOS candidates
+    if system == "Darwin":
+        for candidate in ["/opt/homebrew/bin/python3", "/usr/local/bin/python3", "/usr/bin/python3"]:
+            _add_candidate(candidate, "System Python")
+        pyenv_root = Path.home() / ".pyenv" / "versions"
+        if pyenv_root.exists():
+            try:
+                for version_dir in sorted(pyenv_root.iterdir(), reverse=True):
+                    py_exe = version_dir / "bin" / "python3"
+                    if py_exe.exists():
+                        _add_candidate(str(py_exe), f"pyenv {version_dir.name}")
+                        break
+            except Exception:
+                pass
+        for candidate in [Path.home() / ".miniconda3" / "bin" / "python", Path.home() / "miniconda3" / "bin" / "python"]:
+            _add_candidate(candidate, "Miniconda")
+    
+    # Linux candidates  
+    elif system == "Linux":
+        for candidate in ["/usr/bin/python3", "/usr/local/bin/python3"]:
+            _add_candidate(candidate, "System Python")
+        pyenv_root = Path.home() / ".pyenv" / "versions"
+        if pyenv_root.exists():
+            try:
+                for version_dir in sorted(pyenv_root.iterdir(), reverse=True):
+                    py_exe = version_dir / "bin" / "python3"
+                    if py_exe.exists():
+                        _add_candidate(str(py_exe), f"pyenv {version_dir.name}")
+                        break
+            except Exception:
+                pass
+        _add_candidate(Path.home() / ".miniconda3" / "bin" / "python", "Miniconda")
+        _add_candidate("/opt/miniconda3/bin/python", "Miniconda (opt)")
+    
+    # Windows candidates
+    elif system == "Windows":
+        for version in ["310", "311", "312", "313"]:
+            _add_candidate(f"C:\\Python{version}\\python.exe", "System Python")
+        _add_candidate(r"C:\OSGeo4W\apps\Python39\python.exe", "OSGeo4W")
+        _add_candidate(Path.home() / "Anaconda3" / "python.exe", "Anaconda")
+    
+    # Universal venv candidates
+    for venv_path in [Path.home() / ".venv", Path.home() / "venv", Path.cwd() / ".venv"]:
+        _add_candidate(venv_path / "bin" / "python", f"{venv_path.name}")
+    
+    # PATH fallback
+    for cmd in ["python3", "python"]:
+        resolved = shutil.which(cmd)
+        if resolved:
+            _add_candidate(resolved, f"PATH ({cmd})")
+    
+    return candidates
 
 def _next_gen_required_message(detail: str = "") -> str:
     base = (
@@ -1799,3 +1952,96 @@ def run_projection_wrapper(
         raise RuntimeBootstrapError(f"Unsupported projection wrapper tool: {tool_id}")
 
     return {"outputs": {"output": out_path or in_path}}
+
+
+def get_latest_wheel_version(timeout_seconds: float = 4.0) -> str:
+    """Fetch latest whitebox-workflows wheel version from whiteboxgeo.com."""
+    try:
+        url = "https://whiteboxgeo.com/wbw_wheels/version.json"
+        req = urllib.request.Request(url)
+        ctx = ssl.create_default_context()
+        with urllib.request.urlopen(req, context=ctx, timeout=timeout_seconds) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            if isinstance(data, dict) and "version" in data:
+                return str(data["version"]).strip()
+    except Exception:
+        pass
+    return ""
+
+
+def download_and_install_wheels(version_spec: str = "") -> dict:
+    """
+    Download and install whitebox-workflows wheels to plugin wheels folder.
+    Returns dict with keys: success (bool), version (str), message (str), wheels_folder (str)
+    """
+    result = {
+        "success": False,
+        "version": "",
+        "message": "",
+        "wheels_folder": get_wheels_folder(),
+    }
+    
+    if not result["wheels_folder"]:
+        result["message"] = "Plugin folder not initialized. Call set_plugin_folder() first."
+        return result
+    
+    # Create wheels folder if needed
+    wheels_path = Path(result["wheels_folder"])
+    try:
+        wheels_path.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        result["message"] = f"Failed to create wheels folder: {e}"
+        return result
+    
+    # Determine platform
+    system = platform.system()
+    if system == "Darwin":
+        platform_name = "macos"
+    elif system == "Linux":
+        platform_name = "ubuntu"
+    elif system == "Windows":
+        platform_name = "windows"
+    else:
+        result["message"] = f"Unsupported platform: {system}"
+        return result
+    
+    # Determine version to download
+    if version_spec:
+        version_to_download = version_spec
+    else:
+        version_to_download = get_latest_wheel_version()
+        if not version_to_download:
+            result["message"] = "Could not determine latest wheel version"
+            return result
+    
+    # Download wheel zip
+    wheel_url = f"https://whiteboxgeo.com/wbw_wheels/wbw-python-pro-{platform_name}-{version_to_download}.zip"
+    result["version"] = version_to_download
+    
+    try:
+        req = urllib.request.Request(wheel_url)
+        ctx = ssl.create_default_context()
+        
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+            with urllib.request.urlopen(req, context=ctx, timeout=30) as response:
+                tmp.write(response.read())
+            tmp_path = tmp.name
+        
+        # Extract wheels
+        with zipfile.ZipFile(tmp_path, "r") as zf:
+            zf.extractall(str(wheels_path))
+        
+        os.unlink(tmp_path)
+        
+        # Verify installation
+        ensure_wheels_in_sys_path()
+        if can_import_whitebox_workflows(sys.executable):
+            result["success"] = True
+            result["message"] = f"Successfully installed whitebox_workflows {version_to_download}"
+        else:
+            result["message"] = "Wheels installed but import failed - may need to restart QGIS"
+    
+    except Exception as e:
+        result["message"] = f"Failed to download/install wheels: {e}"
+    
+    return result

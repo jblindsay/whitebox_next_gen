@@ -1129,6 +1129,7 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
     interpreter = get_backend_interpreter_path()
     plugin_dir = os.path.dirname(os.path.realpath(__file__))
     diagnostics = []
+    strategy1_error_details = ""
     
     # ===========================================================================
     # STRATEGY 1: Always try whiteboxgeo.com first (QGIS Python is guaranteed)
@@ -1156,7 +1157,15 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
         }
     
     except Exception as strategy1_error:
-        diagnostics.append(f"✗ Strategy 1 failed: {str(strategy1_error)[:200]}")
+        import traceback
+        strategy1_error_details = traceback.format_exc()
+        diagnostics.append(f"✗ Strategy 1 failed:")
+        diagnostics.append(f"  Error type: {type(strategy1_error).__name__}")
+        diagnostics.append(f"  Error message: {str(strategy1_error)}")
+        diagnostics.append("  Full traceback:")
+        for line in strategy1_error_details.split("\n"):
+            if line.strip():
+                diagnostics.append(f"    {line}")
     
     # ===========================================================================
     # STRATEGY 2: If whiteboxgeo.com fails, search for system Python + pip
@@ -1215,6 +1224,7 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
                         "strategy": "pip_system_python",
                         "location": f"System Python: {external_py}",
                         "diagnostics": "\n".join(diagnostics),
+                        "strategy1_failure_details": strategy1_error_details,
                     }
                 else:
                     diagnostics.append(f"    → pip install failed (return code {completed.returncode})")

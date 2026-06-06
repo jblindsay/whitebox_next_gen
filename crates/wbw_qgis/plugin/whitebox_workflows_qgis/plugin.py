@@ -42,6 +42,7 @@ try:
     from qgis.PyQt.QtGui import QAction, QIcon
     from qgis.PyQt.QtCore import QSettings
     from qgis.PyQt.QtWidgets import QApplication, QInputDialog, QLineEdit, QMenu, QMessageBox
+    from qgis.core import QgsMessageLog, Qgis
 except Exception:  # pragma: no cover
     class QAction:  # type: ignore[override]
         def __init__(self, *_args, **_kwargs):
@@ -137,6 +138,16 @@ except Exception:  # pragma: no cover
     class _Signal:  # type: ignore[override]
         def connect(self, *_args, **_kwargs):
             return None
+
+    class QgsMessageLog:  # type: ignore[override]
+        @staticmethod
+        def logMessage(message, tag, level):
+            return None
+
+    class Qgis:  # type: ignore[override]
+        Info = 0
+        Warning = 1
+        Critical = 2
 
 
 class WhiteboxWorkflowsPlugin:
@@ -1435,6 +1446,17 @@ class WhiteboxWorkflowsPlugin:
             location = str(result.get("location", "")).strip()
             strategy_text = f" via {strategy}" if strategy else ""
             location_text = f" → {location}" if location else ""
+            
+            # Log Strategy 1 failure details if Strategy 2 was used
+            if strategy == "pip_system_python":
+                failure_details = str(result.get("strategy1_failure_details", "")).strip()
+                if failure_details:
+                    QgsMessageLog.logMessage(
+                        f"Whitebox Workflows: Strategy 1 (whiteboxgeo.com) failed, falling back to pip.\n\n{failure_details}",
+                        "Whitebox Workflows",
+                        Qgis.Warning
+                    )
+            
             self._notify_info(f"Installed whitebox_workflows{version_text}{strategy_text}{location_text}.")
             return True
         except Exception as exc:
@@ -1515,6 +1537,17 @@ class WhiteboxWorkflowsPlugin:
             location = str(result.get("location", "")).strip()
             strategy_text = f" via {strategy}" if strategy else ""
             location_text = f" → {location}" if location else ""
+            
+            # Log Strategy 1 failure details if Strategy 2 was used
+            if strategy == "pip_system_python":
+                failure_details = str(result.get("strategy1_failure_details", "")).strip()
+                if failure_details:
+                    QgsMessageLog.logMessage(
+                        f"Whitebox Workflows: Strategy 1 (whiteboxgeo.com) failed, falling back to pip.\n\n{failure_details}",
+                        "Whitebox Workflows",
+                        Qgis.Warning
+                    )
+            
             self._skipped_update_version = ""
             self._save_backend_preferences()
             self._notify_info(f"Updated whitebox_workflows to {version}{strategy_text}{location_text}.")

@@ -1977,9 +1977,13 @@ def get_latest_wheel_version(timeout_seconds: float = 4.0) -> str:
         with urllib.request.urlopen(req, context=ctx, timeout=timeout_seconds) as response:
             data = json.loads(response.read().decode("utf-8"))
             if isinstance(data, dict) and "version" in data:
-                return str(data["version"]).strip()
-    except Exception:
-        pass
+                version = str(data["version"]).strip()
+                # Debug logging to console (visible in QGIS Python console)
+                print(f"[WbW Plugin] Latest wheel version from whiteboxgeo.com: {version}")
+                return version
+    except Exception as e:
+        # Debug logging to console
+        print(f"[WbW Plugin] Failed to fetch latest version: {e}")
     return ""
 
 
@@ -2032,14 +2036,25 @@ def download_and_install_wheels(version_spec: str = "") -> dict:
     wheel_url = f"https://whiteboxgeo.com/wbw_wheels/wbw-python-pro-{platform_name}-{version_to_download}.zip"
     result["version"] = version_to_download
     
+    # Debug logging to console
+    print(f"[WbW Plugin] Downloading wheels from: {wheel_url}")
+    
     try:
         req = urllib.request.Request(wheel_url)
         ctx = ssl.create_default_context()
         
-        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-            with urllib.request.urlopen(req, context=ctx, timeout=30) as response:
-                tmp.write(response.read())
-            tmp_path = tmp.name
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+                with urllib.request.urlopen(req, context=ctx, timeout=30) as response:
+                    tmp.write(response.read())
+                tmp_path = tmp.name
+        except urllib.error.HTTPError as http_err:
+            result["message"] = (
+                f"HTTP {http_err.code} error downloading wheels.\\n"
+                f"URL: {wheel_url}\\n"
+                f"Please verify this URL exists and is accessible."
+            )
+            return result
         
         # Extract wheels
         with zipfile.ZipFile(tmp_path, "r") as zf:
@@ -2053,17 +2068,12 @@ def download_and_install_wheels(version_spec: str = "") -> dict:
         # The wheels are now in sys.path, so subsequent imports will find them
         result["success"] = True
         result["message"] = f"Successfully installed whitebox_workflows {version_to_download}"
-    
+        
     except Exception as e:
-        result["message"] = f"Failed to download/install wheels: {e}"
-    
-    return result
-
-
-# ==============================================================================
-# Compatibility functions for plugin.py integration
-# ==============================================================================
-
+        result["message"] = (
+            f"Failed to download/install wheels: {e}\\n"
+            f"URL attempted: {wheel_url}"
+        )
 def get_qgis_bundled_python() -> str:
     """Return path to QGIS's bundled Python interpreter (sys.executable)."""
     import sys

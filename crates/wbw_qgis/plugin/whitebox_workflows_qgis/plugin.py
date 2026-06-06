@@ -1483,17 +1483,13 @@ class WhiteboxWorkflowsPlugin:
         payload = gather_runtime_diagnostics(
             include_pro=self.provider.include_pro,
             tier=self.provider.tier,
-            backend_wbw_path="",
-            backend_wbw_version=self._python_version_cached,
-            backend_installation_source="",
         )
         text = diagnostics_text(payload)
         update_policy = (
             f"Backend configuration:\n"
             f"  python_override_path: {self._python_override_path or '(Using QGIS bundled Python)'}\n"
             f"  python_version_cached: {self._python_version_cached or '(Unknown)'}\n"
-            f"  auto_check_backend_updates: {self._auto_check_backend_updates}\n"
-            f"  skip_auto_update_checks_in_local_mode: {self._skip_auto_update_checks_in_local_mode}"
+            f"  auto_check_backend_updates: {self._auto_check_backend_updates}"
         )
         text = f"{text}\n\n{update_policy}"
 
@@ -1536,9 +1532,6 @@ class WhiteboxWorkflowsPlugin:
         payload = gather_runtime_diagnostics(
             include_pro=self.provider.include_pro,
             tier=self.provider.tier,
-            backend_wbw_path="",
-            backend_wbw_version=self._python_version_cached,
-            backend_installation_source="",
         )
         caps = payload.get("capabilities") if isinstance(payload, dict) else None
         effective_tier = "unknown"

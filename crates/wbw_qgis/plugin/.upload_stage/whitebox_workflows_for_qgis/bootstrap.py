@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import importlib
+import importlib.util
 import json
 import os
 import shutil
@@ -12,9 +13,10 @@ from pathlib import Path
 
 
 _EXTERNAL_SESSION_CACHE: dict[tuple[str, bool, str], "ExternalRuntimeSession"] = {}
-_RUNTIME_MODE = "auto"
+_RUNTIME_MODE = "qgis"
 _RUNTIME_LOCAL_PYTHON = ""
 _NEXT_GEN_MIN_VERSION = "2.0.0"
+_WBW_PIP_TARGET_DIR = ""  # cached pip --target directory
 
 
 def _subprocess_window_kwargs() -> dict:
@@ -42,18 +44,54 @@ def _subprocess_window_kwargs() -> dict:
     return kwargs
 
 
-def set_runtime_preferences(mode: str = "auto", local_python: str = "") -> None:
+def _get_site_packages_for_python(python_exe: str | None) -> str | None:
+    """Given a Python executable path, return its site-packages directory.
+
+    Returns the first writable site-packages directory found, or None if
+    the path is invalid, not executable, or site-packages cannot be determined.
+    """
+    exe_path = str(python_exe or "").strip()
+    if not exe_path:
+        return None
+
+    try:
+        path_obj = Path(exe_path)
+        if not path_obj.exists() or not os.access(path_obj, os.X_OK):
+            return None
+    except Exception:
+        return None
+
+    try:
+        result = subprocess.run(
+            [exe_path, "-c", "import site; print('\\n'.join(site.getsitepackages()))"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            **_subprocess_window_kwargs(),
+        )
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')
+            for line in lines:
+                line = line.strip()
+                if line and os.path.isdir(line):
+                    return line
+    except Exception:
+        pass
+
+    return None
+
+
+def set_runtime_preferences(mode: str = "qgis", local_python: str = "") -> None:
     """Set runtime interpreter selection preferences for this plugin process.
 
     mode values:
-    - auto: prefer discovered external interpreter, then current runtime
-    - local: force a caller-provided local interpreter path
-    - qgis: force current in-process Python runtime
+    - qgis: use in-process QGIS Python runtime (default, recommended for end users)
+    - local: use a caller-provided local interpreter path (for development)
     """
     global _RUNTIME_MODE, _RUNTIME_LOCAL_PYTHON
-    normalized = str(mode or "auto").strip().lower()
-    if normalized not in {"auto", "local", "qgis"}:
-        normalized = "auto"
+    normalized = str(mode or "qgis").strip().lower()
+    if normalized not in {"local", "qgis"}:
+        normalized = "qgis"
     _RUNTIME_MODE = normalized
     _RUNTIME_LOCAL_PYTHON = str(local_python or "").strip()
 
@@ -285,79 +323,17 @@ class ExternalRuntimeSession:
             "    tool_id = str(p.get('tool_id', ''))\n"
             "    args = json.loads(str(p.get('args_json', '{}')))\n"
             "    wbe = wbw.WbEnvironment()\n"
-            "    def _to_optional_bool(v):\n"
-            "        if v is None:\n"
-            "            return None\n"
-            "        if isinstance(v, bool):\n"
-            "            return v\n"
-            "        if isinstance(v, str):\n"
-            "            t = v.strip().lower()\n"
-            "            if t in ('true', '1', 'yes', 'y', 'on'):\n"
-            "                return True\n"
-            "            if t in ('false', '0', 'no', 'n', 'off'):\n"
-            "                return False\n"
-            "            return None\n"
-            "        return bool(v)\n"
             "    epsg = int(args.get('epsg'))\n"
             "    in_path = str(args.get('input', ''))\n"
             "    out_path = str(args.get('output', ''))\n"
-            "    coordinate_epoch = args.get('coordinate_epoch', None)\n"
-            "    source_reference_epoch = args.get('source_reference_epoch', None)\n"
-            "    target_reference_epoch = args.get('target_reference_epoch', None)\n"
-            "    operation_code = args.get('operation_code', None)\n"
-            "    prefer_official_operation = _to_optional_bool(args.get('prefer_official_operation', None))\n"
-            "    epoch_policy = args.get('epoch_policy', None)\n"
             "    if tool_id == 'reproject_raster':\n"
             "        resample = str(args.get('resample', 'bilinear')).strip() or 'bilinear'\n"
             "        src = wbe.read_raster(in_path)\n"
-            "        kwargs = {'dst_epsg': epsg, 'resample': resample}\n"
-            "        if coordinate_epoch is not None:\n"
-            "            kwargs['coordinate_epoch'] = float(coordinate_epoch)\n"
-            "        if source_reference_epoch is not None:\n"
-            "            kwargs['source_reference_epoch'] = float(source_reference_epoch)\n"
-            "        if target_reference_epoch is not None:\n"
-            "            kwargs['target_reference_epoch'] = float(target_reference_epoch)\n"
-            "        if operation_code is not None:\n"
-            "            kwargs['operation_code'] = int(operation_code)\n"
-            "        if prefer_official_operation is not None:\n"
-            "            kwargs['prefer_official_operation'] = prefer_official_operation\n"
-            "        if epoch_policy is not None and str(epoch_policy).strip():\n"
-            "            kwargs['epoch_policy'] = str(epoch_policy)\n"
-            "        out_obj = wbe.reproject_raster(src, **kwargs)\n"
+            "        out_obj = wbe.reproject_raster(src, dst_epsg=epsg, resample=resample)\n"
             "        wbe.write_raster(out_obj, out_path)\n"
-            "    elif tool_id == 'reproject_vector':\n"
-            "        src = wbe.read_vector(in_path)\n"
-            "        kwargs = {'dst_epsg': epsg}\n"
-            "        if coordinate_epoch is not None:\n"
-            "            kwargs['coordinate_epoch'] = float(coordinate_epoch)\n"
-            "        if source_reference_epoch is not None:\n"
-            "            kwargs['source_reference_epoch'] = float(source_reference_epoch)\n"
-            "        if target_reference_epoch is not None:\n"
-            "            kwargs['target_reference_epoch'] = float(target_reference_epoch)\n"
-            "        if operation_code is not None:\n"
-            "            kwargs['operation_code'] = int(operation_code)\n"
-            "        if prefer_official_operation is not None:\n"
-            "            kwargs['prefer_official_operation'] = prefer_official_operation\n"
-            "        if epoch_policy is not None and str(epoch_policy).strip():\n"
-            "            kwargs['epoch_policy'] = str(epoch_policy)\n"
-            "        out_obj = wbe.reproject_vector(src, **kwargs)\n"
-            "        wbe.write_vector(out_obj, out_path)\n"
             "    elif tool_id == 'reproject_lidar':\n"
             "        src = wbe.read_lidar(in_path)\n"
-            "        kwargs = {'dst_epsg': epsg}\n"
-            "        if coordinate_epoch is not None:\n"
-            "            kwargs['coordinate_epoch'] = float(coordinate_epoch)\n"
-            "        if source_reference_epoch is not None:\n"
-            "            kwargs['source_reference_epoch'] = float(source_reference_epoch)\n"
-            "        if target_reference_epoch is not None:\n"
-            "            kwargs['target_reference_epoch'] = float(target_reference_epoch)\n"
-            "        if operation_code is not None:\n"
-            "            kwargs['operation_code'] = int(operation_code)\n"
-            "        if prefer_official_operation is not None:\n"
-            "            kwargs['prefer_official_operation'] = prefer_official_operation\n"
-            "        if epoch_policy is not None and str(epoch_policy).strip():\n"
-            "            kwargs['epoch_policy'] = str(epoch_policy)\n"
-            "        out_obj = wbe.reproject_lidar(src, **kwargs)\n"
+            "        out_obj = wbe.reproject_lidar(src, dst_epsg=epsg)\n"
             "        wbe.write_lidar(out_obj, out_path)\n"
             "    elif tool_id == 'assign_projection_raster':\n"
             "        src = wbe.read_raster(in_path)\n"
@@ -656,7 +632,11 @@ def _rewrite_windows_qgis_launcher(path_text: str | None) -> str:
     if not any(normalized.endswith(suffix) for suffix in suffixes):
         return raw
 
-    install_root = raw[: raw.lower().rfind("bin\\python") if "bin\\python" in raw.lower() else raw.replace("\\", "/").lower().rfind("/bin/python")]
+    install_root = raw[
+        : raw.lower().rfind("bin\\python")
+        if "bin\\python" in raw.lower()
+        else raw.replace("\\", "/").lower().rfind("/bin/python")
+    ]
     install_root = install_root.rstrip("\\/")
     if not install_root:
         return raw
@@ -733,14 +713,195 @@ def _discover_external_python_candidates() -> list[str]:
     return ordered
 
 
+def _get_pip_target_dir() -> str:
+    """Return a writable per-profile directory for pip --target installs.
+
+    Uses the QGIS profile's python directory when available so that the
+    installed package persists across QGIS sessions and is isolated from
+    the (read-only) QGIS app bundle site-packages.
+    """
+    global _WBW_PIP_TARGET_DIR
+    if _WBW_PIP_TARGET_DIR:
+        return _WBW_PIP_TARGET_DIR
+
+    target: Path | None = None
+
+    # Prefer the QGIS profile directory - available when running inside QGIS.
+    try:
+        from qgis.core import QgsApplication  # type: ignore[import]
+        config_path = QgsApplication.qgisSettingsDirPath()
+        if config_path:
+            target = Path(config_path) / "python" / "whitebox_workflows_lib"
+    except Exception:
+        pass
+
+    # Fallback: user home directory.
+    if target is None:
+        target = Path.home() / ".whitebox_workflows_lib"
+
+    target.mkdir(parents=True, exist_ok=True)
+    _WBW_PIP_TARGET_DIR = str(target)
+    return _WBW_PIP_TARGET_DIR
+
+
+def _ensure_pip_target_on_sys_path() -> None:
+    """Add the pip --target directory to sys.path if not already present."""
+    import sys
+    target = _get_pip_target_dir()
+    if target and target not in sys.path:
+        sys.path.insert(0, target)
+
+
+def _install_whitebox_workflows_via_pip(target_dir: str) -> None:
+    """Install whitebox-workflows into *target_dir* using the QGIS Python pip.
+
+    Uses sys.executable (the QGIS Python) and preserves the full process
+    environment so that PYTHONHOME is correctly inherited on macOS/Linux
+    bundled distributions.
+    """
+    import sys
+    completed = subprocess.run(
+        [
+            sys.executable, "-m", "pip", "install",
+            "--target", target_dir,
+            "--upgrade",
+            "whitebox-workflows",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=dict(os.environ),  # keep full env - PYTHONHOME required for bundled Python
+        **_subprocess_window_kwargs(),
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or "unknown pip error"
+        raise RuntimeBootstrapError(
+            f"pip install whitebox-workflows failed: {detail}"
+        )
+
+
 def load_whitebox_workflows():
+    import sys
+
+    # When switching runtime modes, clear the cached module so we reimport from the new location.
+    # Otherwise Python returns the cached module and importlib caches have no effect.
+    mode, local_python = get_runtime_preferences()
+    if mode == "local":
+        # Remove cached whitebox_workflows and all its submodules
+        sys.modules.pop("whitebox_workflows", None)
+        to_remove = [key for key in sys.modules.keys() if key.startswith("whitebox_workflows.")]
+        for key in to_remove:
+            sys.modules.pop(key, None)
+        # Clear Python's import machinery cache (PathFinder, etc.) so it rescans for modules
+        importlib.invalidate_caches()
+
+    # For local mode: directly load from the development path using importlib
+    # This avoids permanently modifying sys.path and breaking QGIS plugin compatibility
+    if mode == "local" and local_python:
+        site_packages = _get_site_packages_for_python(local_python)
+        if site_packages:
+            # Look for .pth files that might point to development directories (from maturin develop)
+            pth_files = list(Path(site_packages).glob("whitebox_workflows*.pth"))
+            for pth_file in pth_files:
+                try:
+                    pth_path = pth_file.read_text().strip()
+                    if pth_path and Path(pth_path).exists():
+                        # Try to load from the .pth path directly
+                        wbw_module_path = Path(pth_path) / "whitebox_workflows" / "__init__.py"
+                        if wbw_module_path.exists():
+                            spec = importlib.util.spec_from_file_location(
+                                "whitebox_workflows",
+                                wbw_module_path
+                            )
+                            if spec and spec.loader:
+                                wbw = importlib.util.module_from_spec(spec)
+                                sys.modules["whitebox_workflows"] = wbw
+                                spec.loader.exec_module(wbw)
+                                return wbw
+                except Exception:
+                    pass
+
+            # If .pth approach didn't work, try site-packages itself
+            wbw_module_path = Path(site_packages) / "whitebox_workflows" / "__init__.py"
+            if wbw_module_path.exists():
+                try:
+                    spec = importlib.util.spec_from_file_location(
+                        "whitebox_workflows",
+                        wbw_module_path
+                    )
+                    if spec and spec.loader:
+                        wbw = importlib.util.module_from_spec(spec)
+                        sys.modules["whitebox_workflows"] = wbw
+                        spec.loader.exec_module(wbw)
+                        return wbw
+                except Exception:
+                    pass
+
+    # Attempt 1: direct import (standard Python path resolution for QGIS Python)
     try:
         return importlib.import_module("whitebox_workflows")
-    except ImportError as exc:
-        raise RuntimeBootstrapError(
-            "The whitebox_workflows package is not available in this Python environment. "
-            "Install or activate a QGIS-compatible WbW-Py build before loading the plugin."
-        ) from exc
+    except ImportError:
+        pass
+
+    # Attempt 2: add the pip target dir to sys.path and retry.
+    # Covers the case where a previous install ran but the dir wasn't on sys.path.
+    _ensure_pip_target_on_sys_path()
+    try:
+        return importlib.import_module("whitebox_workflows")
+    except ImportError:
+        pass
+
+    # Not installed. Raise a specific sentinel so callers can offer to install.
+    raise RuntimeBootstrapError(
+        "BACKEND_NOT_INSTALLED: whitebox-workflows is not installed. "
+        "The plugin can install it automatically — please use "
+        "Plugins → Whitebox Workflows → Plugin Settings to install the backend."
+    )
+
+
+def is_backend_not_installed_error(exc: Exception) -> bool:
+    """Return True if *exc* is the specific 'backend not installed' sentinel."""
+    return str(exc).startswith("BACKEND_NOT_INSTALLED:")
+
+
+def get_loaded_backend_info() -> dict:
+    """Return diagnostic info about the currently loaded whitebox_workflows.
+
+    Returns a dict with:
+    - version: version string (e.g., "2.0.3")
+    - file_path: location of the whitebox_workflows package
+    - mode: current runtime mode ("qgis" or "local")
+    - local_python_path: path to local Python if in local mode, else ""
+    """
+    try:
+        wbw = importlib.import_module("whitebox_workflows")
+
+        version = "unknown"
+        try:
+            version = importlib.metadata.version("whitebox_workflows")
+        except Exception:
+            if hasattr(wbw, "__version__"):
+                version = str(wbw.__version__)
+
+        file_path = "unknown"
+        if hasattr(wbw, "__file__") and wbw.__file__:
+            file_path = str(wbw.__file__)
+
+        mode, local_python = get_runtime_preferences()
+
+        return {
+            "version": version,
+            "file_path": file_path,
+            "mode": mode,
+            "local_python_path": local_python if mode == "local" else "",
+        }
+    except Exception as exc:
+        return {
+            "version": "error",
+            "file_path": str(exc),
+            "mode": "",
+            "local_python_path": "",
+        }
 
 
 def _effective_python_for_backend_ops() -> str | None:
@@ -782,6 +943,25 @@ def get_backend_interpreter_path() -> str:
 
 
 def _get_installed_whitebox_workflows_version_for_interpreter(interpreter: str) -> str:
+    """Get the installed whitebox-workflows version.
+
+    For the in-process (QGIS Python) case we query importlib.metadata directly —
+    no subprocess. sys.executable inside QGIS is the QGIS binary, not Python,
+    so subprocess.run([sys.executable, ...]) would launch QGIS, not Python.
+    """
+    import sys as _sys
+    is_inprocess = (interpreter == str(_sys.executable))
+
+    if is_inprocess:
+        # Fast in-process path: no subprocess needed.
+        _ensure_pip_target_on_sys_path()
+        try:
+            import importlib.metadata as _md
+            return _md.version("whitebox-workflows")
+        except Exception:
+            return ""
+
+    # External interpreter path (unchanged from original).
     runner = (
         "import importlib.metadata as md\n"
         "try:\n"
@@ -811,51 +991,104 @@ def get_installed_whitebox_workflows_version() -> str:
 
 
 def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec: str = "") -> dict:
-    """Install or upgrade whitebox-workflows in the selected interpreter."""
-    interpreter = get_backend_interpreter_path()
+    """Install or upgrade whitebox-workflows using pip in-process.
+
+    Runs pip via its internal Python API (no subprocess) so that:
+    - sys.executable does not need to be a Python binary (it isn't in QGIS)
+    - No stdout/stderr capture issues inside QGIS
+    - No hang from subprocess waiting for QGIS to exit
+
+    Installs into the per-profile pip --target directory.
+    NOTE: Blocks until pip completes. Call via install_whitebox_workflows_async
+    from the UI to avoid freezing Qt.
+    """
+    target_dir = _get_pip_target_dir()
     package_spec = "whitebox-workflows"
     cleaned_spec = str(version_spec or "").strip()
     if cleaned_spec:
         package_spec = f"whitebox-workflows{cleaned_spec}"
 
-    command = [interpreter, "-m", "pip", "install"]
+    args = ["install", "--target", target_dir]
     if upgrade:
-        command.append("--upgrade")
-    command.append(package_spec)
+        args.append("--upgrade")
+    args.append(package_spec)
 
-    completed = subprocess.run(
-        command,
-        check=False,
-        capture_output=True,
-        text=True,
-        env=_build_clean_env(),
-        **_subprocess_window_kwargs(),
-    )
-    stdout = completed.stdout.strip()
-    stderr = completed.stderr.strip()
-
-    if completed.returncode != 0:
-        detail = stderr or stdout or "unknown pip install error"
+    try:
+        from pip._internal.cli.main import main as pip_main  # type: ignore[import]
+    except ImportError:
         raise RuntimeBootstrapError(
-            f"Failed to install {package_spec} via {interpreter}: {detail}"
+            "pip is not available in this Python environment. "
+            "Install whitebox-workflows manually and restart QGIS."
         )
+
+    import io  # noqa: F401 — imported for future use if pip output capture is needed
+    exit_code = 1
+    try:
+        # pip calls sys.exit() on completion; catch it.
+        exit_code = pip_main(args)
+    except SystemExit as exc:
+        exit_code = int(exc.code) if exc.code is not None else 0
+    except Exception as exc:
+        raise RuntimeBootstrapError(f"pip install failed: {exc}") from exc
+
+    if exit_code not in (0, None):
+        raise RuntimeBootstrapError(
+            f"pip install {package_spec} failed with exit code {exit_code}. "
+            "Check the QGIS Python console for details."
+        )
+
+    # Add target dir to sys.path and clear stale import cache.
+    _ensure_pip_target_on_sys_path()
+    import sys as _sys
+    for key in list(_sys.modules.keys()):
+        if key == "whitebox_workflows" or key.startswith("whitebox_workflows."):
+            del _sys.modules[key]
+    _EXTERNAL_SESSION_CACHE.clear()
 
     installed = ""
     try:
-        installed = get_installed_whitebox_workflows_version()
+        installed = _get_installed_whitebox_workflows_version_for_interpreter(str(_sys.executable))
     except Exception:
         installed = ""
 
-    # Existing cached sessions may point to a stale module build.
-    _EXTERNAL_SESSION_CACHE.clear()
-
+    import sys
     return {
-        "interpreter": interpreter,
+        "interpreter": str(sys.executable),
+        "target_dir": target_dir,
         "installed_version": installed,
-        "stdout": stdout,
-        "stderr": stderr,
         "upgraded": bool(upgrade),
     }
+
+
+def install_whitebox_workflows_async(
+    on_success,   # callable(result_dict)
+    on_error,     # callable(error_message: str)
+    *,
+    upgrade: bool = False,
+) -> None:
+    """Run install_or_upgrade_whitebox_workflows in a background thread.
+
+    *on_success* and *on_error* are called from the background thread.
+    If you need to update Qt widgets, use a signal/slot or QMetaObject.invokeMethod
+    in those callbacks.
+    """
+    import threading
+
+    def _worker():
+        try:
+            result = install_or_upgrade_whitebox_workflows(upgrade=upgrade)
+            try:
+                on_success(result)
+            except Exception:
+                pass
+        except Exception as exc:
+            try:
+                on_error(str(exc))
+            except Exception:
+                pass
+
+    thread = threading.Thread(target=_worker, daemon=True)
+    thread.start()
 
 
 def fetch_latest_whitebox_workflows_version(timeout_seconds: float = 4.0) -> str:
@@ -947,15 +1180,28 @@ def backend_update_status() -> dict:
 
 
 def backend_install_status() -> dict:
-    """Return local installation status without querying remote package indexes."""
+    """Return local installation status using the QGIS Python (sys.executable).
+
+    installed_version is only populated if the version meets the minimum
+    Next Gen requirement (>= 2.0.0). A legacy v0.x or v1.x package is
+    treated as absent so the user is prompted to install the correct version.
+    """
+    import sys
     result = {
-        "interpreter": "",
+        "interpreter": str(sys.executable),
         "installed_version": "",
         "error": "",
     }
     try:
-        result["interpreter"] = get_backend_interpreter_path()
-        result["installed_version"] = get_installed_whitebox_workflows_version()
+        _ensure_pip_target_on_sys_path()
+        version = _get_installed_whitebox_workflows_version_for_interpreter(str(sys.executable))
+        if version and _normalize_version_for_compare(version) >= _normalize_version_for_compare(_NEXT_GEN_MIN_VERSION):
+            result["installed_version"] = version
+        elif version:
+            result["error"] = (
+                f"Found whitebox_workflows {version} but require >= {_NEXT_GEN_MIN_VERSION}. "
+                "The plugin will reinstall the correct version."
+            )
     except Exception as exc:
         result["error"] = str(exc)
     return result
@@ -1114,16 +1360,10 @@ def create_runtime_session(include_pro: bool = True, tier: str = "open"):
             f"Tried: {', '.join(external_candidates)}. Detail: {detail}"
         )
 
-    # Prefer a discovered external runtime first. In environments where QGIS
-    # ships with a different embedded Python package set, this avoids silently
-    # binding to a stale in-process whitebox_workflows install.
-    try:
-        return _external_session(prefer_pro=include_pro, allow_downgrade=True)
-    except RuntimeBootstrapError:
-        # Fall back to the current Python runtime if an external runtime is not
-        # available or cannot provide a valid Next Gen session.
-        pass
-
+    # Prefer in-process first: load_whitebox_workflows() will auto-install via
+    # the QGIS Python pip if whitebox_workflows is not yet present. This is the
+    # correct default because the QGIS Python IS the execution environment and
+    # always has pip available (bundled since QGIS 3.x).
     try:
         wbw = load_whitebox_workflows()
         try:
@@ -1138,10 +1378,7 @@ def create_runtime_session(include_pro: bool = True, tier: str = "open"):
             # keep the existing capabilities-based gate below.
             pass
         if not hasattr(wbw, "RuntimeSession"):
-            try:
-                return _external_session(prefer_pro=include_pro, allow_downgrade=True)
-            except Exception:
-                raise RuntimeBootstrapError(_next_gen_required_message("RuntimeSession class not found."))
+            raise RuntimeBootstrapError(_next_gen_required_message("RuntimeSession class not found."))
         try:
             session = wbw.RuntimeSession(include_pro=include_pro, tier=tier)
             raw_caps = session.get_runtime_capabilities_json()
@@ -1155,21 +1392,15 @@ def create_runtime_session(include_pro: bool = True, tier: str = "open"):
                     _parse_next_gen_capabilities(raw_caps, "current Python runtime")
                     return downgraded
                 except Exception:
-                    # Only fall back to a different external interpreter if the
-                    # current Python runtime cannot even provide a valid OSS-only
-                    # Next Gen session. This avoids silently switching to a stale
-                    # external environment with a different tool catalog.
-                    return _external_session(prefer_pro=True, allow_downgrade=True)
+                    # Cannot downgrade to open mode; re-raise the original error
+                    raise
             if _is_legacy_runtime_error(str(exc)):
-                try:
-                    return _external_session(prefer_pro=include_pro, allow_downgrade=True)
-                except Exception:
-                    raise RuntimeBootstrapError(_next_gen_required_message(str(exc))) from exc
+                raise RuntimeBootstrapError(_next_gen_required_message(str(exc))) from exc
             raise
-    except RuntimeBootstrapError as exc:
-        if _is_legacy_runtime_error(str(exc)):
-            raise
-        return _external_session(prefer_pro=include_pro, allow_downgrade=True)
+    except RuntimeBootstrapError:
+        # QGIS-only mode: don't try external Python fallback
+        # Just re-raise the error (e.g., BACKEND_NOT_INSTALLED)
+        raise
 
 
 def get_runtime_capabilities(include_pro: bool = True, tier: str = "open") -> dict:
@@ -1202,66 +1433,15 @@ def run_projection_wrapper(
 
     wbw = load_whitebox_workflows()
     wbe = wbw.WbEnvironment()
-
-    def _to_optional_bool(v):
-        if v is None:
-            return None
-        if isinstance(v, bool):
-            return v
-        if isinstance(v, str):
-            t = v.strip().lower()
-            if t in {"true", "1", "yes", "y", "on"}:
-                return True
-            if t in {"false", "0", "no", "n", "off"}:
-                return False
-            return None
-        return bool(v)
-
     epsg = int(args.get("epsg"))
     in_path = str(args.get("input", ""))
     out_path = str(args.get("output", ""))
-    coordinate_epoch = args.get("coordinate_epoch", None)
-    source_reference_epoch = args.get("source_reference_epoch", None)
-    target_reference_epoch = args.get("target_reference_epoch", None)
-    operation_code = args.get("operation_code", None)
-    prefer_official_operation = _to_optional_bool(args.get("prefer_official_operation", None))
-    epoch_policy = args.get("epoch_policy", None)
 
     if tool_id == "reproject_raster":
         resample = str(args.get("resample", "bilinear")).strip() or "bilinear"
         src = wbe.read_raster(in_path)
-        kwargs = {"dst_epsg": epsg, "resample": resample}
-        if coordinate_epoch is not None:
-            kwargs["coordinate_epoch"] = float(coordinate_epoch)
-        if source_reference_epoch is not None:
-            kwargs["source_reference_epoch"] = float(source_reference_epoch)
-        if target_reference_epoch is not None:
-            kwargs["target_reference_epoch"] = float(target_reference_epoch)
-        if operation_code is not None:
-            kwargs["operation_code"] = int(operation_code)
-        if prefer_official_operation is not None:
-            kwargs["prefer_official_operation"] = prefer_official_operation
-        if epoch_policy is not None and str(epoch_policy).strip():
-            kwargs["epoch_policy"] = str(epoch_policy)
-        out_obj = wbe.reproject_raster(src, **kwargs)
+        out_obj = wbe.reproject_raster(src, dst_epsg=epsg, resample=resample)
         wbe.write_raster(out_obj, out_path)
-    elif tool_id == "reproject_vector":
-        src = wbe.read_vector(in_path)
-        kwargs = {"dst_epsg": epsg}
-        if coordinate_epoch is not None:
-            kwargs["coordinate_epoch"] = float(coordinate_epoch)
-        if source_reference_epoch is not None:
-            kwargs["source_reference_epoch"] = float(source_reference_epoch)
-        if target_reference_epoch is not None:
-            kwargs["target_reference_epoch"] = float(target_reference_epoch)
-        if operation_code is not None:
-            kwargs["operation_code"] = int(operation_code)
-        if prefer_official_operation is not None:
-            kwargs["prefer_official_operation"] = prefer_official_operation
-        if epoch_policy is not None and str(epoch_policy).strip():
-            kwargs["epoch_policy"] = str(epoch_policy)
-        out_obj = wbe.reproject_vector(src, **kwargs)
-        wbe.write_vector(out_obj, out_path)
     elif tool_id == "georeference_raster_from_control_points":
         resample = str(args.get("resample", "bilinear")).strip() or "bilinear"
         src = wbe.read_raster(in_path)
@@ -1276,20 +1456,7 @@ def run_projection_wrapper(
         )
     elif tool_id == "reproject_lidar":
         src = wbe.read_lidar(in_path)
-        kwargs = {"dst_epsg": epsg}
-        if coordinate_epoch is not None:
-            kwargs["coordinate_epoch"] = float(coordinate_epoch)
-        if source_reference_epoch is not None:
-            kwargs["source_reference_epoch"] = float(source_reference_epoch)
-        if target_reference_epoch is not None:
-            kwargs["target_reference_epoch"] = float(target_reference_epoch)
-        if operation_code is not None:
-            kwargs["operation_code"] = int(operation_code)
-        if prefer_official_operation is not None:
-            kwargs["prefer_official_operation"] = prefer_official_operation
-        if epoch_policy is not None and str(epoch_policy).strip():
-            kwargs["epoch_policy"] = str(epoch_policy)
-        out_obj = wbe.reproject_lidar(src, **kwargs)
+        out_obj = wbe.reproject_lidar(src, dst_epsg=epsg)
         wbe.write_lidar(out_obj, out_path)
     elif tool_id == "assign_projection_raster":
         src = wbe.read_raster(in_path)

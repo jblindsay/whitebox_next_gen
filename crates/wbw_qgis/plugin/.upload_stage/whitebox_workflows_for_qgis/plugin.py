@@ -8,7 +8,6 @@ from .bootstrap import (
     backend_install_status,
     backend_update_status,
     install_or_upgrade_whitebox_workflows,
-    set_runtime_preferences,
 )
 from .diagnostics import diagnostics_text, gather_runtime_diagnostics
 from .host_api import (
@@ -174,11 +173,8 @@ class WhiteboxWorkflowsPlugin:
         self._settings_key_search_text = "whitebox_workflows/search_text"
         self._settings_key_focus_area = "whitebox_workflows/focus_area"
         self._settings_key_last_tool = "whitebox_workflows/last_tool_id"
-        self._settings_key_runtime_mode = "whitebox_workflows/runtime_mode"
-        self._settings_key_local_python = "whitebox_workflows/local_python"
         self._settings_key_auto_install_backend = "whitebox_workflows/auto_install_backend"
         self._settings_key_auto_check_updates = "whitebox_workflows/auto_check_updates"
-        self._settings_key_skip_auto_update_checks_local_mode = "whitebox_workflows/skip_auto_update_checks_local_mode"
         self._settings_key_last_update_check_unix = "whitebox_workflows/last_update_check_unix"
         self._settings_key_skipped_update_version = "whitebox_workflows/skipped_update_version"
         self._panel_visible = True
@@ -190,11 +186,8 @@ class WhiteboxWorkflowsPlugin:
         self._panel_focus_area = "search"
         self._last_tool_id = ""
         self._last_runtime_warning_signature = ""
-        self._runtime_mode = "auto"
-        self._runtime_local_python = ""
         self._auto_install_backend = True
         self._auto_check_backend_updates = True
-        self._skip_auto_update_checks_in_local_mode = True
         self._last_update_check_unix = 0
         self._skipped_update_version = ""
 
@@ -264,9 +257,7 @@ class WhiteboxWorkflowsPlugin:
 
         self._load_recent_tools()
         self._load_favorite_tools()
-        self._load_runtime_preferences()
         self._load_backend_preferences()
-        self._apply_runtime_preferences_to_bootstrap()
         self._load_quick_open_preference()
         self._load_panel_ui_state()
         self._load_last_tool()
@@ -501,7 +492,8 @@ class WhiteboxWorkflowsPlugin:
 
     def _open_field_calculator_assistant(self, tool_id: str):
         self._notify_info(
-            "Opening Field Calculator Assistant. After review, the standard processing dialog will open with prefilled parameters."
+            "Opening Field Calculator Assistant. "
+            "After review, the standard processing dialog will open with prefilled parameters."
         )
         try:
             from .field_calculator_dialog import run_field_calculator_assistant
@@ -544,7 +536,8 @@ class WhiteboxWorkflowsPlugin:
 
     def _open_raster_calculator_assistant(self, tool_id: str):
         self._notify_info(
-            "Opening Raster Calculator Assistant. After review, the standard processing dialog will open with prefilled parameters."
+            "Opening Raster Calculator Assistant. "
+            "After review, the standard processing dialog will open with prefilled parameters."
         )
         try:
             from .raster_calculator_dialog import run_raster_calculator_assistant
@@ -1020,19 +1013,12 @@ class WhiteboxWorkflowsPlugin:
     def _load_backend_preferences(self):
         try:
             settings = QSettings()
-            mode = str(settings.value(self._settings_key_runtime_mode, "auto")).strip().lower()
-            self._runtime_mode = mode if mode in ("auto", "local", "qgis") else "auto"
-            self._runtime_local_python = str(settings.value(self._settings_key_local_python, "")).strip()
             self._auto_install_backend = self._coerce_bool(
                 settings.value(self._settings_key_auto_install_backend, True),
                 True,
             )
             self._auto_check_backend_updates = self._coerce_bool(
                 settings.value(self._settings_key_auto_check_updates, True),
-                True,
-            )
-            self._skip_auto_update_checks_in_local_mode = self._coerce_bool(
-                settings.value(self._settings_key_skip_auto_update_checks_local_mode, True),
                 True,
             )
             self._last_update_check_unix = int(
@@ -1042,11 +1028,8 @@ class WhiteboxWorkflowsPlugin:
                 settings.value(self._settings_key_skipped_update_version, "")
             ).strip()
         except Exception:
-            self._runtime_mode = "auto"
-            self._runtime_local_python = ""
             self._auto_install_backend = True
             self._auto_check_backend_updates = True
-            self._skip_auto_update_checks_in_local_mode = True
             self._last_update_check_unix = 0
             self._skipped_update_version = ""
 
@@ -1086,21 +1069,14 @@ class WhiteboxWorkflowsPlugin:
     def _save_backend_preferences(self):
         try:
             settings = QSettings()
-            settings.setValue(self._settings_key_runtime_mode, self._runtime_mode)
-            settings.setValue(self._settings_key_local_python, self._runtime_local_python)
             settings.setValue(self._settings_key_auto_install_backend, self._auto_install_backend)
             settings.setValue(self._settings_key_auto_check_updates, self._auto_check_backend_updates)
-            settings.setValue(
-                self._settings_key_skip_auto_update_checks_local_mode,
-                self._skip_auto_update_checks_in_local_mode,
-            )
             settings.setValue(self._settings_key_last_update_check_unix, int(self._last_update_check_unix))
             settings.setValue(self._settings_key_skipped_update_version, self._skipped_update_version)
         except Exception:
             pass
 
-    def _apply_runtime_preferences_to_bootstrap(self):
-        set_runtime_preferences(mode=self._runtime_mode, local_python=self._runtime_local_python)
+    # _apply_runtime_preferences_to_bootstrap removed - always uses QGIS Python
 
     def _load_panel_ui_state(self):
         try:
@@ -1124,7 +1100,9 @@ class WhiteboxWorkflowsPlugin:
                 True,
             )
             self._panel_search_text = str(settings.value(self._settings_key_search_text, ""))
-            self._panel_focus_area = str(settings.value(self._settings_key_focus_area, "search")).strip().lower() or "search"
+            self._panel_focus_area = (
+                str(settings.value(self._settings_key_focus_area, "search")).strip().lower() or "search"
+            )
         except Exception:
             self._panel_visible = True
             self._panel_width = 320
@@ -1248,11 +1226,8 @@ class WhiteboxWorkflowsPlugin:
             panel_show_locked=self._panel_show_locked,
             panel_show_locked_recipes=self._panel_show_locked_recipes,
             panel_width=self._panel_width,
-            runtime_mode=self._runtime_mode,
-            local_python_path=self._runtime_local_python,
             auto_install_backend=self._auto_install_backend,
             auto_check_backend_updates=self._auto_check_backend_updates,
-            skip_auto_update_checks_in_local_mode=self._skip_auto_update_checks_in_local_mode,
         )
         try:
             dlg = WhiteboxSettingsDialog(current, parent=self.iface.mainWindow())
@@ -1286,25 +1261,18 @@ class WhiteboxWorkflowsPlugin:
             (
                 updated.include_pro != self.provider.include_pro,
                 updated.tier != self.provider.tier,
-                updated.runtime_mode != self._runtime_mode,
-                updated.local_python_path != self._runtime_local_python,
             )
         )
         backend_policy_changed = any(
             (
                 updated.auto_install_backend != self._auto_install_backend,
                 updated.auto_check_backend_updates != self._auto_check_backend_updates,
-                updated.skip_auto_update_checks_in_local_mode != self._skip_auto_update_checks_in_local_mode,
             )
         )
 
-        self._runtime_mode = updated.runtime_mode
-        self._runtime_local_python = updated.local_python_path
         self._auto_install_backend = updated.auto_install_backend
         self._auto_check_backend_updates = updated.auto_check_backend_updates
-        self._skip_auto_update_checks_in_local_mode = updated.skip_auto_update_checks_in_local_mode
         self._save_backend_preferences()
-        self._apply_runtime_preferences_to_bootstrap()
 
         if runtime_changed:
             self.provider.include_pro = updated.include_pro
@@ -1392,56 +1360,156 @@ class WhiteboxWorkflowsPlugin:
             return False
 
         installed = str(status.get("installed_version", "")).strip()
-        interpreter = str(status.get("interpreter", "")).strip()
-        error_text = str(status.get("error", "")).strip()
-
         if installed:
             return True
-
-        if self._runtime_mode == "local" and not self._auto_install_backend:
-            if interactive:
-                self._notify_warning(
-                    "whitebox_workflows is not installed in the configured local interpreter. "
-                    "Install it manually or enable auto-install in Plugin Settings."
-                )
-            return False
-
-        if not self._auto_install_backend:
-            if interactive:
-                self._notify_warning(
-                    "whitebox_workflows is not installed. Enable auto-install in Plugin Settings or install manually."
-                )
-            return False
 
         if not interactive:
             return False
 
-        detail = f"Target interpreter: {interpreter or 'unknown'}"
-        if error_text:
-            detail = f"{detail}\nDetail: {error_text}"
-        if not self._confirm(
-            "Install Whitebox Workflows Backend",
-            "The whitebox_workflows backend is not installed.\n\n"
-            "Install it now using pip?\n\n"
-            f"{detail}",
-        ):
-            return False
+        self._show_backend_install_instructions()
+        return False
+
+    def _build_install_command(self) -> str:
+        """Return a single-line exec() command safe to paste into the QGIS Python Console.
+
+        Installs whitebox-workflows via pip then reloads the plugin in-place,
+        so the user never needs to restart QGIS.
+        """
+        import os
+        if os.name == "nt":
+            pip_args = "['pip','install','whitebox-workflows']"
+        else:
+            pip_args = "['pip','install','--user','whitebox-workflows']"
+
+        inner = (
+            "import runpy,sys\\n"
+            f"sys.argv={pip_args}\\n"
+            "try:\\n"
+            "    runpy.run_module('pip',run_name='__main__',alter_sys=True)\\n"
+            "except SystemExit:\\n"
+            "    pass\\n"
+            "import qgis.utils\\n"
+            "qgis.utils.unloadPlugin('whitebox_workflows_qgis')\\n"
+            "qgis.utils.loadPlugin('whitebox_workflows_qgis')\\n"
+            "qgis.utils.startPlugin('whitebox_workflows_qgis')\\n"
+            "print('Whitebox Workflows backend installed and plugin reloaded.')"
+        )
+        return f'exec("{inner}")'
+
+    def _show_backend_install_instructions(self) -> None:
+        """Show a dialog with step-by-step installation instructions."""
+        import os
+
+        command = self._build_install_command()
+
+        if os.name == "nt":
+            console_path = "Plugins  ▸  Python Console"
+            alt_note = "Alternatively, open the OSGeo4W Shell and run:\n  python -m pip install whitebox-workflows"
+        else:
+            console_path = "Plugins  ▸  Python Console"
+            alt_note = ""
 
         try:
-            result = install_or_upgrade_whitebox_workflows(upgrade=False)
-            version = str(result.get("installed_version", "")).strip()
-            version_text = f" (version {version})" if version else ""
-            self._notify_info(f"Installed whitebox_workflows{version_text}.")
-            return True
-        except Exception as exc:
-            self._notify_warning(f"Backend install failed: {exc}")
-            return False
+            from qgis.PyQt.QtWidgets import (
+                QDialog, QVBoxLayout, QHBoxLayout,
+                QLabel, QPlainTextEdit, QPushButton,
+            )
+            from qgis.PyQt.QtGui import QFont
+
+            dlg = QDialog(self.iface.mainWindow())
+            dlg.setWindowTitle("⚠️  Action Required — Install Whitebox Workflows Backend")
+            dlg.setMinimumWidth(660)
+
+            layout = QVBoxLayout(dlg)
+            layout.setSpacing(10)
+
+            # Header warning
+            header = QLabel(
+                "<b style='font-size:13px;'>This plugin requires a separate backend package to function.</b>"
+            )
+            header.setWordWrap(True)
+            header.setStyleSheet("color: #b34700; padding: 4px 0;")
+            layout.addWidget(header)
+
+            # Instructions
+            instructions = (
+                "You have installed the <b>Whitebox Workflows frontend</b>, but the plugin "
+                "will not work until you also install the <b>whitebox-workflows Python backend</b>.<br><br>"
+                "<b>Without completing the step below, none of the tools will be available.</b><br><br>"
+                "To install the backend:<ol>"
+                f"<li>Open the QGIS Python Console:&nbsp;&nbsp;<b>{console_path}</b></li>"
+                "<li>Click <b>Copy command to clipboard</b> below, paste it into the console, "
+                "and press <b>Enter</b>.</li>"
+                "<li>The backend will install and the plugin will reload automatically — "
+                "no restart needed.</li>"
+                "</ol>"
+            )
+            if alt_note:
+                instructions += f"<br><i>{alt_note}</i>"
+
+            lbl = QLabel(instructions)
+            lbl.setWordWrap(True)
+            lbl.setOpenExternalLinks(False)
+            layout.addWidget(lbl)
+
+            # Command label
+            layout.addWidget(QLabel("<b>Command to paste in the Python Console:</b>"))
+
+            # Command box
+            cmd_edit = QPlainTextEdit(command)
+            cmd_edit.setReadOnly(True)
+            font = QFont()
+            font.setFamily("Courier New" if os.name == "nt" else "Menlo")
+            font.setPointSize(10)
+            cmd_edit.setFont(font)
+            cmd_edit.setFixedHeight(140)
+            layout.addWidget(cmd_edit)
+
+            # Button row
+            btn_row = QHBoxLayout()
+
+            copy_btn = QPushButton("📋  Copy command to clipboard")
+            copy_btn.setDefault(True)  # Enter triggers Copy, not Close
+
+            def _copy():
+                try:
+                    from qgis.PyQt.QtWidgets import QApplication
+                    QApplication.clipboard().setText(command)
+                    copy_btn.setText("✓  Copied!")
+                except Exception:
+                    pass
+            copy_btn.clicked.connect(_copy)
+            btn_row.addWidget(copy_btn)
+            btn_row.addStretch()
+
+            close_btn = QPushButton("Close")
+            close_btn.setDefault(False)
+            close_btn.setAutoDefault(False)
+            close_btn.clicked.connect(dlg.accept)
+            btn_row.addWidget(close_btn)
+
+            layout.addLayout(btn_row)
+
+            dlg.exec() if hasattr(dlg, "exec") and callable(dlg.exec) else dlg.exec_()
+
+        except Exception:
+            # Last-resort: plain notification. Sanitise to one readable line.
+            self._notify_warning(
+                "whitebox-workflows is not installed. "
+                f"Open the QGIS Python Console ({console_path}) and run: "
+                "import runpy, sys; sys.argv=['pip','install','--user','whitebox-workflows']; "
+                "runpy.run_module('pip', run_name='__main__', alter_sys=True)"
+            )
+
+    def _main_window_or_none(self):
+        try:
+            return self.iface.mainWindow()
+        except Exception:
+            return None
 
     def _check_backend_updates(self, manual: bool = False):
         if not manual:
             if not self._auto_check_backend_updates:
-                return
-            if self._runtime_mode == "local" and self._skip_auto_update_checks_in_local_mode:
                 return
             now_unix = int(datetime.now().timestamp())
             check_interval_seconds = 24 * 60 * 60
@@ -1522,9 +1590,7 @@ class WhiteboxWorkflowsPlugin:
         text = diagnostics_text(payload)
         update_policy = (
             f"Backend update policy:\n"
-            f"  runtime_mode: {self._runtime_mode}\n"
             f"  auto_check_backend_updates: {self._auto_check_backend_updates}\n"
-            f"  skip_auto_update_checks_in_local_mode: {self._skip_auto_update_checks_in_local_mode}"
         )
         text = f"{text}\n\n{update_policy}"
 

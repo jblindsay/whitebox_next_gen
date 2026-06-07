@@ -6,6 +6,30 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [2.0.4] - 2026-06-07
+
+### Added
+- Added 28 new spatial statistics tools across four capability groups, accessible
+  via `wbe.vector.spatial_statistics.*` and `wbe.raster.spatial_statistics.*`:
+  - **Spatial autocorrelation (vector):** `global_morans_i`, `local_morans_i_lisa`,
+    `getis_ord_gi_star`, `nearest_neighbour_index`, `quadrat_count_test`.
+  - **Spatial autocorrelation (raster):** `local_morans_i_lisa_raster`,
+    `getis_ord_gi_star_raster`.
+  - **Variography and kriging (raster):** `ordinary_kriging`, `local_kriging`,
+    `simple_kriging`, `universal_kriging`, `spacetime_kriging`, `ordinary_cokriging`.
+  - **Variogram estimation (vector):** `estimate_variogram`, `fit_variogram`,
+    `directional_variogram`, `kriging_cross_validation`.
+  - **Spatial regression (vector):** `spatial_lag_regression`,
+    `spatial_error_regression`, `geographically_weighted_regression`.
+  - **Spatial regression (raster):** `spatial_lag_regression_raster`,
+    `spatial_error_regression_raster`,
+    `geographically_weighted_regression_raster`.
+  - **Point pattern analysis (vector):** `ripleys_k_test`, `envelope_test`,
+    `point_process_residuals`, `ripleys_k_function`, `point_pattern_envelope`,
+    `inhomogeneous_intensity_raster`.
+- Added `baseline_matching_and_diagnostics_assessment` to the terrain
+  `workflow_products` subcategory.
+
 ### Changed
 - Added epoch-aware reprojection parameters to Python-facing raster/vector/lidar
   reprojection methods, including `coordinate_epoch`, optional source/target
@@ -13,6 +37,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   `epoch_policy` routing control.
 - Updated `whitebox_workflows.pyi` reprojection signatures (single and batch)
   to include the new epoch-aware parameters.
+- Updated `tool_taxonomy.toml` with `raster.spatial_statistics` and
+  `vector.spatial_statistics` subcategory sections; regenerated
+  `tool_taxonomy.resolved.json`.
 
 ## [2.0.3] - 2026-05-30
 

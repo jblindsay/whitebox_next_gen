@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import importlib
+import importlib.util
 import json
 import os
 import shutil
@@ -779,7 +780,7 @@ def load_whitebox_workflows():
     import sys
 
     # When switching runtime modes, clear the cached module so we reimport from the new location.
-    # Otherwise Python returns the cached module and sys.path changes have no effect.
+    # Otherwise Python returns the cached module and importlib caches have no effect.
     mode, local_python = get_runtime_preferences()
     if mode == "local":
         # Remove cached whitebox_workflows and all its submodules
@@ -789,41 +790,59 @@ def load_whitebox_workflows():
             sys.modules.pop(key, None)
         print(f"[WBW] DEBUG: Cleared cached whitebox_workflows, {len(to_remove)} submodules removed")
         
-        # Clear Python's import machinery cache (PathFinder, etc.) so it rescans sys.path
-        # This is critical: sys.modules cache is only part of the problem.
-        # Python also caches which directories contain which modules at the finder level.
+        # Clear Python's import machinery cache (PathFinder, etc.) so it rescans for modules
         importlib.invalidate_caches()
         print(f"[WBW] DEBUG: Invalidated importlib caches (finders, path index)")
 
-    # Prepend local Python's site-packages if in local mode.
-    # For development installs (maturin develop), read .pth files and add those paths directly.
+    # For local mode: directly load from the development path using importlib
+    # This avoids permanently modifying sys.path and breaking QGIS plugin compatibility
     if mode == "local" and local_python:
         site_packages = _get_site_packages_for_python(local_python)
         print(f"[WBW] DEBUG: local_python={local_python}, site_packages={site_packages}")
         
         if site_packages:
-            # First: look for .pth files that might point to development directories
-            # (e.g., from maturin develop)
+            # Look for .pth files that might point to development directories (from maturin develop)
             pth_files = list(Path(site_packages).glob("whitebox_workflows*.pth"))
             for pth_file in pth_files:
                 try:
                     pth_path = pth_file.read_text().strip()
                     if pth_path and Path(pth_path).exists():
-                        # Add the .pth path to sys.path[0] so it's searched first
-                        if pth_path not in sys.path:
-                            sys.path.insert(0, pth_path)
-                            print(f"[WBW] DEBUG: Added .pth path to sys.path[0]: {pth_path}")
+                        # Try to load from the .pth path directly
+                        wbw_module_path = Path(pth_path) / "whitebox_workflows" / "__init__.py"
+                        if wbw_module_path.exists():
+                            spec = importlib.util.spec_from_file_location(
+                                "whitebox_workflows",
+                                wbw_module_path
+                            )
+                            if spec and spec.loader:
+                                wbw = importlib.util.module_from_spec(spec)
+                                sys.modules["whitebox_workflows"] = wbw
+                                spec.loader.exec_module(wbw)
+                                import_file = getattr(wbw, "__file__", "unknown")
+                                print(f"[WBW] DEBUG: Loaded whitebox_workflows from {pth_path}: {import_file}")
+                                return wbw
                 except Exception as e:
-                    print(f"[WBW] DEBUG: Could not read {pth_file}: {e}")
+                    print(f"[WBW] DEBUG: Could not load from .pth path {pth_path}: {e}")
             
-            # Second: also add the site-packages directory itself
-            if site_packages not in sys.path:
-                sys.path.insert(0, site_packages)
-                print(f"[WBW] DEBUG: Added site-packages to sys.path[0]: {site_packages}")
-        
-        print(f"[WBW] DEBUG: sys.path[0]={sys.path[0] if sys.path else 'empty'}")
+            # If .pth approach didn't work, try site-packages itself
+            wbw_module_path = Path(site_packages) / "whitebox_workflows" / "__init__.py"
+            if wbw_module_path.exists():
+                try:
+                    spec = importlib.util.spec_from_file_location(
+                        "whitebox_workflows",
+                        wbw_module_path
+                    )
+                    if spec and spec.loader:
+                        wbw = importlib.util.module_from_spec(spec)
+                        sys.modules["whitebox_workflows"] = wbw
+                        spec.loader.exec_module(wbw)
+                        import_file = getattr(wbw, "__file__", "unknown")
+                        print(f"[WBW] DEBUG: Loaded whitebox_workflows from site-packages: {import_file}")
+                        return wbw
+                except Exception as e:
+                    print(f"[WBW] DEBUG: Could not load from site-packages {site_packages}: {e}")
 
-    # Attempt 1: direct import (already on sys.path).
+    # Attempt 1: direct import (standard Python path resolution for QGIS Python)
     try:
         wbw = importlib.import_module("whitebox_workflows")
         import_file = getattr(wbw, "__file__", "unknown")

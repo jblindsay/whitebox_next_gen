@@ -778,8 +778,17 @@ def _install_whitebox_workflows_via_pip(target_dir: str) -> None:
 def load_whitebox_workflows():
     import sys
 
-    # Prepend local Python's site-packages if in local mode.
+    # When switching runtime modes, clear the cached module so we reimport from the new location.
+    # Otherwise Python returns the cached module and sys.path changes have no effect.
     mode, local_python = get_runtime_preferences()
+    if mode == "local":
+        # Remove cached whitebox_workflows and all its submodules
+        sys.modules.pop("whitebox_workflows", None)
+        to_remove = [key for key in sys.modules.keys() if key.startswith("whitebox_workflows.")]
+        for key in to_remove:
+            sys.modules.pop(key, None)
+
+    # Prepend local Python's site-packages if in local mode.
     if mode == "local" and local_python:
         site_packages = _get_site_packages_for_python(local_python)
         if site_packages and site_packages not in sys.path:

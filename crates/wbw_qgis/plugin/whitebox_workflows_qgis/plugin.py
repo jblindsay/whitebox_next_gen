@@ -10,10 +10,8 @@ from .bootstrap import (
     install_or_upgrade_whitebox_workflows,
     is_backend_not_installed_error,
     get_loaded_backend_info,
-    set_runtime_preferences,
 )
 from .diagnostics import diagnostics_text, gather_runtime_diagnostics
-from .discovery import clear_runtime_cache
 from .host_api import (
     host_capabilities,
     open_local_file,
@@ -177,11 +175,8 @@ class WhiteboxWorkflowsPlugin:
         self._settings_key_search_text = "whitebox_workflows/search_text"
         self._settings_key_focus_area = "whitebox_workflows/focus_area"
         self._settings_key_last_tool = "whitebox_workflows/last_tool_id"
-        self._settings_key_runtime_mode = "whitebox_workflows/runtime_mode"
-        self._settings_key_local_python = "whitebox_workflows/local_python"
         self._settings_key_auto_install_backend = "whitebox_workflows/auto_install_backend"
         self._settings_key_auto_check_updates = "whitebox_workflows/auto_check_updates"
-        self._settings_key_skip_auto_update_checks_local_mode = "whitebox_workflows/skip_auto_update_checks_local_mode"
         self._settings_key_last_update_check_unix = "whitebox_workflows/last_update_check_unix"
         self._settings_key_skipped_update_version = "whitebox_workflows/skipped_update_version"
         self._panel_visible = True
@@ -193,11 +188,8 @@ class WhiteboxWorkflowsPlugin:
         self._panel_focus_area = "search"
         self._last_tool_id = ""
         self._last_runtime_warning_signature = ""
-        self._runtime_mode = "auto"
-        self._runtime_local_python = ""
         self._auto_install_backend = True
         self._auto_check_backend_updates = True
-        self._skip_auto_update_checks_in_local_mode = True
         self._last_update_check_unix = 0
         self._skipped_update_version = ""
 
@@ -267,9 +259,7 @@ class WhiteboxWorkflowsPlugin:
 
         self._load_recent_tools()
         self._load_favorite_tools()
-        self._load_runtime_preferences()
         self._load_backend_preferences()
-        self._apply_runtime_preferences_to_bootstrap()
         self._load_quick_open_preference()
         self._load_panel_ui_state()
         self._load_last_tool()
@@ -1023,19 +1013,12 @@ class WhiteboxWorkflowsPlugin:
     def _load_backend_preferences(self):
         try:
             settings = QSettings()
-            mode = str(settings.value(self._settings_key_runtime_mode, "qgis")).strip().lower()
-            self._runtime_mode = mode if mode in ("local", "qgis") else "qgis"
-            self._runtime_local_python = str(settings.value(self._settings_key_local_python, "")).strip()
             self._auto_install_backend = self._coerce_bool(
                 settings.value(self._settings_key_auto_install_backend, True),
                 True,
             )
             self._auto_check_backend_updates = self._coerce_bool(
                 settings.value(self._settings_key_auto_check_updates, True),
-                True,
-            )
-            self._skip_auto_update_checks_in_local_mode = self._coerce_bool(
-                settings.value(self._settings_key_skip_auto_update_checks_local_mode, True),
                 True,
             )
             self._last_update_check_unix = int(
@@ -1045,11 +1028,8 @@ class WhiteboxWorkflowsPlugin:
                 settings.value(self._settings_key_skipped_update_version, "")
             ).strip()
         except Exception:
-            self._runtime_mode = "auto"
-            self._runtime_local_python = ""
             self._auto_install_backend = True
             self._auto_check_backend_updates = True
-            self._skip_auto_update_checks_in_local_mode = True
             self._last_update_check_unix = 0
             self._skipped_update_version = ""
 
@@ -1089,22 +1069,14 @@ class WhiteboxWorkflowsPlugin:
     def _save_backend_preferences(self):
         try:
             settings = QSettings()
-            settings.setValue(self._settings_key_runtime_mode, self._runtime_mode)
-            settings.setValue(self._settings_key_local_python, self._runtime_local_python)
             settings.setValue(self._settings_key_auto_install_backend, self._auto_install_backend)
             settings.setValue(self._settings_key_auto_check_updates, self._auto_check_backend_updates)
-            settings.setValue(
-                self._settings_key_skip_auto_update_checks_local_mode,
-                self._skip_auto_update_checks_in_local_mode,
-            )
             settings.setValue(self._settings_key_last_update_check_unix, int(self._last_update_check_unix))
             settings.setValue(self._settings_key_skipped_update_version, self._skipped_update_version)
         except Exception:
             pass
 
-    def _apply_runtime_preferences_to_bootstrap(self):
-        print(f"[WBW] DEBUG: Applying runtime preferences: mode={self._runtime_mode}, local_python={self._runtime_local_python}")
-        set_runtime_preferences(mode=self._runtime_mode, local_python=self._runtime_local_python)
+    # _apply_runtime_preferences_to_bootstrap removed - always uses QGIS Python
 
     def _load_panel_ui_state(self):
         try:
@@ -1252,11 +1224,8 @@ class WhiteboxWorkflowsPlugin:
             panel_show_locked=self._panel_show_locked,
             panel_show_locked_recipes=self._panel_show_locked_recipes,
             panel_width=self._panel_width,
-            runtime_mode=self._runtime_mode,
-            local_python_path=self._runtime_local_python,
             auto_install_backend=self._auto_install_backend,
             auto_check_backend_updates=self._auto_check_backend_updates,
-            skip_auto_update_checks_in_local_mode=self._skip_auto_update_checks_in_local_mode,
         )
         try:
             dlg = WhiteboxSettingsDialog(current, parent=self.iface.mainWindow())
@@ -1290,64 +1259,29 @@ class WhiteboxWorkflowsPlugin:
             (
                 updated.include_pro != self.provider.include_pro,
                 updated.tier != self.provider.tier,
-                updated.runtime_mode != self._runtime_mode,
-                updated.local_python_path != self._runtime_local_python,
             )
         )
         backend_policy_changed = any(
             (
                 updated.auto_install_backend != self._auto_install_backend,
                 updated.auto_check_backend_updates != self._auto_check_backend_updates,
-                updated.skip_auto_update_checks_in_local_mode != self._skip_auto_update_checks_in_local_mode,
             )
         )
 
-        self._runtime_mode = updated.runtime_mode
-        self._runtime_local_python = updated.local_python_path
         self._auto_install_backend = updated.auto_install_backend
         self._auto_check_backend_updates = updated.auto_check_backend_updates
-        self._skip_auto_update_checks_in_local_mode = updated.skip_auto_update_checks_in_local_mode
         self._save_backend_preferences()
-        self._apply_runtime_preferences_to_bootstrap()
 
         if runtime_changed:
             self.provider.include_pro = updated.include_pro
             self.provider.tier = updated.tier
             self._save_runtime_preferences()
-            clear_runtime_cache()
             if self._ensure_backend_available(interactive=True):
                 self._refresh_catalog()
-                self._show_backend_info()
             return
 
         if backend_policy_changed:
             self._notify_info("Backend install/update preferences saved.")
-
-    def _show_backend_info(self):
-        """Display info about the loaded whitebox-workflows backend."""
-        try:
-            info = get_loaded_backend_info()
-            
-            version = str(info.get("version", "unknown"))
-            file_path = str(info.get("file_path", "unknown"))
-            mode = str(info.get("mode", "unknown"))
-            
-            # Extract just the venv/site-packages directory from the full path
-            if file_path != "unknown" and file_path:
-                try:
-                    if "/site-packages/" in file_path:
-                        file_display = file_path.split("/site-packages/")[0] + "/site-packages"
-                    else:
-                        file_display = file_path
-                except Exception:
-                    file_display = file_path
-            else:
-                file_display = file_path
-            
-            msg = f"Whitebox Workflows {version} loaded\nMode: {mode}\nPath: {file_display}"
-            self._notify_info(msg)
-        except Exception as exc:
-            self._notify_info(f"Could not retrieve backend info: {exc}")
 
     def _manual_check_backend_updates(self, *_args):
         self._check_backend_updates(manual=True)
@@ -1561,8 +1495,6 @@ class WhiteboxWorkflowsPlugin:
         if not manual:
             if not self._auto_check_backend_updates:
                 return
-            if self._runtime_mode == "local" and self._skip_auto_update_checks_in_local_mode:
-                return
             now_unix = int(datetime.now().timestamp())
             check_interval_seconds = 24 * 60 * 60
             if self._last_update_check_unix > 0 and (now_unix - self._last_update_check_unix) < check_interval_seconds:
@@ -1642,9 +1574,7 @@ class WhiteboxWorkflowsPlugin:
         text = diagnostics_text(payload)
         update_policy = (
             f"Backend update policy:\n"
-            f"  runtime_mode: {self._runtime_mode}\n"
             f"  auto_check_backend_updates: {self._auto_check_backend_updates}\n"
-            f"  skip_auto_update_checks_in_local_mode: {self._skip_auto_update_checks_in_local_mode}"
         )
         text = f"{text}\n\n{update_policy}"
 

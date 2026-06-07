@@ -1410,23 +1410,34 @@ class WhiteboxWorkflowsPlugin:
         try:
             from qgis.PyQt.QtWidgets import (
                 QDialog, QVBoxLayout, QHBoxLayout,
-                QLabel, QPlainTextEdit, QPushButton,
+                QLabel, QPlainTextEdit, QPushButton, QMessageBox,
             )
             from qgis.PyQt.QtGui import QFont
 
             dlg = QDialog(self.iface.mainWindow())
-            dlg.setWindowTitle("Whitebox Workflows — Backend Not Installed")
-            dlg.setMinimumWidth(620)
+            dlg.setWindowTitle("⚠️  Action Required — Install Whitebox Workflows Backend")
+            dlg.setMinimumWidth(660)
 
             layout = QVBoxLayout(dlg)
             layout.setSpacing(10)
 
+            # Header warning
+            header = QLabel(
+                "<b style='font-size:13px;'>This plugin requires a separate backend package to function.</b>"
+            )
+            header.setWordWrap(True)
+            header.setStyleSheet("color: #b34700; padding: 4px 0;")
+            layout.addWidget(header)
+
             # Instructions
             instructions = (
-                "<b>The whitebox-workflows backend is not installed.</b><br><br>"
-                "To install it:<ol>"
-                f"<li>Open the QGIS Python Console:<br>&nbsp;&nbsp;&nbsp;<b>{console_path}</b></li>"
-                "<li>Paste the command below into the console and press <b>Enter</b>.</li>"
+                "You have installed the <b>Whitebox Workflows frontend</b>, but the plugin "
+                "will not work until you also install the <b>whitebox-workflows Python backend</b>.<br><br>"
+                "<b>Without completing the step below, none of the tools will be available.</b><br><br>"
+                "To install the backend:<ol>"
+                f"<li>Open the QGIS Python Console:&nbsp;&nbsp;<b>{console_path}</b></li>"
+                "<li>Click <b>Copy command to clipboard</b> below, paste it into the console, "
+                "and press <b>Enter</b>.</li>"
                 "<li>The backend will install and the plugin will reload automatically — "
                 "no restart needed.</li>"
                 "</ol>"
@@ -1455,12 +1466,16 @@ class WhiteboxWorkflowsPlugin:
             # Button row
             btn_row = QHBoxLayout()
 
-            copy_btn = QPushButton("Copy command to clipboard")
+            _copied = [False]
+
+            copy_btn = QPushButton("📋  Copy command to clipboard")
+            copy_btn.setDefault(True)  # Enter triggers Copy, not Close
             def _copy():
                 try:
                     from qgis.PyQt.QtWidgets import QApplication
                     QApplication.clipboard().setText(command)
-                    copy_btn.setText("✓ Copied!")
+                    copy_btn.setText("✓  Copied!")
+                    _copied[0] = True
                 except Exception:
                     pass
             copy_btn.clicked.connect(_copy)
@@ -1468,8 +1483,33 @@ class WhiteboxWorkflowsPlugin:
             btn_row.addStretch()
 
             close_btn = QPushButton("Close")
-            close_btn.setDefault(True)
-            close_btn.clicked.connect(dlg.accept)
+            close_btn.setDefault(False)
+            close_btn.setAutoDefault(False)
+
+            def _on_close():
+                if not _copied[0]:
+                    try:
+                        warn = QMessageBox(dlg)
+                        warn.setWindowTitle("Backend Not Yet Installed")
+                        warn.setIcon(QMessageBox.Icon.Warning)
+                        warn.setText(
+                            "<b>You have not copied the install command yet.</b><br><br>"
+                            "The plugin will not work until you run the install command "
+                            "in the QGIS Python Console.<br><br>"
+                            "Click <b>Go Back</b> to copy the command, or <b>Dismiss</b> "
+                            "to close anyway (you can install later via "
+                            "Plugins → Whitebox Workflows → Plugin Settings)."
+                        )
+                        go_back = warn.addButton("Go Back", QMessageBox.ButtonRole.RejectRole)
+                        warn.addButton("Dismiss", QMessageBox.ButtonRole.AcceptRole)
+                        warn.exec() if hasattr(warn, "exec") and callable(warn.exec) else warn.exec_()
+                        if warn.clickedButton() == go_back:
+                            return  # Don't close the main dialog
+                    except Exception:
+                        pass
+                dlg.accept()
+
+            close_btn.clicked.connect(_on_close)
             btn_row.addWidget(close_btn)
 
             layout.addLayout(btn_row)

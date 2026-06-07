@@ -1410,7 +1410,7 @@ class WhiteboxWorkflowsPlugin:
         try:
             from qgis.PyQt.QtWidgets import (
                 QDialog, QVBoxLayout, QHBoxLayout,
-                QLabel, QPlainTextEdit, QPushButton, QMessageBox,
+                QLabel, QPlainTextEdit, QPushButton,
             )
             from qgis.PyQt.QtGui import QFont
 
@@ -1466,8 +1466,6 @@ class WhiteboxWorkflowsPlugin:
             # Button row
             btn_row = QHBoxLayout()
 
-            _copied = [False]
-
             copy_btn = QPushButton("📋  Copy command to clipboard")
             copy_btn.setDefault(True)  # Enter triggers Copy, not Close
             def _copy():
@@ -1475,7 +1473,6 @@ class WhiteboxWorkflowsPlugin:
                     from qgis.PyQt.QtWidgets import QApplication
                     QApplication.clipboard().setText(command)
                     copy_btn.setText("✓  Copied!")
-                    _copied[0] = True
                 except Exception:
                     pass
             copy_btn.clicked.connect(_copy)
@@ -1485,31 +1482,7 @@ class WhiteboxWorkflowsPlugin:
             close_btn = QPushButton("Close")
             close_btn.setDefault(False)
             close_btn.setAutoDefault(False)
-
-            def _on_close():
-                if not _copied[0]:
-                    try:
-                        warn = QMessageBox(dlg)
-                        warn.setWindowTitle("Backend Not Yet Installed")
-                        warn.setIcon(QMessageBox.Icon.Warning)
-                        warn.setText(
-                            "<b>You have not copied the install command yet.</b><br><br>"
-                            "The plugin will not work until you run the install command "
-                            "in the QGIS Python Console.<br><br>"
-                            "Click <b>Go Back</b> to copy the command, or <b>Dismiss</b> "
-                            "to close anyway (you can install later via "
-                            "Plugins → Whitebox Workflows → Plugin Settings)."
-                        )
-                        go_back = warn.addButton("Go Back", QMessageBox.ButtonRole.RejectRole)
-                        warn.addButton("Dismiss", QMessageBox.ButtonRole.AcceptRole)
-                        warn.exec() if hasattr(warn, "exec") and callable(warn.exec) else warn.exec_()
-                        if warn.clickedButton() == go_back:
-                            return  # Don't close the main dialog
-                    except Exception:
-                        pass
-                dlg.accept()
-
-            close_btn.clicked.connect(_on_close)
+            close_btn.clicked.connect(dlg.accept)
             btn_row.addWidget(close_btn)
 
             layout.addLayout(btn_row)

@@ -210,9 +210,6 @@ class WhiteboxSettingsDialog(QDialog):
         self._auto_check_updates_check = QCheckBox()
         self._auto_check_updates_check.setChecked(s.auto_check_backend_updates)
 
-        self._skip_local_auto_updates_check = QCheckBox()
-        self._skip_local_auto_updates_check.setChecked(s.skip_auto_update_checks_in_local_mode)
-
         if hasattr(runtime_form, "addRow"):
             runtime_form.addRow("Include Pro catalog", self._include_pro_check)
             runtime_form.addRow("Requested tier", self._tier_combo)

@@ -22,7 +22,6 @@ def clear_runtime_cache():
     whitebox_workflows module.
     """
     global _RUNTIME_ENV, _RUNTIME_STUB_TEXT
-    print("[WBW] DEBUG: Clearing discovery runtime cache")
     _RUNTIME_ENV = None
     _RUNTIME_STUB_TEXT = None
 

@@ -788,18 +788,13 @@ def load_whitebox_workflows():
         to_remove = [key for key in sys.modules.keys() if key.startswith("whitebox_workflows.")]
         for key in to_remove:
             sys.modules.pop(key, None)
-        print(f"[WBW] DEBUG: Cleared cached whitebox_workflows, {len(to_remove)} submodules removed")
-        
         # Clear Python's import machinery cache (PathFinder, etc.) so it rescans for modules
         importlib.invalidate_caches()
-        print(f"[WBW] DEBUG: Invalidated importlib caches (finders, path index)")
 
     # For local mode: directly load from the development path using importlib
     # This avoids permanently modifying sys.path and breaking QGIS plugin compatibility
     if mode == "local" and local_python:
         site_packages = _get_site_packages_for_python(local_python)
-        print(f"[WBW] DEBUG: local_python={local_python}, site_packages={site_packages}")
-        
         if site_packages:
             # Look for .pth files that might point to development directories (from maturin develop)
             pth_files = list(Path(site_packages).glob("whitebox_workflows*.pth"))
@@ -818,11 +813,9 @@ def load_whitebox_workflows():
                                 wbw = importlib.util.module_from_spec(spec)
                                 sys.modules["whitebox_workflows"] = wbw
                                 spec.loader.exec_module(wbw)
-                                import_file = getattr(wbw, "__file__", "unknown")
-                                print(f"[WBW] DEBUG: Loaded whitebox_workflows from {pth_path}: {import_file}")
                                 return wbw
-                except Exception as e:
-                    print(f"[WBW] DEBUG: Could not load from .pth path {pth_path}: {e}")
+                except Exception:
+                    pass
             
             # If .pth approach didn't work, try site-packages itself
             wbw_module_path = Path(site_packages) / "whitebox_workflows" / "__init__.py"
@@ -836,32 +829,22 @@ def load_whitebox_workflows():
                         wbw = importlib.util.module_from_spec(spec)
                         sys.modules["whitebox_workflows"] = wbw
                         spec.loader.exec_module(wbw)
-                        import_file = getattr(wbw, "__file__", "unknown")
-                        print(f"[WBW] DEBUG: Loaded whitebox_workflows from site-packages: {import_file}")
                         return wbw
-                except Exception as e:
-                    print(f"[WBW] DEBUG: Could not load from site-packages {site_packages}: {e}")
+                except Exception:
+                    pass
 
     # Attempt 1: direct import (standard Python path resolution for QGIS Python)
     try:
-        wbw = importlib.import_module("whitebox_workflows")
-        import_file = getattr(wbw, "__file__", "unknown")
-        print(f"[WBW] DEBUG: Imported whitebox_workflows from {import_file}")
-        return wbw
-    except ImportError as e:
-        print(f"[WBW] DEBUG: Attempt 1 failed: {e}")
+        return importlib.import_module("whitebox_workflows")
+    except ImportError:
         pass
 
     # Attempt 2: add the pip target dir to sys.path and retry.
     # Covers the case where a previous install ran but the dir wasn't on sys.path.
     _ensure_pip_target_on_sys_path()
     try:
-        wbw = importlib.import_module("whitebox_workflows")
-        import_file = getattr(wbw, "__file__", "unknown")
-        print(f"[WBW] DEBUG: Attempt 2 imported from {import_file}")
-        return wbw
-    except ImportError as e:
-        print(f"[WBW] DEBUG: Attempt 2 failed: {e}")
+        return importlib.import_module("whitebox_workflows")
+    except ImportError:
         pass
 
     # Not installed. Raise a specific sentinel so callers can offer to install.

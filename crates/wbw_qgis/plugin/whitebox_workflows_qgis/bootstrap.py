@@ -812,6 +812,46 @@ def is_backend_not_installed_error(exc: Exception) -> bool:
     return str(exc).startswith("BACKEND_NOT_INSTALLED:")
 
 
+def get_loaded_backend_info() -> dict:
+    """Return diagnostic info about the currently loaded whitebox_workflows.
+    
+    Returns a dict with:
+    - version: version string (e.g., "2.0.3")
+    - file_path: location of the whitebox_workflows package
+    - mode: current runtime mode ("qgis" or "local")
+    - local_python_path: path to local Python if in local mode, else ""
+    """
+    try:
+        wbw = importlib.import_module("whitebox_workflows")
+        
+        version = "unknown"
+        try:
+            version = importlib.metadata.version("whitebox_workflows")
+        except Exception:
+            if hasattr(wbw, "__version__"):
+                version = str(wbw.__version__)
+        
+        file_path = "unknown"
+        if hasattr(wbw, "__file__") and wbw.__file__:
+            file_path = str(wbw.__file__)
+        
+        mode, local_python = get_runtime_preferences()
+        
+        return {
+            "version": version,
+            "file_path": file_path,
+            "mode": mode,
+            "local_python_path": local_python if mode == "local" else "",
+        }
+    except Exception as exc:
+        return {
+            "version": "error",
+            "file_path": str(exc),
+            "mode": "",
+            "local_python_path": "",
+        }
+
+
 def _effective_python_for_backend_ops() -> str | None:
     """Return the python executable used for backend package ops.
 

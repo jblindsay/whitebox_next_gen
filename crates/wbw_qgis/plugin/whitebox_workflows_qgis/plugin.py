@@ -9,6 +9,7 @@ from .bootstrap import (
     backend_update_status,
     install_or_upgrade_whitebox_workflows,
     is_backend_not_installed_error,
+    get_loaded_backend_info,
     set_runtime_preferences,
 )
 from .diagnostics import diagnostics_text, gather_runtime_diagnostics
@@ -1313,10 +1314,37 @@ class WhiteboxWorkflowsPlugin:
             self._save_runtime_preferences()
             if self._ensure_backend_available(interactive=True):
                 self._refresh_catalog()
+                self._show_backend_info()
             return
 
         if backend_policy_changed:
             self._notify_info("Backend install/update preferences saved.")
+
+    def _show_backend_info(self):
+        """Display info about the loaded whitebox-workflows backend."""
+        try:
+            info = get_loaded_backend_info()
+            
+            version = str(info.get("version", "unknown"))
+            file_path = str(info.get("file_path", "unknown"))
+            mode = str(info.get("mode", "unknown"))
+            
+            # Extract just the venv/site-packages directory from the full path
+            if file_path != "unknown" and file_path:
+                try:
+                    if "/site-packages/" in file_path:
+                        file_display = file_path.split("/site-packages/")[0] + "/site-packages"
+                    else:
+                        file_display = file_path
+                except Exception:
+                    file_display = file_path
+            else:
+                file_display = file_path
+            
+            msg = f"Whitebox Workflows {version} loaded\nMode: {mode}\nPath: {file_display}"
+            self._notify_info(msg)
+        except Exception as exc:
+            self._notify_info(f"Could not retrieve backend info: {exc}")
 
     def _manual_check_backend_updates(self, *_args):
         self._check_backend_updates(manual=True)

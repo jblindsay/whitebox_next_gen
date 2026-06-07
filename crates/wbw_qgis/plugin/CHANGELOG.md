@@ -4,6 +4,15 @@ This changelog tracks user-visible changes to the Whitebox Workflows QGIS plugin
 
 ## Unreleased
 
+## 2.0.14 - 2026-06-07
+
+- Removed debug print statements from `bootstrap.py` `load_whitebox_workflows()` and `discovery.py` `clear_runtime_cache()` used during development.
+- Fixed a settings dialog crash on startup caused by dangling QCheckBox widget reference to a removed plugin settings field (`skip_auto_update_checks_in_local_mode`).
+- Improved backend installation experience by silently suppressing red error popups after users close the install instructions dialog, preventing distracting error notifications when the backend is not yet installed.
+- Enhanced the backend installation instructions dialog with a clear ⚠️ warning title ("Action Required — Install Whitebox Workflows Backend"), prominent orange header, and explicit text ("none of the tools will be available"). Made the copy button the default action so users can press Enter to copy the install command instead of accidentally closing the dialog.
+- Applied code style fixes for QGIS plugin repository validator compliance: removed unused imports (`is_backend_not_installed_error`, `get_loaded_backend_info`); fixed unused variable assignments; added missing blank lines before nested functions; broke long lines to fit 120-character limit; stripped trailing whitespace from blank lines.
+- Confirmed "Check backend updates" button works correctly with QGIS-only backend installation via pip-based setup.
+
 ## 2.0.13 - 2026-05-30
 
 - Fixed QGIS parameter inference for stream-network tools so `streams` and `flow_accumulation` inputs are recognized as vector/raster selectors instead of plain string fields.

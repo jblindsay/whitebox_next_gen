@@ -1392,10 +1392,7 @@ def create_runtime_session(include_pro: bool = True, tier: str = "open"):
             # keep the existing capabilities-based gate below.
             pass
         if not hasattr(wbw, "RuntimeSession"):
-            try:
-                return _external_session(prefer_pro=include_pro, allow_downgrade=True)
-            except Exception:
-                raise RuntimeBootstrapError(_next_gen_required_message("RuntimeSession class not found."))
+            raise RuntimeBootstrapError(_next_gen_required_message("RuntimeSession class not found."))
         try:
             session = wbw.RuntimeSession(include_pro=include_pro, tier=tier)
             raw_caps = session.get_runtime_capabilities_json()
@@ -1409,21 +1406,15 @@ def create_runtime_session(include_pro: bool = True, tier: str = "open"):
                     _parse_next_gen_capabilities(raw_caps, "current Python runtime")
                     return downgraded
                 except Exception:
-                    # Only fall back to a different external interpreter if the
-                    # current Python runtime cannot even provide a valid OSS-only
-                    # Next Gen session. This avoids silently switching to a stale
-                    # external environment with a different tool catalog.
-                    return _external_session(prefer_pro=True, allow_downgrade=True)
+                    # Cannot downgrade to open mode; re-raise the original error
+                    raise
             if _is_legacy_runtime_error(str(exc)):
-                try:
-                    return _external_session(prefer_pro=include_pro, allow_downgrade=True)
-                except Exception:
-                    raise RuntimeBootstrapError(_next_gen_required_message(str(exc))) from exc
+                raise RuntimeBootstrapError(_next_gen_required_message(str(exc))) from exc
             raise
-    except RuntimeBootstrapError as exc:
-        if _is_legacy_runtime_error(str(exc)):
-            raise
-        return _external_session(prefer_pro=include_pro, allow_downgrade=True)
+    except RuntimeBootstrapError:
+        # QGIS-only mode: don't try external Python fallback
+        # Just re-raise the error (e.g., BACKEND_NOT_INSTALLED)
+        raise
 
 
 def get_runtime_capabilities(include_pro: bool = True, tier: str = "open") -> dict:

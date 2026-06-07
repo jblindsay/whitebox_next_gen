@@ -46,21 +46,21 @@ def _subprocess_window_kwargs() -> dict:
 
 def _get_site_packages_for_python(python_exe: str | None) -> str | None:
     """Given a Python executable path, return its site-packages directory.
-    
+
     Returns the first writable site-packages directory found, or None if
     the path is invalid, not executable, or site-packages cannot be determined.
     """
     exe_path = str(python_exe or "").strip()
     if not exe_path:
         return None
-    
+
     try:
         path_obj = Path(exe_path)
         if not path_obj.exists() or not os.access(path_obj, os.X_OK):
             return None
     except Exception:
         return None
-    
+
     try:
         result = subprocess.run(
             [exe_path, "-c", "import site; print('\\n'.join(site.getsitepackages()))"],
@@ -77,7 +77,7 @@ def _get_site_packages_for_python(python_exe: str | None) -> str | None:
                     return line
     except Exception:
         pass
-    
+
     return None
 
 
@@ -632,7 +632,11 @@ def _rewrite_windows_qgis_launcher(path_text: str | None) -> str:
     if not any(normalized.endswith(suffix) for suffix in suffixes):
         return raw
 
-    install_root = raw[: raw.lower().rfind("bin\\python") if "bin\\python" in raw.lower() else raw.replace("\\", "/").lower().rfind("/bin/python")]
+    install_root = raw[
+        : raw.lower().rfind("bin\\python")
+        if "bin\\python" in raw.lower()
+        else raw.replace("\\", "/").lower().rfind("/bin/python")
+    ]
     install_root = install_root.rstrip("\\/")
     if not install_root:
         return raw
@@ -816,7 +820,7 @@ def load_whitebox_workflows():
                                 return wbw
                 except Exception:
                     pass
-            
+
             # If .pth approach didn't work, try site-packages itself
             wbw_module_path = Path(site_packages) / "whitebox_workflows" / "__init__.py"
             if wbw_module_path.exists():
@@ -862,7 +866,7 @@ def is_backend_not_installed_error(exc: Exception) -> bool:
 
 def get_loaded_backend_info() -> dict:
     """Return diagnostic info about the currently loaded whitebox_workflows.
-    
+
     Returns a dict with:
     - version: version string (e.g., "2.0.3")
     - file_path: location of the whitebox_workflows package
@@ -871,20 +875,20 @@ def get_loaded_backend_info() -> dict:
     """
     try:
         wbw = importlib.import_module("whitebox_workflows")
-        
+
         version = "unknown"
         try:
             version = importlib.metadata.version("whitebox_workflows")
         except Exception:
             if hasattr(wbw, "__version__"):
                 version = str(wbw.__version__)
-        
+
         file_path = "unknown"
         if hasattr(wbw, "__file__") and wbw.__file__:
             file_path = str(wbw.__file__)
-        
+
         mode, local_python = get_runtime_preferences()
-        
+
         return {
             "version": version,
             "file_path": file_path,
@@ -1017,8 +1021,7 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
             "Install whitebox-workflows manually and restart QGIS."
         )
 
-    import io
-    captured = io.StringIO()
+    import io  # noqa: F401 — imported for future use if pip output capture is needed
     exit_code = 1
     try:
         # pip calls sys.exit() on completion; catch it.

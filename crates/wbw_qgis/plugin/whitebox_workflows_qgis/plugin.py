@@ -8,8 +8,6 @@ from .bootstrap import (
     backend_install_status,
     backend_update_status,
     install_or_upgrade_whitebox_workflows,
-    is_backend_not_installed_error,
-    get_loaded_backend_info,
 )
 from .diagnostics import diagnostics_text, gather_runtime_diagnostics
 from .host_api import (
@@ -494,7 +492,8 @@ class WhiteboxWorkflowsPlugin:
 
     def _open_field_calculator_assistant(self, tool_id: str):
         self._notify_info(
-            "Opening Field Calculator Assistant. After review, the standard processing dialog will open with prefilled parameters."
+            "Opening Field Calculator Assistant. "
+            "After review, the standard processing dialog will open with prefilled parameters."
         )
         try:
             from .field_calculator_dialog import run_field_calculator_assistant
@@ -537,7 +536,8 @@ class WhiteboxWorkflowsPlugin:
 
     def _open_raster_calculator_assistant(self, tool_id: str):
         self._notify_info(
-            "Opening Raster Calculator Assistant. After review, the standard processing dialog will open with prefilled parameters."
+            "Opening Raster Calculator Assistant. "
+            "After review, the standard processing dialog will open with prefilled parameters."
         )
         try:
             from .raster_calculator_dialog import run_raster_calculator_assistant
@@ -1100,7 +1100,9 @@ class WhiteboxWorkflowsPlugin:
                 True,
             )
             self._panel_search_text = str(settings.value(self._settings_key_search_text, ""))
-            self._panel_focus_area = str(settings.value(self._settings_key_focus_area, "search")).strip().lower() or "search"
+            self._panel_focus_area = (
+                str(settings.value(self._settings_key_focus_area, "search")).strip().lower() or "search"
+            )
         except Exception:
             self._panel_visible = True
             self._panel_width = 320
@@ -1468,6 +1470,7 @@ class WhiteboxWorkflowsPlugin:
 
             copy_btn = QPushButton("📋  Copy command to clipboard")
             copy_btn.setDefault(True)  # Enter triggers Copy, not Close
+
             def _copy():
                 try:
                     from qgis.PyQt.QtWidgets import QApplication
@@ -1489,7 +1492,7 @@ class WhiteboxWorkflowsPlugin:
 
             dlg.exec() if hasattr(dlg, "exec") and callable(dlg.exec) else dlg.exec_()
 
-        except Exception as exc:
+        except Exception:
             # Last-resort: plain notification. Sanitise to one readable line.
             self._notify_warning(
                 "whitebox-workflows is not installed. "

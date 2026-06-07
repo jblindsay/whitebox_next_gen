@@ -16,7 +16,7 @@ _RUNTIME_STUB_TEXT = None
 
 def clear_runtime_cache():
     """Clear cached runtime environment when mode changes.
-    
+
     Called by plugin when runtime preferences are updated, so that
     the next discovery call creates a fresh runtime with the new
     whitebox_workflows module.

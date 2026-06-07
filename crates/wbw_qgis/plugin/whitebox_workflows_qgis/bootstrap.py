@@ -131,3 +131,139 @@ subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "whitebox-w
 
 print("Installation complete. Refresh the Whitebox Workflows catalog: Plugins → Whitebox Workflows → Refresh Catalog")
 '''
+
+
+def backend_install_status() -> dict:
+    """Check if whitebox-workflows is installed.
+    
+    Returns dict with:
+    - installed: bool
+    - version: str or None
+    - error: str or None
+    """
+    try:
+        info = get_loaded_backend_info()
+        version = str(info.get("version", "unknown")).strip()
+        if version and version not in ("unknown", "error"):
+            return {
+                "installed": True,
+                "version": version,
+                "error": None,
+            }
+    except Exception:
+        pass
+    
+    return {
+        "installed": False,
+        "version": None,
+        "error": "whitebox-workflows is not installed",
+    }
+
+
+def backend_update_status() -> dict:
+    """Check for available updates to whitebox-workflows.
+    
+    Returns dict with:
+    - update_available: bool
+    - installed_version: str
+    - latest_version: str
+    - interpreter: str
+    - error: str or None
+    """
+    try:
+        installed_info = backend_install_status()
+        if not installed_info.get("installed"):
+            return {
+                "update_available": False,
+                "installed_version": None,
+                "latest_version": None,
+                "interpreter": None,
+                "error": "Backend not installed",
+            }
+        
+        installed_version = str(installed_info.get("version", "unknown"))
+        
+        # Try to get latest version from PyPI
+        import sys
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "index", "versions", "whitebox-workflows"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+        
+        latest_version = "unknown"
+        if result.returncode == 0:
+            # Parse output to find latest version
+            for line in result.stdout.split('\n'):
+                if 'Available versions:' in line:
+                    # Next line contains versions
+                    parts = line.split(':')
+                    if len(parts) > 1:
+                        versions = parts[1].strip().split(',')
+                        if versions:
+                            latest_version = versions[0].strip()
+                    break
+        
+        if latest_version == "unknown":
+            # Fallback: try pip-audit or similar
+            latest_version = installed_version
+        
+        # Compare versions (simplified string comparison)
+        update_available = latest_version > installed_version if latest_version != "unknown" else False
+        
+        return {
+            "update_available": update_available,
+            "installed_version": installed_version,
+            "latest_version": latest_version,
+            "interpreter": str(subprocess.sys.executable),
+            "error": None,
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "update_available": False,
+            "installed_version": "unknown",
+            "latest_version": "unknown",
+            "interpreter": str(subprocess.sys.executable),
+            "error": "Update check timed out",
+        }
+    except Exception as exc:
+        return {
+            "update_available": False,
+            "installed_version": "unknown",
+            "latest_version": "unknown",
+            "interpreter": "unknown",
+            "error": str(exc),
+        }
+
+
+def install_or_upgrade_whitebox_workflows(use_wheel: str = "") -> dict:
+    """Install or upgrade whitebox-workflows in QGIS Python.
+    
+    Args:
+        use_wheel: Optional path to local .whl file.
+    
+    Returns dict with:
+    - success: bool
+    - message: str
+    - installed_version: str or None
+    - error: str or None
+    """
+    try:
+        install_whitebox_workflows_via_pip(use_wheel=use_wheel)
+        info = get_loaded_backend_info()
+        version = str(info.get("version", "unknown"))
+        return {
+            "success": True,
+            "message": f"Installation complete. Installed version: {version}",
+            "installed_version": version,
+            "error": None,
+        }
+    except Exception as exc:
+        return {
+            "success": False,
+            "message": f"Installation failed: {exc}",
+            "installed_version": None,
+            "error": str(exc),
+        }

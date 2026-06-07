@@ -787,25 +787,37 @@ def load_whitebox_workflows():
         to_remove = [key for key in sys.modules.keys() if key.startswith("whitebox_workflows.")]
         for key in to_remove:
             sys.modules.pop(key, None)
+        print(f"[WBW] DEBUG: Cleared cached whitebox_workflows, {len(to_remove)} submodules removed")
 
     # Prepend local Python's site-packages if in local mode.
     if mode == "local" and local_python:
         site_packages = _get_site_packages_for_python(local_python)
+        print(f"[WBW] DEBUG: local_python={local_python}, site_packages={site_packages}")
         if site_packages and site_packages not in sys.path:
             sys.path.insert(0, site_packages)
+            print(f"[WBW] DEBUG: Prepended {site_packages} to sys.path")
+        print(f"[WBW] DEBUG: sys.path[0]={sys.path[0] if sys.path else 'empty'}")
 
     # Attempt 1: direct import (already on sys.path).
     try:
-        return importlib.import_module("whitebox_workflows")
-    except ImportError:
+        wbw = importlib.import_module("whitebox_workflows")
+        import_file = getattr(wbw, "__file__", "unknown")
+        print(f"[WBW] DEBUG: Imported whitebox_workflows from {import_file}")
+        return wbw
+    except ImportError as e:
+        print(f"[WBW] DEBUG: Attempt 1 failed: {e}")
         pass
 
     # Attempt 2: add the pip target dir to sys.path and retry.
     # Covers the case where a previous install ran but the dir wasn't on sys.path.
     _ensure_pip_target_on_sys_path()
     try:
-        return importlib.import_module("whitebox_workflows")
-    except ImportError:
+        wbw = importlib.import_module("whitebox_workflows")
+        import_file = getattr(wbw, "__file__", "unknown")
+        print(f"[WBW] DEBUG: Attempt 2 imported from {import_file}")
+        return wbw
+    except ImportError as e:
+        print(f"[WBW] DEBUG: Attempt 2 failed: {e}")
         pass
 
     # Not installed. Raise a specific sentinel so callers can offer to install.

@@ -14,6 +14,19 @@ _RUNTIME_ENV = None
 _RUNTIME_STUB_TEXT = None
 
 
+def clear_runtime_cache():
+    """Clear cached runtime environment when mode changes.
+    
+    Called by plugin when runtime preferences are updated, so that
+    the next discovery call creates a fresh runtime with the new
+    whitebox_workflows module.
+    """
+    global _RUNTIME_ENV, _RUNTIME_STUB_TEXT
+    print("[WBW] DEBUG: Clearing discovery runtime cache")
+    _RUNTIME_ENV = None
+    _RUNTIME_STUB_TEXT = None
+
+
 def _get_runtime_env():
     global _RUNTIME_ENV
     if _RUNTIME_ENV is not None:

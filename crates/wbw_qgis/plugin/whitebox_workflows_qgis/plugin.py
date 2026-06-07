@@ -13,6 +13,7 @@ from .bootstrap import (
     set_runtime_preferences,
 )
 from .diagnostics import diagnostics_text, gather_runtime_diagnostics
+from .discovery import clear_runtime_cache
 from .host_api import (
     host_capabilities,
     open_local_file,
@@ -1102,6 +1103,7 @@ class WhiteboxWorkflowsPlugin:
             pass
 
     def _apply_runtime_preferences_to_bootstrap(self):
+        print(f"[WBW] DEBUG: Applying runtime preferences: mode={self._runtime_mode}, local_python={self._runtime_local_python}")
         set_runtime_preferences(mode=self._runtime_mode, local_python=self._runtime_local_python)
 
     def _load_panel_ui_state(self):
@@ -1312,6 +1314,7 @@ class WhiteboxWorkflowsPlugin:
             self.provider.include_pro = updated.include_pro
             self.provider.tier = updated.tier
             self._save_runtime_preferences()
+            clear_runtime_cache()
             if self._ensure_backend_available(interactive=True):
                 self._refresh_catalog()
                 self._show_backend_info()

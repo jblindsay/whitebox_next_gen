@@ -788,6 +788,12 @@ def load_whitebox_workflows():
         for key in to_remove:
             sys.modules.pop(key, None)
         print(f"[WBW] DEBUG: Cleared cached whitebox_workflows, {len(to_remove)} submodules removed")
+        
+        # Clear Python's import machinery cache (PathFinder, etc.) so it rescans sys.path
+        # This is critical: sys.modules cache is only part of the problem.
+        # Python also caches which directories contain which modules at the finder level.
+        importlib.invalidate_caches()
+        print(f"[WBW] DEBUG: Invalidated importlib caches (finders, path index)")
 
     # Prepend local Python's site-packages if in local mode.
     if mode == "local" and local_python:

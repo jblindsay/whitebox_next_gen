@@ -5,6 +5,7 @@ import importlib
 import json
 import os
 import shutil
+import site
 import subprocess
 import urllib.parse
 import urllib.request
@@ -796,12 +797,15 @@ def load_whitebox_workflows():
         print(f"[WBW] DEBUG: Invalidated importlib caches (finders, path index)")
 
     # Prepend local Python's site-packages if in local mode.
+    # Use site.addsitedir() to properly process .pth files at runtime.
+    # (Plain sys.path.insert() doesn't process .pth files — site.py only does that at startup)
     if mode == "local" and local_python:
         site_packages = _get_site_packages_for_python(local_python)
         print(f"[WBW] DEBUG: local_python={local_python}, site_packages={site_packages}")
         if site_packages and site_packages not in sys.path:
-            sys.path.insert(0, site_packages)
-            print(f"[WBW] DEBUG: Prepended {site_packages} to sys.path")
+            # site.addsitedir() adds the directory to sys.path AND processes .pth files
+            site.addsitedir(site_packages)
+            print(f"[WBW] DEBUG: Added {site_packages} to sys.path via site.addsitedir() (processes .pth files)")
         print(f"[WBW] DEBUG: sys.path[0]={sys.path[0] if sys.path else 'empty'}")
 
     # Attempt 1: direct import (already on sys.path).

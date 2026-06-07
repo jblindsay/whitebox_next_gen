@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 _EXTERNAL_SESSION_CACHE: dict[tuple[str, bool, str], "ExternalRuntimeSession"] = {}
-_RUNTIME_MODE = "auto"
+_RUNTIME_MODE = "qgis"
 _RUNTIME_LOCAL_PYTHON = ""
 _NEXT_GEN_MIN_VERSION = "2.0.0"
 _WBW_PIP_TARGET_DIR = ""  # cached pip --target directory
@@ -43,18 +43,54 @@ def _subprocess_window_kwargs() -> dict:
     return kwargs
 
 
-def set_runtime_preferences(mode: str = "auto", local_python: str = "") -> None:
+def _get_site_packages_for_python(python_exe: str | None) -> str | None:
+    """Given a Python executable path, return its site-packages directory.
+    
+    Returns the first writable site-packages directory found, or None if
+    the path is invalid, not executable, or site-packages cannot be determined.
+    """
+    exe_path = str(python_exe or "").strip()
+    if not exe_path:
+        return None
+    
+    try:
+        path_obj = Path(exe_path)
+        if not path_obj.exists() or not os.access(path_obj, os.X_OK):
+            return None
+    except Exception:
+        return None
+    
+    try:
+        result = subprocess.run(
+            [exe_path, "-c", "import site; print('\\n'.join(site.getsitepackages()))"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            **_subprocess_window_kwargs(),
+        )
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')
+            for line in lines:
+                line = line.strip()
+                if line and os.path.isdir(line):
+                    return line
+    except Exception:
+        pass
+    
+    return None
+
+
+def set_runtime_preferences(mode: str = "qgis", local_python: str = "") -> None:
     """Set runtime interpreter selection preferences for this plugin process.
 
     mode values:
-    - auto: prefer discovered external interpreter, then current runtime
-    - local: force a caller-provided local interpreter path
-    - qgis: force current in-process Python runtime
+    - qgis: use in-process QGIS Python runtime (default, recommended for end users)
+    - local: use a caller-provided local interpreter path (for development)
     """
     global _RUNTIME_MODE, _RUNTIME_LOCAL_PYTHON
-    normalized = str(mode or "auto").strip().lower()
-    if normalized not in {"auto", "local", "qgis"}:
-        normalized = "auto"
+    normalized = str(mode or "qgis").strip().lower()
+    if normalized not in {"local", "qgis"}:
+        normalized = "qgis"
     _RUNTIME_MODE = normalized
     _RUNTIME_LOCAL_PYTHON = str(local_python or "").strip()
 
@@ -741,6 +777,13 @@ def _install_whitebox_workflows_via_pip(target_dir: str) -> None:
 
 def load_whitebox_workflows():
     import sys
+
+    # Prepend local Python's site-packages if in local mode.
+    mode, local_python = get_runtime_preferences()
+    if mode == "local" and local_python:
+        site_packages = _get_site_packages_for_python(local_python)
+        if site_packages and site_packages not in sys.path:
+            sys.path.insert(0, site_packages)
 
     # Attempt 1: direct import (already on sys.path).
     try:

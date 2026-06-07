@@ -214,9 +214,8 @@ class WhiteboxSettingsDialog(QDialog):
 
         self._runtime_mode_combo = QComboBox()
         runtime_modes = [
-            ("auto", "Auto (recommended)"),
-            ("local", "Force local interpreter"),
-            ("qgis", "Force QGIS Python"),
+            ("qgis", "QGIS Python (Bundled)"),
+            ("local", "Local System Python"),
         ]
         for mode_key, mode_label in runtime_modes:
             self._runtime_mode_combo.addItem(mode_label, mode_key)
@@ -366,7 +365,7 @@ class WhiteboxSettingsDialog(QDialog):
             panel_show_locked=bool(self._show_locked_check.isChecked()),
             panel_show_locked_recipes=bool(self._show_locked_recipes_check.isChecked()),
             panel_width=int(self._panel_width_spin.value()),
-            runtime_mode=str(self._runtime_mode_combo.currentData() or "auto").strip().lower() or "auto",
+            runtime_mode=str(self._runtime_mode_combo.currentData() or "qgis").strip().lower() or "qgis",
             local_python_path=str(self._local_python_edit.text()).strip(),
             auto_install_backend=bool(self._auto_install_backend_check.isChecked()),
             auto_check_backend_updates=bool(self._auto_check_updates_check.isChecked()),

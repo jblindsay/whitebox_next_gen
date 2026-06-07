@@ -1021,8 +1021,8 @@ class WhiteboxWorkflowsPlugin:
     def _load_backend_preferences(self):
         try:
             settings = QSettings()
-            mode = str(settings.value(self._settings_key_runtime_mode, "auto")).strip().lower()
-            self._runtime_mode = mode if mode in ("auto", "local", "qgis") else "auto"
+            mode = str(settings.value(self._settings_key_runtime_mode, "qgis")).strip().lower()
+            self._runtime_mode = mode if mode in ("local", "qgis") else "qgis"
             self._runtime_local_python = str(settings.value(self._settings_key_local_python, "")).strip()
             self._auto_install_backend = self._coerce_bool(
                 settings.value(self._settings_key_auto_install_backend, True),

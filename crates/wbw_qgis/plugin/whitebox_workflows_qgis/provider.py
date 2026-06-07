@@ -48,7 +48,10 @@ class WhiteboxProcessingProvider(QgsProcessingProvider):
         return QIcon()
 
     def load(self):
-        self.refresh_catalog()
+        try:
+            self.refresh_catalog()
+        except Exception:
+            pass  # Backend not yet installed; catalog stays empty until user installs
         return True
 
     def unload(self):
@@ -56,7 +59,10 @@ class WhiteboxProcessingProvider(QgsProcessingProvider):
         self._help_index = {}
 
     def loadAlgorithms(self):
-        self.refresh_catalog()
+        try:
+            self.refresh_catalog()
+        except Exception:
+            pass  # Backend not yet installed; no algorithms to register
         for alg in build_algorithms(self, self._catalog):
             self.addAlgorithm(alg)
         return None
@@ -68,9 +74,16 @@ class WhiteboxProcessingProvider(QgsProcessingProvider):
             regenerate_help: Force-regenerate all help HTML files even if they
                 already exist in the cache.  Use True after a WbW-Py upgrade.
         """
-        self._catalog = discover_tool_catalog(
-            include_pro=self._include_pro, tier=self._tier
-        )
+        from .bootstrap import is_backend_not_installed_error
+        try:
+            self._catalog = discover_tool_catalog(
+                include_pro=self._include_pro, tier=self._tier
+            )
+        except Exception as exc:
+            if is_backend_not_installed_error(exc):
+                self._catalog = []  # Backend not installed yet; stay silent
+                return self._catalog
+            raise
         self._generate_help(force=regenerate_help)
         return self._catalog
 

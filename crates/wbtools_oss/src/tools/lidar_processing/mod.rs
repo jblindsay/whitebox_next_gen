@@ -10279,7 +10279,7 @@ impl Tool for IndividualTreeSegmentationTool {
                 ToolParamSpec { name: "mode_merge_dist", description: "Distance threshold for merging converged modes (default 0.8).", required: false, ..Default::default() },
                 ToolParamSpec { name: "threads", description: "Thread count override (0 uses default Rayon pool).", required: false, ..Default::default() },
                 ToolParamSpec { name: "simd", description: "Enable SIMD-assisted arithmetic in weighting loops (default true).", required: false, ..Default::default() },
-                ToolParamSpec { name: "output_id_mode", description: "Output segment id encoding: rgb/user_data/point_source_id or combinations like rgb+user_data.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output_id_mode", description: "Output segment id encoding {rgb|user_data|point_source_id|rgb+user_data|rgb+point_source_id} (default rgb).", required: false, ..Default::default() },
                 ToolParamSpec { name: "output_sidecar_csv", description: "If true, write point_index,segment_id CSV beside lidar output.", required: false, ..Default::default() },
                 ToolParamSpec { name: "seed", description: "Deterministic seed for colour mapping (default 1).", required: false, ..Default::default() },
                 ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },

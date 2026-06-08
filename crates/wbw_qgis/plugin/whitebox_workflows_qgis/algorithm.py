@@ -155,7 +155,15 @@ def _looks_like_output(name: str, description: str) -> bool:
     # Prefer explicit output-like parameter names.
     if n in {"output", "out", "output_file", "output_path", "destination", "dst"}:
         return True
-    if n.startswith(("output_", "out_", "destination_")):
+    # Names like output_id_mode, output_type, output_encoding, output_format,
+    # output_units, output_method are semantic qualifiers, not file destinations.
+    _NON_FILE_SUFFIXES = (
+        "_mode", "_type", "_encoding", "_format", "_units",
+        "_method", "_style", "_scheme", "_class", "_kind",
+    )
+    if n.startswith(("output_", "out_", "destination_")) and not any(
+        n.endswith(sfx) for sfx in _NON_FILE_SUFFIXES
+    ):
         return True
 
     # Description-only hints must indicate persisted artifacts, not semantic "output units" text.

@@ -64,7 +64,7 @@ Parameters: directions specify azimuths (0-180°) to analyze (common: 0°, 45°,
                 args: defaults,
             }],
             tags: vec!["geostatistics".to_string(), "variography".to_string(), "anisotropy".to_string(), "directional".to_string(), "visualization".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

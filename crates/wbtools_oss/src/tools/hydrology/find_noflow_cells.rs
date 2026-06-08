@@ -49,7 +49,7 @@ impl Tool for FindNoflowCellsTool {
                 args: ToolArgs::new(),
             }],
             tags: vec!["hydrology".to_string(), "diagnostics".to_string(), "dem".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

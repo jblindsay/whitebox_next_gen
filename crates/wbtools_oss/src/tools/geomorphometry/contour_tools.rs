@@ -1458,7 +1458,7 @@ impl Tool for TopographicHachuresTool {
                 "vector".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1593,7 +1593,7 @@ impl Tool for ContoursFromRasterTool {
                 "vector".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1713,7 +1713,7 @@ impl Tool for ContoursFromPointsTool {
                 "triangulation".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

@@ -2753,7 +2753,7 @@ impl GisOverlayCore {
                 args: example_args,
             }],
             tags: op.tags(),
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3393,7 +3393,7 @@ impl Tool for UpdateNodataCellsTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "nodata".to_string(), "overlay".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3519,7 +3519,7 @@ impl Tool for BufferRasterTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "buffer".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3748,7 +3748,7 @@ impl Tool for ClumpTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "clump".to_string(), "connectivity".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4083,7 +4083,7 @@ impl Tool for EuclideanDistanceTool {
             defaults,
             examples: vec![ToolExample { name: "euclidean_distance_basic".to_string(), description: "Computes distance to nearest target cells.".to_string(), args: example_args }],
             tags: vec!["raster".to_string(), "gis".to_string(), "distance".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4155,7 +4155,7 @@ impl Tool for EuclideanAllocationTool {
             defaults,
             examples: vec![ToolExample { name: "euclidean_allocation_basic".to_string(), description: "Computes nearest-target allocation raster.".to_string(), args: example_args }],
             tags: vec!["raster".to_string(), "gis".to_string(), "distance".to_string(), "allocation".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4222,7 +4222,7 @@ impl Tool for CostDistanceTool {
             defaults,
             examples: vec![ToolExample { name: "cost_distance_basic".to_string(), description: "Computes cost accumulation and backlink rasters.".to_string(), args: example_args }],
             tags: vec!["raster".to_string(), "gis".to_string(), "distance".to_string(), "cost".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4373,7 +4373,7 @@ impl Tool for CostAllocationTool {
             defaults,
             examples: vec![ToolExample { name: "cost_allocation_basic".to_string(), description: "Allocates cells to source IDs using backlink connectivity.".to_string(), args: example_args }],
             tags: vec!["raster".to_string(), "gis".to_string(), "distance".to_string(), "cost".to_string(), "allocation".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4533,7 +4533,7 @@ impl Tool for CostPathwayTool {
             defaults,
             examples: vec![ToolExample { name: "cost_pathway_basic".to_string(), description: "Traces least-cost pathways from destinations.".to_string(), args: example_args }],
             tags: vec!["raster".to_string(), "gis".to_string(), "distance".to_string(), "cost".to_string(), "pathway".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5756,7 +5756,7 @@ impl Tool for PickFromListTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "overlay".to_string(), "selection".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5928,7 +5928,7 @@ impl Tool for WeightedSumTool {
             defaults,
             examples: vec![ToolExample { name: "weighted_sum_basic".to_string(), description: "Runs weighted sum on a raster stack.".to_string(), args: example_args }],
             tags: vec!["raster".to_string(), "gis".to_string(), "overlay".to_string(), "weighted".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6052,7 +6052,7 @@ impl Tool for WeightedOverlayTool {
             defaults,
             examples: vec![ToolExample { name: "weighted_overlay_basic".to_string(), description: "Runs weighted overlay on factor rasters.".to_string(), args: example_args }],
             tags: vec!["raster".to_string(), "gis".to_string(), "overlay".to_string(), "weighted".to_string(), "constraints".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6204,7 +6204,7 @@ impl Tool for AggregateRasterTool {
             defaults,
             examples: vec![ToolExample { name: "aggregate_raster_basic".to_string(), description: "Aggregates a raster by a factor of two.".to_string(), args: example_args }],
             tags: vec!["raster".to_string(), "gis".to_string(), "aggregation".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6351,7 +6351,7 @@ fn block_tool_manifest(id: &'static str, display_name: &'static str, summary: &'
         defaults,
         examples: vec![ToolExample { name: format!("{}_basic", id), description: format!("Runs {} on a point vector layer.", id), args: example_args }],
         tags: vec!["raster".to_string(), "gis".to_string(), "points".to_string(), "legacy-port".to_string()],
-        stability: ToolStability::Experimental,
+        stability: ToolStability::Stable,
     }
 }
 
@@ -6582,7 +6582,7 @@ impl Tool for IdwInterpolationTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "interpolation".to_string(), "idw".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6759,7 +6759,7 @@ impl Tool for NearestNeighbourInterpolationTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "interpolation".to_string(), "nearest".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6900,7 +6900,7 @@ impl Tool for TinInterpolationTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "interpolation".to_string(), "tin".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -7097,7 +7097,7 @@ impl Tool for NaturalNeighbourInterpolationTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "interpolation".to_string(), "natural-neighbour".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -7282,7 +7282,7 @@ impl Tool for ModifiedShepardInterpolationTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "interpolation".to_string(), "shepard".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -7535,7 +7535,7 @@ impl Tool for RadialBasisFunctionInterpolationTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "interpolation".to_string(), "rbf".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -7737,7 +7737,7 @@ impl Tool for HeatMapTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "density".to_string(), "heatmap".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -7860,7 +7860,7 @@ impl Tool for ExtractRasterValuesAtPointsTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "gis".to_string(), "sampling".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -7978,7 +7978,7 @@ impl Tool for RasterCellAssignmentTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "grid".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -8079,7 +8079,7 @@ impl Tool for LayerFootprintRasterTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "gis".to_string(), "footprint".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -8167,7 +8167,7 @@ impl Tool for LayerFootprintVectorTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "gis".to_string(), "footprint".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -8411,7 +8411,7 @@ Applications: (1) Heatmap generation—unbiased density visualization, (2) Raste
                 "grid".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -8539,7 +8539,7 @@ Applications: (1) Spatial aggregation—summarizing vector features into hex bin
                 "grid".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -8672,7 +8672,7 @@ impl Tool for RectangularGridFromRasterBaseTool {
                 "grid".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -8821,7 +8821,7 @@ impl Tool for RectangularGridFromVectorBaseTool {
                 "grid".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -8962,7 +8962,7 @@ impl Tool for MapFeaturesTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "features".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -9390,7 +9390,7 @@ impl Tool for CreatePlaneTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "surface".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -9508,7 +9508,7 @@ impl Tool for CentroidRasterTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "centroid".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -9638,7 +9638,7 @@ impl Tool for MedoidTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "gis".to_string(), "centroid".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -9774,7 +9774,7 @@ impl Tool for FindLowestOrHighestPointsTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "vector".to_string(), "gis".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -9965,7 +9965,7 @@ impl Tool for EliminateCoincidentPointsTool {
                 "points".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -10224,7 +10224,7 @@ Applications: (1) Topology cleanup—connecting slightly-separated lines, (2) Bo
                 "linework".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -10460,7 +10460,7 @@ impl Tool for SmoothVectorsTool {
                 "linework".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -10685,7 +10685,7 @@ impl Tool for SplitVectorLinesTool {
                 "linework".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -10941,7 +10941,7 @@ impl Tool for SnapEndnodesTool {
                 "linework".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -11153,7 +11153,7 @@ Applications: (1) Facility coverage—defining service areas for hospitals/stati
                 "voronoi".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -11304,7 +11304,7 @@ impl Tool for ClipRasterToPolygonTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "clip".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -11454,7 +11454,7 @@ impl Tool for ErasePolygonFromRasterTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "erase".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -11608,7 +11608,7 @@ impl Tool for RasterAreaTool {
                 "categorical".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -11802,7 +11802,7 @@ impl Tool for RasterPerimeterTool {
                 "categorical".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -12618,7 +12618,7 @@ Applications: (1) Environmental protection—buffering streams/wetlands for setb
                 "buffer".to_string(),
                 "distance".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -13174,7 +13174,7 @@ fn overlay_manifest(
             "overlay".to_string(),
             "legacy-port".to_string(),
         ],
-        stability: ToolStability::Experimental,
+        stability: ToolStability::Stable,
     }
 }
 
@@ -13500,7 +13500,7 @@ impl Tool for FilterVectorFeaturesByAreaTool {
                 "polygon".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -13631,7 +13631,7 @@ impl Tool for ExtractNodesTool {
                 "nodes".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -13769,7 +13769,7 @@ Applications: (1) Thematic mapping—placing category labels within polygons, (2
                 "centroid".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -13967,7 +13967,7 @@ Applications: (1) Label placement—ensuring text appears within feature bounds,
                 "representative-point".to_string(),
                 "point-on-surface".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -14085,7 +14085,7 @@ impl Tool for ExtractByAttributeTool {
                 "query".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -14286,7 +14286,7 @@ impl Tool for DissolveTool {
                 "dissolve".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -15278,7 +15278,7 @@ impl Tool for MinimumConvexHullTool {
                 "shape".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -15446,7 +15446,7 @@ impl Tool for MinimumBoundingBoxTool {
                 "shape".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -15609,7 +15609,7 @@ impl Tool for MinimumBoundingCircleTool {
                 "shape".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -15776,7 +15776,7 @@ impl Tool for MinimumBoundingEnvelopeTool {
                 "shape".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -15971,7 +15971,7 @@ impl Tool for FilterRasterFeaturesByAreaTool {
                 "filter".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -16134,7 +16134,7 @@ impl Tool for ReclassTool {
                 "reclass".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -16305,7 +16305,7 @@ impl Tool for ReclassEqualIntervalTool {
                 "reclass".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -16746,7 +16746,7 @@ fn line_tool_manifest(
             "linework".to_string(),
             "legacy-port".to_string(),
         ],
-        stability: ToolStability::Experimental,
+        stability: ToolStability::Stable,
     }
 }
 
@@ -16946,7 +16946,7 @@ impl Tool for MergeLineSegmentsTool {
                 "merge".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -17242,7 +17242,7 @@ Applications: (1) Boundary conversion—converting sketched lines to polygon zon
                 "polygonize".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -17421,7 +17421,7 @@ impl Tool for SplitWithLinesTool {
                 "split".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -17577,7 +17577,7 @@ impl Tool for SplitLinesAtIntersectionsTool {
                 "preprocessing".to_string(),
                 "split".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -17699,7 +17699,7 @@ impl Tool for BuildNetworkTopologyTool {
                 "topology".to_string(),
                 "preprocessing".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -18080,7 +18080,7 @@ impl Tool for HoleProportionTool {
             defaults,
             examples: vec![ToolExample { name: "hole_proportion_basic".to_string(), description: "Calculates HOLE_PROP for polygons.".to_string(), args: example_args }],
             tags: vec!["vector".to_string(), "gis".to_string(), "shape".to_string(), "holes".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -18171,7 +18171,7 @@ impl Tool for PatchOrientationTool {
             defaults,
             examples: vec![ToolExample { name: "patch_orientation_basic".to_string(), description: "Calculates ORIENT for polygons.".to_string(), args: example_args }],
             tags: vec!["vector".to_string(), "gis".to_string(), "shape".to_string(), "orientation".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -18247,7 +18247,7 @@ impl Tool for PerimeterAreaRatioTool {
             defaults,
             examples: vec![ToolExample { name: "perimeter_area_ratio_basic".to_string(), description: "Calculates P_A_RATIO for polygons.".to_string(), args: example_args }],
             tags: vec!["vector".to_string(), "gis".to_string(), "shape".to_string(), "perimeter".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -18329,7 +18329,7 @@ impl Tool for RelatedCircumscribingCircleTool {
             defaults,
             examples: vec![ToolExample { name: "related_circumscribing_circle_basic".to_string(), description: "Calculates RC_CIRCLE for polygons.".to_string(), args: example_args }],
             tags: vec!["vector".to_string(), "gis".to_string(), "shape".to_string(), "circle".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -18429,7 +18429,7 @@ impl Tool for DeviationFromRegionalDirectionTool {
             defaults,
             examples: vec![ToolExample { name: "deviation_from_regional_direction_basic".to_string(), description: "Calculates DEV_DIR for polygons.".to_string(), args: example_args }],
             tags: vec!["vector".to_string(), "gis".to_string(), "shape".to_string(), "direction".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -18578,7 +18578,7 @@ impl Tool for FindPatchEdgeCellsTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "patch".to_string(), "edge".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -18683,7 +18683,7 @@ impl Tool for EdgeProportionTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "patch".to_string(), "edge".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -18833,7 +18833,7 @@ impl Tool for RadiusOfGyrationTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "patch".to_string(), "shape".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -19000,7 +19000,7 @@ impl Tool for PolygonAreaTool {
                 "area".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -19153,7 +19153,7 @@ impl Tool for PolygonPerimeterTool {
                 "perimeter".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -19252,7 +19252,7 @@ impl Tool for PolygonShortAxisTool {
                 "axis".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -19356,7 +19356,7 @@ impl Tool for PolygonLongAxisTool {
                 "axis".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -19445,7 +19445,7 @@ impl Tool for ShapeComplexityIndexRasterTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "patch".to_string(), "shape".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -19597,7 +19597,7 @@ impl Tool for BoundaryShapeComplexityTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "patch".to_string(), "shape".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -19847,7 +19847,7 @@ impl Tool for CompactnessRatioTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "gis".to_string(), "shape".to_string(), "compactness".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -19943,7 +19943,7 @@ impl Tool for ElongationRatioTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "gis".to_string(), "shape".to_string(), "elongation".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -20064,7 +20064,7 @@ impl Tool for LinearityIndexTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "gis".to_string(), "shape".to_string(), "linearity".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -20210,7 +20210,7 @@ impl Tool for NarrownessIndexTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "patch".to_string(), "shape".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -20470,7 +20470,7 @@ impl Tool for NarrownessIndexVectorTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "gis".to_string(), "shape".to_string(), "narrowness".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -20566,7 +20566,7 @@ impl Tool for ShapeComplexityIndexVectorTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "gis".to_string(), "shape".to_string(), "complexity".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -20762,7 +20762,7 @@ impl Tool for TravellingSalesmanProblemTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "gis".to_string(), "optimization".to_string(), "routing".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -21085,7 +21085,7 @@ Applications: (1) Terrain modeling—creating 3D surfaces from LiDAR/survey poin
                 "tin".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -21479,7 +21479,7 @@ Applications: (1) Heatmaps—visualizing point density with publication-ready ae
                 "binning".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -23859,7 +23859,7 @@ Applications: (1) Multi-source integration—combining datasets in different CRS
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "projection".to_string(), "crs".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -23949,7 +23949,7 @@ Applications: (1) Feature classification—filtering polygons by area or perimet
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "attributes".to_string(), "measurements".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -24160,7 +24160,7 @@ Applications: (1) Multi-scale visualization—generating coarser versions for sm
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "simplify".to_string(), "generalization".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -24316,7 +24316,7 @@ Applications: (1) Service location analysis—fire station/hospital coverage, (2
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "nearest".to_string(), "distance".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -24441,7 +24441,7 @@ Applications: (1) Regulatory compliance—features violating setback requirement
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "query".to_string(), "spatial".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -24608,7 +24608,7 @@ Applications: (1) Feature classification—assigning categories based on attribu
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "attributes".to_string(), "expression".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -24863,7 +24863,7 @@ Applications: (1) Zoning compliance—labeling parcels with adjacent land-use ca
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "join".to_string(), "spatial".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -25212,7 +25212,7 @@ impl Tool for TransferAttributesTool {
                 "attribute-transfer".to_string(),
                 "preprocessing".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -25334,7 +25334,7 @@ Applications: (1) Environmental delineation—accurate species/ecosystem range m
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "hull".to_string(), "boundary".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -25499,7 +25499,7 @@ Applications: (1) Ground-truth sampling—selecting unbiased survey locations, (
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "sampling".to_string(), "random".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -25667,7 +25667,7 @@ Applications: (1) Coordinate transformation—ensuring sufficient vertices for p
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "densify".to_string(), "vertices".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -25813,7 +25813,7 @@ Applications: (1) Environmental monitoring—water quality sampling points along
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "points".to_string(), "lines".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -25946,7 +25946,7 @@ impl Tool for LocatePointsAlongRoutesTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "linear-referencing".to_string(), "routes".to_string(), "points".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -26081,7 +26081,7 @@ impl Tool for SnapPointsToNetworkTool {
                 "snapping".to_string(),
                 "preprocessing".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -26308,7 +26308,7 @@ impl Tool for SnapEventsToRoutesTool {
                 "linear-referencing".to_string(),
                 "event-snapping".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -26397,7 +26397,7 @@ impl Tool for RouteEventPointsFromTableTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "linear-referencing".to_string(), "events".to_string(), "csv".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -26553,7 +26553,7 @@ impl Tool for RouteEventLinesFromTableTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "linear-referencing".to_string(), "events".to_string(), "csv".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -26734,7 +26734,7 @@ impl Tool for RouteEventPointsFromLayerTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "linear-referencing".to_string(), "events".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -26946,7 +26946,7 @@ impl Tool for RouteEventLinesFromLayerTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "linear-referencing".to_string(), "events".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -27196,7 +27196,7 @@ impl Tool for RouteCalibrateTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "linear-referencing".to_string(), "calibration".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -27457,7 +27457,7 @@ impl Tool for RouteRecalibrateTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "linear-referencing".to_string(), "recalibration".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -27683,7 +27683,7 @@ impl Tool for RouteEventSplitTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "linear-referencing".to_string(), "events".to_string(), "split".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -27942,7 +27942,7 @@ impl Tool for RouteEventMergeTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "linear-referencing".to_string(), "events".to_string(), "merge".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -28254,7 +28254,7 @@ impl Tool for RouteEventOverlayTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "linear-referencing".to_string(), "events".to_string(), "overlay".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -28602,7 +28602,7 @@ impl Tool for RouteMeasureQaTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "linear-referencing".to_string(), "qa".to_string(), "diagnostics".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -28953,7 +28953,7 @@ Applications: (1) Inventory management—counting features by type/class, (2) Da
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "statistics".to_string(), "table".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -29115,7 +29115,7 @@ Applications: (1) Data harmonization—standardizing field names across datasets
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "schema".to_string(), "attributes".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -29212,7 +29212,7 @@ Applications: (1) Privacy compliance—removing sensitive personal data, (2) Sch
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "schema".to_string(), "attributes".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -29339,7 +29339,7 @@ impl Tool for AddFieldTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "schema".to_string(), "attributes".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -29436,7 +29436,7 @@ Applications: (1) Infrastructure subsetting—extracting utilities within admini
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "clip".to_string(), "line".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -32608,7 +32608,7 @@ impl Tool for ShortestPathNetworkTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "shortest-path".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -32897,7 +32897,7 @@ impl Tool for MultimodalShortestPathTool {
                 },
             ],
             tags: vec!["vector".to_string(), "network".to_string(), "multimodal".to_string(), "shortest-path".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -33118,7 +33118,7 @@ impl Tool for MultimodalOdCostMatrixTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "multimodal".to_string(), "od-matrix".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -33419,7 +33419,7 @@ impl Tool for MultimodalRoutesFromOdTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "multimodal".to_string(), "routes".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -33665,7 +33665,7 @@ impl Tool for NetworkCentralityMetricsTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "centrality".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -33878,7 +33878,7 @@ impl Tool for NetworkAccessibilityMetricsTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "accessibility".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -34143,7 +34143,7 @@ impl Tool for OdSensitivityAnalysisTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "sensitivity".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -34477,7 +34477,7 @@ impl Tool for NetworkNodeDegreeTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "topology".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -34665,7 +34665,7 @@ impl Tool for NetworkServiceAreaTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "service-area".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -35597,7 +35597,7 @@ impl Tool for MapMatchingV1Tool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "map-matching".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -36150,7 +36150,7 @@ impl Tool for NetworkTopologyAuditTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "diagnostics".to_string(), "topology".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -36437,7 +36437,7 @@ impl Tool for GenerateNetworkNodesTool {
                 "nodes".to_string(),
                 "preprocessing".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -36560,7 +36560,7 @@ impl Tool for NetworkOdCostMatrixTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "od-matrix".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -36849,7 +36849,7 @@ impl Tool for NetworkConnectedComponentsTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "components".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -37023,7 +37023,7 @@ impl Tool for NetworkRoutesFromOdTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "routes".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -37396,7 +37396,7 @@ impl Tool for ClosestFacilityNetworkTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "closest-facility".to_string(), "routing".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -37801,7 +37801,7 @@ impl Tool for LocationAllocationNetworkTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "location-allocation".to_string(), "allocation".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -39527,7 +39527,7 @@ impl Tool for VehicleRoutingCvrpTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "routing".to_string(), "optimization".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -41257,7 +41257,7 @@ impl Tool for VehicleRoutingVrptwTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "routing".to_string(), "optimization".to_string(), "time-window".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -42375,7 +42375,7 @@ impl Tool for VehicleRoutingPickupDeliveryTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "routing".to_string(), "optimization".to_string(), "pickup-delivery".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -43002,7 +43002,7 @@ impl Tool for KShortestPathsNetworkTool {
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "k-shortest-paths".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

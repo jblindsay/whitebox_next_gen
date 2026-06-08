@@ -110,7 +110,7 @@ impl Tool for NibbleTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "nibble".to_string(), "allocation".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -301,7 +301,7 @@ impl Tool for SieveTool {
                 },
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "sieve".to_string(), "patch".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

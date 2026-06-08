@@ -459,7 +459,7 @@ impl Tool for StrahlerStreamOrderTool {
                 "stream_order".to_string(),
                 "hydrology".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2959,7 +2959,7 @@ impl Tool for HortonStreamOrderTool {
             defaults,
             examples: vec![],
             tags: vec!["stream_network".to_string(), "stream_order".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3161,7 +3161,7 @@ impl Tool for HackStreamOrderTool {
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["stream_network".to_string(), "stream_order".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3319,7 +3319,7 @@ impl Tool for ShreveStreamMagnitudeTool {
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["stream_network".to_string(), "stream_magnitude".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3410,7 +3410,7 @@ macro_rules! create_stream_tool_impl {
                     defaults: ToolArgs::new(),
                     examples: vec![],
                     tags: vec!["stream_network".to_string()],
-                    stability: ToolStability::Experimental,
+                    stability: ToolStability::Stable,
                 }
             }
 
@@ -3523,7 +3523,7 @@ impl Tool for ExtractStreamsTool {
                 },
             }],
             tags: vec!["stream_network".to_string(), "hydrology".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3626,7 +3626,7 @@ impl Tool for VectorStreamNetworkAnalysisTool {
                 },
             }],
             tags: vec!["stream_network".to_string(), "vector".to_string(), "hydrology".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

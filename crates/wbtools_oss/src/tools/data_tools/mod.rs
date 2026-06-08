@@ -1565,7 +1565,7 @@ impl Tool for AddPointCoordinatesToTableTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "vector".to_string(), "attributes".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1678,7 +1678,7 @@ impl Tool for CleanVectorTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "vector".to_string(), "cleaning".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1791,7 +1791,7 @@ impl Tool for FixDanglingArcsTool {
                 args: example,
             }],
             tags: vec!["data-tools".to_string(), "vector".to_string(), "topology".to_string(), "lines".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2073,7 +2073,7 @@ impl Tool for TopologyValidationReportTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "vector".to_string(), "topology".to_string(), "qa".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2531,7 +2531,7 @@ impl Tool for TopologyRuleValidateTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "vector".to_string(), "topology".to_string(), "rules".to_string(), "qa".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2969,7 +2969,7 @@ impl Tool for TopologyRuleAutoFixTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "vector".to_string(), "topology".to_string(), "fix".to_string(), "quality".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3377,7 +3377,7 @@ impl Tool for ConvertNodataToZeroTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "raster".to_string(), "conversion".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3449,7 +3449,7 @@ impl Tool for ModifyNodataValueTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "raster".to_string(), "nodata".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3521,7 +3521,7 @@ impl Tool for LinesToPolygonsTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "vector".to_string(), "conversion".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3667,7 +3667,7 @@ impl Tool for NewRasterFromBaseRasterTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "raster".to_string(), "creation".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3765,7 +3765,7 @@ impl Tool for PolygonsToLinesTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "vector".to_string(), "conversion".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3905,7 +3905,7 @@ impl Tool for PrintGeotiffTagsTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "raster".to_string(), "metadata".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3983,7 +3983,7 @@ impl Tool for ReinitializeAttributeTableTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "vector".to_string(), "attributes".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4066,7 +4066,7 @@ impl Tool for RasterToVectorPointsTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "raster".to_string(), "vectorization".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4180,7 +4180,7 @@ impl Tool for RemovePolygonHolesTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "vector".to_string(), "topology".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4299,7 +4299,7 @@ impl Tool for SetNodataValueTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "raster".to_string(), "nodata".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4391,7 +4391,7 @@ impl Tool for MultipartToSinglepartTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "vector".to_string(), "multipart".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4514,7 +4514,7 @@ impl Tool for SinglepartToMultipartTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "vector".to_string(), "multipart".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4644,7 +4644,7 @@ impl Tool for MergeVectorsTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "vector".to_string(), "merge".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4806,7 +4806,7 @@ impl Tool for VectorLinesToRasterTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "vector".to_string(), "raster".to_string(), "lines".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4980,7 +4980,7 @@ impl Tool for RasterToVectorPolygonsTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "raster".to_string(), "vector".to_string(), "polygonize".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5357,7 +5357,7 @@ impl Tool for RasterToVectorLinesTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "raster".to_string(), "vector".to_string(), "lines".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5637,7 +5637,7 @@ impl Tool for VectorPointsToRasterTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "vector".to_string(), "raster".to_string(), "rasterize".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5888,7 +5888,7 @@ impl Tool for NewRasterFromBaseVectorTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "raster".to_string(), "vector".to_string(), "grid".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6015,7 +6015,7 @@ impl Tool for RemoveRasterPolygonHolesTool {
                 args: example_args,
             }],
             tags: vec!["data-tools".to_string(), "raster".to_string(), "holes".to_string(), "morphology".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6232,7 +6232,7 @@ impl Tool for CsvPointsToVectorTool {
                 args: example,
             }],
             tags: vec!["data-tools".to_string(), "csv".to_string(), "vector".to_string(), "points".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6354,7 +6354,7 @@ impl Tool for ExportTableToCsvTool {
                 args: example,
             }],
             tags: vec!["data-tools".to_string(), "csv".to_string(), "attributes".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6480,7 +6480,7 @@ impl Tool for JoinTablesTool {
                 args: example,
             }],
             tags: vec!["data-tools".to_string(), "table".to_string(), "join".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6648,7 +6648,7 @@ impl Tool for MergeTableWithCsvTool {
                 args: example,
             }],
             tags: vec!["data-tools".to_string(), "table".to_string(), "csv".to_string(), "join".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6807,7 +6807,7 @@ impl Tool for VectorPolygonsToRasterTool {
                 args: example,
             }],
             tags: vec!["data-tools".to_string(), "vector".to_string(), "raster".to_string(), "polygons".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

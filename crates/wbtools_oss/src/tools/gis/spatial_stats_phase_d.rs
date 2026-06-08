@@ -85,7 +85,7 @@ impl Tool for RipleysKFunctionTool {
                 args: defaults,
             }],
             tags: vec!["vector".to_string(), "point-pattern".to_string(), "spatial-statistics".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -196,7 +196,7 @@ impl Tool for PointPatternEnvelopeTool {
                 args: defaults,
             }],
             tags: vec!["vector".to_string(), "hypothesis-test".to_string(), "spatial-statistics".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -334,7 +334,7 @@ impl Tool for InhomogeneousBaselineTool {
                 args: defaults,
             }],
             tags: vec!["vector".to_string(), "inhomogeneous".to_string(), "spatial-statistics".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -452,7 +452,7 @@ impl Tool for PointProcessResidualsComparisonTool {
                 args: defaults,
             }],
             tags: vec!["vector".to_string(), "diagnostics".to_string(), "spatial-statistics".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -593,7 +593,7 @@ impl Tool for HotspotVsProcessTool {
                 args: defaults,
             }],
             tags: vec!["vector".to_string(), "comparison".to_string(), "spatial-statistics".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

@@ -705,7 +705,7 @@ Outputs: I statistic, expected I under null hypothesis, variance, z-score, p-val
                 "permutation-testing".to_string(),
                 "report".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1174,7 +1174,7 @@ Applications: identifying crime hotspots, disease clusters, pollution zones, or 
                 "lisa".to_string(),
                 "permutation-testing".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1627,7 +1627,7 @@ Applications: identifying retail sales hotspots, disease/crime hotspots, polluti
                 "coldspot".to_string(),
                 "permutation-testing".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2131,7 +2131,7 @@ Applications: Testing for ecological clustering, disease cluster detection, spat
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "spatial-statistics".to_string(), "point-pattern".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2355,7 +2355,7 @@ Applications: Disease cluster screening, ecological hotspot detection, retail lo
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "spatial-statistics".to_string(), "point-pattern".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2681,7 +2681,7 @@ Compare to SEM (Spatial Error) when spatial dependence acts through residuals (e
                 "spatial-regression".to_string(),
                 "sar".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2899,7 +2899,7 @@ Compare to SAR when spatial dependence operates through the response variable di
                 "spatial-regression".to_string(),
                 "sem".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3110,7 +3110,7 @@ Applications: Identifying where relationships break down, detecting market segme
                 "gwr".to_string(),
                 "local-regression".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3319,7 +3319,7 @@ Applications: Disease/crime hotspot mapping (combine with epidemiological/crime 
                 "lisa".to_string(),
                 "surface".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3522,7 +3522,7 @@ Applications: Crime hotspot mapping, retail sales concentration, pollution zone 
                 "coldspot".to_string(),
                 "surface".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3714,7 +3714,7 @@ impl Tool for SpatialLagRegressionRasterTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "spatial-regression".to_string(), "sar".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3902,7 +3902,7 @@ impl Tool for SpatialErrorRegressionRasterTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "spatial-regression".to_string(), "sem".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4084,7 +4084,7 @@ impl Tool for GeographicallyWeightedRegressionRasterTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "spatial-regression".to_string(), "gwr".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4277,7 +4277,7 @@ Applications: Disease risk mapping (spatially variable incidence), species distr
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "point-pattern".to_string(), "kde".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4429,7 +4429,7 @@ Applications: Ecology (animal territory or resource clustering detection across 
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "point-pattern".to_string(), "ripley-k".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4590,7 +4590,7 @@ Applications: Testing whether observed clustering is statistically significant o
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "point-pattern".to_string(), "envelope".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4812,7 +4812,7 @@ Applications: Validating fitted Poisson point process models, diagnosing geostat
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "point-pattern".to_string(), "residuals".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

@@ -2530,7 +2530,7 @@ Compare to D-Infinity (continuous angles, better sediment transport) or FD8 (mul
                 args: ToolArgs::new(),
             }],
             tags: vec!["hydrology".to_string(), "flow-direction".to_string(), "d8".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2648,7 +2648,7 @@ impl Tool for D8FlowAccumTool {
                 args: ToolArgs::new(),
             }],
             tags: vec!["hydrology".to_string(), "flow-accumulation".to_string(), "d8".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2771,7 +2771,7 @@ D-Infinity has higher computational cost than D8 but better represents true grad
                 args: ToolArgs::new(),
             }],
             tags: vec!["hydrology".to_string(), "flow-direction".to_string(), "dinf".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2837,7 +2837,7 @@ impl Tool for DInfFlowAccumTool {
                 args: ToolArgs::new(),
             }],
             tags: vec!["hydrology".to_string(), "flow-accumulation".to_string(), "dinf".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2955,7 +2955,7 @@ Slope exponent (default 1.1) controls flow sensitivity to gradient magnitude—h
                 "flow-accumulation".to_string(),
                 "mdinf".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3051,7 +3051,7 @@ impl Tool for QinFlowAccumulationTool {
                 args: ToolArgs::new(),
             }],
             tags: vec!["hydrology".to_string(), "flow-accumulation".to_string(), "qin".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3178,7 +3178,7 @@ impl Tool for QuinnFlowAccumulationTool {
                 args: ToolArgs::new(),
             }],
             tags: vec!["hydrology".to_string(), "flow-accumulation".to_string(), "quinn".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3305,7 +3305,7 @@ impl Tool for MinimalDispersionFlowAlgorithmTool {
                 "flow-accumulation".to_string(),
                 "mdfa".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3525,7 +3525,7 @@ Computationally more expensive than D8 but generates accumulation patterns close
                 args: ToolArgs::new(),
             }],
             tags: vec!["hydrology".to_string(), "flow-direction".to_string(), "fd8".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3590,7 +3590,7 @@ Requires multiple runs (typically 50-100) with ensemble averaging for statistica
                 args: ToolArgs::new(),
             }],
             tags: vec!["hydrology".to_string(), "flow-direction".to_string(), "rho8".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3676,7 +3676,7 @@ impl Tool for Rho8FlowAccumTool {
                 args: ToolArgs::new(),
             }],
             tags: vec!["hydrology".to_string(), "flow-accumulation".to_string(), "rho8".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3805,7 +3805,7 @@ impl Tool for FD8FlowAccumTool {
                 args: ToolArgs::new(),
             }],
             tags: vec!["hydrology".to_string(), "flow-accumulation".to_string(), "fd8".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

@@ -333,7 +333,7 @@ impl RasterAddTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), op.tag().to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

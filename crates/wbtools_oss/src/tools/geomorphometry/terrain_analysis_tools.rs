@@ -965,7 +965,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "signature".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1144,7 +1144,7 @@ impl TerrainAnalysisCore {
                 "html".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1325,7 +1325,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "plot".to_string(), "html".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1754,7 +1754,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "plot".to_string(), "html".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1963,7 +1963,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2000,7 +2000,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "texture".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2196,7 +2196,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "visibility".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2306,7 +2306,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "ridges".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2496,7 +2496,7 @@ impl TerrainAnalysisCore {
                 "vector".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3085,7 +3085,7 @@ impl TerrainAnalysisCore {
                 "vectorization".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3805,7 +3805,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "classification".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4035,7 +4035,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "classification".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4315,7 +4315,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "visibility".to_string(), "terrain".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4504,7 +4504,7 @@ impl TerrainAnalysisCore {
                 "passes".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4820,7 +4820,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "local-relief".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4914,7 +4914,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "local-relief".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5019,7 +5019,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "flow".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5094,7 +5094,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "flow".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5169,7 +5169,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "flow".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5252,7 +5252,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "flow".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5335,7 +5335,7 @@ impl TerrainAnalysisCore {
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "flow".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5428,7 +5428,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "local-relief".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5654,7 +5654,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "hydrology".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5891,7 +5891,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "hydrology".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6047,7 +6047,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "relative-elevation".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6172,7 +6172,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "relief".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6332,7 +6332,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
                 "wind".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6619,7 +6619,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "aspect".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6749,7 +6749,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "roughness".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6951,7 +6951,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "roughness".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -7082,7 +7082,7 @@ Applications: (1) Landform classification combining elevation percentile + slope
             defaults,
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "roughness".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -7263,7 +7263,7 @@ Compare to Elevation Percentile (relative position in relief) and Surface Area R
                 "ruggedness".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -7401,7 +7401,7 @@ Applications: (1) Terrain roughness classification (smooth=near 1.0, rough>2.0),
                 "jenness".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -7620,7 +7620,7 @@ Applications: (1) Terrain roughness classification (smooth=near 1.0, rough>2.0),
                 "normalisation".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -7777,7 +7777,7 @@ Applications: (1) Terrain roughness classification (smooth=near 1.0, rough>2.0),
                 "wetness".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

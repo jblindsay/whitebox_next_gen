@@ -111,7 +111,7 @@ impl Tool for ImprovedGroundPointFilterTool {
                 args: example_args,
             }],
             tags: vec!["lidar".to_string(), "ground".to_string(), "filter".to_string(), "dtm".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

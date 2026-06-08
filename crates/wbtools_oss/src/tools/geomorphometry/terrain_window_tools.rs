@@ -644,7 +644,7 @@ impl TerrainWindowCore {
                 "smoothing".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -704,7 +704,7 @@ impl TerrainWindowCore {
                 "smoothing".to_string(),
                 "multiscale".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1341,7 +1341,7 @@ impl TerrainWindowCore {
                 "lidar".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1430,7 +1430,7 @@ impl TerrainWindowCore {
                 "lidar".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1535,7 +1535,7 @@ impl TerrainWindowCore {
                 "embankment".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1996,7 +1996,7 @@ impl TerrainWindowCore {
                 "gap-filling".to_string(),
                 "idw".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2057,7 +2057,7 @@ impl TerrainWindowCore {
                 "dem".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2933,7 +2933,7 @@ impl TerrainWindowCore {
                 "gss".to_string(),
                 "elevated-index".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2980,7 +2980,7 @@ impl TerrainWindowCore {
                 "gss".to_string(),
                 "low-lying-index".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3107,7 +3107,7 @@ impl TerrainWindowCore {
                 "hypsometry".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3154,7 +3154,7 @@ impl TerrainWindowCore {
             defaults,
             examples: vec![ToolExample { name: "basic_difference_from_mean_elevation".to_string(), description: "Compute local mean difference from a DEM.".to_string(), args: example_args }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "local-relief".to_string(), "integral-image".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3201,7 +3201,7 @@ impl TerrainWindowCore {
             defaults,
             examples: vec![ToolExample { name: "basic_deviation_from_mean_elevation".to_string(), description: "Compute local elevation deviation z-scores from a DEM.".to_string(), args: example_args }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "local-relief".to_string(), "integral-image".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3251,7 +3251,7 @@ impl TerrainWindowCore {
             defaults,
             examples: vec![ToolExample { name: "basic_standard_deviation_of_slope".to_string(), description: "Compute local slope roughness from a DEM.".to_string(), args: example_args }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "roughness".to_string(), "integral-image".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3305,7 +3305,7 @@ impl TerrainWindowCore {
             defaults,
             examples: vec![ToolExample { name: "basic_max_difference_from_mean".to_string(), description: "Compute multiscale maximum local relief contrast.".to_string(), args: example_args }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "multiscale".to_string(), "integral-image".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3411,7 +3411,7 @@ impl TerrainWindowCore {
                 "topographic-position".to_string(),
                 "landform-classification".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3450,7 +3450,7 @@ impl TerrainWindowCore {
             defaults,
             examples: vec![ToolExample { name: "basic_max_elevation_deviation".to_string(), description: "Compute multiscale DEVmax and corresponding optimal scale.".to_string(), args: example_args }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "multiscale".to_string(), "topographic-position".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3516,7 +3516,7 @@ impl TerrainWindowCore {
                 "integral-image".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3570,7 +3570,7 @@ impl TerrainWindowCore {
             defaults,
             examples: vec![ToolExample { name: "basic_multiscale_topographic_position_image".to_string(), description: "Compose local/meso/broad DEVmax rasters into a packed RGB visualization.".to_string(), args: example_args }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "visualization".to_string(), "topographic-position".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3632,7 +3632,7 @@ impl TerrainWindowCore {
             defaults,
             examples: vec![ToolExample { name: "basic_multiscale_elevation_percentile".to_string(), description: "Compute the most extreme local elevation percentile across multiple scales.".to_string(), args: example_args }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "multiscale".to_string(), "topographic-position".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3686,7 +3686,7 @@ impl TerrainWindowCore {
             defaults,
             examples: vec![ToolExample { name: "basic_max_anisotropy_dev".to_string(), description: "Compute multiscale anisotropy response in standardized elevation deviation.".to_string(), args: example_args }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "multiscale".to_string(), "anisotropy".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3743,7 +3743,7 @@ impl TerrainWindowCore {
             defaults,
             examples: vec![ToolExample { name: "basic_multiscale_roughness".to_string(), description: "Compute roughness from scale-dependent normal-vector deviations.".to_string(), args: example_args }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "multiscale".to_string(), "roughness".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3798,7 +3798,7 @@ impl TerrainWindowCore {
             defaults,
             examples: vec![ToolExample { name: "basic_max_elev_dev_signature".to_string(), description: "Generate DEV signatures for a set of sample locations.".to_string(), args: example_args }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "signature".to_string(), "multiscale".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3853,7 +3853,7 @@ impl TerrainWindowCore {
             defaults,
             examples: vec![ToolExample { name: "basic_max_anisotropy_dev_signature".to_string(), description: "Generate anisotropy signatures for a set of sample locations.".to_string(), args: example_args }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "signature".to_string(), "anisotropy".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3912,7 +3912,7 @@ impl TerrainWindowCore {
             defaults,
             examples: vec![ToolExample { name: "basic_multiscale_roughness_signature".to_string(), description: "Generate roughness signatures for a set of sample locations.".to_string(), args: example_args }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "signature".to_string(), "roughness".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3973,7 +3973,7 @@ impl TerrainWindowCore {
             defaults,
             examples: vec![ToolExample { name: "basic_multiscale_std_dev_normals".to_string(), description: "Compute multiscale maximum spherical standard deviation of normals.".to_string(), args: example_args }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "multiscale".to_string(), "roughness".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4035,7 +4035,7 @@ impl TerrainWindowCore {
             defaults,
             examples: vec![ToolExample { name: "basic_multiscale_std_dev_normals_signature".to_string(), description: "Generate spherical-standard-deviation signatures for sample locations.".to_string(), args: example_args }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "signature".to_string(), "roughness".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

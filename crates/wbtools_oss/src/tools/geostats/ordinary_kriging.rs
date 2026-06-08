@@ -94,7 +94,7 @@ Ordinary kriging is most general-purpose variant (stationary random function, co
                 },
             ],
             tags: vec!["geostatistics".to_string(), "kriging".to_string(), "raster".to_string(), "interpolation".to_string(), "uncertainty".to_string(), "anisotropy".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

@@ -126,7 +126,7 @@ fn manifest_for(spec: &UnaryRasterMathSpec) -> ToolManifest {
             args: example_args,
         }],
         tags: vec!["raster".to_string(), "math".to_string(), spec.id.to_string()],
-        stability: ToolStability::Experimental,
+        stability: ToolStability::Stable,
     }
 }
 
@@ -301,7 +301,7 @@ impl Tool for RasterIncrementTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "increment".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -421,7 +421,7 @@ impl Tool for RasterDecrementTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "decrement".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -526,7 +526,7 @@ impl Tool for RasterIsNodataTool {
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "is_nodata".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

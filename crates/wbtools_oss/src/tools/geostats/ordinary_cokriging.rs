@@ -72,7 +72,7 @@ impl Tool for OrdinaryCoKrigingTool {
                 },
             ],
             tags: vec!["geostatistics".to_string(), "cokriging".to_string(), "multivariate".to_string(), "raster".to_string(), "interpolation".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

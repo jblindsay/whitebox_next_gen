@@ -384,7 +384,7 @@ impl Tool for PruneVectorStreamsTool {
                 "stream_network".to_string(),
                 "vector".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -855,7 +855,7 @@ impl Tool for RiverCenterlinesTool {
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["stream_network".to_string(), "vector".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1495,7 +1495,7 @@ impl Tool for RidgeAndValleyVectorsTool {
                 args: example_args,
             }],
             tags: vec!["geomorphometry".to_string(), "ridges".to_string(), "valleys".to_string(), "vector".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

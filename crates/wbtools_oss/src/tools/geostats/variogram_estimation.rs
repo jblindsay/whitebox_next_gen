@@ -54,7 +54,7 @@ Lag parameters control variogram resolution: lag_distance sets bin size; lag_tol
                 args: example_args,
             }],
             tags: vec!["geostatistics".to_string(), "kriging".to_string(), "spatial-statistics".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

@@ -49,7 +49,7 @@ Interpret results as validation of variogram model fit. Poor CV statistics sugge
                 args: example_args,
             }],
             tags: vec!["geostatistics".to_string(), "kriging".to_string(), "model-validation".to_string(), "statistics".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

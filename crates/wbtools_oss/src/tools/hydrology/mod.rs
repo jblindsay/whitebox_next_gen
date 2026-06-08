@@ -3219,7 +3219,7 @@ impl Tool for BreachDepressionsLeastCostTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "depression".to_string(), "dem".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -3293,7 +3293,7 @@ impl Tool for BreachSingleCellPitsTool {
 			defaults: ToolArgs::new(),
 			examples: vec![],
 			tags: vec!["hydrology".to_string(), "depression".to_string(), "dem".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -3372,7 +3372,7 @@ impl Tool for FillDepressionsTool {
 			defaults,
 			examples: vec![],
 			tags: vec!["hydrology".to_string(), "depression".to_string(), "dem".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -3435,7 +3435,7 @@ impl Tool for FillDepressionsPlanchonAndDarbouxTool {
 			defaults,
 			examples: vec![],
 			tags: vec!["hydrology".to_string(), "depression".to_string(), "dem".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -3498,7 +3498,7 @@ impl Tool for FillDepressionsWangAndLiuTool {
 			defaults,
 			examples: vec![],
 			tags: vec!["hydrology".to_string(), "depression".to_string(), "dem".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -3548,7 +3548,7 @@ impl Tool for FillPitsTool {
 			defaults: ToolArgs::new(),
 			examples: vec![],
 			tags: vec!["hydrology".to_string(), "depression".to_string(), "dem".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -3603,7 +3603,7 @@ impl Tool for DepthInSinkTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "depression".to_string(), "sink".to_string(), "dem".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -3670,7 +3670,7 @@ impl Tool for SinkTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "depression".to_string(), "sink".to_string(), "dem".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -3776,7 +3776,7 @@ impl Tool for FlowAccumFullWorkflowTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "flow-accumulation".to_string(), "workflow".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -4172,7 +4172,7 @@ impl Tool for NumInflowingNeighboursTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "diagnostics".to_string(), "dem".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -4231,7 +4231,7 @@ impl Tool for FindParallelFlowTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "diagnostics".to_string(), "d8".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -4346,7 +4346,7 @@ impl Tool for EdgeContaminationTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "diagnostics".to_string(), "dem".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -4708,7 +4708,7 @@ impl Tool for D8MassFluxTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "mass_flux".to_string(), "d8".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -4892,7 +4892,7 @@ impl Tool for DInfMassFluxTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "mass_flux".to_string(), "dinf".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -5091,7 +5091,7 @@ impl Tool for FlowLengthDiffTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "d8".to_string(), "flowpath".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -5264,7 +5264,7 @@ impl Tool for DownslopeFlowpathLengthTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "d8".to_string(), "flowpath".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -5463,7 +5463,7 @@ impl Tool for MaxUpslopeFlowpathLengthTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "flowpath".to_string(), "dem".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -5578,7 +5578,7 @@ impl Tool for AverageUpslopeFlowpathLengthTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "flowpath".to_string(), "dem".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -5823,7 +5823,7 @@ impl Tool for ElevationAboveStreamTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "streams".to_string(), "hand".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -5940,7 +5940,7 @@ impl Tool for ElevationAboveStreamEuclideanTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "streams".to_string(), "hand".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -6075,7 +6075,7 @@ impl Tool for DownslopeDistanceToStreamTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "streams".to_string(), "distance".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -6283,7 +6283,7 @@ impl Tool for DepthToWaterTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "wetness".to_string(), "dtw".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -6435,7 +6435,7 @@ impl Tool for FillBurnTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "dem".to_string(), "stream_burning".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -6532,7 +6532,7 @@ impl Tool for BurnStreamsAtRoadsTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "dem".to_string(), "roads".to_string(), "stream_burning".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -6605,7 +6605,7 @@ impl Tool for TraceDownslopeFlowpathsTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "d8".to_string(), "flowpath".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -6706,7 +6706,7 @@ impl Tool for FloodOrderTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "dem".to_string(), "priority_flood".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -6839,7 +6839,7 @@ impl Tool for InsertDamsTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "dem".to_string(), "dams".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -7080,7 +7080,7 @@ impl Tool for RaiseWallsTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "dem".to_string(), "walls".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -7223,7 +7223,7 @@ impl Tool for TopologicalBreachBurnTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "stream_burning".to_string(), "d8".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -7565,7 +7565,7 @@ impl Tool for StochasticDepressionAnalysisTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "depressions".to_string(), "stochastic".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -7694,7 +7694,7 @@ impl Tool for UnnestBasinsTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "watershed".to_string(), "nested".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -7857,7 +7857,7 @@ impl Tool for UpslopeDepressionStorageTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "depressions".to_string(), "storage".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -7993,7 +7993,7 @@ impl Tool for FlattenLakesTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "dem".to_string(), "lakes".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -8105,7 +8105,7 @@ impl Tool for HydrologicConnectivityTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "connectivity".to_string(), "wetness".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -8514,7 +8514,7 @@ impl Tool for ImpoundmentSizeIndexTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "impoundment".to_string(), "dam".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -8945,7 +8945,7 @@ impl Tool for AverageFlowpathSlopeTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "slope".to_string(), "flowpath".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -9093,7 +9093,7 @@ impl Tool for MaxUpslopeValueTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "upslope".to_string(), "d8".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -9220,7 +9220,7 @@ impl Tool for LongestFlowpathTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "basins".to_string(), "flowpath".to_string(), "vector".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -9489,7 +9489,7 @@ impl Tool for BasinsTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "watershed".to_string(), "d8".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -9574,7 +9574,7 @@ impl Tool for WatershedFromRasterPourPointsTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "watershed".to_string(), "pour_points".to_string(), "d8".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -9664,7 +9664,7 @@ impl Tool for WatershedTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "watershed".to_string(), "vector".to_string(), "d8".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -9756,7 +9756,7 @@ impl Tool for JensonSnapPourPointsTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "watershed".to_string(), "pour_points".to_string(), "snap".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -9893,7 +9893,7 @@ impl Tool for SnapPourPointsTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "watershed".to_string(), "pour_points".to_string(), "snap".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -10178,7 +10178,7 @@ impl Tool for SubbasinsTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "watershed".to_string(), "subbasins".to_string(), "d8".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -10264,7 +10264,7 @@ impl Tool for HillslopesTool {
 				args: ToolArgs::new(),
 			}],
 			tags: vec!["hydrology".to_string(), "hillslopes".to_string(), "watershed".to_string(), "d8".to_string()],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -10434,7 +10434,7 @@ impl Tool for StrahlerOrderBasinsTool {
 				"stream_order".to_string(),
 				"d8".to_string(),
 			],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 
@@ -10665,7 +10665,7 @@ impl Tool for IsobasinsTool {
 				"isobasins".to_string(),
 				"basin".to_string(),
 			],
-			stability: ToolStability::Experimental,
+			stability: ToolStability::Stable,
 		}
 	}
 

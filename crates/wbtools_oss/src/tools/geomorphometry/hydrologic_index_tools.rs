@@ -128,7 +128,7 @@ impl HydrologicIndexCore {
                 args: example_args,
             }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "hydrology".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -181,7 +181,7 @@ impl HydrologicIndexCore {
                 args: example_args,
             }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "hydrology".to_string(), "erosion".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -228,7 +228,7 @@ impl HydrologicIndexCore {
                 args: example_args,
             }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "hydrology".to_string(), "watersheds".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

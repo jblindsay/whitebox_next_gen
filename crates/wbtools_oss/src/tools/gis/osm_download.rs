@@ -1293,7 +1293,7 @@ impl Tool for DownloadOsmVectorTool {
                 "overpass".to_string(),
                 "online".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

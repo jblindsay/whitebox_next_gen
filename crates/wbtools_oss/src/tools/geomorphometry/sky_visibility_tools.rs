@@ -686,7 +686,7 @@ impl SkyVisibilityCore {
                 "terrain".to_string(),
                 "visibility".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -874,7 +874,7 @@ impl SkyVisibilityCore {
                 "terrain".to_string(),
                 "visibility".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1417,7 +1417,7 @@ impl SkyVisibilityCore {
                 "terrain".to_string(),
                 "visibility".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1611,7 +1611,7 @@ impl SkyVisibilityCore {
                 "terrain".to_string(),
                 "visibility".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1709,7 +1709,7 @@ impl SkyVisibilityCore {
                 "visibility".to_string(),
                 "solar".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1786,7 +1786,7 @@ impl SkyVisibilityCore {
                 "solar".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2256,7 +2256,7 @@ impl SkyVisibilityCore {
                 "animation".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2803,7 +2803,7 @@ impl SkyVisibilityCore {
                 "hillshade".to_string(),
                 "rendering".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3415,7 +3415,7 @@ impl SkyVisibilityCore {
                 "rendering".to_string(),
                 "topographic".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4441,7 +4441,7 @@ impl SkyVisibilityCore {
                 "visibility".to_string(),
                 "skyline".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

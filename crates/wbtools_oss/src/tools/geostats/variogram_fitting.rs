@@ -45,7 +45,7 @@ Output includes fitted model parameters used by kriging tools. Workflow: estimat
                 args: example_args,
             }],
             tags: vec!["geostatistics".to_string(), "kriging".to_string(), "model-fitting".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

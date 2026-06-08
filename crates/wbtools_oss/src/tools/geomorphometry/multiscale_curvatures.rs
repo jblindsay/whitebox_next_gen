@@ -1203,7 +1203,7 @@ impl Tool for MultiscaleCurvaturesTool {
                 "terrain".to_string(),
                 "legacy-port".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

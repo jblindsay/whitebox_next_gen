@@ -434,7 +434,7 @@ Common workflow: (1) Slope magnitude for terrain classification, (2) Combined wi
             defaults,
             examples: vec![ToolExample { name: "basic_slope".to_string(), description: "Slope in degrees.".to_string(), args: ToolArgs::new() }],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "slope".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -529,7 +529,7 @@ Applications: (1) Solar potential analysis, (2) Ecological habitat classificatio
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "aspect".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -615,7 +615,7 @@ Applications: (1) Valley/ridge identification without flow direction computation
                 "terrain".to_string(),
                 "convergence".to_string(),
             ],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -756,7 +756,7 @@ Applications: (1) DEM quality assessment (visual inspection for artifacts), (2) 
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "hillshade".to_string(), "render_hint:raster=grayscale_brightness".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -790,7 +790,7 @@ Applications: (1) Enhanced DEM visualization (better than single-light for compl
             defaults: ToolArgs::new(),
             examples: vec![],
             tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "hillshade".to_string(), "render_hint:raster=grayscale_brightness".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

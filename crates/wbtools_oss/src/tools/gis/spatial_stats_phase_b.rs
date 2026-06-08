@@ -71,7 +71,7 @@ Outputs include the interpolated raster and kriging variance, which can be used 
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "kriging".to_string(), "interpolation".to_string(), "spatial-stats".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -212,7 +212,7 @@ Output includes both interpolated predictions and kriging variance, useful for i
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "kriging".to_string(), "interpolation".to_string(), "spatial-stats".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -354,7 +354,7 @@ Compare to ordinary kriging when the mean is unknown, or universal kriging when 
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "kriging".to_string(), "interpolation".to_string(), "spatial-stats".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -496,7 +496,7 @@ Universal kriging is appropriate for continuous spatial phenomena with geographi
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "kriging".to_string(), "interpolation".to_string(), "spatial-stats".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -638,7 +638,7 @@ Applications include gap-filling in sensor networks, interpolating climate data 
                 args: example_args,
             }],
             tags: vec!["raster".to_string(), "gis".to_string(), "kriging".to_string(), "interpolation".to_string(), "spatial-stats".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

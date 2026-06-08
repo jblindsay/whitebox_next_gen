@@ -1105,7 +1105,7 @@ impl Tool for RasterSummaryStatsTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1279,7 +1279,7 @@ impl Tool for RasterHistogramTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1458,7 +1458,7 @@ impl Tool for ListUniqueValuesRasterTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1637,7 +1637,7 @@ impl Tool for ZScoresTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1821,7 +1821,7 @@ impl Tool for RescaleValueRangeTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -1991,7 +1991,7 @@ impl Tool for RandomFieldTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "random".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2086,7 +2086,7 @@ impl Tool for FftRandomFieldTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "simulation".to_string(), "fft".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2250,7 +2250,7 @@ impl Tool for RandomSampleTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "random".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2368,7 +2368,7 @@ impl Tool for CumulativeDistributionTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2537,7 +2537,7 @@ impl Tool for CrispnessIndexTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2666,7 +2666,7 @@ impl Tool for KsNormalityTestTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2884,7 +2884,7 @@ impl Tool for InPlaceAddTool {
             defaults,
             examples: vec![ToolExample { name: "basic_inplace_add".to_string(), description: "Modify input1 by adding input2.".to_string(), args: example }],
             tags: vec!["raster".to_string(), "math".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2934,7 +2934,7 @@ impl Tool for InPlaceSubtractTool {
             defaults,
             examples: vec![ToolExample { name: "basic_inplace_subtract".to_string(), description: "Modify input1 by subtracting input2.".to_string(), args: example }],
             tags: vec!["raster".to_string(), "math".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -2984,7 +2984,7 @@ impl Tool for InPlaceMultiplyTool {
             defaults,
             examples: vec![ToolExample { name: "basic_inplace_multiply".to_string(), description: "Modify input1 by multiplying with input2.".to_string(), args: example }],
             tags: vec!["raster".to_string(), "math".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3034,7 +3034,7 @@ impl Tool for InPlaceDivideTool {
             defaults,
             examples: vec![ToolExample { name: "basic_inplace_divide".to_string(), description: "Modify input1 by dividing by input2.".to_string(), args: example }],
             tags: vec!["raster".to_string(), "math".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3097,7 +3097,7 @@ impl Tool for AttributeHistogramTool {
                 args: example,
             }],
             tags: vec!["vector".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3243,7 +3243,7 @@ impl Tool for AttributeScattergramTool {
                 args: example,
             }],
             tags: vec!["vector".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3447,7 +3447,7 @@ impl Tool for AttributeCorrelationTool {
                 args: example,
             }],
             tags: vec!["vector".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3595,7 +3595,7 @@ impl Tool for CrossTabulationTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -3747,7 +3747,7 @@ impl Tool for AnovaTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4004,7 +4004,7 @@ impl Tool for PhiCoefficientTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4185,7 +4185,7 @@ impl Tool for ImageCorrelationTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4364,7 +4364,7 @@ impl Tool for ImageAutocorrelationTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4675,7 +4675,7 @@ impl Tool for ImageCorrelationNeighbourhoodAnalysisTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -4960,7 +4960,7 @@ impl Tool for ImageRegressionTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5275,7 +5275,7 @@ impl Tool for DbscanTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "clustering".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5576,7 +5576,7 @@ impl Tool for ConditionalEvaluationTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "conditional".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5730,7 +5730,7 @@ impl Tool for KappaIndexTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -5968,7 +5968,7 @@ impl Tool for PairedSampleTTestTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6144,7 +6144,7 @@ impl Tool for TwoSampleKsTestTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6244,7 +6244,7 @@ impl Tool for WilcoxonSignedRankTestTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6382,7 +6382,7 @@ impl Tool for MaxTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "max".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6502,7 +6502,7 @@ impl Tool for MinTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "min".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6620,7 +6620,7 @@ impl Tool for QuantilesTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6787,7 +6787,7 @@ impl Tool for ListUniqueValuesTool {
                 args: example,
             }],
             tags: vec!["vector".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -6909,7 +6909,7 @@ impl Tool for RootMeanSquareErrorTool {
                 args: example,
             }],
             tags: vec!["raster".to_string(), "math".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -7061,7 +7061,7 @@ impl Tool for ZonalStatisticsTool {
             defaults,
             examples: vec![ToolExample { name: "mean_by_zone".to_string(), description: "Compute mean slope within each watershed zone.".to_string(), args: example }],
             tags: vec!["raster".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -7275,7 +7275,7 @@ impl Tool for TurningBandsSimulationTool {
             defaults,
             examples: vec![ToolExample { name: "basic".to_string(), description: "Simulate a correlated random field.".to_string(), args: example }],
             tags: vec!["raster".to_string(), "simulation".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -7509,7 +7509,7 @@ impl Tool for TrendSurfaceTool {
             defaults,
             examples: vec![ToolExample { name: "basic".to_string(), description: "Fit a 2nd-order trend surface to a DEM.".to_string(), args: example }],
             tags: vec!["raster".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -7653,7 +7653,7 @@ impl Tool for TrendSurfaceVectorPointsTool {
             defaults,
             examples: vec![ToolExample { name: "basic".to_string(), description: "Fit trend surface from elevation points.".to_string(), args: example }],
             tags: vec!["raster".to_string(), "vector".to_string(), "statistics".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -7824,7 +7824,7 @@ impl Tool for RasterCalculatorTool {
             defaults: ToolArgs::new(),
             examples: vec![ToolExample { name: "ndvi".to_string(), description: "Compute NDVI from NIR and red bands.".to_string(), args: example }],
             tags: vec!["raster".to_string(), "math".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -8066,7 +8066,7 @@ impl Tool for PrincipalComponentAnalysisTool {
             defaults,
             examples: vec![ToolExample { name: "basic_pca".to_string(), description: "PCA on 3 spectral bands.".to_string(), args: example }],
             tags: vec!["raster".to_string(), "statistics".to_string(), "pca".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 
@@ -8356,7 +8356,7 @@ impl Tool for InversePcaTool {
             defaults: ToolArgs::new(),
             examples: vec![ToolExample { name: "basic".to_string(), description: "Reconstruct 3 images from PCA components.".to_string(), args: example }],
             tags: vec!["raster".to_string(), "statistics".to_string(), "pca".to_string(), "legacy-port".to_string()],
-            stability: ToolStability::Experimental,
+            stability: ToolStability::Stable,
         }
     }
 

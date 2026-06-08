@@ -35,7 +35,7 @@ If you have a plugin `.zip` file:
 ## Install the Whitebox Workflows Backend
 
 After installing the plugin, restart QGIS. The plugin will check for the
-`whitebox_workflows` Python package.
+`whitebox-workflows` Python package.
 
 ### Option A: Install via Plugin Dialog (Easiest)
 
@@ -43,6 +43,9 @@ After installing the plugin, restart QGIS. The plugin will check for the
 2. If the backend is not installed, a dialog appears: 
    **"⚠️ Action Required — Install Whitebox Workflows Backend"**
 3. Read the installation instructions (or copy the command to clipboard)
+```python
+exec("import runpy,sys\nsys.argv=['pip','install','--user','whitebox-workflows']\ntry:\n    runpy.run_module('pip',run_name='__main__',alter_sys=True)\nexcept SystemExit:\n    pass\nimport qgis.utils\nqgis.utils.unloadPlugin('whitebox_workflows_qgis')\nqgis.utils.loadPlugin('whitebox_workflows_qgis')\nqgis.utils.startPlugin('whitebox_workflows_qgis')\nprint('Whitebox Workflows backend installed and plugin reloaded.')")
+```
 4. Click **Install** to automatically download and install the backend using 
    QGIS's bundled Python and pip
 5. Wait for the installation to complete

@@ -1373,7 +1373,9 @@ class WhiteboxWorkflowsPlugin:
         """Return a single-line exec() command safe to paste into the QGIS Python Console.
 
         Installs whitebox-workflows via pip then reloads the plugin in-place,
-        so the user never needs to restart QGIS.
+        so the user never needs to restart QGIS.  Pip is bootstrapped via
+        ensurepip first, which handles OSGeo4W installations where pip is not
+        included in the bundled Python environment by default.
         """
         import os
         if os.name == "nt":
@@ -1383,6 +1385,11 @@ class WhiteboxWorkflowsPlugin:
 
         inner = (
             "import runpy,sys\\n"
+            "try:\\n"
+            "    import pip\\n"
+            "except ImportError:\\n"
+            "    import ensurepip\\n"
+            "    ensurepip.bootstrap(upgrade=True)\\n"
             f"sys.argv={pip_args}\\n"
             "try:\\n"
             "    runpy.run_module('pip',run_name='__main__',alter_sys=True)\\n"
@@ -1404,7 +1411,11 @@ class WhiteboxWorkflowsPlugin:
 
         if os.name == "nt":
             console_path = "Plugins  ▸  Python Console"
-            alt_note = "Alternatively, open the OSGeo4W Shell and run:\n  python -m pip install whitebox-workflows"
+            alt_note = (
+                "Alternatively, open the OSGeo4W Shell and run:\n"
+                "  python -m ensurepip\n"
+                "  python -m pip install whitebox-workflows"
+            )
         else:
             console_path = "Plugins  ▸  Python Console"
             alt_note = ""
@@ -1594,18 +1605,50 @@ class WhiteboxWorkflowsPlugin:
         )
         text = f"{text}\n\n{update_policy}"
 
+        # Use a scrollable QDialog rather than QMessageBox.information — large
+        # text in QMessageBox renders blank on some macOS Qt builds.
         try:
-            if show_info_dialog(self.iface, "Whitebox Workflows Diagnostics", text):
-                return
+            from qgis.PyQt.QtWidgets import (
+                QDialog, QVBoxLayout, QHBoxLayout,
+                QPlainTextEdit, QPushButton,
+            )
+            from qgis.PyQt.QtGui import QFont
+
+            parent = None
+            try:
+                parent = self.iface.mainWindow()
+            except Exception:
+                pass
+
+            dlg = QDialog(parent)
+            dlg.setWindowTitle("Whitebox Workflows — Runtime Diagnostics")
+            dlg.setMinimumSize(640, 480)
+            layout = QVBoxLayout(dlg)
+            layout.setContentsMargins(12, 12, 12, 12)
+            layout.setSpacing(8)
+
+            text_edit = QPlainTextEdit(dlg)
+            text_edit.setReadOnly(True)
+            text_edit.setPlainText(text)
+            mono = QFont("Courier New", 10)
+            mono.setStyleHint(QFont.Monospace if hasattr(QFont, "Monospace") else QFont.StyleHint.Monospace)
+            text_edit.setFont(mono)
+            layout.addWidget(text_edit)
+
+            btn_row = QHBoxLayout()
+            btn_row.addStretch()
+            close_btn = QPushButton("Close")
+            close_btn.setDefault(True)
+            close_btn.clicked.connect(dlg.accept)
+            btn_row.addWidget(close_btn)
+            layout.addLayout(btn_row)
+
+            dlg.exec() if hasattr(dlg, "exec") and callable(dlg.exec) else dlg.exec_()
+            return
         except Exception:
             pass
 
-        try:
-            if show_info_dialog(None, "Whitebox Workflows Diagnostics", text):
-                return
-        except Exception:
-            pass
-
+        # Last-resort fallback
         push_host_message(
             self.iface,
             "Whitebox Workflows",

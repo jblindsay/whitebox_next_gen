@@ -44,7 +44,7 @@ After installing the plugin, restart QGIS. The plugin will check for the
    **"⚠️ Action Required — Install Whitebox Workflows Backend"**
 3. Read the installation instructions (or copy the command to clipboard)
 ```python
-exec("import runpy,sys\nsys.argv=['pip','install','--user','whitebox-workflows']\ntry:\n    runpy.run_module('pip',run_name='__main__',alter_sys=True)\nexcept SystemExit:\n    pass\nimport qgis.utils\nqgis.utils.unloadPlugin('whitebox_workflows_qgis')\nqgis.utils.loadPlugin('whitebox_workflows_qgis')\nqgis.utils.startPlugin('whitebox_workflows_qgis')\nprint('Whitebox Workflows backend installed and plugin reloaded.')")
+exec("import runpy,sys\ntry:\n    import pip\nexcept ImportError:\n    import ensurepip\n    ensurepip.bootstrap(upgrade=True)\nsys.argv=['pip','install','--user','whitebox-workflows']\ntry:\n    runpy.run_module('pip',run_name='__main__',alter_sys=True)\nexcept SystemExit:\n    pass\nimport qgis.utils\nqgis.utils.unloadPlugin('whitebox_workflows_qgis')\nqgis.utils.loadPlugin('whitebox_workflows_qgis')\nqgis.utils.startPlugin('whitebox_workflows_qgis')\nprint('Whitebox Workflows backend installed and plugin reloaded.')")
 ```
 4. Click **Install** to automatically download and install the backend using 
    QGIS's bundled Python and pip
@@ -119,8 +119,54 @@ plugins/
 
 ### Backend Installation Fails
 
-- **"pip: command not found"** — Use `python3 -m pip` instead
+#### `ImportError: No module named pip` (Windows / OSGeo4W)
+
+This is a known issue on Windows when QGIS is installed via the **OSGeo4W
+installer**. Unlike the standalone QGIS installer, OSGeo4W does not include
+`pip` in its bundled Python by default. The symptom is an error like:
+
+```
+ImportError: No module named pip
+```
+
+or:
+
+```
+C:\OSGeo4W\bin\python.exe: No module named pip
+```
+
+**Fix:** Bootstrap `pip` into the OSGeo4W Python environment first, then
+re-run the backend installation.
+
+1. Open the **OSGeo4W Shell** (search for it in the Windows Start menu)
+2. Run the following commands to install pip:
+   ```bat
+   python -m ensurepip
+   python -m pip install --upgrade pip
+   ```
+   If `ensurepip` is unavailable, download and run the pip bootstrap script
+   directly:
+   ```bat
+   curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+   python get-pip.py
+   ```
+   Alternatively, follow the official OSGeo4W instructions for external
+   Python packages at: https://trac.osgeo.org/osgeo4w/wiki/ExternalPythonPackages
+
+3. Once pip is installed, run the Whitebox backend installation from the
+   OSGeo4W Shell:
+   ```bat
+   python -m pip install whitebox-workflows
+   ```
+4. Restart QGIS and the tools should populate normally.
+
+> **Note:** The standalone QGIS installer from qgis.org includes pip by default
+> and does not require this step. If you encounter this issue frequently,
+> consider switching to the standalone installer.
+
+#### Other Backend Installation Issues
+
 - **"Permission denied"** — Try `pip install --user whitebox-workflows`
-- **Network issues** — Check your internet connection and try again
+- **Network issues** — Check your internet connection and proxy settings
 - **For help** — See [Troubleshooting](troubleshooting.md) or contact 
   support@whiteboxgeo.com

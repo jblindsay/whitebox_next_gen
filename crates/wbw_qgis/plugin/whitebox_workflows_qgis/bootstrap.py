@@ -1295,9 +1295,45 @@ def invoke_license_function(
     """
     external_python = _discover_external_python()
     if not external_python:
-        raise RuntimeBootstrapError(
-            "No external Python interpreter was found for license operations."
-        )
+        # No external Python configured (standard QGIS-mode installation).
+        # Call the license functions in-process via the already-loaded
+        # whitebox_workflows module rather than spawning a subprocess.
+        try:
+            wbw = load_whitebox_workflows()
+        except Exception as exc:
+            raise RuntimeBootstrapError(
+                f"whitebox_workflows is not available for in-process license operations: {exc}"
+            )
+        try:
+            if function_name == "activate_license":
+                if not all([key, firstname, lastname, email]):
+                    raise RuntimeBootstrapError(
+                        "activate_license requires: key, firstname, lastname, email"
+                    )
+                result = wbw.activate_license(
+                    key=str(key),
+                    firstname=str(firstname),
+                    lastname=str(lastname),
+                    email=str(email),
+                    agree_to_license_terms=True,
+                    provider_url=provider_url or None,
+                    include_pro=True,
+                )
+                return str(result)
+            elif function_name == "transfer_license":
+                result = wbw.transfer_license()
+                return str(result)
+            elif function_name == "deactivate_license":
+                result = wbw.deactivate_license(from_transfer=bool(from_transfer))
+                return str(result)
+            else:
+                raise RuntimeBootstrapError(f"Unknown license function: {function_name}")
+        except RuntimeBootstrapError:
+            raise
+        except Exception as exc:
+            raise RuntimeBootstrapError(
+                f"License operation '{function_name}' failed in-process: {exc}"
+            )
 
     if function_name == "activate_license":
         if not all([key, firstname, lastname, email]):

@@ -1,0 +1,513 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Filtering and Classification - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html" class="active"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="filtering-and-classification"><a class="header" href="#filtering-and-classification">Filtering and Classification</a></h1>
+<hr />
+<h2 id="classify-buildings-in-lidar"><a class="header" href="#classify-buildings-in-lidar">Classify Buildings In LiDAR</a></h2>
+<p><strong>Function name:</strong> <code>classify_buildings_in_lidar</code></p>
+<p>This tool can be used to assign the building class (classification value 6) to all points within an input LiDAR point cloud (<code>input</code>) that are contained within the polygons of an input buildings footprint vector (<code>buildings</code>). The tool performs a simple point-in-polygon operation to determine membership. The two inputs (i.e. the LAS file and vector) must share the same map projection. Furthermore, any error in the definition of the building footprints will result in misclassified points in the output LAS file (<code>output</code>). In particular, if the footprints extend slightly beyond the actual building, ground points situated adjacent to the building will be incorrectly classified. Thus, care must be taken in digitizing building footprint polygons. Furthermore, where there are tall trees that overlap significantly with the building footprint, these vegetation points will also be incorrectly assigned the building class value.</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>filter_lidar_classes</code>, <code>lidar_ground_point_filter</code>, <code>clip_lidar_to_polygon</code></p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def classify_buildings_in_lidar(self, in_lidar: Lidar, building_footprints: Vector) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="classify-lidar"><a class="header" href="#classify-lidar">Classify LiDAR</a></h2>
+<p><strong>Function name:</strong> <code>classify_lidar</code></p>
+<h3 id="description"><a class="header" href="#description">Description</a></h3>
+<p>This tool provides a basic classification of a LiDAR point cloud into ground, building, and vegetation classes. The algorithm performs the classification based on point neighbourhood geometric properties, including planarity, linearity, and height above the ground. There is also a point segmentation involved in the classification process.</p>
+<p>The user may specify the names of the input and output LiDAR files (<code>input</code> and <code>output</code>). Note that if the user does not specify the optional input/output LiDAR files, the tool will search for all valid LiDAR (*.las, *.laz, *.zlidar) files contained within the current working directory. This feature can be useful for processing a large number of LiDAR files in batch mode. When this batch mode is applied, the output file names will be the same as the input file names but with a '_classified' suffix added to the end.</p>
+<p>The search distance (<code>radius</code>), defining the radius of the neighbourhood window surrounding each point, must also be specified. If this parameter is set to a value that is too large, areas of high surface curvature on the ground surface will be left unclassed and smaller buildings, e.g. sheds, will not be identified. If the parameter is set too small, areas of low point density may provide unsatisfactory classification values. The larger this search distance is, the longer the algorithm will take to processs a data set. For many airborne LiDAR data sets, a value between 1.0 - 3.0 meters is likely appropriate.</p>
+<p>The ground threshold parameter (<code>grd_threshold</code>) determines how far above the <code>tophat-transformed</code> surface a point must be to be excluded from the ground surface. This parameter also determines the maximum distance a point can be from a plane or line model fit to a neighbourhood of points to be considered part of the model geometry. Similarly the off-terrain object threshold parameter (<code>oto_threshold</code>) is used to determine how high above the ground surface a point must be to be considered either a vegetation or building point. The ground threshold must be smaller than the off-terrain object threshold. If you find that breaks-in-slope in areas of more complex ground topography are left unclassed (class = 1), this can be addressed by raising the ground threshold parameter.</p>
+<p>The planarity and linearity thresholds (<code>planarity_threshold</code> and <code>linearity_threshold</code>) describe the minimum proportion (0-1) of neighbouring points that must be part of a fitted model before the point is considered to be planar or linear. Both of these properties are used by the algorithm in a variety of ways to determine final class values. Planar and linear models are fit using a <code>RANSAC-like</code> algorithm, with the main user-specified parameter of the number of iterations (<code>iterations</code>). The larger the number of iterations the greater the processing time will be.</p>
+<p>The facade threshold (<code>facade_threshold</code>) is the last user-specified parameter, and determines the maximum horizontal distance that a point beneath a rooftop edge point may be to be considered part of the building facade (i.e. walls). The default value is 0.5 m, although this value will depend on a number of factors, such as whether or not the building has balconies.</p>
+<p>The algorithm generally does very well to identify deciduous (broad-leaf) trees but can at times struggle with incorrectly classifying dense coniferous (needle-leaf) trees as buildings. When this is the case, you may counter this tendency by lowering the planarity threshold parameter value. Similarly, the algorithm will generally leave overhead power lines as unclassified (class = 1), howevever, if you find that the algorithm misclassifies most such points as high vegetation (class = 5), this can be countered by lowering the linearity threshold value.</p>
+<p>Note that if the input file already contains class data, these data will be overwritten in the output file.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>colourize_based_on_class</code>, <code>filter_lidar</code>, <code>modify_lidar</code>, <code>sort_lidar</code>, <code>split_lidar</code></p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def classify_lidar(self, input_lidar: Optional[Lidar], search_radius: float = 2.5, grd_threshold: float = 0.1, oto_threshold: float = 1.0, linearity_threshold: float = 0.5, planarity_threshold: float = 0.85, num_iter: int = 30, facade_threshold: float = 0.5) -&gt; Optional[Lidar]:
+</code></pre>
+<hr />
+<h2 id="classify-overlap-points"><a class="header" href="#classify-overlap-points">Classify Overlap Points</a></h2>
+<p><strong>Function name:</strong> <code>classify_overlap_points</code></p>
+<p>This tool can be used to flag points within an input LiDAR file (<code>input</code>) that overlap with other  nearby points from different flightlines, i.e. to identify overlap points. The flightline associated  with a LiDAR point is assumed to be contained within the point's <code>Point Source ID</code> (PSID) property. If the PSID property is not set, or has been lost, users may with to apply the <code>recover_flightline_info</code>  tool prior to running <code>flightline_overlap</code>.</p>
+<p>Areas of multiple flightline overlap tend to have point densities that are far greater than areas of single flightlines. This can produce suboptimal results for applications that assume regular point  distribution, e.g. in point classification operations.</p>
+<p>The tool works by applying a square grid over the extent of the input LiDAR file. The grid cell size is  determined by the user-defined <code>resolution</code> parameter.  Grid cells containing multiple PSIDs, i.e.  with more than one flightline, are then identified. Overlap points within these grid cells can then be  flagged on the basis of a user-defined <code>criterion</code>. The flagging options include the following:  CriterionOverlap Point Definition <code>max scan angle</code>All points that share the PSID of the point with the maximum absolute scan angle <code>not min point source ID</code>All points with a different PSID to that of the point with the lowest PSID <code>not min time</code>All points with a different PSID to that of the point with the minimum GPS time <code>multiple point source IDs</code>All points in grid cells with multiple PSIDs, i.e. all overlap points.</p>
+<p>Note that the <code>max scan angle</code> criterion may not be appropriate when more than two flightlines overlap,  since it will result in only flagging points from one of the multiple flightlines.</p>
+<p>It is important to set the <code>resolution</code> parameter appropriately, as setting this value too high will yield the filtering of points in non-overlap areas, and setting the resolution to low will result in fewer than expected points being flagged. An appropriate resolution size value may require experimentation, however a value that is 2-3 times the nominal point spacing has been previously recommended. The nominal point spacing can be determined using the <code>lidar_info</code> tool.</p>
+<p>By default, all flagged overlap points are reclassified in the output LiDAR file (<code>output</code>) to class  12. Alternatively, if the user specifies the <code>filter</code> parameter, then each overlap point will be  excluded from the output file. Classified overlap points may also be filtered from LiDAR point clouds using the <code>filter_lidar</code> tool.</p>
+<p>Note that this tool is intended to be applied to LiDAR tile data containing points that have been merged from multiple overlapping flightlines. It is commonly the case that airborne LiDAR data from each of the flightlines from a survey are merged and then tiled into 1 km2 tiles, which are the target dataset for this tool.</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>flightline_overlap</code>, <code>recover_flightline_info</code>, <code>filter_lidar</code>, <code>lidar_info</code></p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def classify_overlap_points(self, in_lidar: Lidar, resolution: float = 1.0, overlap_criterion: str = "max scan angle", filter: bool = False) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="clip-lidar-to-polygon"><a class="header" href="#clip-lidar-to-polygon">Clip LiDAR To Polygon</a></h2>
+<p><strong>Function name:</strong> <code>clip_lidar_to_polygon</code></p>
+<p>This tool can be used to isolate, or clip, all of the LiDAR points in a LAS file (<code>input</code>) contained within one or more vector polygon features. The user must specify the name of the input clip file (--polygons), which must be a vector of a Polygon base shape type. The clip file may contain multiple polygon features and polygon hole parts will be respected during clipping, i.e. LiDAR points within polygon holes will be removed from the output LAS file.</p>
+<p>Use the <code>erase_polygon_from_lidar</code> tool to perform the complementary operation of removing points from a LAS file that are contained within a set of polygons.</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>erase_polygon_from_lidar</code>, <code>filter_lidar</code>, <code>clip</code>, <code>clip_raster_to_polygon</code></p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def clip_lidar_to_polygon(self, input: Lidar, polygons: Vector) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="erase-polygon-from-lidar"><a class="header" href="#erase-polygon-from-lidar">Erase Polygon From LiDAR</a></h2>
+<p><strong>Function name:</strong> <code>erase_polygon_from_lidar</code></p>
+<p>This tool can be used to isolate, or clip, all of the LiDAR points in a LAS file (<code>input</code>) contained within one or more vector polygon features. The user must specify the name of the input clip file (--polygons), which must be a vector of a Polygon base shape type. The clip file may contain multiple polygon features and polygon hole parts will be respected during clipping, i.e. LiDAR points within polygon holes will be removed from the output LAS file.</p>
+<p>Use the <code>erase_polygon_from_lidar</code> tool to perform the complementary operation of removing points from a LAS file that are contained within a set of polygons.</p>
+<h3 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h3>
+<p><code>erase_polygon_from_lidar</code>, <code>filter_lidar</code>, <code>clip</code>, <code>clip_raster_to_polygon</code></p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def erase_polygon_from_lidar(self, input: Lidar, polygons: Vector) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="filter-lidar"><a class="header" href="#filter-lidar">Filter LiDAR</a></h2>
+<p><strong>Function name:</strong> <code>filter_lidar</code></p>
+<h3 id="description-1"><a class="header" href="#description-1">Description</a></h3>
+<p>The FilterLidar tool is a very powerful tool for filtering points within a LiDAR point cloud based on point properties. Complex filter statements (<code>statement</code>) can be used to include or exclude points in the output file (<code>output</code>).</p>
+<p>Note that if the user does not specify the optional input LiDAR file (<code>input</code>), the tool will search for all valid LiDAR (*.las, *.laz, *.zlidar) files contained within the current working directory. This feature can be useful for processing a large number of LiDAR files in batch mode. When this batch mode is applied, the output file names will be the same as the input file names but with a '_filtered' suffix added to the end.</p>
+<p>Points are either included or excluded from the output file by creating conditional filter statements. Statements must be valid Rust syntax and evaluate to a Boolean. Any of the following variables are acceptable within the filter statement:  Variable NameDescription xThe point x coordinate yThe point y coordinate zThe point z coordinate intensityThe point intensity value retThe point return number nretThe point number of returns is_onlyTrue if the point is an only return (i.e. ret == nret == 1), otherwise false is_multipleTrue if the point is a multiple return (i.e. nret &gt; 1), otherwise false is_earlyTrue if the point is an early return (i.e. ret == 1), otherwise false is_intermediateTrue if the point is an intermediate return (i.e. ret &gt; 1 &amp;&amp; ret  is_lateTrue if the point is a late return (i.e. ret == nret), otherwise false is_firstTrue if the point is a first return (i.e. ret == 1 &amp;&amp; nret &gt; 1), otherwise false is_lastTrue if the point is a last return (i.e. ret == nret &amp;&amp; nret &gt; 1), otherwise false classThe class value in numeric form, e.g. 0 = Never classified, 1 = Unclassified, 2 = Ground, etc. is_noiseTrue if the point is classified noise (i.e. class == 7class == 18), otherwise false is_syntheticTrue if the point is synthetic, otherwise false is_keypointTrue if the point is a keypoint, otherwise false is_withheldTrue if the point is withheld, otherwise false is_overlapTrue if the point is an overlap point, otherwise false scan_angleThe point scan angle scan_directionTrue if the scanner is moving from the left towards the right, otherwise false is_flightline_edgeTrue if the point is situated along the filightline edge, otherwise false user_dataThe point user data point_source_idThe point source ID scanner_channelThe point scanner channel timeThe point GPS time, if it exists, otherwise 0 redThe point red value, if it exists, otherwise 0 greenThe point green value, if it exists, otherwise 0 blueThe point blue value, if it exists, otherwise 0 nirThe point near infrared value, if it exists, otherwise 0 pt_numThe point number within the input file n_ptsThe number of points within the file min_xThe file minimum x value mid_xThe file mid-point x value max_xThe file maximum x value min_yThe file minimum y value mid_yThe file mid-point y value max_yThe file maximum y value min_zThe file minimum z value mid_zThe file mid-point z value max_zThe file maximum z value dist_to_ptThe distance from the point to a specified xy or xyz point, e.g. dist_to_pt(562500, 4819500) or dist_to_pt(562500, 4819500, 320) dist_to_lineThe distance from the point to the line passing through two xy points, e.g. dist_to_line(562600, 4819500, 562750, 4819750) dist_to_line_segThe distance from the point to the line segment defined by two xy end-points, e.g. dist_to_line_seg(562600, 4819500, 562750, 4819750) within_rect1 if the point falls within the bounds of a 2D or 3D rectangle, otherwise 0. Bounds are defined as within_rect(ULX, ULY, LRX, LRY) or within_rect(ULX, ULY, ULZ, LRX, LRY, LRZ)</p>
+<p>In addition to the point properties defined above, if the user applies the <code>lidar_eigenvalue_features</code> tool on the input LiDAR file, the <code>filter_lidar</code> tool will automatically read in the additional *.eigen file, which include the eigenvalue-based point neighbourhood measures, such as <code>lambda1</code>, <code>lambda2</code>, <code>lambda3</code>, <code>linearity</code>, <code>planarity</code>, <code>sphericity</code>, <code>omnivariance</code>, <code>eigentropy</code>, <code>slope</code>, and <code>residual</code>. See the <code>lidar_eigenvalue_features</code> documentation for details on each of these metrics describing the structure and distribution of points within the neighbourhood surrounding each point in the LiDAR file.</p>
+<p>Statements can be as simple or complex as desired. For example, to filter out all points that are classified noise (i.e. class numbers 7 or 18):</p>
+<p><code>!is_noise </code> The following is a statement to retain only the late returns from the input file (i.e. both last and single returns):</p>
+<p><code>ret == nret </code> Notice that equality uses the <code>==</code> symbol an inequality uses the <code>!=</code> symbol. As an equivalent to the above statement, we could have used the <code>is_late</code> point property:</p>
+<p><code>is_late </code> If we want to remove all points outside of a range of xy values:</p>
+<p><code>x &gt;= 562000 &amp;&amp; x &lt;= 562500 &amp;&amp; y &gt;= 4819000 &amp;&amp; y &lt;= 4819500 </code> Notice how we can combine multiple constraints using the <code>&amp;&amp;</code> (logical AND) and <code>||</code> (logical OR) operators. As an alternative to the above statement, we could have used the <code>within_rect</code> function:</p>
+<p><code>within_rect(562000, 4819500, 562500, 4819000) </code> If we want instead to exclude all of the points within this defined region, rather than to retain them, we simply use the <code>!</code> (logial NOT):</p>
+<p><code>!(x &gt;= 562000 &amp;&amp; x &lt;= 562500 &amp;&amp; y &gt;= 4819000 &amp;&amp; y &lt;= 4819500) </code> or, simply:</p>
+<p><code>!within_rect(562000, 4819500, 562500, 4819000) </code> If we need to find all of the ground points within 150 m of (562000, 4819500), we could use:</p>
+<p><code>class == 2 &amp;&amp; dist_to_pt(562000, 4819500) &lt;= 150.0 </code> The following statement outputs all non-vegetation classed points in the upper-right quadrant:</p>
+<p><code>!(class == 3 &amp;&amp; class != 4 &amp;&amp; class != 5) &amp;&amp; x &lt; min_x + (max_x - min_x) / 2.0 &amp;&amp; y &gt; max_y - (max_y - min_y) / 2.0 </code> As demonstrated above, the <code>filter_lidar</code> tool provides an extremely flexible, powerful, and easy means for retaining and removing points from point clouds based on any of the common LiDAR point attributes.</p>
+<h3 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h3>
+<p><code>filter_lidar_classes</code>, <code>filter_lidar_scan_angles</code>, <code>modify_lidar</code>, <code>erase_polygon_from_lidar</code>, <code>clip_lidar_to_polygon</code>, <code>sort_lidar</code>, <code>lidar_eigenvalue_features</code></p>
+<h3 id="python-api-5"><a class="header" href="#python-api-5">Python API</a></h3>
+<pre><code class="language-python">def filter_lidar(self, statement: str, input_lidar: Optional[Lidar]) -&gt; Optional[Lidar]:
+</code></pre>
+<hr />
+<h2 id="filter-lidar-by-percentile"><a class="header" href="#filter-lidar-by-percentile">Filter LiDAR By Percentile</a></h2>
+<p><strong>Function name:</strong> <code>filter_lidar_by_percentile</code></p>
+<h3 id="description-2"><a class="header" href="#description-2">Description</a></h3>
+<p>This tool can be used to extract a subset of points from an input LiDAR point cloud (<code>input_lidar</code>) that correspond  to a user-specified <code>percentile</code> of the points within the local neighbourhood. The algorithm works by overlaying a  grid of a specified size (<code>block_size</code>). The group of LiDAR points contained within each block in the superimposed  grid are identified and are sorted by elevation. The point with the elevation that corresponds most closely to the  specified percentile is then inserted into the output LiDAR point cloud. For example, if <code>percentile = 0.0</code>, the  lowest point within each block will be output, if <code>percentile = 100.0</code> the highest point will be output, and if <code>percentile = 50.0</code> the point that is nearest the median elevation will be output. Notice that the lower the number of points contained within a block, the more approximate the calculation will be. For example, if a block only contains three points, no single point occupies the 25th percentile. The equation that is used to identify the closest corresponding point (zero-based) from a list of <code>n</code> sorted by elevation values is:</p>
+<p><code>point_num = ⌊percentile / 100.0 * (n - 1)⌉</code></p>
+<p>Increasing the block size (default is 1.0 xy-units) will increase the average number of points within blocks,  allowing for a more accurate percentile calculation.</p>
+<p>Like many of the LiDAR functions, the input LiDAR point cloud (<code>input_lidar</code>) is optional. If an input LiDAR file  is not specified, the tool will search for all valid LiDAR (*.las, *.laz, *.zlidar) files contained within the current working directory. This feature can be very useful when you need to process a large number of LiDAR files contained within a directory. This batch processing mode enables the function to run in a more optimized parallel manner. When run in this batch mode, no output LiDAR object will be created. Instead the function will create an output file (saved to disc) with the same name as each input LiDAR file, but with the .tif extension. This can provide a very efficient means for processing extremely large LiDAR data sets.</p>
+<h3 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h3>
+<p><code>filter_lidar</code>, <code>lidar_block_minimum</code>, <code>lidar_block_maximum</code></p>
+<h3 id="python-api-6"><a class="header" href="#python-api-6">Python API</a></h3>
+<pre><code class="language-python">def filter_lidar_by_percentile(self, input_lidar: Optional[Lidar],  percentile: float = 0.0, block_size: float = 1.0) -&gt; Optional[Lidar]:
+</code></pre>
+<hr />
+<h2 id="filter-lidar-by-reference-surface"><a class="header" href="#filter-lidar-by-reference-surface">Filter LiDAR By Reference Surface</a></h2>
+<p><strong>Function name:</strong> <code>filter_lidar_by_reference_surface</code></p>
+<h3 id="description-3"><a class="header" href="#description-3">Description</a></h3>
+<p>This tool can be used to extract a subset of points from an input LiDAR point cloud (<code>input_lidar</code>) that satisfy a <code>query</code> relation with a user-specified raster reference surface (<code>ref_surface</code>). For example, you may use this function to extract all of the points that are below (<code>query="&lt;"</code> or <code>query="&lt;="</code>) or above (<code>query="&gt;"</code> or <code>query="&gt;="</code>) a surface model. The default query mode is "within" (i.e. <code>query="within"</code>), which extracts all of the points that are within a specified absolute vertical distance (<code>threshold</code>) of the surface. Notice that the <code>threshold</code> parameter is ignored for query types other than "within".</p>
+<p>By default, the function will return a point cloud containing only the subset of points in the input dataset that satisfy the condition of the query. Setting the <code>classify</code> parameter to True modifies this behaviour such that the output point cloud will contain all of the points within the input dataset, but will have the classification value of the query-satifying points will be set to the <code>true_class_value</code> parameter (0-255) and points that do not satisfy the query  will be assigned the <code>false_class_value</code> (0-255). By setting the <code>preserve_classes</code> paramter to True, all points that do not satisfy the query will have unmodified class values from the input dataset.</p>
+<p>Unlike many of the LiDAR functions, this function does not have a batch mode and operates on single tiles only.</p>
+<h3 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h3>
+<p><code>filter_lidar</code></p>
+<h3 id="python-api-7"><a class="header" href="#python-api-7">Python API</a></h3>
+<pre><code class="language-python">def filter_lidar_by_reference_surface(self, input_lidar: Lidar, ref_surface: Raster, query: str = "within", threshold: float = 0.0) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="filter-lidar-classes"><a class="header" href="#filter-lidar-classes">Filter LiDAR Classes</a></h2>
+<p><strong>Function name:</strong> <code>filter_lidar_classes</code></p>
+<p>This tool can be used to remove points within a LAS LiDAR file that possess certain specified class values. The user must input the names of the input (<code>input</code>) and output (<code>output</code>) LAS files and the class values to be excluded (<code>exclude_cls</code>). Class values are specified by their numerical values, such that:  Classification ValueMeaning 0Created never classified 1Unclassified 2Ground 3Low Vegetation 4Medium Vegetation 5High Vegetation 6Building 7Low Point (noise) 8Reserved 9Water 10Rail 11Road Surface 12Reserved 13Wire – Guard (Shield) 14Wire – Conductor (Phase) 15Transmission Tower 16Wire-structure Connector (e.g. Insulator) 17Bridge Deck 18High noise</p>
+<p>Thus, to filter out low and high noise points from a point cloud, specify <code>exclude_cls='7,18'</code>. Class ranges may also be specified, e.g. <code>exclude_cls='3-5,7,18'</code>. Notice that usage of this tool assumes that the LAS file has underwent a comprehensive point classification, which not all point clouds have had. Use the <code>lidar_info</code> tool determine the distribution of various class values in your file.</p>
+<h3 id="see-also-8"><a class="header" href="#see-also-8">See Also</a></h3>
+<p><code>lidar_info</code></p>
+<h3 id="python-api-8"><a class="header" href="#python-api-8">Python API</a></h3>
+<pre><code class="language-python">def filter_lidar_classes(self, input: Lidar, exclusion_classes: List[int]) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="filter-lidar-noise"><a class="header" href="#filter-lidar-noise">Filter LiDAR Noise</a></h2>
+<p><strong>Function name:</strong> <code>filter_lidar_noise</code></p>
+<p>This function can be used to remove both low (class = 7) and high (class = 18) noise classed points within a LiDAR file.  The function is therefore equivalent to running the <code>filter_lidar_noise</code> function, specifying classes 7 and 18. Notice that usage of this tool assumes that the LAS file has underwent a comprehensive point classification, which not all point clouds have had. Use the <code>lidar_info</code> tool determine the distribution of various class values in your file.</p>
+<h3 id="see-also-9"><a class="header" href="#see-also-9">See Also</a></h3>
+<p><code>lidar_info</code>, <code>filter_lidar_classes</code></p>
+<h3 id="python-api-9"><a class="header" href="#python-api-9">Python API</a></h3>
+<pre><code class="language-python">def filter_lidar_noise(self, input: Lidar) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="filter-lidar-scan-angles"><a class="header" href="#filter-lidar-scan-angles">Filter LiDAR Scan Angles</a></h2>
+<p><strong>Function name:</strong> <code>filter_lidar_scan_angles</code></p>
+<h3 id="python-api-10"><a class="header" href="#python-api-10">Python API</a></h3>
+<pre><code class="language-python">def filter_lidar_scan_angles(self, in_lidar: Lidar, threshold: int) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="height-above-ground"><a class="header" href="#height-above-ground">Height Above Ground</a></h2>
+<p><strong>Function name:</strong> <code>height_above_ground</code></p>
+<p>This tool normalizes an input LiDAR point cloud (<code>input</code>) such that point z-values in the output LAS file (<code>output</code>) are converted from elevations to heights above the ground, specifically the height above the nearest ground-classified point. The input LAS file must have ground-classified points, otherwise the tool will return an error. The <code>lidar_tophat_transform</code> tool can be used to perform the normalization if a ground classification is lacking.</p>
+<h3 id="see-also-10"><a class="header" href="#see-also-10">See Also</a></h3>
+<p><code>lidar_tophat_transform</code></p>
+<h3 id="python-api-11"><a class="header" href="#python-api-11">Python API</a></h3>
+<pre><code class="language-python">def height_above_ground(self, input: Lidar) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="improved-ground-point-filter"><a class="header" href="#improved-ground-point-filter">Improved Ground Point Filter</a></h2>
+<p><strong>Function name:</strong> <code>improved_ground_point_filter</code></p>
+<p>This function provides a faster alternative to the <code>lidar_ground_point_filter</code> algorithm, provided in the free version of Whitebox Workflows, for the extraction of ground points from within a LiDAR point cloud. The algorithm works by placing a grid overtop of the point cloud of a specified resolution (<code>block_size</code>, in xy-units) and identifying the subset of lidar points associated with the lowest position in each block. A raster surface is then created by  TINing these points. The surface is further processed by removing any off-terrain objects (OTOs), including buildings smaller than the <code>max_building_size</code> parameter (xy-units). Removing OTOs also requires the user to specify the value of a <code>slope_threshold</code>, in degrees. Finally, the algorithm then extracts all of the points in the input LiDAR point cloud  (<code>input</code>) that are within a specified absolute vertical distance (<code>elev_threshold</code>) of this surface model.</p>
+<p>Conceptually, this method of ground-point filtering is somewhat similar in concept to the cloth-simulation approach of  Zhang et al. (2016). The difference is that the cloth is first fitted to the minimum surface with infinite flexibility  and then the rigidity of the cloth is subsequently increased, via the identification and removal of OTOs from the minimal  surface. The <code>slope_threshold</code> parameter effectively controls the eventual rigidity of the fitted surface.</p>
+<p>By default, the tool will return a point cloud containing only the subset of points in the input dataset that coincide with the idenfitied ground points. Setting the <code>classify</code> parameter to True modifies this behaviour such that the output point cloud will contain all of the points within the input dataset, but will have the classification value of identified ground points set to '2' (i.e., the ground class value) and all other points will be set to '1' (i.e., the unclassified class value). By setting the <code>preserve_classes</code> paramter to True, all non-ground points in the output cloud will have the same classes as the corresponding point class values in the input dataset.</p>
+<p>Compared with the <code>lidar_ground_point_filter</code> algorithm, the <code>improved_ground_point_filter</code> algorithm is generally far faster and is able to more effectively remove points associated with larger buildings. Removing large buildings from point clouds with the  <code>lidar_ground_point_filter</code> algorithm requires use of very large search distances, which slows the operation considerably.</p>
+<p>As a comparison of the two available methods, one test tile of LiDAR containing numerous large buildings and abundant  vegetation required 600.5 seconds to process on the test system using the <code>lidar_ground_point_filter</code> algorithm  (removing all but the largest buildings) and 9.8 seconds to process using the <code>improved_ground_point_filter</code> algorithm  (with complete building removal), i.e., 61x faster.</p>
+<p>The original test LiDAR tile, containing abundant vegetation and buildings:</p>
+<p>The result of applying the <code>lidar_ground_point_filter</code> function, with a search radius of 25 m and max inter-point slope of  15 degrees:</p>
+<p>The result of applying the <code>improved_ground_point_filter</code> method, with <code>block_size</code> = 1.0 m, <code>max_building_size</code> = 150.0 m,  <code>slope_threshold</code> = 15.0 degrees, and <code>elev_threshold</code> = 0.15 m:</p>
+<h3 id="references"><a class="header" href="#references">References:</a></h3>
+<p>Zhang, W., Qi, J., Wan, P., Wang, H., Xie, D., Wang, X., &amp; Yan, G. (2016). An easy-to-use airborne LiDAR data filtering  method based on cloth simulation. Remote sensing, 8(6), 501.</p>
+<h3 id="see-also-11"><a class="header" href="#see-also-11">See Also:</a></h3>
+<p><code>lidar_ground_point_filter</code></p>
+<h3 id="python-api-12"><a class="header" href="#python-api-12">Python API</a></h3>
+<pre><code class="language-python">def improved_ground_point_filter(self, input: Lidar, block_size = 1.0, max_building_size = 150.0, slope_threshold = 15.0, elev_threshold = 0.15, , classify = False, preserve_classes = False) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="individual-tree-segmentation"><a class="header" href="#individual-tree-segmentation">Individual Tree Segmentation</a></h2>
+<p><strong>Function name:</strong> <code>individual_tree_segmentation</code></p>
+<p>Stable</p>
+<p>Segment individual tree crowns from LiDAR using adaptive bandwidth and vegetation filtering.</p>
+<h3 id="parameters"><a class="header" href="#parameters">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input LiDAR path or typed LiDAR object.Required—
+<code>only_use_veg</code>If true, process only vegetation classes (default true).Optional—
+<code>veg_classes</code>Vegetation classes as comma-delimited text or integer array (default '3,4,5').Optional—
+<code>min_height</code>Minimum point height for segmentation (default 2.0).Optional—
+<code>max_height</code>Optional maximum point height.Optional—
+<code>bandwidth_min</code>Minimum horizontal bandwidth (default 1.0).Optional—
+<code>bandwidth_max</code>Maximum horizontal bandwidth (default 6.0).Optional—
+<code>adaptive_bandwidth</code>Estimate per-seed horizontal bandwidth from local crown geometry (default true).Optional—
+<code>adaptive_neighbors</code>Neighbour count used for adaptive local density scale (default 24).Optional—
+<code>adaptive_sector_count</code>Number of angular sectors for local crown-radius estimation (default 8).Optional—
+<code>grid_acceleration</code>Use MeanShift++-style grid approximation for faster mode updates (default false).Optional—
+<code>grid_cell_size</code>Grid cell size for accelerated mode updates (default 0.5).Optional—
+<code>grid_refine_exact</code>Run short exact-neighbour refinement after grid acceleration (default false).Optional—
+<code>grid_refine_iterations</code>Exact refinement iteration cap after grid mode updates (default 2).Optional—
+<code>tile_size</code>Optional tile size for seed scheduling; Optional—
+<code>tile_overlap</code>Tile overlap width for tiled seed scheduling (default 0.0).Optional—
+<code>vertical_bandwidth</code>Vertical kernel bandwidth (default 5.0).Optional—
+<code>max_iterations</code>Maximum mean-shift iterations per seed (default 30).Optional—
+<code>convergence_tol</code>Convergence tolerance for shift magnitude (default 0.05).Optional—
+<code>min_cluster_points</code>Minimum points per retained tree cluster (default 50).Optional—
+<code>mode_merge_dist</code>Distance threshold for merging converged modes (default 0.8).Optional—
+<code>threads</code>Thread count override (0 uses default Rayon pool).Optional—
+<code>simd</code>Enable SIMD-assisted arithmetic in weighting loops (default true).Optional—
+<code>output_id_mode</code>Output segment id encoding: rgb/user_data/point_source_id or combinations like rgb+user_data.Optional—
+<code>output_sidecar_csv</code>If true, write point_index,segment_id CSV beside lidar output.Optional—
+<code>seed</code>Deterministic seed for colour mapping (default 1).Optional—
+<code>output</code>Optional output LiDAR path.Optional—</p>
+<hr />
+<h2 id="lidar-classify-subset"><a class="header" href="#lidar-classify-subset">LiDAR Classify Subset</a></h2>
+<p><strong>Function name:</strong> <code>lidar_classify_subset</code></p>
+<p>This tool classifies points within a user-specified LiDAR point cloud (<code>base</code>) that correspond with points in a subset cloud (<code>subset</code>). The subset point cloud may have been derived by filtering the original point cloud. The user must specify the names of the two input LAS files (i.e. the full and subset clouds) and the class value (<code>subset_class</code>) to assign the matching points. This class value will be assigned to points in the base cloud, overwriting their input class values in the output LAS file (<code>output</code>). Class values should be numerical (integer valued) and should follow the LAS specifications below:  Classification ValueMeaning 0Created never classified 1Unclassified 2Ground 3Low Vegetation 4Medium Vegetation 5High Vegetation 6Building 7Low Point (noise) 8Reserved 9Water 10Rail 11Road Surface 12Reserved 13Wire – Guard (Shield) 14Wire – Conductor (Phase) 15Transmission Tower 16Wire-structure Connector (e.g. Insulator) 17Bridge Deck 18High noise</p>
+<p>The user may optionally specify a class value to be assigned to non-subset (i.e. non-matching) points (<code>nonsubset_class</code>) in the base file. If this parameter is not specified, output non-sutset points will have the same class value as the base file.</p>
+<h3 id="python-api-13"><a class="header" href="#python-api-13">Python API</a></h3>
+<pre><code class="language-python">def lidar_classify_subset(self, base_lidar: Lidar, subset_lidar: Lidar, subset_class_value: int, nonsubset_class_value: int) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="lidar-elevation-slice"><a class="header" href="#lidar-elevation-slice">LiDAR Elevation Slice</a></h2>
+<p><strong>Function name:</strong> <code>lidar_elevation_slice</code></p>
+<p>This tool can be used to either extract or classify the elevation values (z) of LiDAR points within a specified elevation range (slice). In addition to the names of the input and output LiDAR files (<code>input</code> and <code>output</code>), the user must specify the lower (<code>minz</code>) and upper (<code>maxz</code>) bounds of the elevation range. By default, the tool will only output points within the elevation slice, filtering out all points lying outside of this range. If the <code>class</code> parameter is used, the tool will operate by assigning a class value (<code>inclassval</code>) to the classification bit of points within the slice and another class value (<code>outclassval</code>) to those points falling outside the range.</p>
+<h3 id="see-also-12"><a class="header" href="#see-also-12">See Also</a></h3>
+<p><code>lidar_remove_outliers</code>, <code>lidar_classify_subset</code></p>
+<h3 id="python-api-14"><a class="header" href="#python-api-14">Python API</a></h3>
+<pre><code class="language-python">def lidar_elevation_slice(self, input: Lidar, minz: float = float('-inf'), maxz: float = float('inf'), classify: bool = False, in_class_value: int = 2, out_class_value: int = 1) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="lidar-remove-outliers"><a class="header" href="#lidar-remove-outliers">LiDAR Remove Outliers</a></h2>
+<p><strong>Function name:</strong> <code>lidar_remove_outliers</code></p>
+<p>This tool will filter out points from a LiDAR point cloud if the absolute elevation difference between a point and the averge elevation of its neighbourhood, calculated without the point, exceeds a threshold (elev_diff).</p>
+<h3 id="python-api-15"><a class="header" href="#python-api-15">Python API</a></h3>
+<pre><code class="language-python">def lidar_remove_outliers(self, input: Lidar, search_radius: float = 2.0, elev_diff: float = 50.0, use_median: bool = False, classify: bool = False) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="lidar-segmentation"><a class="header" href="#lidar-segmentation">LiDAR Segmentation</a></h2>
+<p><strong>Function name:</strong> <code>lidar_segmentation</code></p>
+<p>This tool can be used to segment a LiDAR point cloud based on differences in the orientation of fitted planar surfaces and point proximity. The algorithm begins by attempting to fit planar surfaces to all of the points within a user-specified radius (<code>radius</code>) of each point in the LiDAR data set. The planar equation is stored for each point for which a suitable planar model can be fit. A region-growing algorithm is then used to assign nearby points with similar planar models. Similarity is based on a maximum allowable angular difference (in degrees) between the two neighbouring points' plane normal vectors (<code>norm_diff</code>). The <code>norm_diff</code> parameter can therefore be thought of as a way of specifying the magnitude of edges mapped by the region-growing algorithm. By setting this value appropriately, it is possible to segment each facet of a building's roof. Segment edges for planar points may also be determined by a maximum allowable height difference (<code>maxzdiff</code>) between neighbouring points on the same plane. Points for which no suitable planar model can be fit are assigned to 'volume' (non-planar) segments (e.g. vegetation points) using a region-growing method that connects neighbouring points based solely on proximity (i.e. all volume points within <code>radius</code> distance are considered to belong to the same segment).</p>
+<p>The resulting point cloud will have both planar segments (largely ground surfaces and building roofs and walls) and volume segments (largely vegetation). Each segment is assigned a random red-green-blue (RGB) colour in the output LAS file. The largest segment in any airborne LiDAR dataset will usually belong to the ground surface. This largest segment will always be assigned a dark-green RGB of (25, 120, 0) by the tool.</p>
+<p>This tool uses the <code>random sample consensus (RANSAC)</code> method to identify points within a LiDAR point cloud that belong to planar surfaces. RANSAC is a common method used in the field of computer vision to identify a subset of inlier points in a noisy data set containing abundant outlier points. Because LiDAR point clouds often contain vegetation points that do not form planar surfaces, this tool can be used to largely strip vegetation points from the point cloud, leaving behind the ground returns, buildings, and other points belonging to planar surfaces. If the <code>classify</code> flag is used, non-planar points will not be removed but rather will be assigned a different class (1) than the planar points (0).</p>
+<p>The algorithm selects a random sample, of a specified size (<code>num_samples</code>) of the points from within the neighbourhood (<code>radius</code>) surrounding each LiDAR point. The sample is then used to parameterize a planar best-fit model. The distance between each neighbouring point and the plane is then evaluated; inliers are those neighbouring points within a user-specified distance threshold (<code>threshold</code>). Models with at least a minimum number of inlier points (<code>model_size</code>) are then accepted. This process of selecting models is iterated a number of user-specified times (<code>num_iter</code>).</p>
+<p>One of the challenges with identifying planar surfaces in LiDAR point clouds is that these data are usually collected along scan lines. Therefore, each scan line can potentially yield a vertical planar surface, which is one reason that some vegetation points may be assigned to planes during the RANSAC plane-fitting method. To cope with this problem, the tool allows the user to specify a maximum planar slope (<code>max_slope</code>) parameter. Planes that have slopes greater than this threshold are rejected by the algorithm. This has the side-effect of removing building walls however.</p>
+<h3 id="references-1"><a class="header" href="#references-1">References</a></h3>
+<p>Fischler MA and Bolles RC. 1981. Random sample consensus: a paradigm for model fitting with applications to image analysis and automated cartography. Commun. ACM, 24(6):381–395.</p>
+<h3 id="see-also-13"><a class="header" href="#see-also-13">See Also</a></h3>
+<p><code>lidar_ransac_planes</code>, <code>lidar_ground_point_filter</code></p>
+<h3 id="python-api-16"><a class="header" href="#python-api-16">Python API</a></h3>
+<pre><code class="language-python">def lidar_segmentation(self, in_lidar: Lidar, search_radius: float = 2.0, num_iterations: int = 50, num_samples: int = 10, inlier_threshold: float = 0.15, acceptable_model_size: int = 30, max_planar_slope: float = 75.0, norm_diff_threshold: float = 2.0, max_z_diff: float = 1.0, classes: bool = False, ground: bool = False) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="lidar-segmentation-based-filter"><a class="header" href="#lidar-segmentation-based-filter">LiDAR Segmentation Based Filter</a></h2>
+<p><strong>Function name:</strong> <code>lidar_segmentation_based_filter</code></p>
+<h3 id="python-api-17"><a class="header" href="#python-api-17">Python API</a></h3>
+<pre><code class="language-python">def lidar_segmentation_based_filter(self, in_lidar: Lidar, search_radius: float = 5.0, norm_diff_threshold: float = 2.0, max_z_diff: float = 1.0, classify_points: bool = False) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="modify-lidar"><a class="header" href="#modify-lidar">Modify LiDAR</a></h2>
+<p><strong>Function name:</strong> <code>modify_lidar</code></p>
+<h3 id="description-4"><a class="header" href="#description-4">Description</a></h3>
+<p>The ModifyLidar tool can be used to alter the properties of points within a LiDAR point cloud. The user provides a statement (<code>statement</code>) containing one or more expressions, separated by semicolons (;). The expressions are evaluated for each point within the input LiDAR file (<code>input</code>). Expressions assign altered values to the properties of points in the output file (<code>output</code>), based on any mathematically defined expression that may include the various properties of individual points (e.g. coordinates, intensity, return attributes, etc) or some file-level properties (e.g. min/max coordinates). As a basic example, the following statement:</p>
+<p><code>x = x + 1000.0 </code> could be used to translate the point cloud 1000 x-units (note, the increment operator could be used as a simpler equivalent, <code>x += 1000.0</code>).</p>
+<p>Note that if the user does not specify the optional input LiDAR file, the tool will search for all valid LiDAR (*.las, *.laz, *.zlidar) files contained within the current working directory. This feature can be useful for processing a large number of LiDAR files in batch mode. When this batch mode is applied, the output file names will be the same as the input file names but with a '_modified' suffix added to the end.</p>
+<p>Expressions may contain any of the following point-level or file-level variables:  Variable NameDescriptionType <strong>Point-level properties</strong> xThe point x coordinatefloat yThe point y coordinatefloat zThe point z coordinatefloat xyAn x-y coordinate tuple, (x, y)(float, float) xyzAn x-y-z coordinate tuple, (x, y, z)(float, float, float) intensityThe point intensity valueint retThe point return numberint nretThe point number of returnsint is_onlyTrue if the point is an only return (i.e. ret == nret == 1), otherwise falseBoolean is_multipleTrue if the point is a multiple return (i.e. nret &gt; 1), otherwise falseBoolean is_earlyTrue if the point is an early return (i.e. ret == 1), otherwise falseBoolean is_intermediateTrue if the point is an intermediate return (i.e. ret &gt; 1 &amp;&amp; ret Boolean is_lateTrue if the point is a late return (i.e. ret == nret), otherwise falseBoolean is_firstTrue if the point is a first return (i.e. ret == 1 &amp;&amp; nret &gt; 1), otherwise falseBoolean is_lastTrue if the point is a last return (i.e. ret == nret &amp;&amp; nret &gt; 1), otherwise falseBoolean classThe class value in numeric form, e.g. 0 = Never classified, 1 = Unclassified, 2 = Ground, etc.int is_noiseTrue if the point is classified noise (i.e. class == 7class == 18), otherwise falseBoolean is_syntheticTrue if the point is synthetic, otherwise falseBoolean is_keypointTrue if the point is a keypoint, otherwise falseBoolean is_withheldTrue if the point is withheld, otherwise falseBoolean is_overlapTrue if the point is an overlap point, otherwise falseBoolean scan_angleThe point scan angleint scan_directionTrue if the scanner is moving from the left towards the right, otherwise falseBoolean is_flightline_edgeTrue if the point is situated along the filightline edge, otherwise falseBoolean user_dataThe point user dataint point_source_idThe point source IDint scanner_channelThe point scanner channelint timeThe point GPS time, if it exists, otherwise 0float rgbA red-green-blue tuple (r, g, b) if it exists, otherwise (0,0,0)(int, int, int) nirThe point near infrared value, if it exists, otherwise 0int pt_numThe point number within the input fileint <strong>File-level properties (invariant)</strong> n_ptsThe number of points within the fileint min_xThe file minimum x valuefloat mid_xThe file mid-point x valuefloat max_xThe file maximum x valuefloat min_yThe file minimum y valuefloat mid_yThe file mid-point y valuefloat max_yThe file maximum y valuefloat min_zThe file minimum z valuefloat mid_zThe file mid-point z valuefloat max_zThe file maximum z valuefloat x_scale_factorThe file x scale factorfloat y_scale_factorThe file y scale factorfloat z_scale_factorThe file z scale factorfloat x_offsetThe file x offsetfloat y_offsetThe file y offsetfloat z_offsetThe file z offsetfloat</p>
+<p>Most of the point-level properties above are modifiable, however some are not. The complete list of modifiable point attributes include, x, y, z, xy, xyz, intensity, ret, nret, class, user_data, point_source_id, scanner_channel, scan_angle, time, rgb, nir, is_synthetic, is_keypoint, is_withheld, and is_overlap. The immutable properties include is_only, is_multiple, is_early, is_intermediate, is_late, is_first, is_last, is_noise, and pt_num. Of the file-level properties, the modifiable properties include the x_scale_factor, y_scale_factor, z_scale_factor, x_offset, y_offset, and z_offset.</p>
+<p>In addition to the point properties defined above, if the user applies the <code>lidar_eigenvalue_features</code> tool on the input LiDAR file, the <code>modify_lidar</code> tool will automatically read in the additional *.eigen file, which include the eigenvalue-based point neighbourhood measures, such as <code>lambda1</code>, <code>lambda2</code>, <code>lambda3</code>, <code>linearity</code>, <code>planarity</code>, <code>sphericity</code>, <code>omnivariance</code>, <code>eigentropy</code>, <code>slope</code>, and <code>residual</code>. See the <code>lidar_eigenvalue_features</code> documentation for details on each of these metrics describing the structure and distribution of points within the neighbourhood surrounding each point in the LiDAR file.</p>
+<p>Expressions may use any of the standard mathematical operators, +, -, *, /, % (modulo), ^ (exponentiation), comparison operators, &lt;, &gt;, &lt;=, &gt;=, == (equality), != (inequality), and logical operators, &amp;&amp; (Boolean AND),  (Boolean OR). Expressions must evaluate to an assignment operation, where the variable that is assigned to must be a modifiable point-level property (see table above). That is, expressions should take the form</p>
+<p><code>pt_variable = ...</code>. Other assignment operators are also possible (at least for numeric non-tuple properties), such as the increment (=+) operator (e.g. <code>x += 1000.0</code>) and the decrement (-=) operator (e.g. <code>y -= 1000.0</code>). Expressions may use a number of built-in mathematical functions, including:  Function NameDescriptionExample ifPerforms an if(CONDITION, TRUE, FALSE) operation, return either the value of TRUE or FALSE depending on CONDITION<code>ret = if(ret==0, 1, ret)</code> absReturns the absolute value of the argument<code>value = abs(x - mid_x)</code> minReturns the minimum of the arguments<code>value = min(x, y, z)</code> maxReturns the maximum of the arguments<code>value = max(x, y, z)</code> floorReturns the largest integer less than or equal to a number<code>x = floor(x)</code> roundReturns the nearest integer to a number. Rounds half-way cases away from 0.0<code>x = round(x)</code> ceilReturns the smallest integer greater than or equal to a number<code>x = ceil(x)</code> clampForces a value to fall within a specified range, defined by a minimum and maximum<code>z = clamp(min_z+10.0, z, max_z-20.0)</code> intReturns the integer equivalent of a number<code>intensity = int(z)</code> floatReturns the float equivalent of a number<code>z = float(intensity)</code> to_radiansConverts a number in degrees to radians<code>val = to_radians(scan_angle)</code> to_degreesConverts a number in radians to degrees<code>scan_angle = int(to_degrees(val))</code> distReturns the distance between two points defined by two n-length tuples<code>d = dist(xy, (mid_x, mid_y))</code> or <code>d = dist(xyz, (mid_x, mid_y, mid_z))</code> rotate_ptRotates an x-y point by a certain angle, in degrees<code>xy = rotate_pt(xy, 45.0)</code> or <code>orig_pt = (1000.0, 1000.0); xy = rotate_pt(xy, 45.0, orig_pt)</code> math::lnReturns the natural logarithm of the number<code>z = math::ln(z)</code> math::logReturns the logarithm of the number with respect to an arbitrary base<code>z = math::log(z, 10)</code> math::log2Returns the base 2 logarithm of the number<code>z = math::log2(z)</code> math::log10Returns the base 10 logarithm of the number<code>z = math::log10(z)</code> math::expReturns e^(number), (the exponential function)<code>z = math::exp(z)</code> math::powRaises a number to the power of the other number<code>z = math::pow(z, 2.0)</code> math::sqrtReturns the square root of a number. Returns NaN for a negative number<code>z = math::sqrt(z, 2.0)</code> math::cosComputes the cosine of a number (in radians)<code>z = math::cos(to_radians(z))</code> math::sinComputes the sine of a number (in radians)<code>z = math::sin(to_radians(z))</code> math::tanComputes the tangent of a number (in radians)<code>z = math::tan(to_radians(z))</code> math::acosComputes the arccosine of a number. The return value is in radians in the range [0, pi] or NaN if the number is outside the range [-1, 1]<code>z = math::acos(z)</code> math::asinComputes the arcsine of a number. The return value is in radians in the range [0, pi] or NaN if the number is outside the range [-1, 1]<code>z = math::asin(z)</code> math::atanComputes the arctangent of a number. The return value is in radians in the range [0, pi] or NaN if the number is outside the range [-1, 1]<code>z = math::atan(z)</code> randReturns a random value between 0 and 1, with an optional seed value<code>rgb = (int(255.0 * rand()), int(255.0 * rand()), int(255.0 * rand()))</code> helmert_transformationPerforms a Helmert transformation on a point using a 7-parameter transform<code>xyz = helmert_transformation(xyz, −446.448, 125.157, −542.06, 20.4894, −0.1502, −0.247, −0.8421 )</code></p>
+<p>The hyperbolic trigonometric functions are also available for use in expression building, as is <code>math::atan2</code> and the mathematical constants <code>pi</code> and <code>e</code>.</p>
+<p>You may use <code>if</code> operations within statements to implement a conditional modification of point properties. For example, the following expression demonstrates how you could modify a point's RGB colour based on its classification, assign ground points (class 2) in the output file a green colour:</p>
+<p><code>rgb = if(class==2, (0,255,0), rgb) </code> To colour all points within 50 m of the tile mid-point red and all other points blue:</p>
+<p><code>rgb = if(dist(xy, (mid_x, mid_y))&lt;50.0, (255,0,0), (0,0,255)) </code> <code>if</code> operations may also be nested to create more complex compound conditional point modification. For example, in the following statement, we assign first-return points red (255,0,0) and last-return points green (0,255,0) colours and white (255,255,255) to all other points (intermediate-returns and only-returns):</p>
+<p><code>rgb = if(is_first, (255,0,0), if(is_last, (0,255,0), (255,255,255))) </code> Here we use an <code>if</code> expression to re-classify points above an elevation of 1000.0 as high noise (class 18):</p>
+<p><code>class = if(z&gt;1000.0, 18, class) </code> Expressions may be strung together within statements using semicolons (;), with each expression being evaluated individually. When this is the case, at least one of the expressions must assign a value to one of the variant point properties (see table above). The following statement demonstrates multi-expression statements, in this case to swap the x and y coordinates in a LiDAR file:</p>
+<p><code>new_var = x; x = y; y = new_var </code> The <code>rand</code> function, used with the seeding option, can be useful when assigning colours to points based on common point properties. For example, to assign a point a random RGB colour based on its <code>point_source_id</code> (Note, for many point clouds, this operation will assign each flightline a unique colour; if flightline information is not stored in the file's <code>point_source_id</code> attribute, one could use the <code>recover_flightline_info</code> tool to calculate this data.):</p>
+<p><code>rgb=(int(255 * rand(point_source_id)), int(255 * rand(point_source_id+1)), int(255 * rand(point_source_id+2))) </code> This expression-based approach to modifying point properties provides a great deal of flexibility and power to the processing of LiDAR point cloud data sets.</p>
+<h3 id="see-also-14"><a class="header" href="#see-also-14">See Also</a></h3>
+<p><code>filter_lidar</code>, <code>sort_lidar</code>, <code>lidar_eigenvalue_features</code></p>
+<h3 id="python-api-18"><a class="header" href="#python-api-18">Python API</a></h3>
+<pre><code class="language-python">def modify_lidar(self, statement: str, input_lidar: Optional[Lidar]) -&gt; Optional[Lidar]:
+</code></pre>
+<hr />
+<h2 id="normalize-lidar"><a class="header" href="#normalize-lidar">Normalize LiDAR</a></h2>
+<p><strong>Function name:</strong> <code>normalize_lidar</code></p>
+<p>This tool can be used to normalize a LiDAR point cloud. A normalized point cloud is one for which the point z-values represent height above the ground surface rather than raw elevation values. Thus, a point that falls on the ground  surface will have a z-value of zero and vegetation points, and points associated with other off-terrain objects,  have positive, non-zero z-values. Point cloud normalization is an essential pre-processing method for many forms of LiDAR data analysis, including the characterization of many forestry related metrics and individual tree mapping  (<code>IndividualTreeDetection</code>).</p>
+<p>This tool works by measuring the elevation difference of each point in an input LiDAR file (<code>input</code>) and the elevation of an input raster digital terrain model (<code>dtm</code>). A DTM is a bare-earth digital elevation model. Typically, the input DTM is creating using the same input LiDAR data by interpolating the ground surface using only ground-classified points. If the LiDAR point cloud does not contain ground-point classifications, you may wish to apply the <code>LidarGroundPointFilter</code>  or <code>ClassifyLidar</code>tools before interpolating the DTM. While ground-point classification works well to identify the ground  surface beneath vegetation cover, building points are sometimes left  It may also be necessary to remove other off-terrain  objects like buildings. The <code>RemoveOffTerrainObjects</code> tool can be useful for this purpose, creating a final bare-earth DTM. This tool outputs a normalized LiDAR point cloud (<code>output</code>). If the <code>no_negatives</code> parameter is True, any points that fall beneath the surface elevation defined by the DTM, will have their z-value set to zero.</p>
+<p>Note that the <code>LidarTophatTransform</code> tool similarly can be used to produce a type of normalized point cloud, although it  does not require an input raster DTM. Rather, it attempts to model the ground surface within the point cloud by identifying the lowest points within local neighbourhoods surrounding each point in the cloud. While this approach can produce satisfactory results in some cases, the <code>NormalizeLidar</code> tool likely works better under more rugged topography and in areas with  extensive building coverage, and provides greater control over the definition of the ground surface.</p>
+<h3 id="see-also-15"><a class="header" href="#see-also-15">See Also</a></h3>
+<p><code>lidar_tophat_transform</code>, <code>individual_tree_detection</code>, <code>lidar_ground_point_filter</code>, <code>classify_lidar</code></p>
+<h3 id="python-api-19"><a class="header" href="#python-api-19">Python API</a></h3>
+<pre><code class="language-python">def normalize_lidar(self, input_lidar: Lidar, dtm: Raster) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="remove-duplicates"><a class="header" href="#remove-duplicates">Remove Duplicates</a></h2>
+<p><strong>Function name:</strong> <code>remove_duplicates</code></p>
+<p>This tool removes duplicate points from a LiDAR data set. Duplicates are determined by their x, y, and optionally (<code>include_z</code>) z coordinates.</p>
+<h3 id="see-also-16"><a class="header" href="#see-also-16">See Also</a></h3>
+<p><code>eliminate_coincident_points</code></p>
+<h3 id="python-api-20"><a class="header" href="#python-api-20">Python API</a></h3>
+<pre><code class="language-python">def remove_duplicates(self, input: Lidar, include_z: bool = False) -&gt; Lidar:
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="lidar-io-management.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="lidar-interpolation-gridding.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="lidar-io-management.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="lidar-interpolation-gridding.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

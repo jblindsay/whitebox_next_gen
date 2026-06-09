@@ -1,0 +1,409 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Stream Ordering and Metrics - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html" class="active"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="stream-ordering-and-metrics"><a class="header" href="#stream-ordering-and-metrics">Stream Ordering and Metrics</a></h1>
+<hr />
+<h2 id="hack-stream-order"><a class="header" href="#hack-stream-order">Hack Stream Order</a></h2>
+<p><strong>Function name:</strong> <code>hack_stream_order</code></p>
+<p>This tool can be used to assign the Hack stream order to each link in a stream network. According to this common stream numbering system, the main stream is assigned an order of one. All tributaries to the main stream (i.e. the trunk) are assigned an order of two; tributaries to second-order links are assigned an order of three, and so on. The trunk or main stream of the stream network can be defined either based on the furthest upstream distance, at each bifurcation (i.e. network junction).</p>
+<p>Stream order is often used in hydro-geomorphic and ecological studies to quantify the relative size and importance of a stream segment to the overall river system. Unlike some other stream ordering systems, e.g. Horton-Strahler stream order (<code>strahler_stream_order</code>) and Shreve's stream magnitude (<code>shreve_stream_magnitude</code>), Hack's stream ordering method increases from the catchment outlet towards the channel heads. This has the main advantage that the catchment outlet is likely to be accurately located while the channel network extent may be less accurately mapped.</p>
+<p>The user must input a streams raster image (<code>streams_raster</code>) and D8 pointer image (<code>d8_pntr</code>). Stream cells are designated in the streams image as all positive, nonzero values. Thus all non-stream or background grid cells are commonly assigned either zeros or NoData values. The pointer image is used to traverse the stream network and should only be created using the D8 algorithm (<code>d8_pointer</code>). Background cells will be assigned the NoData value in the output image, unless the <code>zero_background=True</code>, in which case non-stream cells will be assigned zero values in the output.</p>
+<p>By default, the pointer raster is assumed to use the clockwise indexing method used by WhiteboxTools. If the pointer file contains ESRI flow direction values instead, the user should specify <code>esri_pntr=True</code>.</p>
+<h3 id="reference"><a class="header" href="#reference">Reference</a></h3>
+<p>Hack, J. T. (1957). Studies of longitudinal stream profiles in Virginia and Maryland (Vol. 294). US Government Printing Office.</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>horton_stream_order</code>, <code>strahler_stream_order</code>, <code>shreve_stream_magnitude</code>, <code>topological_stream_order</code></p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def hack_stream_order(self, d8_pntr: Raster, streams_raster: Raster, esri_pntr: bool = False, zero_background: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="horton-ratios"><a class="header" href="#horton-ratios">Horton Ratios</a></h2>
+<p><strong>Function name:</strong> <code>horton_ratios</code></p>
+<p>This function can be used to calculate Horton's so-called laws of drainage network composition for a input stream network. The user must specify an input DEM (which has been suitably hydrologically pre-processed to remove any topographic depressions) and a raster stream network. The function will output a 4-element  tuple containing the bifurcation ratio (Rb), the length ratio (Rl), the area ratio (Ra), and the slope ratio (Rs). These indices are related to drainage network geometry and are used in some geomorphological analysis. The calculation of the ratios is based on the method described by Knighton (1998) Fluvial Forms and Processes:  A New Perspective.</p>
+<h3 id="code-example"><a class="header" href="#code-example">Code Example</a></h3>
+<p>`from whitebox_workflows import WbEnvironment</p>
+<h3 id="set-up-the-wbw-environment"><a class="header" href="#set-up-the-wbw-environment">Set up the WbW environment</a></h3>
+<p>wbe = WbEnvironment() wbe.verbose = True wbe.working_directory = '/path/to/data'</p>
+<h3 id="read-the-inputs"><a class="header" href="#read-the-inputs">Read the inputs</a></h3>
+<p>dem = wbe.read_raster('DEM.tif') streams = wbe.read_raster('streams.tif')</p>
+<h3 id="calculate-the-horton-ratios"><a class="header" href="#calculate-the-horton-ratios">Calculate the Horton ratios</a></h3>
+<p>(bifurcation_ratio, length_ratio, area_ratio, slope_ratio) = wbe.horton_ratios(dem, streams)</p>
+<h3 id="outputs"><a class="header" href="#outputs">Outputs</a></h3>
+<p>print(f"Bifurcation ratio (Rb): {bifurcation_ratio:.3f}") print(f"Length ratio (Rl): {length_ratio:.3f}") print(f"Area ratio (Ra): {area_ratio:.3f}") print(f"Slope ratio (Rs): {slope_ratio:.3f}") `</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>horton_stream_order</code></p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def horton_ratios(self, dem: Raster, streams_raster: Raster) -&gt; Tuple[float, float, float, float]:
+</code></pre>
+<hr />
+<h2 id="horton-stream-order"><a class="header" href="#horton-stream-order">Horton Stream Order</a></h2>
+<p><strong>Function name:</strong> <code>horton_stream_order</code></p>
+<p>This tool can be used to assign the Horton stream order to each link in a stream network. Stream ordering is often used in hydro-geomorphic and ecological studies to quantify the relative size and importance of a stream segment to the overall river system. There are several competing stream ordering schemes. Based on to this common stream numbering system, headwater stream links are assigned an order of one. Stream order only increases downstream when two links of equal order join, otherwise the downstream link is assigned the larger of the two link orders.</p>
+<p>Strahler order and Horton order are similar approaches to assigning stream network hierarchy. Horton stream order essentially starts with the Strahler order scheme, but subsequently replaces each of the assigned stream order value along the main trunk of the network with the order value of the outlet. The main channel is not treated differently compared with other tributaries in the Strahler ordering scheme.</p>
+<p>The user must specify input a streams raster image (<code>streams_raster</code>) and D8 pointer image (<code>d8_pntr</code>). Stream cells are designated in the streams image as all positive, nonzero values. Thus all non-stream or background grid cells are commonly assigned either zeros or NoData values. The pointer image is used to traverse the stream network and should only be created using the D8 algorithm (<code>d8_pointer</code>). Background cells will be assigned the NoData value in the output image, unless the user specifies <code>zero_background=True</code>, in which case non-stream cells will be assigned zero values in the output.</p>
+<p>By default, the pointer raster is assumed to use the clockwise indexing method used by WhiteboxTools. If the pointer file contains ESRI flow direction values instead, the user must set <code>esri_pntr=True</code>.</p>
+<h3 id="reference-horton-r-e-1945-erosional-development-of-streams-and-their"><a class="header" href="#reference-horton-r-e-1945-erosional-development-of-streams-and-their">Reference Horton, R. E. (1945). Erosional development of streams and their</a></h3>
+<p>drainage basins; hydrophysical approach to quantitative morphology. Geological society of America bulletin, 56(3), 275-370.</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>hack_stream_order</code>, <code>shreve_stream_magnitude</code>, <code>strahler_stream_order</code>, <code>topological_stream_order</code></p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def horton_stream_order(self, d8_pntr: Raster, streams_raster: Raster, esri_pntr: bool = False, zero_background: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="shreve-stream-magnitude"><a class="header" href="#shreve-stream-magnitude">Shreve Stream Magnitude</a></h2>
+<p><strong>Function name:</strong> <code>shreve_stream_magnitude</code></p>
+<p>This tool can be used to assign the Shreve stream magnitude to each link in a stream network. Stream ordering is often used in hydro-geomorphic and ecological studies to quantify the relative size and importance of a stream segment to the overall river system. There are several competing stream ordering schemes. Shreve stream magnitude is equal to the number of headwater links upstream of each link. Headwater stream links are assigned a magnitude of one.</p>
+<p>The user must input a streams raster image (<code>streams_raster</code>) and D8 pointer (flow direction) image (<code>d8_pntr</code>). Stream cells are designated in the streams raster as all positive, nonzero values. Thus all non-stream or background grid cells are commonly assigned either zeros or NoData values. The pointer image is used to traverse the stream network and should only be created using the D8 algorithm. Background cells will be assigned the NoData value in the output image, unless the user specifies <code>zero_background=True</code>, in which case non-stream cells will be assigned zero values in the output.</p>
+<p>By default, the pointer raster is assumed to use the clockwise indexing method used by WhiteboxTools. If the pointer file contains ESRI flow direction values instead, the user should specify <code>esri_pntr=True</code>.</p>
+<h3 id="reference-shreve-r-l-1966-statistical-law-of-stream-numbers-the-journal"><a class="header" href="#reference-shreve-r-l-1966-statistical-law-of-stream-numbers-the-journal">Reference Shreve, R. L. (1966). Statistical law of stream numbers. The Journal</a></h3>
+<p>of Geology, 74(1), 17-37.</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>horton_stream_order</code>, <code>hack_stream_order</code>, <code>strahler_stream_order</code>, <code>topological_stream_order</code></p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def shreve_stream_magnitude(self, d8_pntr: Raster, streams_raster: Raster, esri_pntr: bool = False, zero_background: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="strahler-order-basins"><a class="header" href="#strahler-order-basins">Strahler Order Basins</a></h2>
+<p><strong>Function name:</strong> <code>strahler_order_basins</code></p>
+<p>This tool will identify the catchment areas of each Horton-Strahler stream order link in a user-specified stream network (<code>streams</code>), i.e. the network's <em>Strahler basins</em>. The tool effectively performs a Horton-Strahler stream ordering operation (<code>horton_stream_order</code>) followed by by a <code>watershed</code> operation. The user must specify the name of a flow pointer (flow direction) raster (<code>d8_pntr</code>), a streams raster (<code>streams</code>), and the output raster (<code>output</code>). The flow pointer and streams rasters should be generated using the <code>d8_pointer</code> algorithm. This will require a depressionless DEM, processed using either the <code>breach_depressions_least_cost</code> or <code>fill_depressions</code> tool.</p>
+<p>By default, the pointer raster is assumed to use the clockwise indexing method used by WhiteboxTools. If the pointer file contains ESRI flow direction values instead, the <code>esri_pntr</code> parameter must be specified.</p>
+<p>NoData values in the input flow pointer raster are assigned NoData values in the output image.</p>
+<h3 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h3>
+<p><code>horton_stream_order</code>, <code>watershed</code>, <code>d8_pointer</code>, <code>breach_depressions_least_cost</code>, <code>fill_depressions</code></p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def strahler_order_basins(self, d8_pointer: Raster, streams: Raster, esri_pntr: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="strahler-stream-order"><a class="header" href="#strahler-stream-order">Strahler Stream Order</a></h2>
+<p><strong>Function name:</strong> <code>strahler_stream_order</code></p>
+<p>This tool can be used to assign the Strahler stream order to each link in a stream network. Stream ordering is often used in hydro-geomorphic and ecological studies to quantify the relative size and importance of a stream segment to the overall river system. There are several competing stream ordering schemes. Based on to this common stream numbering system, headwater stream links are assigned an order of one. Stream order only increases downstream when two links of equal order join, otherwise the downstream link is assigned the larger of the two link orders.</p>
+<p>Strahler order and Horton order are similar approaches to assigning stream network hierarchy. Horton stream order essentially starts with the Strahler order scheme, but subsequently replaces each of the assigned stream order value along the main trunk of the network with the order value of the outlet. The main channel is not treated differently compared with other tributaries in the Strahler ordering scheme.</p>
+<p>The user must input a streams raster image (<code>streams_raster</code>) and D8 pointer (flow direction) image (<code>d8_pntr</code>). Stream cells are designated in the streams image as all positive, nonzero values. Thus all non-stream or background grid cells are commonly assigned either zeros or NoData values. The pointer image is used to traverse the stream network and should only be created using the D8 algorithm (<code>d8_pointer</code>). Background cells will be assigned the NoData value in the output image, unless the user specifies <code>zero_background=True</code>, in which case non-stream cells will be assigned zero values in the output.</p>
+<p>By default, the pointer raster is assumed to use the clockwise indexing method used by WhiteboxTools. If the pointer file contains ESRI flow direction values instead, the user should specify <code>esri_pntr=True</code>.</p>
+<h3 id="reference-strahler-a-n-1957-quantitative-analysis-of-watershed"><a class="header" href="#reference-strahler-a-n-1957-quantitative-analysis-of-watershed">Reference Strahler, A. N. (1957). Quantitative analysis of watershed</a></h3>
+<p>geomorphology. Eos, Transactions American Geophysical Union, 38(6), 913-920.</p>
+<h3 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h3>
+<p><code>horton_stream_order</code>, <code>hack_stream_order</code>, <code>shreve_stream_magnitude</code>, <code>topological_stream_order</code></p>
+<h3 id="python-api-5"><a class="header" href="#python-api-5">Python API</a></h3>
+<pre><code class="language-python">def strahler_stream_order(self, d8_pntr: Raster, streams_raster: Raster, esri_pntr: bool = False, zero_background: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="stream-link-class"><a class="header" href="#stream-link-class">Stream Link Class</a></h2>
+<p><strong>Function name:</strong> <code>stream_link_class</code></p>
+<p>This tool identifies all interior and exterior links, and source, link, and sink nodes in an input stream network (<code>streams_raster</code>). The input streams raster is used to designate which grid cells contain a stream and the pointer image is used to traverse the stream network. Stream cells are designated in the streams image as all values greater than zero. Thus, all non-stream or background grid cells are commonly assigned either zeros or NoData values. Background cells will be assigned the NoData value in the output image, unless <code>zero_background=True</code>, in which case non-stream cells will be assigned zero values in the output.</p>
+<p>Each feature is assigned the following identifier in the output image:</p>
+<p>Value | Stream Type ----- | -----------  1    | Exterior Link  2    | Interior Link  3    | Source Node (head water)  4    | Link Node  5    | Sink Node</p>
+<p>The user must input an input stream raster (<code>streams_raster</code>) and a pointer (flow direction) raster (<code>d8_pntr</code>). The flow pointer and streams rasters should be generated using the <code>d8_pointer</code> algorithm. This will require a depressionless DEM, processed using either the <code>breach_depressions_least_cost</code> or <code>fill_depressions</code> tools.</p>
+<p>By default, the pointer raster is assumed to use the clockwise indexing method used by WhiteboxTools. If the pointer file contains ESRI flow direction values instead, set <code>esri_pntr=True</code>.</p>
+<h3 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h3>
+<p><code>stream_link_identifier</code></p>
+<h3 id="python-api-6"><a class="header" href="#python-api-6">Python API</a></h3>
+<pre><code class="language-python">def stream_link_class(self, d8_pntr: Raster, streams_raster: Raster, esri_pntr: bool = False, zero_background: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="stream-link-identifier"><a class="header" href="#stream-link-identifier">Stream Link Identifier</a></h2>
+<p><strong>Function name:</strong> <code>stream_link_identifier</code></p>
+<p>This tool can be used to assign each link in a stream network a unique numeric identifier. This grid is used by a number of other stream network analysis tools.</p>
+<p>The input streams raster (<code>streams_raster</code>) is used to designate which grid cells contain a stream and the pointer image is used to traverse the stream network. Stream cells are designated in the streams image as all values greater than zero. Thus, all non-stream or background grid cells are commonly assigned either zeros or NoData values. Background cells will be assigned the NoData value in the output image, unless the user specifies <code>zero_background=True</code>, in which case non-stream cells will be assigned zero values in the output.</p>
+<p>The user must specify the name of a flow pointer (flow direction) raster (<code>d8_pntr</code>) and a streams raster (<code>streams_raster</code>). The flow pointer and streams rasters should be generated using the <code>d8_pointer</code> algorithm. This will require a depressionless DEM, processed using either the <code>breach_depressions_least_cost</code> or <code>fill_depressions</code> tool.</p>
+<p>By default, the pointer raster is assumed to use the clockwise indexing method used by WhiteboxTools. If the pointer file contains ESRI flow direction values instead, set <code>esri_pntr=True</code>.</p>
+<h3 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h3>
+<p><code>d8_pointer</code>, <code>tributary_identifier</code>, <code>breach_depressions_least_cost</code>, <code>fill_depressions</code></p>
+<h3 id="python-api-7"><a class="header" href="#python-api-7">Python API</a></h3>
+<pre><code class="language-python">def stream_link_identifier(self, d8_pntr: Raster, streams_raster: Raster, esri_pntr: bool = False, zero_background: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="stream-link-length"><a class="header" href="#stream-link-length">Stream Link Length</a></h2>
+<p><strong>Function name:</strong> <code>stream_link_length</code></p>
+<p>This tool can be used to measure the length of each link in a stream network. The user must input a stream link ID raster (<code>streams_id_raster</code>), created using the <code>stream_link_identifier</code> tool, and D8 pointer raster (<code>d8_pointer</code>). The flow pointer raster is used to traverse the stream network and should only be created using the <code>d8_pointer</code> algorithm. Stream cells are designated in the stream link ID raster as all non-zero, positive values. Background cells will be assigned the NoData value in the output image, unless <code>zero_background=True</code>, in which case non-stream cells will be assigned zero values in the output.</p>
+<h3 id="see-also-8"><a class="header" href="#see-also-8">See Also</a></h3>
+<p><code>stream_link_identifier</code>, <code>d8_pointer</code>, <code>stream_link_slope</code></p>
+<h3 id="python-api-8"><a class="header" href="#python-api-8">Python API</a></h3>
+<pre><code class="language-python">def stream_link_length(self, d8_pointer: Raster, streams_id_raster: Raster, esri_pointer: bool = False, zero_background: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="stream-link-slope"><a class="header" href="#stream-link-slope">Stream Link Slope</a></h2>
+<p><strong>Function name:</strong> <code>stream_link_slope</code></p>
+<p>This tool can be used to measure the average slope gradient, in degrees, of each link in a raster stream network. To estimate the slope of individual grid cells in a raster stream network, use the <code>stream_slope_continuous</code> tool instead. The user must input a stream link identifier raster image (<code>streams_id_raster</code>), a D8 pointer image (<code>d8_pointer</code>), and a digital elevation model (<code>dem</code>). The pointer image is used to traverse the stream network and must only be created using the D8 algorithm (<code>d8_pointer</code>). Stream cells are designated in the streams image as all values greater than zero. Thus, all non-stream or background grid cells are commonly assigned either zeros or NoData values. Background cells will be assigned the NoData value in the output image, unless <code>zero_background=True</code>, in which case non-stream cells will be assigned zero values in the output.</p>
+<p>By default, the pointer raster is assumed to use the clockwise indexing method used by WhiteboxTools. If the pointer file contains ESRI flow direction values instead, set <code>esri_pointer=True</code>.</p>
+<h3 id="see-also-9"><a class="header" href="#see-also-9">See Also</a></h3>
+<p><code>stream_slope_continuous</code>, <code>d8_pointer</code></p>
+<h3 id="python-api-9"><a class="header" href="#python-api-9">Python API</a></h3>
+<pre><code class="language-python">def stream_link_slope(self, d8_pointer: Raster, streams_id_raster: Raster, dem: Raster, esri_pointer: bool = False, zero_background: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="stream-slope-continuous"><a class="header" href="#stream-slope-continuous">Stream Slope Continuous</a></h2>
+<p><strong>Function name:</strong> <code>stream_slope_continuous</code></p>
+<p>This tool can be used to measure the slope gradient, in degrees, each grid cell in a raster stream network. To estimate the average slope for each link in a stream network, use the <code>stream_link_slope</code> tool instead. The user must input a stream raster image (<code>streams_raster</code>), a D8 pointer image (<code>d8_pointer</code>), and a digital elevation model (<code>dem</code>). The pointer image is used to traverse the stream network and must only be created using the D8 algorithm (<code>d8_pointer</code>). Stream cells are designated in the streams image as all values greater than zero. Thus, all non-stream or background grid cells are commonly assigned either zeros or NoData values. Background cells will be assigned the NoData value in the output image, unless <code>zero_background=True</code>, in which case non-stream cells will be assigned zero values in the output.</p>
+<p>By default, the pointer raster is assumed to use the clockwise indexing method used by WhiteboxTools. If the pointer file contains ESRI flow direction values instead, set <code>esri_pointer=True</code>.</p>
+<h3 id="see-also-10"><a class="header" href="#see-also-10">See Also</a></h3>
+<p><code>stream_link_slope</code>, <code>d8_pointer</code></p>
+<h3 id="python-api-10"><a class="header" href="#python-api-10">Python API</a></h3>
+<pre><code class="language-python">def stream_slope_continuous(self, d8_pointer: Raster, streams_raster: Raster, dem: Raster, esri_pointer: bool = False, zero_background: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="topological-stream-order"><a class="header" href="#topological-stream-order">Topological Stream Order</a></h2>
+<p><strong>Function name:</strong> <code>topological_stream_order</code></p>
+<p>This tool can be used to assign the topological stream order to each link in a stream network. According to this stream numbering system, the link directly draining to the outlet is assigned an order of one. Each of the two tributaries draining to the order-one link are assigned an order of two, and so on until the most distant link from the catchment outlet has been assigned an order. The topological order can therefore be thought of as a measure of the topological distance of each link in the network to the catchment outlet and is likely to be related to travel time.</p>
+<p>The user must input a streams raster image (<code>streams_raster</code>) and D8 pointer image (<code>d8_pntr</code>). Stream cells are designated in the streams image as all positive, nonzero values. Thus all non-stream or background grid cells are commonly assigned either zeros or NoData values. The pointer image is used to traverse the stream network and should only be created using the D8 algorithm. Background cells will be assigned the NoData value in the output image, unless the <code>zero_background=True</code>, in which case non-stream cells will be assigned zero values in the output.</p>
+<p>By default, the pointer raster is assumed to use the clockwise indexing method used by WhiteboxTools. If the pointer file contains ESRI flow direction values instead, set <code>esri_pntr=True</code>.</p>
+<h3 id="see-also-11"><a class="header" href="#see-also-11">See Also</a></h3>
+<p><code>hack_stream_order</code>, <code>horton_stream_order</code>, <code>strahler_stream_order</code>, <code>shreve_stream_magnitude</code></p>
+<h3 id="python-api-11"><a class="header" href="#python-api-11">Python API</a></h3>
+<pre><code class="language-python">def topological_stream_order(self, d8_pntr: Raster, streams_raster: Raster, esri_pntr: bool = False, zero_background: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="tributary-identifier"><a class="header" href="#tributary-identifier">Tributary Identifier</a></h2>
+<p><strong>Function name:</strong> <code>tributary_identifier</code></p>
+<p>This tool can be used to assigns a unique identifier to each tributary in a stream network. A tributary is a section of a stream network extending from a channel head downstream to a confluence with a larger stream. Relative stream size is estimated using stream length as a surrogate. Tributaries therefore extend from channel heads downstream until a confluence is encountered in which the intersecting stream is longer, or an outlet cell is detected.</p>
+<p>The input streams raster (<code>streams_raster</code>) is used to designate which grid cells contain a stream and the pointer image is used to traverse the stream network. Stream cells are designated in the streams image as all values greater than zero. Thus, all non-stream or background grid cells are commonly assigned either zeros or NoData values. Background cells will be assigned the NoData value in the output image, unless <code>zero_background=True</code>, in which case non-stream cells will be assigned zero values in the output.</p>
+<p>The user must specify the name of a flow pointer (flow direction) raster (<code>d8_pntr</code>) and a streams raster (<code>streams_raster</code>). The flow pointer and streams rasters should be generated using the <code>d8_pointer</code> algorithm. This will require a depressionless DEM, processed using either the <code>breach_depressions_least_cost</code> or <code>fill_depressions</code> tool. flow direction) raster, and the output raster.</p>
+<p>By default, the pointer raster is assumed to use the clockwise indexing method used by WhiteboxTools. If the pointer file contains ESRI flow direction values instead, set <code>esri_pntr=True</code>.</p>
+<h3 id="see-also-12"><a class="header" href="#see-also-12">See Also</a></h3>
+<p><code>d8_pointer</code>, <code>stream_link_identifier</code>, <code>breach_depressions_least_cost</code>, <code>fill_depressions</code></p>
+<h3 id="python-api-12"><a class="header" href="#python-api-12">Python API</a></h3>
+<pre><code class="language-python">def tributary_identifier(self, d8_pntr: Raster, streams_raster: Raster, esri_pntr: bool = False, zero_background: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="vector-stream-network-analysis"><a class="header" href="#vector-stream-network-analysis">Vector Stream Network Analysis</a></h2>
+<p><strong>Function name:</strong> <code>vector_stream_network_analysis</code></p>
+<p>This tool performs common stream network analysis operations on an input vector stream file (<code>streams</code>). The network indices produced by this analysis are contained within the output vector's (<code>output</code>) attribute table. The following table shows each of the network indices that are calculated.  Index NameDescription OUTLETUnique outlet identifying value, used as basin identifier TRIB_IDUnique tributary identifying value DIST2MOUTHDistance to outlet (i.e., mouth node) DS_NODESNumber of downstream nodes TUCLTotal upstream channel length; the channel equivalent to catchment area MAXUPSDISTMaximum upstream distance HORTONHorton stream order STRAHLERStrahler stream order SHREVEShreve stream magnitude HACKHack stream order MAINSTREAMBoolean value indicating whether link is the main stream trunk of its basin MIN_ELEVMinimum link elevation (from DEM) MAX_ELEVMaximum link elevation (from DEM) IS_OUTLETBoolean value indicating whether link is an outlet link</p>
+<p>In addition to the input and output files, the user must also specify the name of an input DEM file (<code>dem</code>), the maximum ridge-cutting height, in DEM z units (<code>cutting_height</code>), and the snap distance used for identifying any topological errors in the stream file (<code>snap</code>).  The main function of the input DEM is to distinguish between outlet and headwater links in the network, which can be differentiated by their elevations during the priority-flood operation used in the algorithm (see Lindsay et al. 2019). The maximum ridge-cutting height parameter is useful for preventing erroneous stream capture in the headwaters when channel heads are very near (within the sanp distance), which is usually very rare. The snap distance parameter is used to deal with certain common topological errors. However, it is advisable that the input streams file be pre-processed prior to analysis.</p>
+<p>Note: The input streams file for this tool should be pre-processed using the <code>repair_stream_vector_topology</code> tool. <strong>This is an important step</strong>.</p>
+<p>OUTLET:</p>
+<p>HORTON:</p>
+<p>SHREVE:</p>
+<p>TRIB_ID:</p>
+<p>Many of the network indices output by this tool for vector streams have raster equivalents in WhiteboxTools. For example, see the <code>strahler_stream_order</code>, <code>shreve_stream_magnitude</code> tools.</p>
+<p>Tool outputs are: stream lines vector, confluences points vector, outlet points vector, and channel head points vector.</p>
+<h3 id="reference-1"><a class="header" href="#reference-1">Reference</a></h3>
+<p>Lindsay, JB, Yang, W, Hornby, DD. 2019. Drainage network analysis and structuring of topologically noisy vector stream data. ISPRS International Journal of Geo-Information. 8(9), 422; DOI: 10.3390/ijgi8090422</p>
+<h3 id="see-also-13"><a class="header" href="#see-also-13">See Also</a></h3>
+<p><code>repair_stream_vector_topology</code>, <code>strahler_stream_order</code>, <code>shreve_stream_magnitude</code></p>
+<h3 id="python-api-13"><a class="header" href="#python-api-13">Python API</a></h3>
+<pre><code class="language-python">def vector_stream_network_analysis(self, streams: Vector, dem: Raster, max_ridge_cutting_height: float = 10.0, snap_distance: f64 = 0.001) -&gt; Tuple[Vector, Vector, Vector, Vector]:
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="streams-longitudinal-analysis.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="lidar-processing.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="streams-longitudinal-analysis.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="lidar-processing.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

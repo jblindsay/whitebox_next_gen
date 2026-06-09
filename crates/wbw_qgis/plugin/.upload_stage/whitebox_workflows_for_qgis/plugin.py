@@ -8,6 +8,7 @@ from .bootstrap import (
     backend_install_status,
     backend_update_status,
     install_or_upgrade_whitebox_workflows,
+    get_osgeo4w_pip_error_message,
 )
 from .diagnostics import diagnostics_text, gather_runtime_diagnostics
 from .host_api import (
@@ -1356,6 +1357,13 @@ class WhiteboxWorkflowsPlugin:
         try:
             status = backend_install_status()
         except Exception as exc:
+            error_str = str(exc).lower()
+            # Check if this is a pip missing error (OSGeo4W issue)
+            if "pip is not available" in error_str or "no module named pip" in error_str:
+                if interactive:
+                    self._show_pip_missing_dialog()
+                return False
+
             self._notify_warning(f"Unable to inspect whitebox_workflows backend: {exc}")
             return False
 
@@ -1500,6 +1508,15 @@ class WhiteboxWorkflowsPlugin:
                 "import runpy, sys; sys.argv=['pip','install','--user','whitebox-workflows']; "
                 "runpy.run_module('pip', run_name='__main__', alter_sys=True)"
             )
+
+    def _show_pip_missing_dialog(self) -> None:
+        """Show a persistent dialog explaining the OSGeo4W pip missing issue and how to fix it."""
+        error_msg = get_osgeo4w_pip_error_message()
+        show_info_dialog(
+            self.iface,
+            title=error_msg["title"],
+            message=error_msg["details"],
+        )
 
     def _main_window_or_none(self):
         try:

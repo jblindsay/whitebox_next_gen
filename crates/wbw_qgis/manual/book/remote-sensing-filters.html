@@ -1,0 +1,767 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Image Filters - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html" class="active"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="image-filters"><a class="header" href="#image-filters">Image Filters</a></h1>
+<hr />
+<h2 id="adaptive-filter"><a class="header" href="#adaptive-filter">Adaptive Filter</a></h2>
+<p><strong>Function name:</strong> <code>adaptive_filter</code></p>
+<p>This tool performs a type of adaptive filter on a raster image. An adaptive filter can be used to reduce the level of random noise (shot noise) in an image. The algorithm operates by calculating the average value in a moving window centred on each grid cell. If the absolute difference between the window mean value and the centre grid cell value is beyond a user-defined threshold (<code>threshold</code>), the grid cell in the output image is assigned the mean value, otherwise it is equivalent to the original value. Therefore, the algorithm only modifies the image where grid cell values are substantially different than their neighbouring values.</p>
+<p>Neighbourhood size, or filter size, is specified in the x and y dimensions using <code>filterx</code> and <code>filtery</code>.  These dimensions should be odd, positive integer values (e.g. 3, 5, 7, 9, etc.).</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>mean_filter</code></p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def adaptive_filter(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11, threshold: float = 2.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="anisotropic-diffusion-filter"><a class="header" href="#anisotropic-diffusion-filter">Anisotropic Diffusion Filter</a></h2>
+<p><strong>Function name:</strong> <code>anisotropic_diffusion_filter</code></p>
+<p>Experimental</p>
+<p>Performs Perona-Malik edge-preserving anisotropic diffusion smoothing.</p>
+<p>remote_sensing raster filter anisotropic_diffusion_filter legacy-port</p>
+<h3 id="parameters"><a class="header" href="#parameters">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input raster path or typed raster object.Required<code>input.tif</code>
+<code>iterations</code>Number of diffusion iterations (default 10).Optional<code>10</code>
+<code>kappa</code>Edge sensitivity parameter (default 20.0).Optional<code>20.0</code>
+<code>lambda</code>Time-step in (0, 0.25], default 0.2.Optional<code>0.2</code>
+<code>output</code>Optional output path. If omitted, output remains in memory.Optional—</p>
+<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
+<p><em>Applies anisotropic_diffusion_filter to an input raster.</em>
+<code>wbe.anisotropic_diffusion_filter(input='image.tif', output='anisotropic_diffusion_filter.tif')</code></p>
+<hr />
+<h2 id="bilateral-filter"><a class="header" href="#bilateral-filter">Bilateral Filter</a></h2>
+<p><strong>Function name:</strong> <code>bilateral_filter</code></p>
+<p>This tool can be used to perform an edge-preserving smoothing filter, or bilateral filter, on an image. A bilateral filter can be used to emphasize the longer-range variability in an image, effectively acting to smooth the image, while reducing the edge blurring effect common with other types of smoothing filters. As such, this filter is very useful for reducing the noise in an image. Bilateral filtering is a non-linear filtering technique introduced by Tomasi and Manduchi (1998). The algorithm operates by convolving a kernel of weights with each grid cell and its neighbours in an image. The bilateral filter is related to Gaussian smoothing, in that the weights of the convolution kernel are partly determined by the 2-dimensional Gaussian (i.e. normal) curve, which gives stronger weighting to cells nearer the kernel centre. Unlike the <code>gaussian_filter</code>, however, the bilateral kernel weightings are also affected by their similarity to the intensity value of the central pixel. Pixels that are very different in intensity from the central pixel are weighted less, also based on a Gaussian weight distribution. Therefore, this non-linear convolution filter is determined by the spatial and intensity domains of a localized pixel neighborhood.</p>
+<p>The heavier weighting given to nearer and similar-valued pixels makes the bilateral filter an attractive alternative for image smoothing and noise reduction compared to the much-used Mean filter. The size of the filter is determined by setting the standard deviation distance parameter (<code>sigma_dist</code>); the larger the standard deviation the larger the resulting filter kernel. The standard deviation can be any number in the range 0.5-20 and is specified in the unit of pixels. The standard deviation intensity parameter (<code>sigma_int</code>), specified in the same units as the z-values, determines the intensity domain contribution to kernel weightings.</p>
+<h3 id="references"><a class="header" href="#references">References</a></h3>
+<p>Tomasi, C., &amp; Manduchi, R. (1998, January). Bilateral filtering for gray and color images. In null (p. 839). IEEE.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>edge_preserving_mean_filter</code></p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def bilateral_filter(self, raster: Raster, sigma_dist: float = 0.75, sigma_int: float = 1.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="closing"><a class="header" href="#closing">Closing</a></h2>
+<p><strong>Function name:</strong> <code>closing</code></p>
+<p>This tool performs a closing operation on an input greyscale image (<code>input</code>). A <code>closing</code> is a mathematical morphology operation involving an erosion (minimum filter) of a dilation (maximum filter) set. <code>closing</code> operations, together with the <code>opening</code> operation, is frequently used in the fields of computer vision and digital image processing for image noise removal. The user must specify the size of the moving window in both the x and y directions (<code>filterx</code> and <code>filtery</code>).</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>opening</code>, <code>tophat_transform</code></p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def closing(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="conservative-smoothing-filter"><a class="header" href="#conservative-smoothing-filter">Conservative Smoothing Filter</a></h2>
+<p><strong>Function name:</strong> <code>conservative_smoothing_filter</code></p>
+<p>This tool performs a conservative smoothing filter on a raster image. A conservative smoothing filter can be used to remove short-range variability in an image, effectively acting to smooth the image. It is particularly useful for eliminating local spikes and reducing the noise in an image. The algorithm operates by calculating the minimum and maximum neighbouring values surrounding a grid cell. If the cell at the centre of the kernel is greater than the calculated maximum value, it is replaced with the maximum value in the output image. Similarly, if the cell value at the kernel centre is less than the neighbouring minimum value, the corresponding grid cell in the output image is replaced with the minimum value. This filter tends to alter an image very little compared with other smoothing filters such as the <code>mean_filter</code>, <code>edge_preserving_mean_filter</code>, <code>bilateral_filter</code>, <code>median_filter</code>, <code>gaussian_filter</code>, or <code>olympic_filter</code>.</p>
+<p>Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code> flags. These dimensions should be odd, positive integer values (e.g. 3, 5, 7, 9, etc.).</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>mean_filter</code>, <code>edge_preserving_mean_filter</code>, <code>bilateral_filter</code>, <code>median_filter</code>, <code>gaussian_filter</code>, <code>olympic_filter</code></p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def conservative_smoothing_filter(self, raster: Raster, filter_size_x: int = 3, filter_size_y: int = 3) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="diff-of-gaussians-filter"><a class="header" href="#diff-of-gaussians-filter">Diff Of Gaussians Filter</a></h2>
+<p><strong>Function name:</strong> <code>diff_of_gaussians_filter</code></p>
+<p>This tool can be used to perform a difference-of-Gaussians (DoG) filter on a raster image. In digital image processing, DoG is a feature enhancement algorithm that involves the subtraction of one blurred version of an image from another, less blurred version of the original. The blurred images are obtained by applying filters with Gaussian-weighted kernels of differing standard deviations to the input image (<code>input</code>). Blurring an image using a Gaussian-weighted kernel suppresses high-frequency spatial information and emphasizes lower-frequency variation. Subtracting one blurred image from the other preserves spatial information that lies between the range of frequencies that are preserved in the two blurred images. Thus, the difference-of-Gaussians is a band-pass filter that discards all but a specified range of spatial frequencies that are present in the original image.</p>
+<p>The algorithm operates by differencing the results of convolving two kernels of weights with each grid cell and its neighbours in an image. The weights of the convolution kernels are determined by the 2-dimensional Gaussian (i.e. normal) curve, which gives stronger weighting to cells nearer the kernel centre. The size of the two convolution kernels are determined by setting the two standard deviation parameters (<code>sigma1</code> and <code>sigma2</code>); the larger the standard deviation the larger the resulting filter kernel. The second standard deviation should be a larger value than the first, however if this is not the case, the tool will automatically swap the two parameters. Both standard deviations can range from 0.5-20.</p>
+<p>The difference-of-Gaussians filter can be used to emphasize edges present in an image. Other edge-sharpening filters also operate by enhancing high-frequency detail, but because random noise also has a high spatial frequency, many of these sharpening filters tend to enhance noise, which can be an undesirable artifact. The difference-of-Gaussians filter can remove high-frequency noise while emphasizing edges. This filter can, however, reduce overall image contrast.</p>
+<h3 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h3>
+<p><code>gaussian_filter</code>, <code>fast_almost_gaussian_filter</code>, <code>laplacian_filter</code>, LaplacianOfGaussianFilter`</p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def diff_of_gaussians_filter(self, raster: Raster, sigma1: float = 2.0, sigma2: float = 4.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="diversity-filter"><a class="header" href="#diversity-filter">Diversity Filter</a></h2>
+<p><strong>Function name:</strong> <code>diversity_filter</code></p>
+<p>This tool assigns each cell in the output grid the number of different values in a moving window centred on each grid cell in the input raster. The input image should contain integer values but floating point data are allowable and will be handled by multiplying pixel values by 1000 and rounding. Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code> flags. These dimensions should be odd, positive integer values, e.g. 3, 5, 7, 9... If the kernel filter size is the same in the x and y dimensions, the silent <code>filter</code> flag may be used instead (command-line interface only).</p>
+<h3 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h3>
+<p><code>majority_filter</code></p>
+<h3 id="python-api-5"><a class="header" href="#python-api-5">Python API</a></h3>
+<pre><code class="language-python">def diversity_filter(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="edge-preserving-mean-filter"><a class="header" href="#edge-preserving-mean-filter">Edge Preserving Mean Filter</a></h2>
+<p><strong>Function name:</strong> <code>edge_preserving_mean_filter</code></p>
+<p>This tool performs a type of edge-preserving mean filter operation on an input image (<code>input</code>). The filter, a type of low-pass filter, can be used to emphasize the longer-range variability in an image, effectively acting to smooth the image and to reduce noise in the image. The algorithm calculates the average value in a moving window centred on each grid cell, including in the averaging only the set of neighbouring values for which the absolute value difference with the centre value is less than a specified threshold value (<code>threshold</code>). It is, therefore, similar to the <code>bilateral_filter</code>, except all neighbours within the threshold difference are equally weighted and neighbour distance is not accounted for. Filter kernels are always square, and filter size, is specified using the <code>filter</code> parameter. This dimensions should be odd, positive integer values, e.g. 3, 5, 7, 9...</p>
+<p>This tool works with both greyscale and red-green-blue (RGB) input images. RGB images are decomposed into intensity-hue-saturation (IHS) and the filter is applied to the intensity channel. If an RGB image is input, the threshold value must be in the range 0.0-1.0 (more likely less than 0.15), where a value of 1.0 would result in an ordinary mean filter (<code>mean_filter</code>). NoData values in the input image are ignored during filtering.</p>
+<h3 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h3>
+<p><code>mean_filter</code>, <code>bilateral_filter</code>, <code>edge_preserving_mean_filter</code>, <code>gaussian_filter</code>, <code>median_filter</code>, <code>rgb_to_ihs</code></p>
+<h3 id="python-api-6"><a class="header" href="#python-api-6">Python API</a></h3>
+<pre><code class="language-python">def edge_preserving_mean_filter(self, raster: Raster, filter_size: int = 11, threshold: float = 15.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="emboss-filter"><a class="header" href="#emboss-filter">Emboss Filter</a></h2>
+<p><strong>Function name:</strong> <code>emboss_filter</code></p>
+<p>This tool can be used to perform one of eight 3x3 emboss filters on a raster image. Like the <code>sobel_filter</code> and <code>prewitt_filter</code>, the <code>emboss_filter</code> is often applied in edge-detection applications. While these other two common edge-detection filters approximate the slope magnitude of the local neighbourhood surrounding each grid cell, the <code>emboss_filter</code> can be used to estimate the directional slope. The kernel weights for each of the eight available filters are as follows:</p>
+<p>North (<code>n</code>)  ... 0-10 000 010</p>
+<p>Northeast (<code>ne</code>)  ... 00-1 000 -100</p>
+<p>East (<code>e</code>)  ... 000 10-1 000</p>
+<p>Southeast (<code>se</code>)  ... 100 000 00-1</p>
+<p>South (<code>s</code>)  ... 010 000 0-10</p>
+<p>Southwest (<code>sw</code>)  ... 001 000 -100</p>
+<p>West (<code>w</code>)  ... 000 -101 000</p>
+<p>Northwest (<code>nw</code>)  ... -100 000 001</p>
+<p>The user must specify the <code>direction</code>, options include 'n', 's', 'e', 'w', 'ne', 'se', 'nw', 'sw'. The user may also optionally clip the output image distribution tails by a specified amount (e.g. 1%).</p>
+<h3 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h3>
+<p><code>sobel_filter</code>, <code>prewitt_filter</code></p>
+<h3 id="python-api-7"><a class="header" href="#python-api-7">Python API</a></h3>
+<pre><code class="language-python">def emboss_filter(self, raster: Raster, direction: str = "n", clip_amount: float = 0.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="fast-almost-gaussian-filter"><a class="header" href="#fast-almost-gaussian-filter">Fast Almost Gaussian Filter</a></h2>
+<p><strong>Function name:</strong> <code>fast_almost_gaussian_filter</code></p>
+<p>The tool is somewhat modified from Dr. Kovesi's original Matlab code in that it works with both greyscale and RGB images (decomposes to HSI and uses the intensity data) and it handles the case of rasters that contain NoData values. This adds complexity to the original 20 additions and 5 multiplications assertion of the original paper.</p>
+<p>Also note, for small values of sigma (&lt; 1.8), you should probably just use the regular GaussianFilter tool.</p>
+<h3 id="reference"><a class="header" href="#reference">Reference</a></h3>
+<p>P. Kovesi 2010 Fast Almost-Gaussian Filtering, Digital Image Computing: Techniques and Applications (DICTA), 2010 International Conference on.</p>
+<h3 id="python-api-8"><a class="header" href="#python-api-8">Python API</a></h3>
+<pre><code class="language-python">def fast_almost_gaussian_filter(self, raster: Raster, sigma: float = 1.8) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="flip-image"><a class="header" href="#flip-image">Flip Image</a></h2>
+<p><strong>Function name:</strong> <code>flip_image</code></p>
+<p>This tool can be used to flip, or reflect, an image (<code>input</code>) either vertically, horizontally, or both. The axis of reflection is specified using the <code>direction</code> parameter. The input image is not reflected in place; rather, the reflected image is stored in a separate output file.</p>
+<h3 id="python-api-9"><a class="header" href="#python-api-9">Python API</a></h3>
+<pre><code class="language-python">def flip_image(self, raster: Raster, direction: str = "v") -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="frangi-filter"><a class="header" href="#frangi-filter">Frangi Filter</a></h2>
+<p><strong>Function name:</strong> <code>frangi_filter</code></p>
+<p>Experimental</p>
+<p>Performs multiscale Frangi vesselness enhancement.</p>
+<p>remote_sensing raster filter frangi_filter legacy-port</p>
+<h3 id="parameters-1"><a class="header" href="#parameters-1">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input raster path or typed raster object.Required<code>input.tif</code>
+<code>scales</code>List of Gaussian-like scales in pixels (default [1.0, 2.0, 3.0]).Optional<code>[1.0, 2.0, 3.0]</code>
+<code>beta</code>Frangi beta parameter for blob suppression (default 0.5).Optional<code>0.5</code>
+<code>c</code>Frangi c parameter for structure sensitivity (default 15.0).Optional<code>15.0</code>
+<code>output</code>Optional output path. If omitted, output remains in memory.Optional—</p>
+<h3 id="examples-1"><a class="header" href="#examples-1">Examples</a></h3>
+<p><em>Applies frangi_filter to an input raster.</em>
+<code>wbe.frangi_filter(input='image.tif', output='frangi_filter.tif')</code></p>
+<hr />
+<h2 id="gabor-filter-bank"><a class="header" href="#gabor-filter-bank">Gabor Filter Bank</a></h2>
+<p><strong>Function name:</strong> <code>gabor_filter_bank</code></p>
+<p>Experimental</p>
+<p>Performs multi-orientation Gabor response filtering.</p>
+<p>remote_sensing raster filter gabor_filter_bank legacy-port</p>
+<h3 id="parameters-2"><a class="header" href="#parameters-2">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input raster path or typed raster object.Required<code>input.tif</code>
+<code>sigma</code>Gaussian envelope sigma in pixels (default 2.0).Optional<code>2.0</code>
+<code>frequency</code>Sinusoid spatial frequency in cycles/pixel (default 0.2).Optional<code>0.2</code>
+<code>orientations</code>Number of orientations in the filter bank (default 6).Optional<code>6</code>
+<code>output</code>Optional output path. If omitted, output remains in memory.Optional—</p>
+<h3 id="examples-2"><a class="header" href="#examples-2">Examples</a></h3>
+<p><em>Applies gabor_filter_bank to an input raster.</em>
+<code>wbe.gabor_filter_bank(input='image.tif', output='gabor_filter_bank.tif')</code></p>
+<hr />
+<h2 id="gaussian-filter"><a class="header" href="#gaussian-filter">Gaussian Filter</a></h2>
+<p><strong>Function name:</strong> <code>gaussian_filter</code></p>
+<p>This tool can be used to perform a Gaussian filter on a raster image. A Gaussian filter can be used to emphasize the longer-range variability in an image, effectively acting to smooth the image. This can be useful for reducing the noise in an image. The algorithm operates by convolving a kernel of weights with each grid cell and its neighbours in an image. The weights of the convolution kernel are determined by the 2-dimensional Gaussian (i.e. normal) curve, which gives stronger weighting to cells nearer the kernel centre. It is this characteristic that makes the Gaussian filter an attractive alternative for image smoothing and noise reduction than the <code>mean_filter</code>. The size of the filter is determined by setting the standard deviation parameter (<code>sigma</code>), which is in units of grid cells; the larger the standard deviation the larger the resulting filter kernel. The standard deviation can be any number in the range 0.5-20.</p>
+<p><code>gaussian_filter</code> works with both greyscale and red-green-blue (RGB) colour images. RGB images are decomposed into intensity-hue-saturation (IHS) and the filter is applied to the intensity channel. NoData values in the input image are ignored during processing.</p>
+<p>Like many low-pass filters, Gaussian filtering can significantly blur well-defined edges in the input image. The <code>edge_preserving_mean_filter</code> and <code>bilateral_filter</code> offer more robust feature preservation during image smoothing. <code>gaussian_filter</code> is relatively slow compared to the <code>fast_almost_gaussian_filter</code> tool, which offers a fast-running approximatation to a Gaussian filter for larger kernel sizes.</p>
+<h3 id="see-also-8"><a class="header" href="#see-also-8">See Also</a></h3>
+<p><code>fast_almost_gaussian_filter</code>, <code>mean_filter</code>, <code>median_filter</code>, <code>rgb_to_ihs</code></p>
+<h3 id="python-api-10"><a class="header" href="#python-api-10">Python API</a></h3>
+<pre><code class="language-python">def gaussian_filter(self, raster: Raster, sigma: float = 0.75) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="glcm-texture"><a class="header" href="#glcm-texture">GLCM Texture</a></h2>
+<p><strong>Function name:</strong> <code>glcm_texture</code></p>
+<h3 id="description"><a class="header" href="#description">Description</a></h3>
+<p>Computes general-purpose local texture metrics from a single-band raster using a gray-level co-occurrence matrix (GLCM) within a moving window. Output is written as a multiband raster so that large metric sets remain manageable in Python/R APIs and QGIS.</p>
+<p>Use <code>features</code> to choose which metrics are emitted. Supported feature names are <code>contrast</code>, <code>dissimilarity</code>, <code>homogeneity</code>, <code>asm</code>, <code>energy</code>, <code>entropy</code>, <code>mean</code>, <code>variance</code>, and <code>correlation</code>. Use <code>direction_aggregation</code> to combine directions (<code>mean</code>, <code>min</code>, <code>max</code>, <code>range</code>) or keep each direction as separate output bands (<code>separate</code>).</p>
+<p>Angles are specified in degrees using a comma-separated list from <code>0,45,90,135</code>. Increasing <code>window_size</code> and <code>levels</code> generally improves stability at higher computational cost.</p>
+<h3 id="python-api-11"><a class="header" href="#python-api-11">Python API</a></h3>
+<pre><code class="language-python">def glcm_texture(self, input: Raster, window_size: int = 7, distance: int = 1, angles: str = "0,45,90,135", features: str = "contrast,homogeneity,energy,entropy", direction_aggregation: str = "mean", levels: int = 32, symmetric: bool = True) -&gt; Raster:
+</code></pre>
+<h3 id="example"><a class="header" href="#example">Example</a></h3>
+<p><code>glcm = wbe.glcm_texture(     input=raster,     window_size=9,     distance=1,     angles="0,45,90,135",     features="contrast,homogeneity,entropy",     direction_aggregation="mean",     levels=32,     output="glcm_texture.tif", )</code></p>
+<h3 id="see-also-9"><a class="header" href="#see-also-9">See Also</a></h3>
+<p><code>image_segmentation</code>, <code>object_features_texture_glcm_basic</code></p>
+<hr />
+<h2 id="guided-filter"><a class="header" href="#guided-filter">Guided Filter</a></h2>
+<p><strong>Function name:</strong> <code>guided_filter</code></p>
+<p>Experimental</p>
+<p>Performs edge-preserving guided filtering using local linear models.</p>
+<p>remote_sensing raster filter guided_filter legacy-port</p>
+<h3 id="parameters-3"><a class="header" href="#parameters-3">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input raster path or typed raster object.Required<code>input.tif</code>
+<code>radius</code>Guided filter window radius in pixels (default 4).Optional<code>4</code>
+<code>epsilon</code>Regularization parameter for local variance (default 0.01).Optional<code>0.01</code>
+<code>output</code>Optional output path. If omitted, output remains in memory.Optional—</p>
+<h3 id="examples-3"><a class="header" href="#examples-3">Examples</a></h3>
+<p><em>Applies guided_filter to an input raster.</em>
+<code>wbe.guided_filter(input='image.tif', output='guided_filter.tif')</code></p>
+<hr />
+<h2 id="high-pass-bilateral-filter"><a class="header" href="#high-pass-bilateral-filter">High Pass Bilateral Filter</a></h2>
+<p><strong>Function name:</strong> <code>high_pass_bilateral_filter</code></p>
+<p>Experimental</p>
+<p>Computes a high-pass residual by subtracting bilateral smoothing from the input raster.</p>
+<p>raster image filter high-pass legacy-port</p>
+<h3 id="parameters-4"><a class="header" href="#parameters-4">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input raster path or typed raster object.Required<code>input.tif</code>
+<code>sigma_dist</code>Standard deviation of the spatial (distance) Gaussian kernel, in pixels (0.5–20.0, default 0.75).Optional<code>0.75</code>
+<code>sigma_int</code>Standard deviation of the intensity Gaussian kernel, in raster-value units (default 1.0).Optional<code>1.0</code>
+<code>treat_as_rgb</code>Set true to force HSI-intensity filtering for packed RGB rasters before high-pass differencing.Optional<code>False</code>
+<code>assume_three_band_rgb</code>When true (default), and no explicit color metadata is present, allow 3-band uint8/uint16 RGB interpretation.Optional<code>True</code>
+<code>output</code>Optional output file path. If omitted, output remains in memory.Optional—</p>
+<h3 id="examples-4"><a class="header" href="#examples-4">Examples</a></h3>
+<p><em>Applies high-pass bilateral filtering to emphasize local texture.</em>
+<code>wbe.high_pass_bilateral_filter(assume_three_band_rgb=True, input='image.tif', output='image_highpass_bilateral.tif', sigma_dist=1.5, sigma_int=25.0, treat_as_rgb=False)</code></p>
+<hr />
+<h2 id="high-pass-filter"><a class="header" href="#high-pass-filter">High Pass Filter</a></h2>
+<p><strong>Function name:</strong> <code>high_pass_filter</code></p>
+<p>This tool performs a high-pass filter on a raster image. High-pass filters can be used to emphasize the short-range variability in an image. The algorithm operates essentially by subtracting the value at the grid cell at the centre of the window from the average value in the surrounding neighbourhood (i.e. window.)</p>
+<p>Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code> flags. These dimensions should be odd, positive integer values (e.g. 3, 5, 7, 9, etc.).</p>
+<h3 id="see-also-10"><a class="header" href="#see-also-10">See Also</a></h3>
+<p><code>high_pass_median_filter</code>, <code>mean_filter</code></p>
+<h3 id="python-api-12"><a class="header" href="#python-api-12">Python API</a></h3>
+<pre><code class="language-python">def high_pass_filter(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="high-pass-median-filter"><a class="header" href="#high-pass-median-filter">High Pass Median Filter</a></h2>
+<p><strong>Function name:</strong> <code>high_pass_median_filter</code></p>
+<p>This tool performs a high-pass median filter on a raster image. High-pass filters can be used to emphasize the short-range variability in an image. The algorithm operates essentially by subtracting the value at the grid cell at the centre of the window from the median value in the surrounding neighbourhood (i.e. window.)</p>
+<p>Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code> flags. These dimensions should be odd, positive integer values (e.g. 3, 5, 7, 9, etc.).</p>
+<h3 id="see-also-11"><a class="header" href="#see-also-11">See Also</a></h3>
+<p><code>high_pass_filter</code>, <code>median_filter</code></p>
+<h3 id="python-api-13"><a class="header" href="#python-api-13">Python API</a></h3>
+<pre><code class="language-python">def high_pass_median_filter(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11, sig_digits: int = 2) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="integral-image-transform"><a class="header" href="#integral-image-transform">Integral Image Transform</a></h2>
+<p><strong>Function name:</strong> <code>integral_image_transform</code></p>
+<p>This tool transforms an input raster image into an integral image, or summed area table. Integral images are the two-dimensional equivalent to a cumulative distribution function. Each pixel contains the sum of all pixels contained within the enclosing rectangle above and to the left of a pixel. Images with a very large number of grid cells will likely experience numerical overflow errors when converted to an integral image. Integral images are used in a wide variety of computer vision and digital image processing applications, including texture mapping. They allow for the efficient calculation of very large filters and are the basis of several of <em>WhiteboxTools</em>'s image filters.</p>
+<h3 id="reference-1"><a class="header" href="#reference-1">Reference</a></h3>
+<p>Crow, F. C. (1984, January). Summed-area tables for texture mapping. In ACM SIGGRAPH computer graphics (Vol. 18, No. 3, pp. 207-212). ACM.</p>
+<h3 id="python-api-14"><a class="header" href="#python-api-14">Python API</a></h3>
+<pre><code class="language-python">def integral_image_transform(self, raster: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="k-nearest-mean-filter"><a class="header" href="#k-nearest-mean-filter">K Nearest Mean Filter</a></h2>
+<p><strong>Function name:</strong> <code>k_nearest_mean_filter</code></p>
+<p>This tool performs a k-nearest mean filter on a raster image. A mean filter can be used to emphasize the longer-range variability in an image, effectively acting to smooth or blur the image. This can be useful for reducing the noise in an image. The algorithm operates by calculating the average of a specified number (<em>k</em>) values in a moving window centred on each grid cell. The <em>k</em> values used in the average are those cells in the window with the nearest intensity values to that of the centre cell. As such, this is a type of edge-preserving smoothing filter. The <code>bilateral_filter</code> and <code>edge_preserving_mean_filter</code> are examples of more sophisticated edge-preserving smoothing filters.</p>
+<p>Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code> flags. These dimensions should be odd, positive integer values (e.g. 3, 5, 7, 9, etc.).</p>
+<p>NoData values in the input image are ignored during filtering.</p>
+<h3 id="see-also-12"><a class="header" href="#see-also-12">See Also</a></h3>
+<p><code>mean_filter</code>, <code>bilateral_filter</code>, <code>edge_preserving_mean_filter</code></p>
+<h3 id="python-api-15"><a class="header" href="#python-api-15">Python API</a></h3>
+<pre><code class="language-python">def k_nearest_mean_filter(self, raster: Raster, filter_size_x: int = 3, filter_size_y: int = 3, k: int = 5) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="kuwahara-filter"><a class="header" href="#kuwahara-filter">Kuwahara Filter</a></h2>
+<p><strong>Function name:</strong> <code>kuwahara_filter</code></p>
+<p>Experimental</p>
+<p>Performs edge-preserving Kuwahara filtering using minimum-variance subwindows.</p>
+<p>remote_sensing raster filter kuwahara_filter legacy-port</p>
+<h3 id="parameters-5"><a class="header" href="#parameters-5">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input raster path or typed raster object.Required<code>input.tif</code>
+<code>radius</code>Kuwahara quadrant radius in pixels (default 2).Optional<code>2</code>
+<code>output</code>Optional output path. If omitted, output remains in memory.Optional—</p>
+<h3 id="examples-5"><a class="header" href="#examples-5">Examples</a></h3>
+<p><em>Applies kuwahara_filter to an input raster.</em>
+<code>wbe.kuwahara_filter(input='image.tif', output='kuwahara_filter.tif')</code></p>
+<hr />
+<h2 id="lee-filter"><a class="header" href="#lee-filter">Lee Filter</a></h2>
+<p><strong>Function name:</strong> <code>lee_filter</code></p>
+<p>The Lee Sigma filter is a low-pass filter used to smooth the input image (<code>input</code>). The user must specify the dimensions of the filter (<code>filterx</code> and <code>filtery</code>) as well as the <em>sigma</em> (<code>sigma</code>) and <em>M</em> (<code>m</code>) parameter.</p>
+<h3 id="reference-2"><a class="header" href="#reference-2">Reference</a></h3>
+<p>Lee, J. S. (1983). Digital image smoothing and the sigma filter. Computer vision, graphics, and image processing, 24(2), 255-269.</p>
+<h3 id="see-also-13"><a class="header" href="#see-also-13">See Also</a></h3>
+<p><code>mean_filter</code>, <code>gaussian_filter</code></p>
+<h3 id="python-api-16"><a class="header" href="#python-api-16">Python API</a></h3>
+<pre><code class="language-python">def lee_filter(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11, sigma: float = 10.0, m_value: float = 5.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="line-detection-filter"><a class="header" href="#line-detection-filter">Line Detection Filter</a></h2>
+<p><strong>Function name:</strong> <code>line_detection_filter</code></p>
+<p>This tool can be used to perform one of four 3x3 line-detection filters on a raster image. These filters can be used to find one-cell-thick vertical, horizontal, or angled (135-degrees or 45-degrees) lines in an image. Notice that line-finding is a similar application to edge-detection. Common edge-detection filters include the Sobel and Prewitt filters. The kernel weights for each of the four line-detection filters are as follows:</p>
+<p>'v' (Vertical)  ... -12-1 -12-1 -12-1</p>
+<p>'h' (Horizontal)  ... -1-1-1 222 -1-1-1</p>
+<p>'45' (Northeast-Southwest)  ... -1-12 -12-1 2-1-1</p>
+<p>'135' (Northwest-Southeast)  ... 2-1-1 -12-1 -1-12</p>
+<p>The user must specify the <code>variant</code>, including 'v', 'h', '45', and '135', for vertical, horizontal, northeast-southwest, and northwest-southeast directions respectively. The user may also optionally clip the output image distribution tails by a specified amount (e.g. 1%).</p>
+<h3 id="see-also-14"><a class="header" href="#see-also-14">See Also</a></h3>
+<p><code>prewitt_filter</code>, <code>sobel_filter</code></p>
+<h3 id="python-api-17"><a class="header" href="#python-api-17">Python API</a></h3>
+<pre><code class="language-python">def line_detection_filter(self, raster: Raster, variant: str = "v", abs_values: bool = False, clip_tails: float = 0.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="line-thinning"><a class="header" href="#line-thinning">Line Thinning</a></h2>
+<p><strong>Function name:</strong> <code>line_thinning</code></p>
+<p>This image processing tool reduces all polygons in a Boolean raster image to their single-cell wide skeletons. This operation is sometimes called line thinning or skeletonization. In fact, the input image need not be truly Boolean (i.e. contain only 1's and 0's). All non-zero, positive values are considered to be foreground pixels while all zero valued cells are considered background pixels. The <code>remove_spurs</code> tool is useful for cleaning up an image before performing a line thinning operation.</p>
+<p>Note: Unlike other filter-based operations in <em>WhiteboxTools</em>, this algorithm can't easily be parallelized because the output raster must be read and written to during the same loop.</p>
+<h3 id="see-also-15"><a class="header" href="#see-also-15">See Also</a></h3>
+<p><code>remove_spurs</code>, <code>thicken_raster_line</code></p>
+<h3 id="python-api-18"><a class="header" href="#python-api-18">Python API</a></h3>
+<pre><code class="language-python">def line_thinning(self, raster: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="lidar-ground-point-filter"><a class="header" href="#lidar-ground-point-filter">LiDAR Ground Point Filter</a></h2>
+<p><strong>Function name:</strong> <code>lidar_ground_point_filter</code></p>
+<p>This tool can be used to perform a slope-based classification, or filtering (i.e. removal), of non-ground points within a LiDAR point-cloud. The user must specify the name of the input and output LiDAR files (<code>input</code> and <code>output</code>). Inter-point slopes are compared between pair of points contained within local neighbourhoods of size <code>radius</code>. Neighbourhoods with fewer than the user-specified minimum number of points (<code>min_neighbours</code>) are extended until the minimum point number is equaled or exceeded. Points that are above neighbouring points by the minimum (<code>height_threshold</code>) and have an inter-point slope greater than the user-specifed threshold (<code>slope_threshold</code>) are considered non-ground points and are either optionally (<code>classify</code>) excluded from the output point-cloud or assigned the <em>unclassified</em> (value 1) class value.</p>
+<p>Slope-based ground-point classification methods suffer from the challenge of uses a constant slope threshold under varying terrain slopes. Some researchers have developed schemes for varying the slope threshold based on underlying terrain slopes. <code>lidar_ground_point_filter</code> instead allow the user to optionally (<code>slope_norm</code>) normalize the underlying terrain (i.e. flatten the terrain) using a white top-hat transform. A constant slope threshold may then be used without contributing to poorer performance under steep topography. Note, that this option, while useful in rugged terrain, is computationally intensive. If the point-cloud is of a relatively flat terrain, this option may be excluded.</p>
+<p>While this tool is appropriately applied to LiDAR point-clouds, the <code>remove_off_terrain_objects</code> tool can be used to remove off-terrain objects from rasterized LiDAR digital elevation models (DEMs).</p>
+<h3 id="reference-3"><a class="header" href="#reference-3">Reference</a></h3>
+<p>Vosselman, G. (2000). Slope based filtering of laser altimetry data. <em>International Archives of Photogrammetry and Remote Sensing</em>, 33(B3/2; PART 3), 935-942.</p>
+<h3 id="see-also-16"><a class="header" href="#see-also-16">See Also</a></h3>
+<p><code>improved_ground_point_filter</code>, <code>remove_off_terrain_objects</code></p>
+<h3 id="python-api-19"><a class="header" href="#python-api-19">Python API</a></h3>
+<pre><code class="language-python">def lidar_ground_point_filter(self, input_lidar: Optional[Lidar], search_radius: float = 2.0, min_neighbours: int = 0, slope_threshold: float = 45.0, height_threshold: float = 1.0, classify: bool = False, slope_norm: bool = True, height_above_ground: bool = False) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="majority-filter"><a class="header" href="#majority-filter">Majority Filter</a></h2>
+<p><strong>Function name:</strong> <code>majority_filter</code></p>
+<p>This tool performs a range filter on an input image (<code>input</code>). A range filter assigns to each cell in the output grid. The range (maximum - minimum) of the values contained within a moving window centred on each grid cell.</p>
+<p>Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code> flags. These dimensions should be odd, positive integer values (e.g. 3, 5, 7, 9, etc.).</p>
+<h3 id="see-also-17"><a class="header" href="#see-also-17">See Also</a></h3>
+<p><code>total_filter</code></p>
+<h3 id="python-api-20"><a class="header" href="#python-api-20">Python API</a></h3>
+<pre><code class="language-python">def majority_filter(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="maximum-filter"><a class="header" href="#maximum-filter">Maximum Filter</a></h2>
+<p><strong>Function name:</strong> <code>maximum_filter</code></p>
+<p>This tool assigns each cell in the output grid. The maximum value in a moving window centred on each grid cell in the input raster (<code>input</code>). A maximum filter is the equivalent of the mathematical morphological <code>dilation</code> operator.</p>
+<p>Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code> flags. These dimensions should be odd, positive integer values, e.g. 3, 5, 7, 9... If the kernel filter size is the same in the x and y dimensions, the silent <code>filter</code> flag may be used instead (command-line interface only).</p>
+<p>This tool takes advantage of the redundancy between overlapping, neighbouring filters to enhance computationally efficiency. Like most of WhiteboxTools' filters, it is also parallelized for further efficiency.</p>
+<h3 id="see-also-18"><a class="header" href="#see-also-18">See Also</a></h3>
+<p><code>minimum_filter</code></p>
+<h3 id="python-api-21"><a class="header" href="#python-api-21">Python API</a></h3>
+<pre><code class="language-python">def maximum_filter(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="mean-filter"><a class="header" href="#mean-filter">Mean Filter</a></h2>
+<p><strong>Function name:</strong> <code>mean_filter</code></p>
+<p>This tool performs a mean filter operation on a raster image. A mean filter, a type of low-pass filter, can be used to emphasize the longer-range variability in an image, effectively acting to smooth the image. This can be useful for reducing the noise in an image. This tool utilizes an integral image approach (Crow, 1984) to ensure highly efficient filtering that is invariant to filter size. The algorithm operates by calculating the average value in a moving window centred on each grid cell.  Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code> flags. These dimensions should be odd, positive integer values, e.g. 3, 5, 7, 9... If the kernel filter size is the same in the x and y dimensions, the silent <code>filter</code> flag may be used instead (command-line interface only).</p>
+<p>Although commonly applied in digital image processing, mean filters are generally considered to be quite harsh, with respect to their impact on the image, compared to other smoothing filters such as the edge-preserving smoothing filters including the <code>bilateral_filter</code>, <code>median_filter</code>, <code>olympic_filter</code>, <code>edge_preserving_mean_filter</code> and even <code>gaussian_filter</code>.</p>
+<p>This tool works with both greyscale and red-green-blue (RGB) images. RGB images are decomposed into intensity-hue-saturation (IHS) and the filter is applied to the intensity channel. NoData values in the input image are ignored during filtering. NoData values are assigned to all sites beyond the raster.</p>
+<h3 id="reference-4"><a class="header" href="#reference-4">Reference</a></h3>
+<p>Crow, F. C. (1984, January). Summed-area tables for texture mapping. In ACM SIGGRAPH computer graphics (Vol. 18, No. 3, pp. 207-212). ACM.</p>
+<h3 id="see-also-19"><a class="header" href="#see-also-19">See Also</a></h3>
+<p><code>bilateral_filter</code>, <code>edge_preserving_mean_filter</code>, <code>gaussian_filter</code>, <code>median_filter</code>, <code>rgb_to_ihs</code></p>
+<h3 id="python-api-22"><a class="header" href="#python-api-22">Python API</a></h3>
+<pre><code class="language-python">def mean_filter(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="median-filter"><a class="header" href="#median-filter">Median Filter</a></h2>
+<p><strong>Function name:</strong> <code>median_filter</code></p>
+<p>This tool performs a median filter on a raster image. Median filters, a type of low-pass filter, can be used to emphasize the longer-range variability in an image, effectively acting to smooth the image. This can be useful for reducing the noise in an image. The algorithm operates by calculating the median value (middle value in a sorted list) in a moving window centred on each grid cell. Specifically, this tool uses the efficient running-median filtering algorithm of Huang et al. (1979). The median value is not influenced by anomolously high or low values in the distribution to the extent that the average is. As such, the median filter is far less sensitive to shot noise in an image than the mean filter.</p>
+<p>Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code>flags. These dimensions should be odd, positive integer values (e.g. 3, 5, 7, 9, etc.).</p>
+<h3 id="reference-5"><a class="header" href="#reference-5">Reference</a></h3>
+<p>Huang, T., Yang, G.J.T.G.Y. and Tang, G., 1979. A fast two-dimensional median filtering algorithm. IEEE Transactions on Acoustics, Speech, and Signal Processing, 27(1), pp.13-18.</p>
+<h3 id="see-also-20"><a class="header" href="#see-also-20">See Also</a></h3>
+<p><code>bilateral_filter</code>, <code>edge_preserving_mean_filter</code>, <code>gaussian_filter</code>, <code>mean_filter</code></p>
+<h3 id="python-api-23"><a class="header" href="#python-api-23">Python API</a></h3>
+<pre><code class="language-python">def median_filter(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11, sig_digits: int = 2) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="minimum-filter"><a class="header" href="#minimum-filter">Minimum Filter</a></h2>
+<p><strong>Function name:</strong> <code>minimum_filter</code></p>
+<p>This tool assigns each cell in the output grid the minimum value in a moving window centred on each grid cell in the input raster (<code>input</code>). A maximum filter is the equivalent of the mathematical morphological <code>erosion</code> operator.</p>
+<p>Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code> flags. These dimensions should be odd, positive integer values, e.g. 3, 5, 7, 9... If the kernel filter size is the same in the x and y dimensions, the silent <code>filter</code> flag may be used instead (command-line interface only).</p>
+<p>This tool takes advantage of the redundancy between overlapping, neighbouring filters to enhance computationally efficiency. Like most of WhiteboxTools' filters, it is also parallelized for further efficiency.</p>
+<h3 id="see-also-21"><a class="header" href="#see-also-21">See Also</a></h3>
+<p><code>maximum_filter</code></p>
+<h3 id="python-api-24"><a class="header" href="#python-api-24">Python API</a></h3>
+<pre><code class="language-python">def minimum_filter(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="non-local-means-filter"><a class="header" href="#non-local-means-filter">Non Local Means Filter</a></h2>
+<p><strong>Function name:</strong> <code>non_local_means_filter</code></p>
+<p>Experimental</p>
+<p>Performs non-local means denoising using patch similarity weighting.</p>
+<p>remote_sensing raster filter non_local_means_filter legacy-port</p>
+<h3 id="parameters-6"><a class="header" href="#parameters-6">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input raster path or typed raster object.Required<code>input.tif</code>
+<code>search_radius</code>Search window radius in pixels (default 5).Optional<code>5</code>
+<code>patch_radius</code>Patch radius in pixels (default 1).Optional<code>1</code>
+<code>h</code>Filtering strength parameter (default 10.0).Optional<code>10.0</code>
+<code>output</code>Optional output path. If omitted, output remains in memory.Optional—</p>
+<h3 id="examples-6"><a class="header" href="#examples-6">Examples</a></h3>
+<p><em>Applies non_local_means_filter to an input raster.</em>
+<code>wbe.non_local_means_filter(input='image.tif', output='non_local_means_filter.tif')</code></p>
+<hr />
+<h2 id="opening"><a class="header" href="#opening">Opening</a></h2>
+<p><strong>Function name:</strong> <code>opening</code></p>
+<p>This tool performs an opening operation on an input greyscale image (<code>input</code>). An <code>opening</code> is a mathematical morphology operation involving a dilation (maximum filter) on an erosion (minimum filter) set. <code>opening</code> operations, together with the <code>closing</code> operation, is frequently used in the fields of computer vision and digital image processing for image noise removal. The user must specify the size of the moving window in both the x and y directions (<code>filterx</code> and <code>filtery</code>).</p>
+<h3 id="see-also-22"><a class="header" href="#see-also-22">See Also</a></h3>
+<p><code>closing</code>, <code>tophat_transform</code></p>
+<h3 id="python-api-25"><a class="header" href="#python-api-25">Python API</a></h3>
+<pre><code class="language-python">def opening(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="olympic-filter"><a class="header" href="#olympic-filter">Olympic Filter</a></h2>
+<p><strong>Function name:</strong> <code>olympic_filter</code></p>
+<p>This filter is a modification of the <code>mean_filter</code>, whereby the highest and lowest values in the kernel are dropped, and the remaining values are averaged to replace the central pixel. The result is a low-pass smoothing filter that is more robust than the <code>mean_filter</code>, which is more strongly impacted by the presence of outlier values. It is named after a system of scoring Olympic events.</p>
+<p>Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code> flags. These dimensions should be odd, positive integer values (e.g. 3, 5, 7, 9, etc.).</p>
+<h3 id="see-also-23"><a class="header" href="#see-also-23">See Also</a></h3>
+<p><code>mean_filter</code></p>
+<h3 id="python-api-26"><a class="header" href="#python-api-26">Python API</a></h3>
+<pre><code class="language-python">def olympic_filter(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="percentile-filter"><a class="header" href="#percentile-filter">Percentile Filter</a></h2>
+<p><strong>Function name:</strong> <code>percentile_filter</code></p>
+<p>This tool calculates the percentile of the center cell in a moving filter window applied to an input image (`input). This indicates the value below which a given percentage of the neighbouring values in within the filter fall. For example, the 35th percentile is the value below which 35% of the neighbouring values in the filter window may be found. As such, the percentile of a pixel value is indicative of the relative location of the site within the statistical distribution of values contained within a filter window. When applied to input digital elevation models, percentile is a measure of local topographic position, or elevation residual.</p>
+<p>Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code> flags. These dimensions should be odd, positive integer values, e.g. 3, 5, 7, 9... If the kernel filter size is the same in the x and y dimensions, the silent <code>filter</code> flag may be used instead (command-line interface only).</p>
+<p>This tool takes advantage of the redundancy between overlapping, neighbouring filters to enhance computationally efficiency, using a method similar to Huang et al. (1979). This efficient method of calculating percentiles requires rounding of floating-point inputs, and therefore the user must specify the number of significant digits (<code>sig_digits</code>) to be used during the processing. Like most of WhiteboxTools' filters, this tool is also parallelized for further efficiency.</p>
+<h3 id="reference-6"><a class="header" href="#reference-6">Reference</a></h3>
+<p>Huang, T., Yang, G.J.T.G.Y. and Tang, G., 1979. A fast two-dimensional median filtering algorithm. IEEE Transactions on Acoustics, Speech, and Signal Processing, 27(1), pp.13-18.</p>
+<h3 id="see-also-24"><a class="header" href="#see-also-24">See Also</a></h3>
+<p><code>median_filter</code></p>
+<h3 id="python-api-27"><a class="header" href="#python-api-27">Python API</a></h3>
+<pre><code class="language-python">def percentile_filter(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11, sig_digits: int = 2) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="range-filter"><a class="header" href="#range-filter">Range Filter</a></h2>
+<p><strong>Function name:</strong> <code>range_filter</code></p>
+<p>This tool performs a range filter on an input image (<code>input</code>). A range filter assigns to each cell in the output grid the range (maximum - minimum) of the values contained within a moving window centred on each grid cell.</p>
+<p>Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code> flags. These dimensions should be odd, positive integer values (e.g. 3, 5, 7, 9, etc.).</p>
+<h3 id="see-also-25"><a class="header" href="#see-also-25">See Also</a></h3>
+<p><code>total_filter</code></p>
+<h3 id="python-api-28"><a class="header" href="#python-api-28">Python API</a></h3>
+<pre><code class="language-python">def range_filter(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="remove-spurs"><a class="header" href="#remove-spurs">Remove Spurs</a></h2>
+<p><strong>Function name:</strong> <code>remove_spurs</code></p>
+<p>This image processing tool removes small irregularities (i.e. spurs) on the boundaries of objects in a Boolean input raster image (<code>input</code>). This operation is sometimes called <em>pruning</em>. Remove Spurs is a useful tool for cleaning an image before performing a line thinning operation. In fact, the input image need not be truly Boolean (i.e. contain only 1's and 0's). All non-zero, positive values are considered to be foreground pixels while all zero valued cells are considered background pixels.</p>
+<p>Note: Unlike other filter-based operations in <em>WhiteboxTools</em>, this algorithm can't easily be parallelized because the output raster must be read and written to during the same loop.</p>
+<h3 id="see-also-26"><a class="header" href="#see-also-26">See Also</a></h3>
+<p><code>line_thinning</code></p>
+<h3 id="python-api-29"><a class="header" href="#python-api-29">Python API</a></h3>
+<pre><code class="language-python">def remove_spurs(self, raster: Raster, max_iterations: int = 10) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="savitzky-golay-2d-filter"><a class="header" href="#savitzky-golay-2d-filter">Savitzky Golay 2D Filter</a></h2>
+<p><strong>Function name:</strong> <code>savitzky_golay_2d_filter</code></p>
+<p>Experimental</p>
+<p>Performs 2D Savitzky-Golay smoothing.</p>
+<p>remote_sensing raster filter savitzky_golay_2d_filter legacy-port</p>
+<h3 id="parameters-7"><a class="header" href="#parameters-7">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input raster path or typed raster object.Required<code>input.tif</code>
+<code>window_size</code>Odd window size (default 5). Currently supports 5 for polynomial order 2.Optional<code>5</code>
+<code>output</code>Optional output path. If omitted, output remains in memory.Optional—</p>
+<h3 id="examples-7"><a class="header" href="#examples-7">Examples</a></h3>
+<p><em>Applies savitzky_golay_2d_filter to an input raster.</em>
+<code>wbe.savitzky_golay_2d_filter(input='image.tif', output='savitzky_golay_2d_filter.tif')</code></p>
+<hr />
+<h2 id="scharr-filter"><a class="header" href="#scharr-filter">Scharr Filter</a></h2>
+<p><strong>Function name:</strong> <code>scharr_filter</code></p>
+<p>This tool performs a Scharr edge-detection filter on a raster image. The Scharr filter is similar to the <code>sobel_filter</code> and <code>prewitt_filter</code>, in that it identifies areas of high slope in the input image through the calculation of slopes in the x and y directions. A 3 × 3 Scharr filter uses the following schemes to calculate x and y slopes:</p>
+<p>X-direction slope  ... 30-3 100-10 30-3</p>
+<p>Y-direction slope  ... 3103 000 -3-10-3</p>
+<p>Each grid cell in the output image is assigned the square-root of the squared sum of the x and y slopes.</p>
+<p>The output image may be overwhelmed by a relatively small number of high-valued pixels, stretching the palette. The user may therefore optionally clip the output image distribution tails by a specified amount (<code>clip</code>) for improved visualization.</p>
+<h3 id="see-also-27"><a class="header" href="#see-also-27">See Also</a></h3>
+<p><code>sobel_filter</code>, <code>prewitt_filter</code></p>
+<h3 id="python-api-30"><a class="header" href="#python-api-30">Python API</a></h3>
+<pre><code class="language-python">def scharr_filter(self, raster: Raster, clip_tails: float = 0.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="standard-deviation-filter"><a class="header" href="#standard-deviation-filter">Standard Deviation Filter</a></h2>
+<p><strong>Function name:</strong> <code>standard_deviation_filter</code></p>
+<p>This tool performs a standard deviation filter on an input image (<code>input</code>). A standard deviation filter assigns to each cell in the output grid the <code>standard deviation</code>, a measure of dispersion, of the values contained within a moving window centred on each grid cell.</p>
+<p>Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code> flags. These dimensions should be odd, positive integer values (e.g. 3, 5, 7, 9, etc.).</p>
+<h3 id="see-also-28"><a class="header" href="#see-also-28">See Also</a></h3>
+<p><code>range_filter</code>, <code>total_filter</code></p>
+<h3 id="python-api-31"><a class="header" href="#python-api-31">Python API</a></h3>
+<pre><code class="language-python">def standard_deviation_filter(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="thicken-raster-line"><a class="header" href="#thicken-raster-line">Thicken Raster Line</a></h2>
+<p><strong>Function name:</strong> <code>thicken_raster_line</code></p>
+<p>This image processing tool can be used to thicken single-cell wide lines within a raster file along diagonal sections of the lines. Because of the limitation of the raster data format, single-cell wide raster lines can be traversed along diagonal sections without passing through a line grid cell. This causes problems for various raster analysis functions for which lines are intended to be barriers. This tool will thicken raster lines, such that it is impossible to cross a line without passing through a line grid cell. While this can also be achieved using a maximum filter, unlike the filter approach, this tool will result in the smallest possible thickening to achieve the desired result.</p>
+<p>All non-zero, positive values are considered to be foreground pixels while all zero valued cells or NoData cells are considered background pixels.</p>
+<p>Note: Unlike other filter-based operations in <em>WhiteboxTools</em>, this algorithm can't easily be parallelized because the output raster must be read and written to during the same loop.</p>
+<h3 id="see-also-29"><a class="header" href="#see-also-29">See Also</a></h3>
+<p><code>line_thinning</code></p>
+<h3 id="python-api-32"><a class="header" href="#python-api-32">Python API</a></h3>
+<pre><code class="language-python">def thicken_raster_line(self, raster: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="tophat-transform"><a class="header" href="#tophat-transform">Tophat Transform</a></h2>
+<p><strong>Function name:</strong> <code>tophat_transform</code></p>
+<p>This tool performs either a white or black <code>top-hat transform</code> on an input image. A top-hat transform is a common digital image processing operation used for various tasks, such as feature extraction, background equalization, and image enhancement. The size of the rectangular <em>structuring element</em> used in the filtering can be specified using the <code>filterx</code> and <code>filtery</code> flags.</p>
+<p>There are two distinct types of top-hat transform including <em>white</em> and <em>black</em> top-hat transforms. The white top-hat transform is defined as the difference between the input image and its <code>opening</code> by some structuring element. An opening operation is the <code>dilation</code> (maximum filter) of an <code>erosion</code> (minimum filter) image. The black top-hat transform, by comparison, is defined as the difference between the <code>closing</code> and the input image. The user specifies which of the two flavours of top-hat transform the tool should perform by specifying either 'white' or 'black' with the <code>variant</code> flag.</p>
+<h3 id="see-also-30"><a class="header" href="#see-also-30">See Also:</a></h3>
+<p><code>closing</code>, <code>opening</code>, <code>maximum_filter</code>, <code>minimum_filter</code></p>
+<h3 id="python-api-33"><a class="header" href="#python-api-33">Python API</a></h3>
+<pre><code class="language-python">def tophat_transform(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11, variant: str = "white") -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="total-filter"><a class="header" href="#total-filter">Total Filter</a></h2>
+<p><strong>Function name:</strong> <code>total_filter</code></p>
+<p>This tool performs a total filter on an input image. A total filter assigns to each cell in the output grid the total (sum) of all values in a moving window centred on each grid cell.</p>
+<p>Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code> flags. These dimensions should be odd, positive integer values (e.g. 3, 5, 7, 9, etc.).</p>
+<h3 id="see-also-31"><a class="header" href="#see-also-31">See Also</a></h3>
+<p><code>range_filter</code></p>
+<h3 id="python-api-34"><a class="header" href="#python-api-34">Python API</a></h3>
+<pre><code class="language-python">def total_filter(self, raster: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="unsharp-masking"><a class="header" href="#unsharp-masking">Unsharp Masking</a></h2>
+<p><strong>Function name:</strong> <code>unsharp_masking</code></p>
+<p>Unsharp masking is an image edge-sharpening technique commonly applied in digital image processing. Admittedly, the name 'unsharp' seems somewhat counter-intuitive given the purpose of the filter, which is to enchance the definition of edge features within the input image (<code>input</code>). This name comes from the use of a blurred, or unsharpened, intermediate image (mask) in the process. The blurred image is combined with the positive (original) image, creating an image that exhibits enhanced feature definition. A caution is needed in that the output image, although clearer, may be a less accurate representation of the image's subject. The output may also contain more speckle than the input image.</p>
+<p>In addition to the input (<code>input</code>) and output image files, the user must specify the values of three parameters: the standard deviation distance (<code>sigma</code>), which is a measure of the filter size in pixels, the amount (<code>amount</code>), a percentage value that controls the magnitude of each overshoot at edges, and lastly, the threshold (<code>threshold</code>), which controls the minimal brightness change that will be sharpened. Pixels with values differ after the calculation of the filter by less than the threshold are unmodified in the output image.</p>
+<p><code>unsharp_masking</code> works with both greyscale and red-green-blue (RGB) colour images. RGB images are decomposed into intensity-hue-saturation (IHS) and the filter is applied to the intensity channel. Importantly, the intensity values range from 0-1, which is important when setting the threshold value for colour images. NoData values in the input image are ignored during processing.</p>
+<h3 id="see-also-32"><a class="header" href="#see-also-32">See Also</a></h3>
+<p><code>gaussian_filter</code>, <code>high_pass_filter</code></p>
+<h3 id="python-api-35"><a class="header" href="#python-api-35">Python API</a></h3>
+<pre><code class="language-python">def unsharp_masking(self, raster: Raster, sigma: float = 0.75, amount: float = 100.0, threshold: float = 0.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="user-defined-weights-filter"><a class="header" href="#user-defined-weights-filter">User Defined Weights Filter</a></h2>
+<p><strong>Function name:</strong> <code>user_defined_weights_filter</code></p>
+<p>NoData values in the input image are ignored during the convolution operation. This can lead to unexpected behavior at the edges of images (since the default behavior is to return NoData when addressing cells beyond the grid edge) and where the grid contains interior areas of NoData values. Normalization of kernel weights can be useful for handling the edge effects associated with interior areas of NoData values. When the normalization option is selected, the sum of the cell value-weight product is divided by the sum of the weights on a cell-by-cell basis. Therefore, if the kernel at a particular grid cell contains neighboring cells of NoData values, normalization effectively re-adjusts the weighting to account for the missing data values. Normalization also ensures that the output image will possess values within the range of the input image and allows the user to specify integer value weights in the kernel. However, note that this implies that the sum of weights should equal one. In some cases, alternative sums (e.g. zero) are more appropriate, and as such normalization should not be applied in these cases.</p>
+<h3 id="python-api-36"><a class="header" href="#python-api-36">Python API</a></h3>
+<pre><code class="language-python">def user_defined_weights_filter(self, raster: Raster, weights: List[List[float]], kernel_center: str = "center", normalize_weights: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="wiener-filter"><a class="header" href="#wiener-filter">Wiener Filter</a></h2>
+<p><strong>Function name:</strong> <code>wiener_filter</code></p>
+<p>Experimental</p>
+<p>Performs adaptive Wiener denoising using local mean and variance.</p>
+<p>remote_sensing raster filter wiener_filter legacy-port</p>
+<h3 id="parameters-8"><a class="header" href="#parameters-8">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input raster path or typed raster object.Required<code>input.tif</code>
+<code>radius</code>Wiener local window radius in pixels (default 2).Optional<code>2</code>
+<code>noise_variance</code>Optional additive noise variance. If omitted, estimated from local variance map.Optional—
+<code>output</code>Optional output path. If omitted, output remains in memory.Optional—</p>
+<h3 id="examples-8"><a class="header" href="#examples-8">Examples</a></h3>
+<p><em>Applies wiener_filter to an input raster.</em>
+<code>wbe.wiener_filter(input='image.tif', output='wiener_filter.tif')</code></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="remote-sensing-enhancement-contrast.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="remote-sensing-edge-feature-detection.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="remote-sensing-enhancement-contrast.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="remote-sensing-edge-feature-detection.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

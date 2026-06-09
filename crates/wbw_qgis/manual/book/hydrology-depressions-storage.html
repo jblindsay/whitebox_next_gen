@@ -1,0 +1,430 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Depressions and Storage - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html" class="active"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="depressions-and-storage"><a class="header" href="#depressions-and-storage">Depressions and Storage</a></h1>
+<hr />
+<h2 id="breach-depressions-least-cost"><a class="header" href="#breach-depressions-least-cost">Breach Depressions Least Cost</a></h2>
+<p><strong>Function name:</strong> <code>breach_depressions_least_cost</code></p>
+<p>This tool can be used to perform a type of optimal depression breaching to prepare a digital elevation model (DEM) for hydrological analysis. Depression breaching is a common alternative to depression filling (<code>fill_depressions</code>) and often offers a lower-impact solution to the removal of topographic depressions. This tool implements a method that is loosely based on the algorithm described by Lindsay and Dhun (2015), furthering the earlier algorithm with efficiency optimizations and other significant enhancements. The approach uses a least-cost path analysis to identify the breach channel that connects pit cells (i.e. grid cells for which there is no lower neighbour) to some distant lower cell. Prior to breaching and in order to minimize the depth of breach channels, all pit cells are rised to the elevation of the lowest neighbour minus a small heigh value. Here, the cost of a breach path is determined by the amount of elevation lowering needed to cut the breach channel through the surrounding topography.</p>
+<p>The user must specify the name of the input DEM file (<code>dem</code>), the output breached DEM file (<code>output</code>), the maximum search window radius (<code>dist</code>), the optional maximum breach cost (<code>max_cost</code>), and an optional flat height increment value (<code>flat_increment</code>). Notice that <strong>if the <code>flat_increment</code> parameter is not specified, the small number used to ensure flow across flats will be calculated automatically, which should be preferred in most applications</strong> of the tool. The tool operates by performing a least-cost path analysis for each pit cell, radiating outward until the operation identifies a potential breach destination cell or reaches the maximum breach length parameter. If a value is specified for the optional <code>max_cost</code> parameter, then least-cost breach paths that would require digging a channel that is more costly than this value will be left unbreached. The flat increment value is used to ensure that there is a monotonically descending path along breach channels to satisfy the necessary condition of a downslope gradient for flowpath modelling. It is best for this value to be a small value. If left unspecified, the tool with determine an appropriate value based on the range of elevation values in the input DEM, <strong>which should be the case in most applications</strong>. Notice that the need to specify these very small elevation increment values is one of the reasons why the output DEM will always be of a 64-bit floating-point data type, which will often double the storage requirements of a DEM (DEMs are often store with 32-bit precision). Lastly, the user may optionally choose to apply depression filling (<code>fill</code>) on any depressions that remain unresolved by the earlier depression breaching operation. This filling step uses an efficient filling method based on flooding depressions from their pit cells until outlets are identified and then raising the elevations of flooded cells back and away from the outlets.</p>
+<p>The tool can be run in two modes, based on whether the <code>min_dist</code> is specified. If the <code>min_dist</code> flag is specified, the accumulated cost (accum2) of breaching from <em>cell1</em> to <em>cell2</em> along a channel issuing from <em>pit</em> is calculated using the traditional cost-distance function:</p>
+<p>cost1 = z1 - (zpit + <em>l</em> × <em>s</em>)</p>
+<p>cost2 = z2 - [zpit + (<em>l</em> + 1)<em>s</em>]</p>
+<p>accum2 = accum1 + <em>g</em>(cost1 + cost2) / 2.0</p>
+<p>where cost1 and cost2 are the costs associated with moving through <em>cell1</em> and <em>cell2</em> respectively, z1 and z2 are the elevations of the two cells, zpit is the elevation of the pit cell, <em>l</em> is the length of the breach channel to <em>cell1</em>, <em>g</em> is the grid cell distance between cells (accounting for diagonal distances), and <em>s</em> is the small number used to ensure flow across flats. If the <code>min_dist</code> flag is not present, the accumulated cost is calculated as:</p>
+<p>accum2 = accum1 + cost2</p>
+<p>That is, without the <code>min_dist</code> flag, the tool works to minimize elevation changes to the DEM caused by breaching, without considering the distance of breach channels. Notice that the value <code>max_cost</code>, if specified, should account for this difference in the way cost/cost-distances are calculated. The first cell in the least-cost accumulation operation that is identified for which cost2 &lt;= 0.0 is the target cell to which the breach channel will connect the pit along the least-cost path.</p>
+<p>In comparison with the <code>breach_depressions_least_cost</code> tool, this breaching method often provides a more satisfactory, lower impact, breaching solution and is often more efficient. It is therefore advisable that users try the <code>breach_depressions_least_cost</code> tool to remove depressions from their DEMs first. This tool is particularly well suited to breaching through road embankments. There are instances when a breaching solution is inappropriate, e.g. when a very deep depression such as an open-pit mine occurs in the DEM and long, deep breach paths are created. Often restricting breaching with the <code>max_cost</code> parameter, combined with subsequent depression filling (<code>fill</code>) can provide an adequate solution in these cases. Nonetheless, there are applications for which full depression filling using the  <code>fill_depressions</code> tool may be preferred.</p>
+<h3 id="reference"><a class="header" href="#reference">Reference</a></h3>
+<p>Lindsay J, Dhun K. 2015. Modelling surface drainage patterns in altered landscapes using LiDAR. <em>International Journal of Geographical Information Science</em>, 29: 1-15. DOI: 10.1080/13658816.2014.975715</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>breach_depressions_least_cost</code>, <code>fill_depressions</code>, <code>cost_pathway</code></p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def breach_depressions_least_cost(self, dem: Raster, max_cost: float = float('inf'), max_dist: int = 100, flat_increment: float = float('nan'), fill_deps: bool = False, minimize_dist: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="breach-single-cell-pits"><a class="header" href="#breach-single-cell-pits">Breach Single Cell Pits</a></h2>
+<p><strong>Function name:</strong> <code>breach_single_cell_pits</code></p>
+<p>This tool calculates the average slope gradient (i.e. slope steepness in degrees) of the flowpaths that pass through each grid cell in an input digital elevation model (DEM). The user must specify the name of a DEM raster (<code>dem</code>). It is important that this DEM is pre-processed to remove all topographic depressions and flat areas using a tool such as <code>breach_depressions_least_cost</code>. Several intermediate rasters are created and stored in memory during the operation of this tool, which may limit the size of DEM that can be processed, depending on available system resources.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>average_upslope_flowpath_length</code>, <code>breach_depressions_least_cost</code></p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def breach_single_cell_pits(self, dem: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="burn-streams"><a class="header" href="#burn-streams">Burn Streams</a></h2>
+<p><strong>Function name:</strong> <code>burn_streams</code></p>
+<p>Stable</p>
+<p>Burns a stream network into a DEM by decreasing stream-cell elevations.</p>
+<p>stream_network dem_preprocessing</p>
+<hr />
+<h2 id="burn-streams-at-roads"><a class="header" href="#burn-streams-at-roads">Burn Streams At Roads</a></h2>
+<p><strong>Function name:</strong> <code>burn_streams_at_roads</code></p>
+<p>This tool decrements (lowers) the elevations of pixels within an input digital elevation model (DEM) (<code>dem</code>) along an input vector stream network (<code>streams</code>) at the sites of road (<code>roads</code>) intersections. In addition to the input data layers, the user must specify the output raster DEM (<code>output</code>), and the maximum road embankment width (<code>width</code>), in map units. The road width parameter is used to determine the length of channel along stream lines, at the junctions between streams and roads, that the burning (i.e. decrementing) operation occurs. The algorithm works by identifying stream-road intersection cells, then traversing along the rasterized stream path in the upstream and downstream directions by half the maximum road embankment width. The minimum elevation in each stream traversal is identified and then elevations that are higher than this value are lowered to the minimum elevation during a second stream traversal.</p>
+<h3 id="reference-1"><a class="header" href="#reference-1">Reference</a></h3>
+<p>Lindsay JB. 2016. <code>The practice of DEM stream burning revisited</code>.  Earth Surface Processes and Landforms, 41(5): 658–668. DOI: 10.1002/esp.3888</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>raster_streams_to_vector</code>, <code>rasterize_streams</code></p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def burn_streams_at_roads(self, dem: Raster, streams: Vector, roads: Vector, road_width: float) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="depth-in-sink"><a class="header" href="#depth-in-sink">Depth In Sink</a></h2>
+<p><strong>Function name:</strong> <code>depth_in_sink</code></p>
+<p>This tool measures the depth that each grid cell in an input (<code>dem</code>) raster digital elevation model (DEM) lies within a sink feature, i.e. a closed topographic depression. A sink, or depression, is a bowl-like landscape feature, which is characterized by interior drainage and groundwater recharge. The <code>depth_in_sink</code> tool operates by differencing a filled DEM, using the same depression filling method as <code>fill_depressions</code>, and the original surface model.</p>
+<p>In addition to the names of the input DEM (<code>dem</code>) and the output raster (<code>output</code>), the user must specify whether the background value (i.e. the value assigned to grid cells that are not contained within sinks) should be set to 0.0 (<code>zero_background</code>) Without this optional parameter specified, the tool will use the NoData value as the background value.</p>
+<h3 id="reference-2"><a class="header" href="#reference-2">Reference</a></h3>
+<p>Antonić, O., Hatic, D., &amp; Pernar, R. (2001). DEM-based depth in sink as an environmental estimator. Ecological Modelling, 138(1-3), 247-254.</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>fill_depressions</code></p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def depth_in_sink(self, dem: Raster, zero_background: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="fill-burn"><a class="header" href="#fill-burn">Fill Burn</a></h2>
+<p><strong>Function name:</strong> <code>fill_burn</code></p>
+<p>Burns streams into a DEM using the FillBurn (Saunders, 1999) method which produces a hydro-enforced DEM. This tool uses the algorithm described in:</p>
+<p>Lindsay JB. 2016. The practice of DEM stream burning revisited. Earth Surface Processes and Landforms, 41(5): 658-668. DOI: 10.1002/esp.3888</p>
+<p>And:</p>
+<p>Saunders, W. 1999. Preparation of DEMs for use in environmental modeling analysis, in: ESRI User Conference. pp. 24-30.</p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def fill_burn(self, dem: Raster, streams: Vector) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="fill-depressions"><a class="header" href="#fill-depressions">Fill Depressions</a></h2>
+<p><strong>Function name:</strong> <code>fill_depressions</code></p>
+<p>This tool can be used to fill all of the depressions in a digital elevation model (DEM) and to remove the flat areas. This is a common pre-processing step required by many flow-path analysis tools to ensure continuous flow from each grid cell to an outlet located along the grid edge. The <code>fill_depressions</code> algorithm operates by first identifying single-cell pits, that is, interior grid cells with no lower neighbouring cells. Each pit cell is then visited from highest to lowest and a priority region-growing operation is initiated. The area of monotonically increasing elevation, starting from the pit cell and growing based on flood order, is identified. Once a cell, that has not been previously visited and possessing a lower elevation than its discovering neighbour cell, is identified the discovering neighbour is labelled as an outlet (spill point) and the outlet elevation is noted. The algorithm then back-fills the labelled region, raising the elevation in the output DEM (<code>output</code>) to that of the outlet. Once this process is completed for each pit cell (noting that nested pit cells are often solved by prior pits) the flat regions of filled pits are optionally treated (<code>fix_flats</code>) with an applied small slope gradient away from outlets (note, more than one outlet cell may exist for each depression). The user may optionally specify the size of the elevation increment used to solve flats (<code>flat_increment</code>), although <strong>it is best to not specify this optional value and to let the algorithm determine the most suitable value itself</strong>. The flat-fixing method applies a small gradient away from outlets using another priority region-growing operation (i.e. based on a priority queue operation), where priorities are set by the elevations in the input DEM (<code>input</code>). This in effect ensures a gradient away from outlet cells but also following the natural pre-conditioned topography internal to depression areas. For example, if a large filled area occurs upstream of a damming road-embankment, the filled DEM will possess flow directions that are similar to the un-flooded valley, with flow following the valley bottom. In fact, the above case is better handled using the <code>breach_depressions_least_cost</code> tool, which would simply cut through the road embankment at the likely site of a culvert. However, the flat-fixing method of <code>fill_depressions</code> does mean that this common occurrence in LiDAR DEMs is less problematic.</p>
+<p>The <code>breach_depressions_least_cost</code>, while slightly less efficient than either other hydrological preprocessing methods, often provides a lower impact solution to topographic depressions and should be preferred in most applications. In comparison with the <code>breach_depressions_least_cost</code> tool, the depression filling method often provides a less satisfactory, higher impact solution. <strong>It is advisable that users try the <code>breach_depressions_least_cost</code> tool to remove depressions from their DEMs before using <code>fill_depressions</code></strong>. Nonetheless, there are applications for which full depression filling using the <code>fill_depressions</code> tool may be preferred.</p>
+<p>Note that this tool will not fill in NoData regions within the DEM. It is advisable to remove such regions using the <code>fill_missing_data</code> tool prior to application.</p>
+<h3 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h3>
+<p><code>breach_depressions_least_cost</code>, <code>breach_depressions_least_cost</code>, <code>sink</code>, <code>depth_in_sink</code>, <code>fill_missing_data</code></p>
+<h3 id="python-api-5"><a class="header" href="#python-api-5">Python API</a></h3>
+<pre><code class="language-python">def fill_depressions(self, dem: Raster, fix_flats: bool = True, flat_increment: float = float('nan'), max_depth: float = float('inf')) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="fill-depressions-planchon-and-darboux"><a class="header" href="#fill-depressions-planchon-and-darboux">Fill Depressions Planchon And Darboux</a></h2>
+<p><strong>Function name:</strong> <code>fill_depressions_planchon_and_darboux</code></p>
+<p>This tool can be used to fill all of the depressions in a digital elevation model (DEM) and to remove the flat areas using the Planchon and Darboux (2002) method. This is a common pre-processing step required by many flow-path analysis tools to ensure continuous flow from each grid cell to an outlet located along the grid edge. <strong>This tool is currently not the most efficient depression-removal algorithm available in WhiteboxTools</strong>; <code>fill_depressions</code> and <code>breach_depressions_least_cost</code> are both more efficient and often produce better, lower-impact results.</p>
+<p>The user may optionally specify the size of the elevation increment used to solve flats (<code>flat_increment</code>), although <strong>it is best not to specify this optional value and to let the algorithm determine the most suitable value itself</strong>.</p>
+<h3 id="reference-3"><a class="header" href="#reference-3">Reference</a></h3>
+<p>Planchon, O. and Darboux, F., 2002. A fast, simple and versatile algorithm to fill the depressions of digital elevation models. Catena, 46(2-3), pp.159-176.</p>
+<h3 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h3>
+<p><code>fill_depressions</code>, <code>breach_depressions_least_cost</code></p>
+<h3 id="python-api-6"><a class="header" href="#python-api-6">Python API</a></h3>
+<pre><code class="language-python">def fill_depressions_planchon_and_darboux(self, dem: Raster, fix_flats: bool = True, flat_increment: float = float('nan')) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="fill-depressions-wang-and-liu"><a class="header" href="#fill-depressions-wang-and-liu">Fill Depressions Wang And Liu</a></h2>
+<p><strong>Function name:</strong> <code>fill_depressions_wang_and_liu</code></p>
+<p>This tool can be used to fill all of the depressions in a digital elevation model (DEM) and to remove the flat areas. This is a common pre-processing step required by many flow-path analysis tools to ensure continuous flow from each grid cell to an outlet located along the grid edge. The <code>fill_depressions_wang_and_liu</code> algorithm is based on the computationally efficient approach of examining each cell based on its spill elevation, starting from the edge cells, and visiting cells from lowest order using a priority queue. As such, it is based on the algorithm first proposed by Wang and Liu (2006). However, it is currently not the most efficient depression-removal algorithm available in WhiteboxTools; <code>fill_depressions</code> and <code>breach_depressions_least_cost</code> are both more efficient and often produce better, lower-impact results.</p>
+<p>If the input DEM has gaps, or missing-data holes, that contain NoData values, it is better to use the <code>fill_missing_data</code> tool to repair these gaps. This tool will interpolate values across the gaps and produce a more natural-looking surface than the flat areas that are produced by depression filling. Importantly, the <code>fill_depressions</code> tool algorithm implementation assumes that there are no 'donut hole' NoData gaps within the area of valid data. Any NoData areas along the edge of the grid will simply be ignored and will remain NoData areas in the output image.</p>
+<p>The user may optionally specify the size of the elevation increment used to solve flats (<code>flat_increment</code>), although <strong>it is best not to specify this optional value and to let the algorithm determine the most suitable value itself</strong>.</p>
+<h3 id="reference-4"><a class="header" href="#reference-4">Reference</a></h3>
+<p>Wang, L. and Liu, H. 2006. An efficient method for identifying and filling surface depressions in digital elevation models for hydrologic analysis and modelling. International Journal of Geographical Information Science, 20(2): 193-213.</p>
+<h3 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h3>
+<p><code>fill_depressions</code>, <code>breach_depressions_least_cost</code>, <code>breach_depressions_least_cost</code>, <code>fill_missing_data</code></p>
+<h3 id="python-api-7"><a class="header" href="#python-api-7">Python API</a></h3>
+<pre><code class="language-python">def fill_depressions_wang_and_liu(self, dem: Raster, fix_flats: bool = True, flat_increment: float = float('nan')) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="fill-pits"><a class="header" href="#fill-pits">Fill Pits</a></h2>
+<p><strong>Function name:</strong> <code>fill_pits</code></p>
+<p>This tool can be used to remove pits from a digital elevation model (DEM). Pits are single grid cells with no downslope neighbours. They are important because they impede overland flow-paths. This tool will remove any pits in the input DEM that can be resolved by raising the elevation of the pit such that flow will continue past the pit cell to one of the downslope neighbours. Notice that this tool can be a useful pre-processing technique before running one of the more robust depression breaching (<code>breach_depressions_least_cost</code>) or filling (<code>fill_depressions</code>) techniques, which are designed to remove larger depression features.</p>
+<h3 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h3>
+<p><code>breach_depressions_least_cost</code>, <code>fill_depressions</code>, <code>breach_single_cell_pits</code></p>
+<h3 id="python-api-8"><a class="header" href="#python-api-8">Python API</a></h3>
+<pre><code class="language-python">def fill_pits(self, dem: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="flatten-lakes"><a class="header" href="#flatten-lakes">Flatten Lakes</a></h2>
+<p><strong>Function name:</strong> <code>flatten_lakes</code></p>
+<p>This tool can be used to set the elevations contained in a set of input vector lake polygons (<code>lakes</code>) to a consistent value within an input (<code>dem</code>) digital elevation model (DEM). Lake flattening is a common pre-processing step for DEMs intended for use in hydrological applications. This algorithm determines lake elevation automatically based on the minimum perimeter elevation for each lake polygon. The minimum perimeter elevation is assumed to be the lake outlet elevation and is assigned to the entire interior region of lake polygons, excluding island geometries. Note, this tool will not provide satisfactory results if the input vector polygons contain wide river features rather than true lakes. When this is the case, the tool will lower the entire river to the elevation of its mouth, leading to the creation of an artificial gorge.</p>
+<h3 id="see-also-8"><a class="header" href="#see-also-8">See Also</a></h3>
+<p><code>fill_depressions</code></p>
+<h3 id="python-api-9"><a class="header" href="#python-api-9">Python API</a></h3>
+<pre><code class="language-python">def flatten_lakes(self, dem: Raster, lakes: Vector) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="impoundment-size-index"><a class="header" href="#impoundment-size-index">Impoundment Size Index</a></h2>
+<p><strong>Function name:</strong> <code>impoundment_size_index</code></p>
+<p>This tool can be used to calculate the impoundment size index (ISI) from a digital elevation model (DEM). The ISI is a land-surface parameter related to the size of the impoundment that would result from inserting a dam of a user-specified maximum length (<code>damlength</code>) into each DEM grid cell. The tool requires the user to specify the name of one or more of the possible outputs, which include the mean flooded depth (<code>out_mean</code>), the maximum flooded depth (<code>out_max</code>), the flooded volume (<code>out_volume</code>), the flooded area (<code>out_area</code>), and the dam height (<code>out_dam_height</code>).</p>
+<p>Please note that this tool performs an extremely complex and computationally intensive flow-accumulation operation. As such, it may take a substantial amount of processing time and may encounter issues (including memory issues) when applied to very large DEMs. It is not necessary to pre-process the input DEM (<code>dem</code>) to remove topographic depressions and flat areas. The internal flow-accumulation operation will not be confounded by the presence of these features.</p>
+<h3 id="reference-5"><a class="header" href="#reference-5">Reference</a></h3>
+<p>Lindsay, JB (2015) Modelling the spatial pattern of potential impoundment size from DEMs. Online resource: <code>Whitebox Blog</code></p>
+<h3 id="see-also-9"><a class="header" href="#see-also-9">See Also</a></h3>
+<p><code>insert_dams</code>, <code>stochastic_depression_analysis</code></p>
+<h3 id="python-api-10"><a class="header" href="#python-api-10">Python API</a></h3>
+<pre><code class="language-python">def impoundment_size_index(self, dem: Raster, max_dam_length: float, output_mean: bool = False, output_max: bool = False, output_volume: bool = False, output_area: bool = False, output_height: bool = False) -&gt; Tuple[Union[Raster, None], Union[Raster, None], Union[Raster, None], Union[Raster, None], Union[Raster, None]]:
+</code></pre>
+<hr />
+<h2 id="insert-dams"><a class="header" href="#insert-dams">Insert Dams</a></h2>
+<p><strong>Function name:</strong> <code>insert_dams</code></p>
+<p>This tool can be used to insert dams at one or more user-specified points (<code>dam_pts</code>), and of a maximum length (<code>damlength</code>), within an input digital elevation model (DEM) (<code>dem</code>). This tool can be thought of as providing the impoundment feature that is calculated internally during a run of the the impoundment size index (ISI) tool for a set of points of interest. from a  (DEM).</p>
+<h3 id="reference-6"><a class="header" href="#reference-6">Reference</a></h3>
+<p>Lindsay, JB (2015) Modelling the spatial pattern of potential impoundment size from DEMs. Online resource: <code>Whitebox Blog</code></p>
+<h3 id="see-also-10"><a class="header" href="#see-also-10">See Also</a></h3>
+<p><code>impoundment_size_index</code>, <code>stochastic_depression_analysis</code></p>
+<h3 id="python-api-11"><a class="header" href="#python-api-11">Python API</a></h3>
+<pre><code class="language-python">def insert_dams(self, dem: Raster, dam_points: Vector, dam_length: float) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="raise-walls"><a class="header" href="#raise-walls">Raise Walls</a></h2>
+<p><strong>Function name:</strong> <code>raise_walls</code></p>
+<p>This tool is used to increment the elevations in a digital elevation model (DEM) along the boundaries of a vector lines or polygon layer. The user must specify the name of the raster DEM (<code>dem</code>), the vector file (<code>input</code>), the output file name (<code>output</code>), the increment height (<code>height</code>), and an optional breach lines vector layer (<code>breach</code>). The breach lines layer can be used to breach a whole in the raised walls at intersections with the wall layer.</p>
+<h3 id="python-api-12"><a class="header" href="#python-api-12">Python API</a></h3>
+<pre><code class="language-python">def raise_walls(self, dem: Raster, walls: Vector, breach_lines: Vector, wall_height: float = 100.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="sink"><a class="header" href="#sink">Sink</a></h2>
+<p><strong>Function name:</strong> <code>sink</code></p>
+<p>This tool measures the depth that each grid cell in an input (<code>dem</code>) raster digital elevation model (DEM) lies within a sink feature, i.e. a closed topographic depression. A sink, or depression, is a bowl-like landscape feature, which is characterized by interior drainage and groundwater recharge. The <code>depth_in_sink</code> tool operates by differencing a filled DEM, using the same depression filling method as <code>fill_depressions</code>, and the original surface model.</p>
+<p>In addition to the names of the input DEM (<code>dem</code>) and the output raster (<code>output</code>), the user must specify whether the background value (i.e. the value assigned to grid cells that are not contained within sinks) should be set to 0.0 (<code>zero_background</code>) Without this optional parameter specified, the tool will use the NoData value as the background value.</p>
+<h3 id="reference-7"><a class="header" href="#reference-7">Reference</a></h3>
+<p>Antonić, O., Hatic, D., &amp; Pernar, R. (2001). DEM-based depth in sink as an environmental estimator. Ecological Modelling, 138(1-3), 247-254.</p>
+<h3 id="see-also-11"><a class="header" href="#see-also-11">See Also</a></h3>
+<p><code>fill_depressions</code></p>
+<h3 id="python-api-13"><a class="header" href="#python-api-13">Python API</a></h3>
+<pre><code class="language-python">def sink(self, dem: Raster, zero_background: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="stochastic-depression-analysis"><a class="header" href="#stochastic-depression-analysis">Stochastic Depression Analysis</a></h2>
+<p><strong>Function name:</strong> <code>stochastic_depression_analysis</code></p>
+<p>This tool performs a stochastic analysis of depressions within a DEM, calculating the probability of each cell belonging to a depression. This land-surface parameter (pdep) has been widely applied in wetland and bottom-land mapping applications.</p>
+<p>This tool differs from the original Whitebox GAT tool in a few significant ways:</p>
+<ul>
+<li></li>
+</ul>
+<h2 id="the-whitebox-gat-tool-took-an-error-histogram-as-an-input-in-practice-people-found----it-difficult-to-create-this-input-usually-they-just-generated-a-normal-distribution----in-a-spreadsheet-using-information-about-the-dem-root-mean-square-error-rmse-as----such-this-tool-takes-a-rmse-input-and-generates-the-histogram-internally-this-is----more-convienent-for-most-applications-but-loses-the-flexibility-of-specifying-the----error-distribution-more-completely"><a class="header" href="#the-whitebox-gat-tool-took-an-error-histogram-as-an-input-in-practice-people-found----it-difficult-to-create-this-input-usually-they-just-generated-a-normal-distribution----in-a-spreadsheet-using-information-about-the-dem-root-mean-square-error-rmse-as----such-this-tool-takes-a-rmse-input-and-generates-the-histogram-internally-this-is----more-convienent-for-most-applications-but-loses-the-flexibility-of-specifying-the----error-distribution-more-completely">The Whitebox GAT tool took an error histogram as an input. In practice people found    it difficult to create this input. Usually they just generated a normal distribution    in a spreadsheet using information about the DEM root-mean-square-error (RMSE). As    such, this tool takes a RMSE input and generates the histogram internally. This is    more convienent for most applications but loses the flexibility of specifying the    error distribution more completely.</a></h2>
+<h2 id="the-whitebox-gat-tool-generated-the-error-fields-using-the-turning-bands-method----this-tool-generates-a-random-gaussian-error-field-with-no-spatial-autocorrelation----and-then-applies-local-spatial-averaging-using-a-gaussian-filter-the-size-of----which-depends-of-the-error-autocorrelation-length-input-to-increase-the-level-of----autocorrelation-we-use-the-fast-almost-gaussian-filter-of-peter-kovesi-2010----which-uses-five-repeat-passes-of-a-mean-filter-based-on-an-integral-image-this----filter-method-is-highly-efficient-this-results-in-a-significant-performance----increase-compared-with-the-original-tool"><a class="header" href="#the-whitebox-gat-tool-generated-the-error-fields-using-the-turning-bands-method----this-tool-generates-a-random-gaussian-error-field-with-no-spatial-autocorrelation----and-then-applies-local-spatial-averaging-using-a-gaussian-filter-the-size-of----which-depends-of-the-error-autocorrelation-length-input-to-increase-the-level-of----autocorrelation-we-use-the-fast-almost-gaussian-filter-of-peter-kovesi-2010----which-uses-five-repeat-passes-of-a-mean-filter-based-on-an-integral-image-this----filter-method-is-highly-efficient-this-results-in-a-significant-performance----increase-compared-with-the-original-tool">The Whitebox GAT tool generated the error fields using the turning bands method.    This tool generates a random Gaussian error field with no spatial autocorrelation    and then applies local spatial averaging using a Gaussian filter (the size of    which depends of the error autocorrelation length input) to increase the level of    autocorrelation. We use the Fast Almost Gaussian Filter of Peter Kovesi (2010),    which uses five repeat passes of a mean filter, based on an integral image. This    filter method is highly efficient. This results in a significant performance    increase compared with the original tool.</a></h2>
+<p>Parts of the tool's workflow utilize parallel processing. However, the depression    filling operation, which is the most time-consuming part of the workflow, is    not parallelized.</p>
+<p>In addition to the input DEM (<code>dem</code>) and output pdep file name (<code>output</code>), the user must specify the nature of the error model, including the root-mean-square error (<code>rmse</code>) and the error field correlation length (<code>range</code>, in map units). These parameters determine the statistical frequency distribution and spatial characteristics of the modeled error fields added to the DEM in each iteration of the simulation. The user must also specify the number of iterations (<code>iterations</code>). A larger number of iterations will produce a smoother pdep raster.</p>
+<p>This tool creates several temporary rasters in memory and, as a result, is very memory hungry. This will necessarily limit the size of DEMs that can be processed on more memory-constrained systems. As a rough guide for usage, <strong>the computer system will need 6-10 times more memory than the file size of the DEM</strong>. If your computer possesses insufficient memory, you may consider splitting the input DEM apart into smaller tiles.</p>
+<p>For a video demonstrating the application of the <code>stochastic_depression_analysis</code> tool, see  <code>this YouTube video</code>.</p>
+<h3 id="reference-8"><a class="header" href="#reference-8">Reference</a></h3>
+<p>Lindsay, J. B., &amp; Creed, I. F. (2005). Sensitivity of digital landscapes to artifact depressions in remotely-sensed DEMs. Photogrammetric Engineering &amp; Remote Sensing, 71(9), 1029-1036.</p>
+<h3 id="see-also-12"><a class="header" href="#see-also-12">See Also</a></h3>
+<p><code>impoundment_size_index</code>, <code>fast_almost_gaussian_filter</code></p>
+<h3 id="python-api-14"><a class="header" href="#python-api-14">Python API</a></h3>
+<pre><code class="language-python">def stochastic_depression_analysis(self, dem: Raster, rmse: float, range: float, iterations: int = 100) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="topological-breach-burn"><a class="header" href="#topological-breach-burn">Topological Breach Burn</a></h2>
+<p><strong>Function name:</strong> <code>topological_breach_burn</code></p>
+<p>PROExperimental</p>
+<p>Burns streams into a DEM, conditions the surface, and returns stream, DEM, pointer, and accumulation rasters.</p>
+<p>hydrology stream_burning d8</p>
+<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
+<p><em>Generate topologically conditioned stream-burning outputs</em></p>
+<hr />
+<h2 id="upslope-depression-storage"><a class="header" href="#upslope-depression-storage">Upslope Depression Storage</a></h2>
+<p><strong>Function name:</strong> <code>upslope_depression_storage</code></p>
+<p>This tool estimates the average upslope depression storage depth using the FD8 flow algorithm. The input DEM (<code>dem</code>) need not be hydrologically corrected; the tool will internally map depression storage and resolve flowpaths using depression filling. This input elevation model should be of a fine resolution (&lt; 2 m), and is ideally derived using LiDAR. The tool calculates the total upslope depth of depression storage, which is divided by the number of upslope cells in the final step of the process, yielding the average upslope depression depth. Roughened surfaces tend to have higher values compared with smoothed surfaces. Values, particularly on hillslopes, may be very small (&lt; 0.01 m).</p>
+<h3 id="see-also-13"><a class="header" href="#see-also-13">See Also</a></h3>
+<p><code>FD8FlowAccumulation</code>, <code>fill_depressions</code>, <code>depth_in_sink</code></p>
+<h3 id="python-api-15"><a class="header" href="#python-api-15">Python API</a></h3>
+<pre><code class="language-python">def upslope_depression_storage(self, dem: Raster) -&gt; Raster:
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="hydrology-flow-routing.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="hydrology-watersheds-basins.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="hydrology-flow-routing.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="hydrology-watersheds-basins.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

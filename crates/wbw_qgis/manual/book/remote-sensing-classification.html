@@ -1,0 +1,484 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Image Classification - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html" class="active"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="image-classification"><a class="header" href="#image-classification">Image Classification</a></h1>
+<hr />
+<h2 id="evaluate-training-sites"><a class="header" href="#evaluate-training-sites">Evaluate Training Sites</a></h2>
+<p><strong>Function name:</strong> <code>evaluate_training_sites</code></p>
+<h3 id="description"><a class="header" href="#description">Description</a></h3>
+<p>This tool performs an evaluation of the reflectance properties of multi-spectral image dataset for a group of digitized class polygons. This is often viewed as the first step in a supervised classification procedure, such as those performed using the <code>min_dist_classification</code> or <code>parallelepiped_classification</code> tools. The analysis is based on a series of one or more input images (<code>inputs</code>) and an input polygon vector file (<code>polys</code>). The user must also specify the attribute name (<code>field</code>), within the attribute table, containing the class ID associated with each feature in input the polygon vector. A single class may be designated by multiple polygon features in the test site polygon vector. Note that the input polygon file is generally created by digitizing training areas of exemplar reflectance properties for each class type. The input polygon vector should be in the same coordinate system as the input multi-spectral images. The input images must represent a multi-spectral data set made up of individual bands. Do not input colour composite images. Lastly, the user must specify the name of the output HTML file. This file will contain a series of <code>box-and-whisker plots</code>, one for each band in the multi-spectral data set, that visualize the distribution of each class in the associated bands. This can be helpful in determining the overlap between spectral properties for the classes, which may be useful if further class or test site refinement is necessary. For a subsequent supervised classification to be successful, each class should not overlap significantly with the other classes in at least one of the input bands. If this is not the case, the user may need to refine the class system.</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>min_dist_classification</code>, <code>parallelepiped_classification</code></p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def evaluate_training_sites(self, input_rasters: List[Raster], training_polygons: Vector, class_field_name: str, output_html_file: str) -&gt; None:
+</code></pre>
+<hr />
+<h2 id="fuzzy-knn-classification"><a class="header" href="#fuzzy-knn-classification">Fuzzy kNN Classification</a></h2>
+<p><strong>Function name:</strong> <code>fuzzy_knn_classification</code></p>
+<p>Experimental</p>
+<p>Fuzzy k-NN classification that yields soft class membership and optional probability surfaces.</p>
+<p>remote_sensing classification knn fuzzy legacy-port</p>
+<h3 id="parameters"><a class="header" href="#parameters">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>inputs</code>Array of single-band input rasters.Required<code>['band1.tif', 'band2.tif', 'band3.tif']</code>
+<code>training_data</code>Point/polygon vector training data path.Required<code>training.shp</code>
+<code>class_field</code>Class field in training_data attributes.Required<code>class</code>
+<code>scaling</code>Feature scaling mode: none (default), normalize, standardize.Optional<code>none</code>
+<code>k</code>Number of neighbors (default 5).Optional<code>5</code>
+<code>m</code>Fuzzy exponent parameter (&gt; 1; default 2.0).Optional<code>2.0</code>
+<code>output</code>Optional output classified raster path.Optional—
+<code>probability_output</code>Optional membership-probability raster path.Optional—</p>
+<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
+<p><em>Run fuzzy kNN and output both class and confidence rasters.</em>
+<code>wbe.fuzzy_knn_classification(class_field='class', inputs=['band1.tif', 'band2.tif', 'band3.tif'], k=7, m=2.0, output='fuzzy_knn_classified.tif', probability_output='fuzzy_knn_probability.tif', training_data='training.shp')</code></p>
+<hr />
+<h2 id="generalize-classified-raster"><a class="header" href="#generalize-classified-raster">Generalize Classified Raster</a></h2>
+<p><strong>Function name:</strong> <code>generalize_classified_raster</code></p>
+<h3 id="description-1"><a class="header" href="#description-1">Description</a></h3>
+<p>This tool can be used to generalize a raster containing class or object features. Such rasters are usually derived from some classification procedure (e.g. image classification and landform classification), or as the output of a segmentation procedure (<code>image_segmentation</code>). Rasters that are created in this way often contain many very small features that make their interpretation, or vectorization, challenging. Therefore, it is common for practitioners to remove the smaller features. Many different approaches have been used for this task in the past. For example, it is common to remove small features using a filtering based approach (<code>majority_filter</code>). While this can be an effective strategy, it does have the disadvantage of modifying all of the boundaries in the class raster, including those that define larger features. In many applications, this can be a serious issue of concern.</p>
+<p>The <code>generalize_classified_raster</code> tool offers an alternative method for simplifying class rasters. The process begins by identifying each contiguous group of cells in the input (i.e. a clumping operation) and then defines the subset of features that are smaller than the user-specified minimum feature size (<code>min_size</code>), in grid cells. This set of small features is then dealt with using one of three methods (<code>method</code>). In the first method (<em>longest</em>), a small feature may be reassigned the class value of the neighbouring feature with the longest shared border. The sum of the neighbouring feature size and the small feature size must be larger than the specified size threshold, and the tool will iterate through this process of reassigning feature values to neighbouring values until each small feature has been resolved.</p>
+<p>The second method, <em>largest</em>, operates in much the same way as the first, except that objects are reassigned the value of the largest neighbour. Again, this process of reassigning small feature values iterates until every small feature has been reassigned to a large neighbouring feature.</p>
+<p>The third and last method (<em>nearest</em>) takes a different approach to resolving the reassignment of small features. Using the <em>nearest</em> generalization approach, each grid cell contained within a small feature is reassigned the value of the nearest large neighbouring feature. When there are two or more neighbouring features that are equally distanced to a small feature cell, the cell will be reassigned to the largest neighbour. Perhaps the most significant disadvantage of this approach is that it creates a new artificial boundary in the output image that is not contained within the input class raster. That is, with the previous two methods, boundaries associated with smaller features in the input images are 'erased' in the output map, but every boundary in the output raster exactly matches boundaries within the input raster (i.e. the output boundaries are a subset of the input feature boundaries). However, with the <em>nearest</em> method, artificial boundaries, determined by the divide between nearest neighbours, are introduced to the output raster and these new feature boundaries do not have any basis in the original classification/segmentation process. Thus caution should be exercised when using this approach, especially when larger minimum size thresholds are used. The <em>longest</em> method is the recommended approach to class feature generalization.</p>
+<p>For a video tutorial on how to use the <code>generalize_classified_raster</code> tool, see <code>this YouTube video</code>.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>generalize_with_similarity</code>, <code>majority_filter</code>, <code>image_segmentation</code></p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def generalize_classified_raster(self, raster: Raster, area_threshold: int = 5, method: str = "longest") -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="generalize-with-similarity"><a class="header" href="#generalize-with-similarity">Generalize With Similarity</a></h2>
+<p><strong>Function name:</strong> <code>generalize_with_similarity</code></p>
+<h3 id="description-2"><a class="header" href="#description-2">Description</a></h3>
+<p>This tool can be used to generalize a raster containing class features (<code>input</code>) by reassigning the identifier values of small features (<code>min_size</code>) to those of neighbouring features. Therefore, this tool performs a very similar operation to the <code>generalize_classified_raster</code> tool. However, while the <code>generalize_classified_raster</code> tool re-labels small features based on the geometric properties of neighbouring features (e.g. neighbour with the longest shared border, largest neighbour, or nearest neighbour), the <code>generalize_with_similarity</code> tool reassigns feature labels based on similarity with neighbouring features. Similarity is determined using a series of input similarity criteria rasters (<code>similarity</code>), which may be factors used in the creation of the input class raster. For example, the similarlity rasters may be bands of multi-spectral imagery, if the input raster is a classified land-cover map, or DEM-derived land surface parameters, if the input raster is a landform class map.</p>
+<p>The tool works by identifying each contiguous group of pixels (features) in the input class raster (<code>input</code>), i.e. a clumping operation. The mean value is then calculated for each feature and each similarity input, which defines a multi-dimensional 'similarity centre point' associated with each feature. It should be noted that the similarity raster data are standardized prior to calculating these centre point values. Lastly, the tool then reassigns the input label values of all features smaller than the user-specified minimum feature size (<code>min_size</code>) to that of the neighbouring feature with the shortest distance between similarity centre points.</p>
+<p>For small features that are entirely enclosed by a single larger feature, this process will result in the same generalization solution presented by any of the geometric-based methods of the <code>generalize_classified_raster</code> tool. However, for small features that have more than one neighbour, this tool may provide a superior generalization solution than those based solely on geometric information.</p>
+<p>For a video tutorial on how to use the <code>generalize_with_similarity</code> tool, see <code>this YouTube video</code>.</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>generalize_classified_raster</code>, <code>majority_filter</code>, <code>image_segmentation</code></p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def generalize_with_similarity(self, raster: Raster, similarity_rasters: List[Raster], area_threshold: int = 5) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="k-means-clustering"><a class="header" href="#k-means-clustering">K Means Clustering</a></h2>
+<p><strong>Function name:</strong> <code>k_means_clustering</code></p>
+<p>This tool can be used to perform a k-means clustering operation on two or more input images (<code>inputs</code>), typically several bands of multi-spectral satellite imagery. The tool creates two outputs, including the classified image (<code>output</code> and a classification HTML report (<code>out_html</code>). The user must specify the number of class (<code>classes</code>), which should be known <em>a priori</em>, and the strategy for initializing class clusters (<code>initialize</code>). The initialization strategies include "diagonal" (clusters are initially located randomly along the multi-dimensional diagonal of spectral space) and "random" (clusters are initially located randomly throughout spectral space). The algorithm will continue updating cluster center locations with each iteration of the process until either the user-specified maximum number of iterations (<code>max_iterations</code>) is reached, or until a stability criteria (<code>class_change</code>) is achieved. The stability criteria is the percent of the total number of pixels in the image that are changed among the class values between consecutive iterations. Lastly, the user must specify the minimum allowable number of pixels in a cluster (<code>min_class_size</code>).</p>
+<p>Note, each of the input images must have the same number of rows and columns and the same spatial extent because the analysis is performed on a pixel-by-pixel basis. <strong>NoData</strong> values in any of the input images will result in the removal of the corresponding pixel from the analysis.</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>modified_k_means_clustering</code></p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def k_means_clustering(self, input_rasters: List[Raster], output_html_file: str = "", num_clusters: int = 5, max_iterations: int = 10, percent_changed_threshold: float = 2.0, initialization_mode: str = "dia", min_class_size: int = 10) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="knn-classification"><a class="header" href="#knn-classification">kNN Classification</a></h2>
+<p><strong>Function name:</strong> <code>knn_classification</code></p>
+<h3 id="description-3"><a class="header" href="#description-3">Description</a></h3>
+<p>This tool performs a supervised <code>*k*-nearest neighbour (*k*-NN) classification</code> using multiple predictor rasters (<code>inputs</code>), or features, and training data (<code>training</code>). It can be used to model the spatial distribution of class data, such as land-cover type, soil class, or vegetation type. The training data take the form of an input vector Shapefile containing a set of points or polygons, for which the known class information is contained within a field (<code>field</code>) of the attribute table. Each grid cell defines a stack of feature values (one value for each input raster), which serves as a point within the multi-dimensional feature space. The algorithm works by identifying a user-defined number (<em>k</em>, <code>-k</code>) of feature-space neighbours from the training set for each grid cell. The class that is then assigned to the grid cell in the output raster (<code>output</code>) is then determined as the most common class among the set of neighbours. Note that the <code>knn_regression</code> tool can be used to apply the <em>k</em>-NN method to the modelling of continuous data.</p>
+<p>The user has the option to clip the training set data (<code>clip</code>). When this option is selected, each training pixel for which the estimated class value, based on the <em>k</em>-NN procedure, is not equal to the known class value, is removed from the training set before proceeding with labelling all grid cells. This has the effect of removing outlier points within the training set and often improves the overall classification accuracy.</p>
+<p>The tool splits the training data into two sets, one for training the classifier and one for testing the classification. These test data are used to calculate the overall accuracy and Cohen's kappa index of agreement, as well as to estimate the variable importance. The <code>test_proportion</code> parameter is used to set the proportion of the input training data used in model testing. For example, if <code>test_proportion = 0.2</code>, 20% of the training data will be set aside for testing, and this subset will be selected randomly. As a result of this random selection of test data, the tool behaves stochastically, and will result in a different model each time it is run.</p>
+<p>Note that the output image parameter (<code>output</code>) is optional. When unspecified, the tool will simply report the model accuracy statistics and variable importance, allowing the user to experiment with different parameter settings and input predictor raster combinations to optimize the model before applying it to classify the whole image data set.</p>
+<p>Like all supervised classification methods, this technique relies heavily on proper selection of training data. Training sites are exemplar areas/points of known and representative class value (e.g. land cover type). The algorithm determines the feature signatures of the pixels within each training area. In selecting training sites, care should be taken to ensure that they cover the full range of variability within each class. Otherwise the classification accuracy will be impacted. If possible, multiple training sites should be selected for each class. It is also advisable to avoid areas near the edges of class objects (e.g. land-cover patches), where mixed pixels may impact the purity of training site values.</p>
+<p>After selecting training sites, the feature value distributions of each class type can be assessed using the <code>evaluate_training_sites</code> tool. In particular, the distribution of class values should ideally be non-overlapping in at least one feature dimension.</p>
+<p>The <em>k</em>-NN algorithm is based on the calculation of distances in multi-dimensional space. Feature scaling is essential to the application of <em>k</em>-NN modelling, especially when the ranges of the features are different, for example, if they are measured in different units. Without scaling, features with larger ranges will have greater influence in computing the distances between points. The tool offers three options for feature-scaling (<code>scaling</code>), including 'None', 'Normalize', and 'Standardize'. Normalization simply rescales each of the features onto a 0-1 range. This is a good option for most applications, but it is highly sensitive to outliers because it is determined by the range of the minimum and maximum values. Standardization rescales predictors using their means and standard deviations, transforming the data into z-scores. This is a better option than normalization when you know that the data contain outlier values; however, it does does assume that the feature data are somewhat normally distributed, or are at least symmetrical in distribution.</p>
+<p>Because the <em>k</em>-NN algorithm calculates distances in feature-space, like many other related algorithms, it suffers from the <code>curse of dimensionality</code>. Distances become less meaningful in high-dimensional space because the vastness of these spaces means that distances between points are less significant (more similar). As such, if the predictor list includes insignificant or highly correlated variables, it is advisable to exclude these features during the model-building phase, or to use a dimension reduction technique such as <code>principal_component_analysis</code> to transform the features into a smaller set of uncorrelated predictors.</p>
+<p>For a video tutorial on how to use the <code>knn_classification</code> tool, see <code>this YouTube video</code>.</p>
+<h3 id="memory-usage"><a class="header" href="#memory-usage">Memory Usage</a></h3>
+<p>The peak memory usage of this tool is approximately 8 bytes per grid cell × # predictors.</p>
+<h3 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h3>
+<p><code>knn_regression</code>, <code>random_forest_classification</code>, <code>svm_classification</code>, <code>parallelepiped_classification</code>, <code>evaluate_training_sites</code></p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def knn_classification(self, input_rasters: List[Raster], training_data: Vector, class_field_name: str, scaling_method: str = "none", k: int = 5, test_proportion: float = 0.2, use_clipping: bool = False, create_output: bool = False) -&gt; Optional[Raster]:
+</code></pre>
+<hr />
+<h2 id="knn-regression"><a class="header" href="#knn-regression">kNN Regression</a></h2>
+<p><strong>Function name:</strong> <code>knn_regression</code></p>
+<h3 id="description-4"><a class="header" href="#description-4">Description</a></h3>
+<p>This tool performs a supervised <code>*k*-nearest neighbour (*k*-NN) regression analysis</code> using multiple predictor rasters (<code>inputs</code>), or features, and training data (<code>training</code>). It can be used to model the spatial distribution of continuous data, such as soil properties (e.g. percent sand/silt/clay). The training data take the form of an input vector Shapefile containing a set of points, for which the known outcome information is contained within a field (<code>field</code>) of the attribute table. Each grid cell defines a stack of feature values (one value for each input raster), which serves as a point within the multi-dimensional feature space. The algorithm works by identifying a user-defined number (<em>k</em>, <code>-k</code>) of feature-space neighbours from the training set for each grid cell. The value that is then assigned to the grid cell in the output raster (<code>output</code>) is then determined as the mean of the outcome variable among the set of neighbours. The user may optionally choose to weight neighbour outcome values in the averaging calculation, with weights determined by the inverse distance function (<code>weight</code>). Note that the <code>knn_classification</code> tool can be used to apply the <em>k</em>-NN method to the modelling of categorical data.</p>
+<p>The tool splits the training data into two sets, one for training the model and one for testing the prediction. These test data are used to calculate the regression accuracy statistics, as well as to estimate the variable importance. The <code>test_proportion</code> parameter is used to set the proportion of the input training data used in model testing. For example, if <code>test_proportion = 0.2</code>, 20% of the training data will be set aside for testing, and this subset will be selected randomly. As a result of this random selection of test data, the tool behaves stochastically, and will result in a different model each time it is run.</p>
+<p>Note that the output image parameter (<code>output</code>) is optional. When unspecified, the tool will simply report the model accuracy statistics and variable importance, allowing the user to experiment with different parameter settings and input predictor raster combinations to optimize the model before applying it to model the outcome variable across the whole region defined by image data set.</p>
+<p>The <em>k</em>-NN algorithm is based on the calculation of distances in multi-dimensional space. Feature scaling is essential to the application of <em>k</em>-NN modelling, especially when the ranges of the features are different, for example, if they are measured in different units. Without scaling, features with larger ranges will have greater influence in computing the distances between points. The tool offers three options for feature-scaling (<code>scaling</code>), including 'None', 'Normalize', and 'Standardize'. Normalization simply rescales each of the features onto a 0-1 range. This is a good option for most applications, but it is highly sensitive to outliers because it is determined by the range of the minimum and maximum values. Standardization rescales predictors using their means and standard deviations, transforming the data into z-scores. This is a better option than normalization when you know that the data contain outlier values; however, it does does assume that the feature data are somewhat normally distributed, or are at least symmetrical in distribution.</p>
+<p>Because the <em>k</em>-NN algorithm calculates distances in feature-space, like many other related algorithms, it suffers from the <code>curse of dimensionality</code>. Distances become less meaningful in high-dimensional space because the vastness of these spaces means that distances between points are less significant (more similar). As such, if the predictor list includes insignificant or highly correlated variables, it is advisable to exclude these features during the model-building phase, or to use a dimension reduction technique such as <code>principal_component_analysis</code> to transform the features into a smaller set of uncorrelated predictors.</p>
+<h3 id="memory-usage-1"><a class="header" href="#memory-usage-1">Memory Usage</a></h3>
+<p>The peak memory usage of this tool is approximately 8 bytes per grid cell × # predictors.</p>
+<h3 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h3>
+<p><code>knn_classification</code>, <code>random_forest_regression</code>, <code>svm_regression</code>, <code>principal_component_analysis</code></p>
+<h3 id="python-api-5"><a class="header" href="#python-api-5">Python API</a></h3>
+<pre><code class="language-python">def knn_regression(self, input_rasters: List[Raster], training_data: Vector, field_name: str, scaling_method: str = "none", k: int = 5, distance_weighting: bool = False, test_proportion: float = 0.2, create_output: bool = False) -&gt; Optional[Raster]:
+</code></pre>
+<hr />
+<h2 id="logistic-regression"><a class="header" href="#logistic-regression">Logistic Regression</a></h2>
+<p><strong>Function name:</strong> <code>logistic_regression</code></p>
+<h3 id="description-5"><a class="header" href="#description-5">Description</a></h3>
+<p>This tool performs a <code>logistic regression analysis</code> using multiple predictor rasters (<code>inputs</code>), or features, and training data (<code>training</code>). Logistic regression is a type of linear statistical classifier that in its basic form uses a logistic function to model a binary outcome variable, although the implementation used by this tool can handle multi-class dependent variables. This tool can be used to model the spatial distribution of class data, such as land-cover type, soil class, or vegetation type.</p>
+<p>The training data take the form of an input vector Shapefile containing a set of points or polygons, for which the known class information is contained within a field (<code>field</code>) of the attribute table. Each grid cell defines a stack of feature values (one value for each input raster), which serves as a point within the multi-dimensional feature space.</p>
+<p>The tool splits the training data into two sets, one for training the model and one for testing the prediction. These test data are used to calculate the classification accuracy stats, as well as to estimate the variable importance. The <code>test_proportion</code> parameter is used to set the proportion of the input training data used in model testing. For example, if <code>test_proportion = 0.2</code>, 20% of the training data will be set aside for testing, and this subset will be selected randomly. As a result of this random selection of test data, the tool behaves stochastically, and will result in a different model each time it is run.</p>
+<p>Note that the output image parameter (<code>output</code>) is optional. When unspecified, the tool will simply report the model accuracy statistics and variable importance, allowing the user to experiment with different parameter settings and input predictor raster combinations to optimize the model before applying it to model the outcome variable across the whole region defined by image data set.</p>
+<p>The user may opt for feature scaling, which can be important when the ranges of the features are different, for example, if they are measured in different units. Without scaling, features with larger ranges will have greater influence in computing the distances between points. The tool offers three options for feature-scaling (<code>scaling</code>), including 'None', 'Normalize', and 'Standardize'. Normalization simply rescales each of the features onto a 0-1 range. This is a good option for most applications, but it is highly sensitive to outliers because it is determined by the range of the minimum and maximum values. Standardization rescales predictors using their means and standard deviations, transforming the data into z-scores. This is a better option than normalization when you know that the data contain outlier values; however, it does does assume that the feature data are somewhat normally distributed, or are at least symmetrical in distribution.</p>
+<p>Because the logistic regression calculates distances in feature-space, like many other related algorithms, it suffers from the <code>curse of dimensionality</code>. Distances become less meaningful in high-dimensional space because the vastness of these spaces means that distances between points are less significant (more similar). As such, if the predictor list includes insignificant or highly correlated variables, it is advisable to exclude these features during the model-building phase, or to use a dimension reduction technique such as <code>principal_component_analysis</code> to transform the features into a smaller set of uncorrelated predictors.</p>
+<h3 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h3>
+<p><code>svm_classification</code>, <code>random_forest_classification</code>, <code>knn_classification</code>, <code>principal_component_analysis</code></p>
+<h3 id="python-api-6"><a class="header" href="#python-api-6">Python API</a></h3>
+<pre><code class="language-python">def logistic_regression(self, input_rasters: List[Raster], training_data: Vector, class_field_name: str, scaling_method: str = "none", test_proportion: float = 0.2, create_output: bool = False) -&gt; Optional[Raster]:
+</code></pre>
+<hr />
+<h2 id="min-dist-classification"><a class="header" href="#min-dist-classification">Min Dist Classification</a></h2>
+<p><strong>Function name:</strong> <code>min_dist_classification</code></p>
+<h3 id="description-6"><a class="header" href="#description-6">Description</a></h3>
+<p>This tool performs a supervised <code>minimum-distance classification</code> using training site polygons (<code>polys</code>) and multi-spectral images (<code>inputs</code>). This classification method uses the mean vectors for each class and calculates the Euclidean distance from each unknown pixel to the class mean vector. Unclassed pixels are then assigned to the nearest class mean. A threshold distance (<code>threshold</code>), expressed in number of <code>z-scores</code>, may optionally be used and pixels whose multi-spectral distance is greater than this threshold will not be assigned a class in the output image (<code>output</code>). When a threshold distance is unspecified, all pixels will be assigned to a class.</p>
+<p>Like all supervised classification methods, this technique relies heavily on proper selection of training data. Training sites are exemplar areas of known and representative land cover type. The algorithm determines the spectral signature of the pixels within each training area, and uses this information to define the mean vector of each class. It is preferable that training sites are based on either field-collected data or fine-resolution reference imagery. In selecting training sites, care should be taken to ensure that they cover the full range of variability within each class. Otherwise the classification accuracy will be impacted. If possible, multiple training sites should be selected for each class. It is also advisable to avoid areas near the edges of land-cover patches, where mixed pixels may impact the purity of training site reflectance values.</p>
+<p>After selecting training sites, the reflectance values of each land-cover type can be assessed using the <code>evaluate_training_sites</code> tool. In particular, the distribution of reflectance values should ideally be non-overlapping in at least one band of the multi-spectral data set.</p>
+<h3 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h3>
+<p><code>evaluate_training_sites</code>, <code>parallelepiped_classification</code></p>
+<h3 id="python-api-7"><a class="header" href="#python-api-7">Python API</a></h3>
+<pre><code class="language-python">def min_dist_classification(self, input_rasters: List[Raster], training_data: Vector, class_field_name: str, dist_threshold: float = float('inf')) -&gt; Raster:
+</code></pre>
+<h3 id="python-api-8"><a class="header" href="#python-api-8">Python API</a></h3>
+<pre><code class="language-python">def min_dist_classification(self, input_rasters: List[Raster], training_data: Vector, class_field_name: str, dist_threshold: float = float('inf')) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="modified-k-means-clustering"><a class="header" href="#modified-k-means-clustering">Modified K Means Clustering</a></h2>
+<p><strong>Function name:</strong> <code>modified_k_means_clustering</code></p>
+<p>This modified k-means algorithm is similar to that described by Mather and Koch (2011). The main difference between the traditional k-means and this technique is that the user does not need to specify the desired number of classes/clusters prior to running the tool. Instead, the algorithm initializes with a very liberal overestimate of the number of classes and then merges classes that have cluster centres that are separated by less than a user-defined threshold. The main difference between this algorithm and the ISODATA technique is that clusters can not be broken apart into two smaller clusters.</p>
+<h3 id="reference"><a class="header" href="#reference">Reference</a></h3>
+<p>Mather, P. M., &amp; Koch, M. (2011). Computer processing of remotely-sensed images: an introduction. John Wiley &amp; Sons.</p>
+<h3 id="see-also-8"><a class="header" href="#see-also-8">See Also</a></h3>
+<p><code>k_means_clustering</code></p>
+<h3 id="python-api-9"><a class="header" href="#python-api-9">Python API</a></h3>
+<pre><code class="language-python">def modified_k_means_clustering(self, input_rasters: List[Raster], output_html_file: str = "", num_start_clusters: int = 1000, merge_distance: float = 1.0, max_iterations: int = 10, percent_changed_threshold: float = 2.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="nnd-classification"><a class="header" href="#nnd-classification">Nnd Classification</a></h2>
+<p><strong>Function name:</strong> <code>nnd_classification</code></p>
+<h3 id="description-7"><a class="header" href="#description-7">Description</a></h3>
+<p>This tool performs a supervised <code>*k*-nearest neighbour (*k*-NN) classification</code> using multiple predictor rasters (<code>inputs</code>), or features, and training data (<code>training</code>). It can be used to model the spatial distribution of class data, such as land-cover type, soil class, or vegetation type. The training data take the form of an input vector Shapefile containing a set of points or polygons, for which the known class information is contained within a field (<code>field</code>) of the attribute table. Each grid cell defines a stack of feature values (one value for each input raster), which serves as a point within the multi-dimensional feature space. The algorithm works by identifying a user-defined number (<em>k</em>, <code>-k</code>) of feature-space neighbours from the training set for each grid cell. The class that is then assigned to the grid cell in the output raster (<code>output</code>) is then determined as the most common class among the set of neighbours. Note that the <code>knn_regression</code> tool can be used to apply the <em>k</em>-NN method to the modelling of continuous data.</p>
+<p>The user has the option to clip the training set data (<code>clip</code>). When this option is selected, each training pixel for which the estimated class value, based on the <em>k</em>-NN procedure, is not equal to the known class value, is removed from the training set before proceeding with labelling all grid cells. This has the effect of removing outlier points within the training set and often improves the overall classification accuracy.</p>
+<p>The tool splits the training data into two sets, one for training the classifier and one for testing the classification. These test data are used to calculate the overall accuracy and Cohen's kappa index of agreement, as well as to estimate the variable importance. The <code>test_proportion</code> parameter is used to set the proportion of the input training data used in model testing. For example, if <code>test_proportion = 0.2</code>, 20% of the training data will be set aside for testing, and this subset will be selected randomly. As a result of this random selection of test data, the tool behaves stochastically, and will result in a different model each time it is run.</p>
+<p>Note that the output image parameter (<code>output</code>) is optional. When unspecified, the tool will simply report the model accuracy statistics and variable importance, allowing the user to experiment with different parameter settings and input predictor raster combinations to optimize the model before applying it to classify the whole image data set.</p>
+<p>Like all supervised classification methods, this technique relies heavily on proper selection of training data. Training sites are exemplar areas/points of known and representative class value (e.g. land cover type). The algorithm determines the feature signatures of the pixels within each training area. In selecting training sites, care should be taken to ensure that they cover the full range of variability within each class. Otherwise the classification accuracy will be impacted. If possible, multiple training sites should be selected for each class. It is also advisable to avoid areas near the edges of class objects (e.g. land-cover patches), where mixed pixels may impact the purity of training site values.</p>
+<p>After selecting training sites, the feature value distributions of each class type can be assessed using the <code>evaluate_training_sites</code> tool. In particular, the distribution of class values should ideally be non-overlapping in at least one feature dimension.</p>
+<p>The <em>k</em>-NN algorithm is based on the calculation of distances in multi-dimensional space. Feature scaling is essential to the application of <em>k</em>-NN modelling, especially when the ranges of the features are different, for example, if they are measured in different units. Without scaling, features with larger ranges will have greater influence in computing the distances between points. The tool offers three options for feature-scaling (<code>scaling</code>), including 'None', 'Normalize', and 'Standardize'. Normalization simply rescales each of the features onto a 0-1 range. This is a good option for most applications, but it is highly sensitive to outliers because it is determined by the range of the minimum and maximum values. Standardization rescales predictors using their means and standard deviations, transforming the data into z-scores. This is a better option than normalization when you know that the data contain outlier values; however, it does does assume that the feature data are somewhat normally distributed, or are at least symmetrical in distribution.</p>
+<p>Because the <em>k</em>-NN algorithm calculates distances in feature-space, like many other related algorithms, it suffers from the <code>curse of dimensionality</code>. Distances become less meaningful in high-dimensional space because the vastness of these spaces means that distances between points are less significant (more similar). As such, if the predictor list includes insignificant or highly correlated variables, it is advisable to exclude these features during the model-building phase, or to use a dimension reduction technique such as <code>principal_component_analysis</code> to transform the features into a smaller set of uncorrelated predictors.</p>
+<p>For a video tutorial on how to use the <code>knn_classification</code> tool, see <code>this YouTube video</code>.</p>
+<h3 id="memory-usage-2"><a class="header" href="#memory-usage-2">Memory Usage</a></h3>
+<p>The peak memory usage of this tool is approximately 8 bytes per grid cell × # predictors.</p>
+<h3 id="see-also-9"><a class="header" href="#see-also-9">See Also</a></h3>
+<p><code>knn_regression</code>, <code>random_forest_classification</code>, <code>svm_classification</code>, <code>parallelepiped_classification</code>, <code>evaluate_training_sites</code></p>
+<h3 id="python-api-10"><a class="header" href="#python-api-10">Python API</a></h3>
+<pre><code class="language-python">def knn_classification(self, input_rasters: List[Raster], training_data: Vector, class_field_name: str, scaling_method: str = "none", k: int = 5, test_proportion: float = 0.2, use_clipping: bool = False, create_output: bool = False) -&gt; Optional[Raster]:
+</code></pre>
+<hr />
+<h2 id="otsu-thresholding"><a class="header" href="#otsu-thresholding">Otsu Thresholding</a></h2>
+<p><strong>Function name:</strong> <code>otsu_thresholding</code></p>
+<p>This tool uses <code>Ostu's method</code> for optimal automatic binary thresholding, transforming an input image (<code>--input</code>) into background and foreground pixels (<code>--output</code>). Otsu’s method uses the grayscale  image histogram to detect an optimal threshold value that separates two regions with maximum inter-class variance. The process begins by calculating the image histogram of the input.</p>
+<h3 id="references"><a class="header" href="#references">References</a></h3>
+<p>Otsu, N., 1979. A threshold selection method from gray-level histograms. IEEE transactions on  systems, man, and cybernetics, 9(1), pp.62-66.</p>
+<h3 id="see-also-10"><a class="header" href="#see-also-10">See Also</a></h3>
+<p><code>image_segmentation</code>, <code>image_segmentation</code></p>
+<h3 id="python-api-11"><a class="header" href="#python-api-11">Python API</a></h3>
+<pre><code class="language-python">def otsu_thresholding(self, raster: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="parallelepiped-classification"><a class="header" href="#parallelepiped-classification">Parallelepiped Classification</a></h2>
+<p><strong>Function name:</strong> <code>parallelepiped_classification</code></p>
+<h3 id="description-8"><a class="header" href="#description-8">Description</a></h3>
+<p>This tool performs a supervised <code>parallelepiped classification</code> using training site polygons (<code>polys</code>) and multi-spectral images (<code>inputs</code>). This classification method uses the minimum and maximum reflectance values for each class within the training data to characterize a set of <code>parallelepipeds</code>, i.e. multi-dimensional geometric shapes. The algorithm then assigns each unknown pixel in the image data set to the first class for which the pixel's spectral vector is contained within the corresponding class parallelepiped. Pixels with spectral vectors that are not contained within any class parallelepiped will not be assigned a class in the output image.</p>
+<p>Like all supervised classification methods, this technique relies heavily on proper selection of training data. Training sites are exemplar areas of known and representative land cover type. The algorithm determines the spectral signature of the pixels within each training area, and uses this information to define the mean vector of each class. It is preferable that training sites are based on either field-collected data or fine-resolution reference imagery. In selecting training sites, care should be taken to ensure that they cover the full range of variability within each class. Otherwise the classification accuracy will be impacted. If possible, multiple training sites should be selected for each class. It is also advisable to avoid areas near the edges of land-cover patches, where mixed pixels may impact the purity of training site reflectance values.</p>
+<p>After selecting training sites, the reflectance values of each land-cover type can be assessed using the <code>evaluate_training_sites</code> tool. In particular, the distribution of reflectance values should ideally be non-overlapping in at least one band of the multi-spectral data set.</p>
+<h3 id="see-also-11"><a class="header" href="#see-also-11">See Also</a></h3>
+<p><code>evaluate_training_sites</code>, <code>min_dist_classification</code></p>
+<h3 id="python-api-12"><a class="header" href="#python-api-12">Python API</a></h3>
+<pre><code class="language-python">def parallelepiped_classification(self, input_rasters: List[Raster], training_data: Vector, class_field_name: str) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="random-forest-classification"><a class="header" href="#random-forest-classification">Random Forest Classification</a></h2>
+<p><strong>Function name:</strong> <code>random_forest_classification</code></p>
+<p>Experimental</p>
+<p>Supervised Random Forest classification for multisource raster features using point/polygon training data.</p>
+<p>remote_sensing classification random_forest legacy-port</p>
+<h3 id="parameters-1"><a class="header" href="#parameters-1">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>inputs</code>Array of single-band input rasters.Required<code>['band1.tif', 'band2.tif', 'band3.tif']</code>
+<code>training_data</code>Point/polygon vector training data path.Required<code>training.shp</code>
+<code>class_field</code>Class field in training_data attributes.Required<code>class</code>
+<code>scaling</code>Feature scaling mode: none (default), normalize, standardize.Optional<code>none</code>
+<code>n_trees</code>Number of trees in the forest (default 200).Optional<code>200</code>
+<code>min_samples_leaf</code>Minimum number of samples required at a leaf node (default 1).Optional<code>1</code>
+<code>min_samples_split</code>Minimum number of samples required to split an internal node (default 2).Optional<code>2</code>
+<code>output</code>Optional output raster path.Optional—</p>
+<h3 id="examples-1"><a class="header" href="#examples-1">Examples</a></h3>
+<p><em>Run random forest classification on multiband predictors.</em>
+<code>wbe.random_forest_classification(class_field='class', inputs=['band1.tif', 'band2.tif', 'band3.tif'], n_trees=300, output='rf_classification.tif', scaling='standardize', training_data='training.shp')</code></p>
+<hr />
+<h2 id="random-forest-regression"><a class="header" href="#random-forest-regression">Random Forest Regression</a></h2>
+<p><strong>Function name:</strong> <code>random_forest_regression</code></p>
+<p>Experimental</p>
+<p>Random Forest regression for continuous targets (e.g., biomass, moisture, temperature) from raster predictors.</p>
+<p>remote_sensing regression random_forest legacy-port</p>
+<h3 id="parameters-2"><a class="header" href="#parameters-2">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>inputs</code>Array of single-band input rasters.Required<code>['band1.tif', 'band2.tif', 'band3.tif']</code>
+<code>training_data</code>Point vector training data path.Required<code>training_points.shp</code>
+<code>field</code>Numeric target field in training_data attributes.Required<code>value</code>
+<code>scaling</code>Feature scaling mode: none (default), normalize, standardize.Optional<code>none</code>
+<code>n_trees</code>Number of trees in the forest (default 200).Optional<code>200</code>
+<code>min_samples_leaf</code>Minimum number of samples required at a leaf node (default 1).Optional<code>1</code>
+<code>min_samples_split</code>Minimum number of samples required to split an internal node (default 2).Optional<code>2</code>
+<code>output</code>Optional output raster path.Optional—</p>
+<h3 id="examples-2"><a class="header" href="#examples-2">Examples</a></h3>
+<p><em>Run random forest regression on multiband predictors.</em>
+<code>wbe.random_forest_regression(field='target', inputs=['band1.tif', 'band2.tif', 'band3.tif'], n_trees=300, output='rf_regression.tif', scaling='standardize', training_data='training_points.shp')</code></p>
+<hr />
+<h2 id="svm-classification"><a class="header" href="#svm-classification">SVM Classification</a></h2>
+<p><strong>Function name:</strong> <code>svm_classification</code></p>
+<h3 id="description-9"><a class="header" href="#description-9">Description</a></h3>
+<p>This tool performs a <code>support vector machine (SVM) binary classification</code> using multiple predictor rasters (<code>inputs</code>), or features, and training data (<code>training</code>). SVMs are a common class of supervised learning algorithms widely applied in many problem domains. This tool can be used to model the spatial distribution of class data, such as land-cover type, soil class, or vegetation type. The training data take the form of an input vector Shapefile containing a set of points or polygons, for which the known class information is contained within a field (<code>field</code>) of the attribute table. Each grid cell defines a stack of feature values (one value for each input raster), which serves as a point within the multi-dimensional feature space. Note that the <code>svm_regression</code> tool can be used to apply the SVM method to the modelling of continuous data.</p>
+<p>The user must specify the values of three parameters used in the development of the model, the <em>c</em> parameters (<code>-c</code>), gamma (<code>gamma</code>), and the tolerance (<code>tolerance</code>). The <em>c</em>-value is the regularization parameter used in model optimization. The gamma parameter defines the radial basis function (Gaussian) kernel parameter. The tolerance parameter controls the stopping condition used during model optimization.</p>
+<p>The tool splits the training data into two sets, one for training the classifier and one for testing the classification. These test data are used to calculate the overall accuracy and Matthew correlation coefficient (MCC). The <code>test_proportion</code> parameter is used to set the proportion of the input training data used in model testing. For example, if <code>test_proportion = 0.2</code>, 20% of the training data will be set aside for testing, and this subset will be selected randomly. As a result of this random selection of test data, the tool behaves stochastically, and will result in a different model each time it is run.</p>
+<p>Note that the output image parameter (<code>output</code>) is optional. When unspecified, the tool will simply report the model accuracy statistics, allowing the user to experiment with different parameter settings and input predictor raster combinations to optimize the model before applying it to classify the whole image data set.</p>
+<p>Like all supervised classification methods, this technique relies heavily on proper selection of training data. Training sites are exemplar areas/points of known and representative class value (e.g. land cover type). The algorithm determines the feature signatures of the pixels within each training area. In selecting training sites, care should be taken to ensure that they cover the full range of variability within each class. Otherwise the classification accuracy will be impacted. If possible, multiple training sites should be selected for each class. It is also advisable to avoid areas near the edges of class objects (e.g. land-cover patches), where mixed pixels may impact the purity of training site values.</p>
+<p>After selecting training sites, the feature value distributions of each class type can be assessed using the <code>evaluate_training_sites</code> tool. In particular, the distribution of class values should ideally be non-overlapping in at least one feature dimension.</p>
+<p>The SVM algorithm is based on the calculation of distances in multi-dimensional space. Feature scaling is essential to the application of SVM-based modelling, especially when the ranges of the features are different, for example, if they are measured in different units. Without scaling, features with larger ranges will have greater influence in computing the distances between points. The tool offers three options for feature-scaling (<code>scaling</code>), including 'None', 'Normalize', and 'Standardize'. Normalization simply rescales each of the features onto a 0-1 range. This is a good option for most applications, but it is highly sensitive to outliers because it is determined by the range of the minimum and maximum values. Standardization rescales predictors using their means and standard deviations, transforming the data into z-scores. This is a better option than normalization when you know that the data contain outlier values; however, it does does assume that the feature data are somewhat normally distributed, or are at least symmetrical in distribution.</p>
+<p>Because the SVM algorithm calculates distances in feature-space, like many other related algorithms, it suffers from the <code>curse of dimensionality</code>. Distances become less meaningful in high-dimensional space because the vastness of these spaces means that distances between points are less significant (more similar). As such, if the predictor list includes insignificant or highly correlated variables, it is advisable to exclude these features during the model-building phase, or to use a dimension reduction technique such as <code>principal_component_analysis</code> to transform the features into a smaller set of uncorrelated predictors.</p>
+<h3 id="see-also-12"><a class="header" href="#see-also-12">See Also</a></h3>
+<p><code>random_forest_classification</code>, <code>knn_classification</code>, <code>parallelepiped_classification</code>, <code>evaluate_training_sites</code>, <code>principal_component_analysis</code></p>
+<h3 id="python-api-13"><a class="header" href="#python-api-13">Python API</a></h3>
+<pre><code class="language-python">def svm_classification(self, input_rasters: List[Raster], training_data: Vector, class_field_name: str, scaling_method: str = "none", c_value: float = 50.0, kernel_gamma: float = 0.5, tolerance: float = 0.1, test_proportion: float = 0.2, create_output: bool = False) -&gt; Optional[Raster]:
+</code></pre>
+<hr />
+<h2 id="svm-regression"><a class="header" href="#svm-regression">SVM Regression</a></h2>
+<p><strong>Function name:</strong> <code>svm_regression</code></p>
+<h3 id="description-10"><a class="header" href="#description-10">Description</a></h3>
+<p>This tool performs a supervised <code>support vector machine (SVM) regression analysis</code> using multiple predictor rasters (<code>inputs</code>), or features, and training data (<code>training</code>). SVMs are a common class of supervised learning algorithms widely applied in many problem domains. This tool can be used to model the spatial distribution of continuous data, such as soil properties (e.g. percent sand/silt/clay). The training data take the form of an input vector Shapefile containing a set of points for which the known outcome data is contained within a field (<code>field</code>) of the attribute table. Each grid cell defines a stack of feature values (one value for each input raster), which serves as a point within the multi-dimensional feature space. Note that the <code>svm_classification</code> tool can be used to apply the SVM method to the modelling of categorical data.</p>
+<p>The user must specify the <em>c</em>-value (<code>-c</code>), the regularization parameter used in model optimization, the epsilon-value (<code>eps</code>), used in the development of the epsilon-SVM regression model, and the gamma-value (<code>gamma</code>), which is used in defining the radial basis function (Gaussian) kernel parameter.</p>
+<p>The tool splits the training data into two sets, one for training the model and one for testing the prediction. These test data are used to calculate the regression accuracy statistics, as well as to estimate the variable importance. The <code>test_proportion</code> parameter is used to set the proportion of the input training data used in model testing. For example, if <code>test_proportion = 0.2</code>, 20% of the training data will be set aside for testing, and this subset will be selected randomly. As a result of this random selection of test data, the tool behaves stochastically, and will result in a different model each time it is run.</p>
+<p>Note that the output image parameter (<code>output</code>) is optional. When unspecified, the tool will simply report the model accuracy statistics and variable importance, allowing the user to experiment with different parameter settings and input predictor raster combinations to optimize the model before applying it to model the outcome variable across the whole region defined by image data set.</p>
+<p>The SVM algorithm is based on the calculation of distances in multi-dimensional space. Feature scaling is essential to the application of SVM modelling, especially when the ranges of the features are different, for example, if they are measured in different units. Without scaling, features with larger ranges will have greater influence in computing the distances between points. The tool offers three options for feature-scaling (<code>scaling</code>), including 'None', 'Normalize', and 'Standardize'. Normalization simply rescales each of the features onto a 0-1 range. This is a good option for most applications, but it is highly sensitive to outliers because it is determined by the range of the minimum and maximum values. Standardization rescales predictors using their means and standard deviations, transforming the data into z-scores. This is a better option than normalization when you know that the data contain outlier values; however, it does does assume that the feature data are somewhat normally distributed, or are at least symmetrical in distribution.</p>
+<p>Because the SVM algorithm calculates distances in feature-space, like many other related algorithms, it suffers from the <code>curse of dimensionality</code>. Distances become less meaningful in high-dimensional space because the vastness of these spaces means that distances between points are less significant (more similar). As such, if the predictor list includes insignificant or highly correlated variables, it is advisable to exclude these features during the model-building phase, or to use a dimension reduction technique such as <code>principal_component_analysis</code> to transform the features into a smaller set of uncorrelated predictors.</p>
+<h3 id="see-also-13"><a class="header" href="#see-also-13">See Also</a></h3>
+<p><code>svm_classification</code>, <code>random_forest_regression</code>, <code>knn_regression</code>, <code>principal_component_analysis</code></p>
+<h3 id="python-api-14"><a class="header" href="#python-api-14">Python API</a></h3>
+<pre><code class="language-python">def svm_regression(self, input_rasters: List[Raster], training_data: Vector, class_field_name: str, scaling_method: str = "none", c_value: float = 50.0, epsilon_value: float = 10.0, kernel_gamma: float = 0.5, test_proportion: float = 0.2, create_output: bool = False) -&gt; Optional[Raster]:
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="remote-sensing-edge-feature-detection.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="remote-sensing-obia.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="remote-sensing-edge-feature-detection.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="remote-sensing-obia.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

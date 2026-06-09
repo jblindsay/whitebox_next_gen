@@ -1,0 +1,377 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Attribute Analysis - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html" class="active"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="attribute-analysis"><a class="header" href="#attribute-analysis">Attribute Analysis</a></h1>
+<hr />
+<h2 id="add-field"><a class="header" href="#add-field">Add Field</a></h2>
+<p><strong>Function name:</strong> <code>add_field</code></p>
+<p>Experimental</p>
+<p>Adds a new attribute field with an optional default value.</p>
+<p>vector schema attributes</p>
+<h3 id="parameters"><a class="header" href="#parameters">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input vector layer.Required<code>input.shp</code>
+<code>field</code>New field name.Required<code>NEW_FIELD</code>
+<code>field_type</code>Field type: integer, float, text, boolean.Required<code>float</code>
+<code>default</code>Optional default value.Optional—
+<code>output</code>Output vector path.Required—</p>
+<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
+<p><em>Adds a typed field to the layer schema.</em>
+<code>wbe.add_field(default=0.0, field='NEW_FIELD', field_type='float', input='input.shp', output='add_field.shp')</code></p>
+<hr />
+<h2 id="add-geometry-attributes"><a class="header" href="#add-geometry-attributes">Add Geometry Attributes</a></h2>
+<p><strong>Function name:</strong> <code>add_geometry_attributes</code></p>
+<p>Experimental</p>
+<p>Adds area, length, perimeter, and centroid attributes to vector features.</p>
+<p>vector attributes measurements</p>
+<h3 id="parameters-1"><a class="header" href="#parameters-1">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input vector layer.Required<code>input.shp</code>
+<code>area</code>Include AREA field (default true).Optional<code>True</code>
+<code>length</code>Include LENGTH field (default true).Optional<code>True</code>
+<code>perimeter</code>Include PERIMETER field (default true).Optional<code>True</code>
+<code>centroid</code>Include centroid X/Y fields (default true).Optional<code>True</code>
+<code>output</code>Output vector path.Required—</p>
+<h3 id="examples-1"><a class="header" href="#examples-1">Examples</a></h3>
+<p><em>Adds geometry-derived attributes to each feature.</em>
+<code>wbe.add_geometry_attributes(area=True, centroid=True, input='input.shp', length=True, output='geometry_attributes.shp', perimeter=True)</code></p>
+<hr />
+<h2 id="attribute-correlation"><a class="header" href="#attribute-correlation">Attribute Correlation</a></h2>
+<p><strong>Function name:</strong> <code>attribute_correlation</code></p>
+<p>This tool can be used to estimate the Pearson product-moment correlation coefficient (<em>r</em>) for each pair among a group of attributes associated with the database file of a shapefile. The <em>r</em>-value is a measure of the linear association in the variation of the attributes. The coefficient ranges from -1, indicated a perfect negative linear association, to 1, indicated a perfect positive linear association. An <em>r</em>-value of 0 indicates no correlation between the test variables.</p>
+<p>Notice that this index is a measure of the linear association; two variables may be strongly related by a non-linear association (e.g. a power function curve) which will lead to an apparent weak association based on the Pearson coefficient. In fact, non-linear associations are very common among spatial variables, e.g. terrain indices such as slope and contributing area. In such cases, it is advisable that the input images are transformed prior to the estimation of the Pearson coefficient, or that an alternative, non-parametric statistic be used, e.g. the Spearman rank correlation coefficient.</p>
+<p>The user must specify the name of the input vector Shapefile (<code>input</code>). Correlations will be calculated for each pair of numerical attributes contained within the input file's attribute table and presented in a correlation matrix HMTL output (<code>output</code>).</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>image_correlation</code>, <code>attribute_scattergram</code>, <code>attribute_histogram</code></p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def attribute_correlation(self, input: Vector, output_html_file: str) -&gt; None:
+</code></pre>
+<hr />
+<h2 id="attribute-histogram"><a class="header" href="#attribute-histogram">Attribute Histogram</a></h2>
+<p><strong>Function name:</strong> <code>attribute_histogram</code></p>
+<p>This tool can be used to create a histogram, which is a graph displaying the frequency distribution of data, for the values contained in a field of an input vector's attribute table. The user must specify the name of an input vector (<code>input</code>) and the name of one of the fields (<code>field</code>) contained in the associated attribute table. The tool output (<code>output</code>) is an HTML formatted histogram analysis report. If the specified field is non-numerical, the tool will produce a bar-chart of class frequency, similar to the tabular output of the <code>list_unique_values</code> tool.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>list_unique_values</code>, <code>raster_histogram</code></p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def attribute_histogram(self, input: Vector, field_name: str, output_html_file: str) -&gt; None:
+</code></pre>
+<hr />
+<h2 id="attribute-scattergram"><a class="header" href="#attribute-scattergram">Attribute Scattergram</a></h2>
+<p><strong>Function name:</strong> <code>attribute_scattergram</code></p>
+<p>This tool can be used to create a <code>scattergram</code> for two numerical fields (<code>fieldx</code> and <code>fieldy</code>) contained within an input vector's attribute table (<code>input</code>). The user must specify the name of an input shapefile and the name of two of the fields contained it the associated attribute table. The tool output (<code>output</code>) is an HTML formatted report containing a graphical scattergram plot.</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>attribute_histogram</code>, <code>attribute_correlation</code></p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def attribute_scattergram(self, input: Vector, field_name_x: str, field_name_y: str, output_html_file: str, add_trendline: bool = False) -&gt; None:
+</code></pre>
+<hr />
+<h2 id="delete-field"><a class="header" href="#delete-field">Delete Field</a></h2>
+<p><strong>Function name:</strong> <code>delete_field</code></p>
+<p>Experimental</p>
+<p>Deletes one or more attribute fields from a vector layer.</p>
+<p>vector schema attributes</p>
+<h3 id="parameters-2"><a class="header" href="#parameters-2">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input vector layer.Required<code>input.shp</code>
+<code>fields</code>Comma-delimited field names to delete.Required<code>FIELD_A,FIELD_B</code>
+<code>output</code>Output vector path.Required—</p>
+<h3 id="examples-2"><a class="header" href="#examples-2">Examples</a></h3>
+<p><em>Removes selected fields from a layer schema.</em>
+<code>wbe.delete_field(fields='FIELD_A,FIELD_B', input='input.shp', output='fields_deleted.shp')</code></p>
+<hr />
+<h2 id="extract-by-attribute"><a class="header" href="#extract-by-attribute">Extract By Attribute</a></h2>
+<p><strong>Function name:</strong> <code>extract_by_attribute</code></p>
+<p>This tool extracts features from an input vector into an output file based on attribute properties. The user must specify the name of the input (<code>--input</code>) and output (<code>--output</code>) files, along with the filter statement (<code>--statement</code>). The conditional statement is a single-line logical condition containing one or more attribute variables contained in the file's attribute table that evaluates to TRUE/FALSE. In addition to the common comparison and logical operators, i.e. &lt; &gt; &lt;= &gt;= == (EQUAL TO) != (NOT EQUAL TO) || (OR) &amp;&amp; (AND), conditional statements may contain a any valid mathematical operation and the <code>null</code> value.   IdentifierArgument AmountArgument TypesDescription <code>min</code>&gt;= 1NumericReturns the minimum of the arguments <code>max</code>&gt;= 1NumericReturns the maximum of the arguments <code>len</code>1String/TupleReturns the character length of a string, or the amount of elements in a tuple (not recursively) <code>floor</code>1NumericReturns the largest integer less than or equal to a number <code>round</code>1NumericReturns the nearest integer to a number. Rounds half-way cases away from 0.0 <code>ceil</code>1NumericReturns the smallest integer greater than or equal to a number <code>if</code>3Boolean, Any, AnyIf the first argument is true, returns the second argument, otherwise, returns the third <code>contains</code>2Tuple, any non-tupleReturns true if second argument exists in first tuple argument. <code>contains_any</code>2Tuple, Tuple of any non-tupleReturns true if one of the values in the second tuple argument exists in first tuple argument. <code>typeof</code>1Anyreturns "string", "float", "int", "boolean", "tuple", or "empty" depending on the type of the argument <code>math::is_nan</code>1NumericReturns true if the argument is the floating-point value NaN, false if it is another floating-point value, and throws an error if it is not a number <code>math::is_finite</code>1NumericReturns true if the argument is a finite floating-point number, false otherwise <code>math::is_infinite</code>1NumericReturns true if the argument is an infinite floating-point number, false otherwise <code>math::is_normal</code>1NumericReturns true if the argument is a floating-point number that is neither zero, infinite, <a href="https://en.wikipedia.org/wiki/Subnormal_number">subnormal</a>, or NaN, false otherwise <code>math::ln</code>1NumericReturns the natural logarithm of the number <code>math::log</code>2Numeric, NumericReturns the logarithm of the number with respect to an arbitrary base <code>math::log2</code>1NumericReturns the base 2 logarithm of the number <code>math::log10</code>1NumericReturns the base 10 logarithm of the number <code>math::exp</code>1NumericReturns <code>e^(number)</code>, (the exponential function) <code>math::exp2</code>1NumericReturns <code>2^(number)</code> <code>math::pow</code>2Numeric, NumericRaises a number to the power of the other number <code>math::cos</code>1NumericComputes the cosine of a number (in radians) <code>math::acos</code>1NumericComputes the arccosine of a number. The return value is in radians in the range [0, pi] or NaN if the number is outside the range [-1, 1] <code>math::cosh</code>1NumericHyperbolic cosine function <code>math::acosh</code>1NumericInverse hyperbolic cosine function <code>math::sin</code>1NumericComputes the sine of a number (in radians) <code>math::asin</code>1NumericComputes the arcsine of a number. The return value is in radians in the range [-pi/2, pi/2] or NaN if the number is outside the range [-1, 1] <code>math::sinh</code>1NumericHyperbolic sine function <code>math::asinh</code>1NumericInverse hyperbolic sine function <code>math::tan</code>1NumericComputes the tangent of a number (in radians) <code>math::atan</code>1NumericComputes the arctangent of a number. The return value is in radians in the range [-pi/2, pi/2] <code>math::atan2</code>2Numeric, NumericComputes the four quadrant arctangent in radians <code>math::tanh</code>1NumericHyperbolic tangent function <code>math::atanh</code>1NumericInverse hyperbolic tangent function. <code>math::sqrt</code>1NumericReturns the square root of a number. Returns NaN for a negative number <code>math::cbrt</code>1NumericReturns the cube root of a number <code>math::hypot</code>2NumericCalculates the length of the hypotenuse of a right-angle triangle given legs of length given by the two arguments <code>math::abs</code>1NumericReturns the absolute value of a number, returning an integer if the argument was an integer, and a float otherwise <code>str::regex_matches</code>2String, StringReturns true if the first argument matches the regex in the second argument (Requires <code>regex_support</code> feature flag) <code>str::regex_replace</code>3String, String, StringReturns the first argument with all matches of the regex in the second argument replaced by the third argument (Requires <code>regex_support</code> feature flag) <code>str::to_lowercase</code>1StringReturns the lower-case version of the string <code>str::to_uppercase</code>1StringReturns the upper-case version of the string <code>str::trim</code>1StringStrips whitespace from the start and the end of the string <code>str::from</code>&gt;= 0AnyReturns passed value as string <code>bitand</code>2IntComputes the bitwise and of the given integers <code>bitor</code>2IntComputes the bitwise or of the given integers <code>bitxor</code>2IntComputes the bitwise xor of the given integers <code>bitnot</code>1IntComputes the bitwise not of the given integer <code>shl</code>2IntComputes the given integer bitwise shifted left by the other given integer <code>shr</code>2IntComputes the given integer bitwise shifted right by the other given integer <code>random</code>0EmptyReturn a random float between 0 and 1. Requires the <code>rand</code> feature flag. <code>pi</code>0EmptyReturn the value of the PI constant./</p>
+<p>The following are examples of valid conditional statements:</p>
+<p>`HEIGHT &gt;= 300.0</p>
+<p>CROP == "corn"</p>
+<p>(ELEV &gt;= 525.0) &amp;&amp; (HGT_AB_GR &lt;= 5.0)</p>
+<p>math::ln(CARBON) &gt; 1.0</p>
+<p>VALUE == null `</p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def extract_by_attribute(self, input: Vector, statement: str) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="field-calculator"><a class="header" href="#field-calculator">Field Calculator</a></h2>
+<p><strong>Function name:</strong> <code>field_calculator</code></p>
+<p>Experimental</p>
+<p>Calculates or updates a field value from SQL-style or expression-style formulas using feature attributes and geometry variables.</p>
+<p>vector attributes expression</p>
+<h3 id="parameters-3"><a class="header" href="#parameters-3">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input vector layer.Required<code>input.shp</code>
+<code>field</code>Output field name.Required<code>score</code>
+<code>field_type</code>Output field type: float, integer, text.Optional<code>float</code>
+<code>expression</code>Expression or SQL-style UPDATE assignment evaluated per feature.Required<code>VALUE * 2.0 + $area</code>
+<code>overwrite</code>Overwrite existing field if present (default true).Optional<code>True</code>
+<code>preview_rows</code>Optional number of preview rows to return in payload.Optional<code>0</code>
+<code>output</code>Output vector path. Optional when <code>preview_rows &gt; 0</code>.Optional—</p>
+<h3 id="examples-3"><a class="header" href="#examples-3">Examples</a></h3>
+<p><em>Computes a derived numeric field using attributes and geometry.</em>
+<code>wbe.field_calculator(expression='VALUE * 2.0 + $area', field='score', field_type='float', input='input.shp', output='field_calc.shp', overwrite=True)</code></p>
+<p><em>SQL-style conditional update using CASE and UPDATE wrapper.</em>
+<code>wbe.field_calculator(input='roads.gpkg', field='SPEED', field_type='integer', expression="UPDATE roads SET SPEED = CASE WHEN TYPE == 'motorway' THEN 100 WHEN TYPE == 'primary' THEN 80 ELSE 60 END", overwrite=True, output='roads_speed.gpkg')</code></p>
+<p><em>Preview-only evaluation for first 10 rows (no output write).</em>
+<code>wbe.field_calculator(input='roads.gpkg', field='SPEED', field_type='integer', expression="CASE TYPE WHEN 'motorway' THEN 100 ELSE 60 END", overwrite=True, preview_rows=10)</code></p>
+<hr />
+<h2 id="filter-vector-features-by-area"><a class="header" href="#filter-vector-features-by-area">Filter Vector Features By Area</a></h2>
+<p><strong>Function name:</strong> <code>filter_vector_features_by_area</code></p>
+<p>Experimental</p>
+<p>Filters polygon features below a minimum area threshold.</p>
+<p>vector gis filter polygon legacy-port</p>
+<h3 id="parameters-4"><a class="header" href="#parameters-4">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input polygon vector layer.Required<code>polygons.shp</code>
+<code>threshold</code>Minimum polygon area to retain, in layer coordinate units squared.Required<code>1000.0</code>
+<code>output</code>Output vector path.Required—</p>
+<h3 id="examples-4"><a class="header" href="#examples-4">Examples</a></h3>
+<p><em>Removes polygons smaller than the specified area threshold.</em>
+<code>wbe.filter_vector_features_by_area(input='polygons.shp', output='filtered_polygons.shp', threshold=1000.0)</code></p>
+<hr />
+<h2 id="list-unique-values"><a class="header" href="#list-unique-values">List Unique Values</a></h2>
+<p><strong>Function name:</strong> <code>list_unique_values</code></p>
+<p>This tool can be used to list each of the unique values contained within a categorical field of an input vector file's attribute table. The tool outputs an HTML formatted report (<code>output</code>) containing a table of the unique values and their frequency of occurrence within the data. The user must specify the name of an input shapefile (<code>input</code>) and the name of one of the fields (<code>field</code>) contained in the associated attribute table. The specified field <em>should not contained floating-point numerical data</em>, since the number of categories will likely equal the number of records, which may be quite large. The tool effectively provides tabular output that is similar to the graphical output provided by the <code>attribute_histogram</code> tool, which, however, can be applied to continuous data.</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>attribute_histogram</code></p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def list_unique_values(self, input: Vector, field_name: str) -&gt; Tuple[str, int]:
+</code></pre>
+<hr />
+<h2 id="rename-field"><a class="header" href="#rename-field">Rename Field</a></h2>
+<p><strong>Function name:</strong> <code>rename_field</code></p>
+<p>Experimental</p>
+<p>Renames an attribute field in a vector layer.</p>
+<p>vector schema attributes</p>
+<h3 id="parameters-5"><a class="header" href="#parameters-5">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input vector layer.Required<code>input.shp</code>
+<code>field</code>Existing field name.Required<code>OLD_NAME</code>
+<code>new_field</code>Replacement field name.Required<code>NEW_NAME</code>
+<code>output</code>Output vector path.Required—</p>
+<h3 id="examples-5"><a class="header" href="#examples-5">Examples</a></h3>
+<p><em>Renames one attribute field.</em>
+<code>wbe.rename_field(field='OLD_NAME', input='input.shp', new_field='NEW_NAME', output='renamed.shp')</code></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="vector-sampling-gridding.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="vector-spatial-statistics.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="vector-sampling-gridding.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="vector-spatial-statistics.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

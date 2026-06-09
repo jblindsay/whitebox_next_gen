@@ -8,6 +8,7 @@ from .bootstrap import (
     backend_install_status,
     backend_update_status,
     install_or_upgrade_whitebox_workflows,
+    get_osgeo4w_pip_error_message,
 )
 from .diagnostics import diagnostics_text, gather_runtime_diagnostics
 from .host_api import (
@@ -257,6 +258,7 @@ class WhiteboxWorkflowsPlugin:
 
         self._load_recent_tools()
         self._load_favorite_tools()
+        self._load_runtime_preferences()
         self._load_backend_preferences()
         self._load_quick_open_preference()
         self._load_panel_ui_state()
@@ -392,6 +394,14 @@ class WhiteboxWorkflowsPlugin:
     def _deactivate_license(self, *_args):
         from .bootstrap import invoke_license_function
 
+        # Confirm this destructive operation
+        if not self._confirm(
+            "Deactivate License",
+            "This will permanently remove your license from this machine.\n\n"
+            "Are you sure you want to proceed?",
+        ):
+            return
+
         try:
             message = invoke_license_function("deactivate_license", from_transfer=False)
             self._notify_info(str(message))
@@ -402,6 +412,15 @@ class WhiteboxWorkflowsPlugin:
     def _transfer_license(self, *_args):
         from .bootstrap import invoke_license_function
 
+        # Confirm this destructive operation
+        if not self._confirm(
+            "Transfer License",
+            "This will deactivate your license on this machine and free the activation slot.\n\n"
+            "After transfer, you can activate the same license on another machine.\n\n"
+            "Are you sure you want to proceed?",
+        ):
+            return
+
         try:
             payload_raw = invoke_license_function("transfer_license")
             payload = payload_raw
@@ -411,14 +430,32 @@ class WhiteboxWorkflowsPlugin:
                 except Exception:
                     payload = {"message": payload_raw}
 
-            message = str(payload.get("message", "License transferred.")) if isinstance(payload, dict) else str(payload)
+            license_id = ""
             if isinstance(payload, dict):
+                license_id = str(payload.get("floating_license_id", "")).strip()
                 try:
                     QApplication.clipboard().setText(json.dumps(payload, indent=2))
                 except Exception:
                     pass
-            self._notify_info(message)
-            self._refresh_catalog(silent=True)
+
+            if license_id:
+                message = (
+                    f"License deactivated on this machine.\n\n"
+                    f"Your activation key:\n{license_id}\n\n"
+                    f"To activate on another machine:\n"
+                    f"1. Go to that machine\n"
+                    f"2. Open QGIS\n"
+                    f"3. Plugins → Whitebox Workflows → Activate License\n"
+                    f"4. Enter the key above, your name, and email\n\n"
+                    f"(The full payload has been copied to your clipboard for reference.)"
+                )
+            else:
+                message = str(payload.get("message", "License transferred.")) if isinstance(payload, dict) else str(payload)
+
+            # Show as persistent info dialog instead of fleeting notification
+            show_info_dialog(self.iface, "Whitebox Workflows License Transfer", message)
+            # Update provider state without triggering the "Pro unavailable" warning
+            self.provider.include_pro = False
         except Exception as exc:
             self._notify_warning(f"License transfer failed: {exc}")
 
@@ -1356,6 +1393,13 @@ class WhiteboxWorkflowsPlugin:
         try:
             status = backend_install_status()
         except Exception as exc:
+            error_str = str(exc).lower()
+            # Check if this is a pip missing error (OSGeo4W issue)
+            if "pip is not available" in error_str or "no module named pip" in error_str:
+                if interactive:
+                    self._show_pip_missing_dialog()
+                return False
+
             self._notify_warning(f"Unable to inspect whitebox_workflows backend: {exc}")
             return False
 
@@ -1511,6 +1555,15 @@ class WhiteboxWorkflowsPlugin:
                 "import runpy, sys; sys.argv=['pip','install','--user','whitebox-workflows']; "
                 "runpy.run_module('pip', run_name='__main__', alter_sys=True)"
             )
+
+    def _show_pip_missing_dialog(self) -> None:
+        """Show a persistent dialog explaining the OSGeo4W pip missing issue and how to fix it."""
+        error_msg = get_osgeo4w_pip_error_message()
+        show_info_dialog(
+            self.iface,
+            title=error_msg["title"],
+            message=error_msg["details"],
+        )
 
     def _main_window_or_none(self):
         try:

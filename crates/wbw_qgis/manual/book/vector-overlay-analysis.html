@@ -1,0 +1,377 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Overlay Analysis - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html" class="active"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="overlay-analysis"><a class="header" href="#overlay-analysis">Overlay Analysis</a></h1>
+<hr />
+<h2 id="clip"><a class="header" href="#clip">Clip</a></h2>
+<p><strong>Function name:</strong> <code>clip</code></p>
+<p>This tool will extract all the features, or parts of features, that overlap with the features of the clip vector file. The clipping operation is one of the most common vector overlay operations in GIS and effectively imposes the boundary of the clip layer on a set of input vector features, or target features. The operation is sometimes likened to a 'cookie-cutter'. The input vector file can be of any feature type (i.e. points, lines, polygons), however, the clip vector must consist of polygons.</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>erase</code></p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def clip(self, input: Vector, clip_layer: Vector) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="difference"><a class="header" href="#difference">Difference</a></h2>
+<p><strong>Function name:</strong> <code>difference</code></p>
+<p>This tool will remove all the overlapping features, or parts of overlapping features, between input and overlay vector files, outputting only the features that occur in one of the two inputs but not both. The <em>Symmetrical Difference</em> is related to the Boolean exclusive-or (<strong>XOR</strong>) operation in  set theory and is one of the common vector overlay operations in GIS. The user must specify  the names of the input and overlay vector files as well as the output vector file name. The tool operates on vector points, lines, or polygon, but both the input and overlay files must contain the same VectorGeometryType.</p>
+<p>The <em>Symmetrical Difference</em> can also be derived using a combination of other vector overlay operations, as either <code>(A union B) difference (A intersect B)</code>, or <code>(A difference B) union (B difference A)</code>.</p>
+<p>The attributes of the two input vectors will be merged in the output attribute table. Fields that are duplicated between the inputs will share a single attribute in the output. Fields that only exist in one of the two inputs will be populated by <code>null</code> in the output table. Multipoint VectorGeometryTypes however will simply contain a single output feature identifier (<code>FID</code>) attribute. Also, note that depending on the VectorGeometryType (polylines and polygons), <code>Measure</code> and <code>Z</code> ShapeDimension data will not be transferred to the output geometries. If the input attribute table contains fields that measure the geometric properties of their associated features (e.g. length or area), these fields will not be updated to reflect changes in geometry shape and size resulting from the overlay operation.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>intersect</code>, <code>difference</code>, <code>union</code>, <code>clip</code>, <code>erase</code></p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def difference(self, input: Vector, overlay: Vector) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="dissolve"><a class="header" href="#dissolve">Dissolve</a></h2>
+<p><strong>Function name:</strong> <code>dissolve</code></p>
+<p>This tool can be used to remove the interior, or shared, boundaries within a vector polygon coverage. You can either dissolve all interior boundaries or dissolve those boundaries along polygons with the same value of a user-specified attribute within the vector's attribute table. It may be desirable to use the <code>VectorCleaning</code> tool to correct any topological errors resulting from the slight misalignment of nodes along shared boundaries in the vector coverage before performing the <code>dissolve</code> operation.</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>clip</code>, <code>erase</code>, <code>polygonize</code></p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def dissolve(self, input: Vector, dissolve_field: str = "", snap_tolerance: float = 2.220446049250313e-16) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="erase"><a class="header" href="#erase">Erase</a></h2>
+<p><strong>Function name:</strong> <code>erase</code></p>
+<p>This tool will remove all the features, or parts of features, that overlap with the features of the erase vector file. The erasing operation is one of the most common vector overlay operations in GIS and effectively imposes the boundary of the erase layer on a set of input vector features, or target features.</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>clip</code></p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def erase(self, input: Vector, erase_layer: Vector) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="identity"><a class="header" href="#identity">Identity</a></h2>
+<p><strong>Function name:</strong> <code>identity</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="intersect"><a class="header" href="#intersect">Intersect</a></h2>
+<p><strong>Function name:</strong> <code>intersect</code></p>
+<p>The result of the <code>intersect</code> vector overlay operation includes all the feature parts that occur in both input layers, excluding all other parts. It is analogous to the <strong>OR</strong> logical operator and multiplication in arithmetic. This tool is one of the common vector overlay operations in GIS. The user must specify the names of the input and overlay vector files as well as the output vector file name. The tool operates on vector points, lines, or polygon, but both the input and overlay files must contain the same VectorGeometryType.</p>
+<p>The <code>intersect</code> tool is similar to the <code>clip</code> tool. The difference is that the overlay vector layer in a <code>clip</code> operation must always be polygons, regardless of whether the input layer consists of points or polylines.</p>
+<p>The attributes of the two input vectors will be merged in the output attribute table. Note, duplicate fields should not exist between the inputs layers, as they will share a single attribute in the output (assigned from the first layer). Multipoint VectorGeometryTypes will simply contain a single output feature identifier (<code>FID</code>) attribute. Also, note that depending on the VectorGeometryType (polylines and polygons), <code>Measure</code> and <code>Z</code> ShapeDimension data will not be transferred to the output geometries. If the input attribute table contains fields that measure the geometric properties of their associated features (e.g. length or area), these fields will not be updated to reflect changes in geometry shape and size resulting from the overlay operation.</p>
+<h3 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h3>
+<p><code>difference</code>, <code>union</code>, <code>symmetrical_difference</code>, <code>clip</code>, <code>erase</code></p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def intersect(self, input: Vector, overlay: Vector, snap_tolerance: float = 2.220446049250313e-16) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="line-intersections"><a class="header" href="#line-intersections">Line Intersections</a></h2>
+<p><strong>Function name:</strong> <code>line_intersections</code></p>
+<p>This tool identifies points where the features of two vector line/polygon layers intersect. The user must specify the names of two input vector line files and the output file. The output file will be a vector of POINT VectorGeometryType. If the input vectors intersect at a line segment, the beginning and end vertices of the segment will be present in the output file. A warning is issued if intersection line segments are identified during analysis. If no intersections are found between the input line files, the output file will not be saved and a warning will be issued.</p>
+<p>Each intersection point will contain <code>PARENT1</code> and <code>PARENT2</code> attribute fields, identifying the instersecting features in the first and second input line files respectively. Additionally, the output attribute table will contain all of the attributes (excluding <code>FID</code>s) of the two parent line features.</p>
+<h3 id="python-api-5"><a class="header" href="#python-api-5">Python API</a></h3>
+<pre><code class="language-python">def line_intersections(self, input1: Vector, input2: Vector) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="line-polygon-clip"><a class="header" href="#line-polygon-clip">Line Polygon Clip</a></h2>
+<p><strong>Function name:</strong> <code>line_polygon_clip</code></p>
+<p>Experimental</p>
+<p>Clips line features to polygon interiors and outputs clipped line segments.</p>
+<p>vector clip line</p>
+<h3 id="parameters"><a class="header" href="#parameters">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line layer.Required<code>lines.shp</code>
+<code>clip</code>Clip polygon layer.Required<code>clip_polygons.shp</code>
+<code>output</code>Output vector path.Required—</p>
+<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
+<p><em>Returns clipped line segments inside clip polygons.</em>
+<code>wbe.line_polygon_clip(clip='clip_polygons.shp', input='lines.shp', output='line_polygon_clip.shp')</code></p>
+<hr />
+<h2 id="near"><a class="header" href="#near">Near</a></h2>
+<p><strong>Function name:</strong> <code>near</code></p>
+<p>Experimental</p>
+<p>Find nearest neighbor features and optionally compute distance. Efficient for proximity analysis and distance calculations.</p>
+<p>vector nearest distance</p>
+<h3 id="parameters-1"><a class="header" href="#parameters-1">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input vector layer.Required<code>input.shp</code>
+<code>near</code>Near-feature vector layer.Required<code>near.shp</code>
+<code>max_distance</code>Optional maximum search distance.Optional—
+<code>output</code>Output vector path.Required—</p>
+<h3 id="examples-1"><a class="header" href="#examples-1">Examples</a></h3>
+<p><em>Computes nearest feature IDs and distances.</em>
+<code>wbe.near(input='input.shp', near='near.shp', output='near_output.shp')</code></p>
+<hr />
+<h2 id="select-by-location"><a class="header" href="#select-by-location">Select By Location</a></h2>
+<p><strong>Function name:</strong> <code>select_by_location</code></p>
+<p>Experimental</p>
+<p>Extracts target features that satisfy a spatial relationship to query features.</p>
+<p>vector query spatial</p>
+<h3 id="parameters-2"><a class="header" href="#parameters-2">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>target</code>Target feature layer to filter.Required<code>target.shp</code>
+<code>query</code>Query feature layer.Required<code>query.shp</code>
+<code>predicate</code>Spatial predicate: intersects, within, contains, touches, crosses, overlaps, disjoint, within_distance.Required<code>intersects</code>
+<code>distance</code>Distance threshold for within_distance predicate.Optional—
+<code>output</code>Output vector path.Required—</p>
+<h3 id="examples-2"><a class="header" href="#examples-2">Examples</a></h3>
+<p><em>Selects target features that intersect query features.</em>
+<code>wbe.select_by_location(output='selected.shp', predicate='intersects', query='query.shp', target='target.shp')</code></p>
+<hr />
+<h2 id="spatial-join"><a class="header" href="#spatial-join">Spatial Join</a></h2>
+<p><strong>Function name:</strong> <code>spatial_join</code></p>
+<p>Experimental</p>
+<p>Join attributes from one vector layer to another based on spatial relationship. Uses spatial indexing for efficient processing.</p>
+<p>vector join spatial</p>
+<h3 id="parameters-3"><a class="header" href="#parameters-3">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>target</code>Target layer receiving joined attributes.Required<code>target.shp</code>
+<code>join</code>Join layer providing attributes.Required<code>join.shp</code>
+<code>predicate</code>Spatial predicate: intersects, within, contains, touches, crosses, overlaps, within_distance.Required<code>intersects</code>
+<code>distance</code>Distance threshold for within_distance predicate.Optional—
+<code>strategy</code>Join strategy: first, last, count, sum, mean, min, max.Optional<code>first</code>
+<code>prefix</code>Prefix for joined field names (default JOIN_).Optional<code>JOIN_</code>
+<code>output</code>Output vector path.Required—</p>
+<h3 id="examples-3"><a class="header" href="#examples-3">Examples</a></h3>
+<p><em>Transfers join-layer attributes where geometries intersect.</em>
+<code>wbe.spatial_join(join='join.shp', output='spatial_join.shp', predicate='intersects', prefix='JOIN_', strategy='first', target='target.shp')</code></p>
+<hr />
+<h2 id="symmetrical-difference"><a class="header" href="#symmetrical-difference">Symmetrical Difference</a></h2>
+<p><strong>Function name:</strong> <code>symmetrical_difference</code></p>
+<p>This tool will remove all the overlapping features, or parts of overlapping features, between input and overlay vector files, outputting only the features that occur in one of the two inputs but not both. The <em>Symmetrical Difference</em> is related to the Boolean exclusive-or (<strong>XOR</strong>) operation in  set theory and is one of the common vector overlay operations in GIS. The user must specify  the names of the input and overlay vector files as well as the output vector file name. The tool operates on vector points, lines, or polygon, but both the input and overlay files must contain the same VectorGeometryType.</p>
+<p>The <em>Symmetrical Difference</em> can also be derived using a combination of other vector overlay operations, as either <code>(A union B) difference (A intersect B)</code>, or <code>(A difference B) union (B difference A)</code>.</p>
+<p>The attributes of the two input vectors will be merged in the output attribute table. Fields that are duplicated between the inputs will share a single attribute in the output. Fields that only exist in one of the two inputs will be populated by <code>null</code> in the output table. Multipoint VectorGeometryTypes however will simply contain a single output feature identifier (<code>FID</code>) attribute. Also, note that depending on the VectorGeometryType (polylines and polygons), <code>Measure</code> and <code>Z</code> ShapeDimension data will not be transferred to the output geometries. If the input attribute table contains fields that measure the geometric properties of their associated features (e.g. length or area), these fields will not be updated to reflect changes in geometry shape and size resulting from the overlay operation.</p>
+<h3 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h3>
+<p><code>intersect</code>, <code>difference</code>, <code>union</code>, <code>clip</code>, <code>erase</code></p>
+<h3 id="python-api-6"><a class="header" href="#python-api-6">Python API</a></h3>
+<pre><code class="language-python">def symmetrical_difference(self, input: Vector, overlay: Vector, snap_tolerance: float = 2.220446049250313e-16) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="union"><a class="header" href="#union">Union</a></h2>
+<p><strong>Function name:</strong> <code>union</code></p>
+<p>This tool splits vector layers at their overlaps, creating a layer containing all the portions from both input and overlay layers. The <em>Union</em> is related to the Boolean <strong>OR</strong> operation in  set theory and is one of the common vector overlay operations in GIS. The user must specify  the names of the input and overlay vector files as well as the output vector file name. The tool operates on vector points, lines, or polygon, but both the input and overlay files must contain the same VectorGeometryType.</p>
+<p>The attributes of the two input vectors will be merged in the output attribute table. Fields that are duplicated between the inputs will share a single attribute in the output. Fields that only exist in one of the two inputs will be populated by <code>null</code> in the output table. Multipoint VectorGeometryTypes however will simply contain a single output feature identifier (<code>FID</code>) attribute. Also, note that depending on the VectorGeometryType (polylines and polygons), <code>Measure</code> and <code>Z</code> ShapeDimension data will not be transferred to the output geometries. If the input attribute table contains fields that measure the geometric properties of their associated features (e.g. length or area), these fields will not be updated to reflect changes in geometry shape and size resulting from the overlay operation.</p>
+<h3 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h3>
+<p><code>intersect</code>, <code>difference</code>, <code>symmetrical_difference</code>, <code>clip</code>, <code>erase</code></p>
+<h3 id="python-api-7"><a class="header" href="#python-api-7">Python API</a></h3>
+<pre><code class="language-python">def union(self, input: Vector, overlay: Vector, snap_tolerance: float = 2.220446049250313e-16) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="update"><a class="header" href="#update">Update</a></h2>
+<p><strong>Function name:</strong> <code>update</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="vector-analysis.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="vector-geometry-processing.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="vector-analysis.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="vector-geometry-processing.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,322 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Stream Network Extraction - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html" class="active"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="stream-network-extraction"><a class="header" href="#stream-network-extraction">Stream Network Extraction</a></h1>
+<hr />
+<h2 id="extract-streams"><a class="header" href="#extract-streams">Extract Streams</a></h2>
+<p><strong>Function name:</strong> <code>extract_streams</code></p>
+<h3 id="description"><a class="header" href="#description">Description</a></h3>
+<p>This tool can be used to extract, or map, the likely stream cells from an input flow-accumulation image (<code>flow_accumulation</code>). The algorithm applies a threshold to the input flow accumulation image such that streams are considered to be all grid cells with accumulation values greater than the specified threshold (<code>threshold</code>). As such, this threshold represents the minimum area (area is used here as a surrogate for discharge) required to <em>initiate and maintain a channel</em>. Smaller threshold values result in more extensive stream networks and vice versa. Unfortunately there is very little guidance regarding an appropriate method for determining the channel initiation area threshold in practice. As such, it is frequently determined either by examining map or imagery data, using field work, or by experimentation until a suitable or desirable channel network is identified. Notice that the threshold value will be unique for each landscape and dataset (including source and grid resolution), further complicating its <em>a priori</em> determination. There is also evidence that in some landscape the threshold is a combined upslope area-slope function. Generally, a lower threshold is appropriate in humid climates and a higher threshold is appropriate in areas underlain by more resistant bedrock. Climate and bedrock resistance are two factors related to drainage density, i.e. the extent to which a landscape is dissected by drainage channels.</p>
+<p>The background value of the output raster will be the NoData value unless <code>zero_background</code> is set to True.</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>extract_valleys</code></p>
+<h3 id="parameters"><a class="header" href="#parameters">Parameters</a></h3>
+<p>flow_accumulation (Raster):     The input flow accumulation Raster object.</p>
+<p>threshold (float):     The minimum accumulation value required to be part of a stream channel. Default is 0.0, but should be set higher.</p>
+<p>zero_background (bool):     Whether the output raster uses 0.0 for non-channel cells (True) or NoData (False). Default is False.</p>
+<h3 id="returns"><a class="header" href="#returns">Returns:</a></h3>
+<p>Raster</p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def extract_streams(self, flow_accumulation: Raster, threshold: float = 0.0, zero_background: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="extract-valleys"><a class="header" href="#extract-valleys">Extract Valleys</a></h2>
+<p><strong>Function name:</strong> <code>extract_valleys</code></p>
+<p>This tool can be used to extract channel networks from an input digital elevation models (<code>dem</code>) using one of three techniques that are based on local topography alone.</p>
+<p>The Lindsay (2006) 'lower-quartile' method (<code>variant='LQ'</code>) algorithm is a type of 'valley recognition' method. Other channel mapping methods, such as the Johnston and Rosenfeld (1975) algorithm, experience problems because channel profiles are not always 'v'-shaped, nor are they always apparent in small 3 x 3 windows. The lower-quartile method was developed as an alternative and more flexible valley recognition channel mapping technique. The lower-quartile method operates by running a filter over the DEM that calculates the percentile value of the centre cell with respect to the distribution of elevations within the filter window. The roving window is circular, the diameter of which should reflect the topographic variation of the area (e.g. the channel width or average hillslope length). If this variant is selected, the user must specify the <code>filter_size</code> parameter, in pixels, and this value should be an odd number (e.g. 3, 5, 7, etc.). The appropriateness of the selected window diameter will depend on the grid resolution relative to the scale of topographic features. Cells that are within the lower quartile of the distribution of elevations of their neighbourhood are flagged. Thus, the algorithm identifies grid cells that are in relatively low topographic positions at a local scale. This approach to channel mapping is only appropriate in fluvial landscapes. In regions containing numerous lakes and wetlands, the algorithm will pick out the edges of features.</p>
+<p>The Johnston and Rosenfeld (1975) algorithm (<code>variant='JandR'</code>) is a type of 'valley recognition' method and operates as follows: channel cells are flagged in a 3 x 3 window if the north and south neighbours are higher than the centre grid cell or if the east and west neighbours meet this same criterion. The group of cells that are flagged after one pass of the roving window constituted the drainage network. This method is best applied to DEMs that are relatively smooth and do not exhibit high levels of short-range roughness. As such, it may be desirable to use a smoothing filter before applying this tool. The <code>feature_preserving_smoothing</code> is a good option for removing DEM roughness while preserving the topographic information contain in breaks-in-slope (i.e. edges).</p>
+<p>The Peucker and Douglas (1975) algorithm (<code>variant='PandD'</code>) is one of the simplest and earliest algorithms for topography-based network extraction. Their 'valley recognition' method operates by passing a 2 x 2 roving window over a DEM and flagging the highest grid cell in each group of four. Once the window has passed over the entire DEM, channel grid cells are left unflagged. This method is also best applied to DEMs that are relatively smooth and do not exhibit high levels of short-range roughness. Pre-processing the DEM with the <code>feature_preserving_smoothing</code> tool may also be useful when applying this method.</p>
+<p>Each of these methods of extracting valley networks result in line networks that can be wider than a single grid cell. As such, it is often desirable to thin the resulting network using a line-thinning algorithm. The option to perform line-thinning is provided by the tool as a post-processing step (<code>line_thin=True</code>).</p>
+<h3 id="references"><a class="header" href="#references">References</a></h3>
+<p>Johnston, E. G., &amp; Rosenfeld, A. (1975). Digital detection of pits, peaks, ridges, and ravines. IEEE Transactions on Systems, Man, and Cybernetics, (4), 472-480.</p>
+<p>Lindsay, J. B. (2006). Sensitivity of channel mapping techniques to uncertainty in digital elevation data. International Journal of Geographical Information Science, 20(6), 669-692.</p>
+<p>Peucker, T. K., &amp; Douglas, D. H. (1975). Detection of surface-specific points by local parallel processing of discrete terrain elevation data. Computer Graphics and image processing, 4(4), 375-387.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>feature_preserving_smoothing</code></p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def extract_valleys(self, dem: Raster, variant: str = "lq", line_thin: bool = False, filter_size: int = 5) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="prune-vector-streams"><a class="header" href="#prune-vector-streams">Prune Vector Streams</a></h2>
+<p><strong>Function name:</strong> <code>prune_vector_streams</code></p>
+<h3 id="description-1"><a class="header" href="#description-1">Description</a></h3>
+<p>This tool can be used to prune the smallest branches of a vector stream network based on a threshold in link magnitude. The function automatically calculates the Shreve magnitude of each link in the input streams vector. This operation requires an input digital elevation model (DEM). The function is also capable of calculating the link magnitude from stream networks that have some minor topological errors (e.g., line overshoots or undershoots). This requires the input of a <code>snap_distance</code> parameter (default = 0.0).</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>vector_stream_network_analysis</code>, <code>repair_stream_vector_topology</code></p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def prune_vector_streams(self, streams: Vector, dem: Raster, threshold: float, snap_distance: float = 0.001) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="raster-streams-to-vector"><a class="header" href="#raster-streams-to-vector">Raster Streams To Vector</a></h2>
+<p><strong>Function name:</strong> <code>raster_streams_to_vector</code></p>
+<p>This tool converts a raster stream file into a vector file. The user must specify an input raster streams file (<code>streams</code>), and an input D8 flow pointer file (<code>d8_pointer</code>). Streams in the input raster streams file are denoted by cells containing any positive, non-zero integer. A field in the output vector's database file, called STRM_VAL, will correspond to this positive integer value. The database file will also have a field for the length of each link in the stream network. The flow pointer file must be calculated from a DEM with all topographic depressions and flat areas removed and must be calculated using the D8 flow pointer algorithm (<code>d8_pointer</code>). The output vector will contain PolyLine features.</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>rasterize_streams</code>, <code>raster_to_vector_lines</code></p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def raster_streams_to_vector(self, streams: Raster, d8_pointer: Raster, esri_pointer: bool = False) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="rasterize-streams"><a class="header" href="#rasterize-streams">Rasterize Streams</a></h2>
+<p><strong>Function name:</strong> <code>rasterize_streams</code></p>
+<p>This tool can be used rasterize an input vector stream network (<code>streams</code>) using on Lindsay (2016) method. The user inputs an existing raster (<code>base_raster</code>), from which the output raster's grid resolution is determined.</p>
+<h3 id="reference"><a class="header" href="#reference">Reference</a></h3>
+<p>Lindsay JB. 2016. The practice of DEM stream burning revisited. Earth Surface Processes and Landforms, 41(5): 658–668. DOI: 10.1002/esp.3888</p>
+<h3 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h3>
+<p><code>raster_streams_to_vector</code></p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def rasterize_streams(self, streams: Vector, base_raster: Raster = None, zero_background: bool = False, use_feature_id: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="remove-short-streams"><a class="header" href="#remove-short-streams">Remove Short Streams</a></h2>
+<p><strong>Function name:</strong> <code>remove_short_streams</code></p>
+<p>This tool can be used to remove stream links in a stream network that are shorter than a user-specified length (<code>min_length</code>). The user must input a streams raster image (<code>streams_raster</code>) and D8 pointer (flow direction) image (<code>d8_pntr</code>). Stream cells are designated in the streams raster as all positive, nonzero values. Thus all non-stream or background grid cells are commonly assigned either zeros or NoData values. The pointer raster is used to traverse the stream network and should only be created using the D8 algorithm (<code>d8_pointer</code>).</p>
+<p>By default, the pointer raster is assumed to use the clockwise indexing method used by WhiteboxTools. If the pointer file contains ESRI flow direction values instead, the user must specify <code>esri_pntr=True</code>.</p>
+<h3 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h3>
+<p><code>extract_streams</code>, <code>d8_pointer</code></p>
+<h3 id="python-api-5"><a class="header" href="#python-api-5">Python API</a></h3>
+<pre><code class="language-python">def remove_short_streams(self, d8_pntr: Raster, streams_raster: Raster, min_length: float = 0.0, esri_pntr: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="repair-stream-vector-topology"><a class="header" href="#repair-stream-vector-topology">Repair Stream Vector Topology</a></h2>
+<p><strong>Function name:</strong> <code>repair_stream_vector_topology</code></p>
+<p>This tool can be used to resolve many of the topological errors and inconsistencies associated with manually digitized vector stream networks, i.e. hydrography data. A properly structured stream network should consist of a series of stream segments that connect a channel head to a downstream confluence, or an upstream confluence to a downstream confluence/outlet. This tool will join vector arcs that connect at arbitrary, non-confluence points along stream segments. It also splits an arc where a tributary stream connects at a mid-point, thereby creating a proper confluence where two upstream triburaries converge into a downstream segment. The tool also handles non-connecting tributaries caused by dangling arcs, i.e. overshoots and undershoots.</p>
+<p>The user must specify the name of the input vector stream network (<code>input</code>) and the output file (<code>output</code>). Additionally, a distance threshold for snapping dangling arcs (<code>snap</code>) must be specified. This distance is in the input layer's x-y units. The tool works best on projected input data, however, if the input are in geographic coordinates (latitude and longitude), then specifying a small valued snap distance is advisable. Notice that the attributes of the input layer will not be carried over to the output file because there is not a one-for-one feature correspondence between the two files due to the joins and splits of stream segments. Instead the output attribute table will only contain a feature ID (FID) entry.</p>
+<p>Note: this tool should be used to pre-process vector streams that are input to the <code>vector_stream_network_analysis</code> tool.</p>
+<h3 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h3>
+<p><code>vector_stream_network_analysis</code>, <code>fix_dangling_arcs</code></p>
+<hr />
+<h2 id="river-centerlines"><a class="header" href="#river-centerlines">River Centerlines</a></h2>
+<p><strong>Function name:</strong> <code>river_centerlines</code></p>
+<p>Note this tool is part of a <code>WhiteboxTools extension product</code>. Please visit <code>Whitebox Geospatial Inc.</code> for information about purchasing a license activation key (<code>https://www.whiteboxgeo.com/extension-pricing/</code>).</p>
+<p>This tool can map river centerlines, or medial-lines, from input river rasters (<code>input</code>). The input river (or water) raster is often derived from an image classification performed on multispectral satellite imagery. The river raster must be a Boolean (1 for water, 0/NoData for not-water) and can be derived either by reclassifying the classification output, or derived using a 1-class classification procedure. For example, using the <code>parallelepiped_classification</code> tool, it is possible to train the classifier using water training polygons, and all other land classes will simply be left unclassified. It may be necessary to perform some pre-processing on the water Boolean raster before input to the centerlines tool. For example, you may need to remove smaller water polygons associated with small lakes and ponds, and you may want to remove small islands from the remaining water features. This tool will often create a bifurcating vector path around islands within rivers, even if those islands are a single-cell in size. The <code>RemoveRasterPolygonHoles</code> tool can be used to remove islands in the water raster that are smaller than a user-specified size. The user must also specify the minimum line length (<code>min_length</code>), which determines the level of detail in the final rivers map. For example, in the first iamge below, a value of 30 grid cells was used for the <code>min_length</code> parameter, while a value of 5 was used in the second image, which possesses far more (arguably too much) detail.</p>
+<p>Lastly, the user must specify the <code>radius</code> parameter value. At times, the tool will be able to connect distant water polygons that are part of the same feature and this parameter determines the size of the search radius used to identify separated line end-nodes that are candidates for connection. It is advisable that this value not be set too high, or else unexpected connections may be made between unrelated water features. However, a value of between 1 and 5 can produce satisfactory results. Experimentation may be needed to find an appropriate value for any one data set however. The image below provides an example of this characteristic of the tool, where the resulting vector stream centerline passes through disconnected raster water polygons in the underlying input image in four locations.</p>
+<p><code>**Here**</code> is a video that demonstrates how to apply this tool to map river center-lines taken from a water raster created by classifying a Sentinel-2 multi-spectral satellite imagery data set.</p>
+<h3 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h3>
+<p><code>parallelepiped_classification</code>, <code>RemoveRasterPolygonHoles</code></p>
+<h3 id="python-api-6"><a class="header" href="#python-api-6">Python API</a></h3>
+<pre><code class="language-python">def river_centerlines(self, raster: Raster, min_length: int = 3, search_radius: int = 9) -&gt; Vector:
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="hydrology-hydrologic-indices.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="streams-longitudinal-analysis.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="hydrology-hydrologic-indices.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="streams-longitudinal-analysis.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

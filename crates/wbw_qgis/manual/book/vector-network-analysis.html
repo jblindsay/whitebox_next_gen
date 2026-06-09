@@ -1,0 +1,1207 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Tool Reference - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html" class="active"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="network-analysis--tool-reference"><a class="header" href="#network-analysis--tool-reference">Network Analysis — Tool Reference</a></h1>
+<hr />
+<h2 id="build-network-topology"><a class="header" href="#build-network-topology">Build Network Topology</a></h2>
+<p><strong>Function name:</strong> <code>build_network_topology</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="closest-facility-network"><a class="header" href="#closest-facility-network">Closest Facility Network</a></h2>
+<p><strong>Function name:</strong> <code>closest_facility_network</code></p>
+<p>Experimental</p>
+<p>Finds the minimum-cost network route from each incident point to its nearest reachable facility point.</p>
+<p>vector network closest-facility routing</p>
+<h3 id="parameters"><a class="header" href="#parameters">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>incidents</code>Incident/demand point layer.Required<code>incidents.shp</code>
+<code>facilities</code>Facility/supply point layer.Required<code>facilities.shp</code>
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional—
+<code>max_snap_distance</code>Optional max distance from incident/facility points to nearest network node.Optional—
+<code>edge_cost_field</code>Optional numeric line field used as an impedance multiplier for segment length.Optional—
+<code>one_way_field</code>Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).Optional—
+<code>blocked_field</code>Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).Optional—
+<code>barriers</code>Optional barrier point layer; nearest network nodes are blocked from traversal.Optional—
+<code>barrier_snap_distance</code>Optional max distance from each barrier point to a network node for blocking.Optional—
+<code>turn_penalty</code>Optional additive cost applied to non-straight turns at network nodes.Optional—
+<code>u_turn_penalty</code>Optional additive cost applied to U-turn transitions.Optional—
+<code>forbid_u_turns</code>If true, disallow U-turn transitions.Optional—
+<code>forbid_left_turns</code>If true, disallow left-turn transitions.Optional—
+<code>forbid_right_turns</code>If true, disallow right-turn transitions.Optional—
+<code>turn_restrictions_csv</code>Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.Optional—
+<code>temporal_cost_profile</code>Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).Optional—
+<code>temporal_edge_id_field</code>Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).Optional—
+<code>departure_time</code>Optional RFC3339 departure time used for temporal profile lookup.Optional—
+<code>temporal_mode</code>Optional temporal interpretation mode: multiplier or absolute.Optional—
+<code>temporal_fallback</code>Optional fallback when temporal row is missing: static_cost or error.Optional—
+<code>temporal_profile_report</code>Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).Optional—
+<code>output</code>Output closest-facility route line vector path.Required—</p>
+<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
+<p><em>Routes each incident point to the nearest reachable facility by network cost.</em>
+<code>wbe.closest_facility_network(facilities='facilities.shp', incidents='incidents.shp', input='network.shp', output='closest_facility_routes.shp')</code></p>
+<hr />
+<h2 id="emergency-scenario-routing-and-accessibility-simulator"><a class="header" href="#emergency-scenario-routing-and-accessibility-simulator">Emergency Scenario Routing And Accessibility Simulator</a></h2>
+<p><strong>Function name:</strong> <code>emergency_scenario_routing_and_accessibility_simulator</code></p>
+<p>PROProduction</p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative"><a class="header" href="#workflow-narrative">Workflow Narrative</a></h3>
+<p><strong>Emergency Accessibility Scenario Planning</strong></p>
+<h4 id="who-it-is-for"><a class="header" href="#who-it-is-for">Who It Is For</a></h4>
+<ul>
+<li>Emergency management teams planning resilience under flood/fire/closure scenarios.</li>
+<li>Public safety routing analysts evaluating critical-facility reachability under disruptions.</li>
+</ul>
+<h4 id="primary-user"><a class="header" href="#primary-user">Primary User</a></h4>
+<p>Emergency management, public safety operations, and municipal resilience planning teams.</p>
+<h4 id="what-it-does"><a class="header" href="#what-it-does">What It Does</a></h4>
+<ul>
+<li>Simulates emergency network accessibility under multiple disruption scenarios.</li>
+<li>Compares scenario accessibility against baseline service-area coverage.</li>
+<li>Supports scenario-specific blocked-edge simulation using network attribute mapping.</li>
+<li>Outputs baseline and worst-case service areas, scenario KPI table, and simulation report JSON.</li>
+</ul>
+<h4 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h4>
+<ul>
+<li>Runs baseline merged multi-ring service areas from critical facilities using network_service_area.</li>
+<li>Reads scenario CSV (<code>scenario_id,max_cost_multiplier[,blocked_value]</code>).</li>
+<li>For each scenario:</li>
+<li>Scales max travel cost by <code>max_cost_multiplier</code>.</li>
+<li>Optionally maps <code>blocked_value</code> to scenario-blocked edges using <code>scenario_block_source_field</code>.</li>
+<li><strong>Scope boundary:</strong> Emergency Accessibility Scenario Planning simulates disrupted-network conditions for critical facility coverage — it is the service-area tool for emergency resilience and response planning. Service Area Planning and Coverage Optimization (6.2) addresses public infrastructure coverage under normal operating conditions. Market Access and Site Planning (6.7) evaluates commercial expansion by drive-time access and competitive positioning. Choose this tool for resilience analysis, 6.2 for infrastructure coverage gaps, and 6.7 for commercial site decisions.</li>
+<li>Computes scenario service area polygons and demand-point coverage percent.</li>
+<li>Computes <code>delta_from_baseline_pct</code> per scenario and identifies best/worst scenario outcomes.</li>
+</ul>
+<h3 id="inputs"><a class="header" href="#inputs">Inputs</a></h3>
+<p>ParameterTypeRequiredDescription
+<code>network</code>LineVector pathRequiredNetwork layer for routing
+<code>critical_facilities</code>PointVector pathRequiredOrigin facilities (hospitals/fire/EMS/etc.)
+<code>demand_points</code>PointVector pathOptionalDemand points for scenario coverage KPIs
+<code>ring_costs</code>array[float]RequiredService area ring costs (e.g., [5,10,15])
+<code>scenario_csv</code>pathRequiredCSV: scenario_id,max_cost_multiplier[,blocked_value]
+<code>scenario_template</code>stringOptionalScenario authoring template: <code>custom</code> | <code>flood</code> | <code>wildfire</code> | <code>earthquake</code>; applies template guardrails
+<code>scenario_block_source_field</code>stringOptionalNetwork attribute used to match scenario blocked_value
+<code>baseline_service_areas</code>vector pathRequiredOutput baseline service areas
+<code>worst_case_service_areas</code>vector pathRequiredOutput worst-scenario service areas
+<code>scenario_summary_csv</code>pathRequiredOutput scenario KPI summary CSV
+<code>simulation_report</code>pathRequiredOutput simulation summary JSON</p>
+<h3 id="outputs"><a class="header" href="#outputs">Outputs</a></h3>
+<p>OutputTypeContents
+<code>baseline_service_areas</code>VectorBaseline merged service area polygons
+<code>worst_case_service_areas</code>VectorWorst-performing scenario service area polygons
+<code>scenario_summary_csv</code>CSVscenario_id, blocked_value, covered_pct, delta_from_baseline_pct and related KPIs
+<code>simulation_report</code>JSONbaseline stats, scenario comparisons, best/worst scenario summary</p>
+<h3 id="python-example"><a class="header" href="#python-example">Python Example</a></h3>
+<p>`env = WbEnvironment(license_tier="pro")</p>
+<p>result = env.run_tool("emergency_scenario_routing_and_accessibility_simulator",
+network="city_network.gpkg",
+critical_facilities="critical_facilities.gpkg",
+demand_points="demand_points.gpkg",
+ring_costs=[5, 10, 15],
+scenario_csv="scenarios.csv",
+scenario_block_source_field="STATUS",
+baseline_service_areas="output/baseline_service_areas.gpkg",
+worst_case_service_areas="output/worst_service_areas.gpkg",
+scenario_summary_csv="output/scenario_summary.csv",
+simulation_report="output/simulation_report.json",
+)</p>
+<p>print(result)`</p>
+<h3 id="license-notice"><a class="header" href="#license-notice">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+<hr />
+<h2 id="fleet-routing-and-dispatch-optimizer"><a class="header" href="#fleet-routing-and-dispatch-optimizer">Fleet Routing And Dispatch Optimizer</a></h2>
+<p><strong>Function name:</strong> <code>fleet_routing_and_dispatch_optimizer</code></p>
+<p>PROProduction</p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative-1"><a class="header" href="#workflow-narrative-1">Workflow Narrative</a></h3>
+<p><strong>Fleet Routing and Dispatch Optimization</strong></p>
+<h4 id="who-it-is-for-1"><a class="header" href="#who-it-is-for-1">Who It Is For</a></h4>
+<ul>
+<li>Logistics dispatch teams planning daily vehicle assignments.</li>
+<li>Municipal waste and field-maintenance operations with constrained fleet capacity/time.</li>
+<li>Courier and distribution operations requiring transparent route exceptions.</li>
+</ul>
+<h4 id="primary-user-1"><a class="header" href="#primary-user-1">Primary User</a></h4>
+<p>Logistics operations leaders, municipal service planners, and fleet-dispatch platform teams.</p>
+<h4 id="what-it-does-1"><a class="header" href="#what-it-does-1">What It Does</a></h4>
+<ul>
+<li>Optimizes vehicle dispatch plans across depots and stops for logistics and field operations.</li>
+<li>Builds feasible routes under capacity and shift-time constraints.</li>
+<li>Produces assignment, KPI, and exception outputs for operations review.</li>
+<li>Supports objective mode selection (<code>minimize_distance</code>, <code>minimize_time</code>, <code>minimize_cost</code>, <code>balanced</code>).</li>
+</ul>
+<h4 id="how-it-works-1"><a class="header" href="#how-it-works-1">How It Works</a></h4>
+<ul>
+<li>Parses depot and stop layers plus fleet specifications from <code>vehicles_csv</code>.</li>
+<li>Harmonizes depot/stop CRS to the network CRS when EPSG metadata is available and validates projected CRS for distance/time calculations.</li>
+<li>Filters infeasible stops where demand exceeds max vehicle capacity.</li>
+<li>Applies objective-aware greedy nearest-feasible stop construction for initial route assignment (<code>distance</code>, <code>time</code>, <code>cost</code>, <code>balanced</code>).</li>
+<li>Applies optional edge restrictions from CSV (<code>from_x,from_y,to_x,to_y,closed,penalty_factor</code>) as closures or impedance penalties.</li>
+<li>Runs local 2-opt sequence refinement for incremental route improvement.</li>
+<li>Computes per-route and fleet KPIs and emits exceptions with reason codes.</li>
+</ul>
+<h3 id="inputs-1"><a class="header" href="#inputs-1">Inputs</a></h3>
+<p>ParameterTypeRequiredDescription
+<code>network</code>LineVector pathRequiredStreet/network layer used by routing workflow
+<code>depots</code>PointVector pathRequiredDepot or start/end locations for vehicles
+<code>stops</code>PointVector pathRequiredStops/tasks to assign to routes
+<code>vehicles_csv</code>pathRequiredFleet specs (vehicle_id, capacity, available_time_minutes, cost_per_minute, cost_per_km, depot_id)
+<code>objective</code>stringOptionalObjective mode: <code>minimize_distance</code>, <code>minimize_time</code>, <code>minimize_cost</code>, <code>balanced</code>
+<code>restrictions</code>pathOptionalOptional restrictions CSV (<code>from_x,from_y,to_x,to_y[,closed][,penalty_factor]</code>) used for edge closures or impedance penalties
+<code>routes_output</code>vector pathRequiredOutput route vector path
+<code>assignment_csv_output</code>pathRequiredOutput stop-to-route assignment CSV
+<code>route_kpis_csv_output</code>pathRequiredOutput per-route/fleet KPI CSV
+<code>exceptions_csv_output</code>pathRequiredOutput infeasible stop diagnostics CSV</p>
+<h3 id="outputs-1"><a class="header" href="#outputs-1">Outputs</a></h3>
+<p>OutputTypeContents
+<code>routes_output</code>VectorRoute geometries and route-level summaries by vehicle
+<code>assignment_csv_output</code>CSVstop_id, route_id, vehicle_id, sequence_order, arrival/departure times
+<code>route_kpis_csv_output</code>CSVPer-route metrics and fleet roll-up summary
+<code>exceptions_csv_output</code>CSVstop_id with reason code (<code>demand_exceeds_max_vehicle_capacity</code>, <code>no_feasible_route</code>)</p>
+<h3 id="python-example-1"><a class="header" href="#python-example-1">Python Example</a></h3>
+<p>`env = WbEnvironment(license_tier="pro")</p>
+<p>result = env.run_tool("fleet_routing_and_dispatch_optimizer",
+network="city_network.gpkg",
+depots="depots.gpkg",
+stops="daily_stops.gpkg",
+vehicles_csv="fleet_specs.csv",
+objective="minimize_cost",
+routes_output="output/routes.gpkg",
+assignment_csv_output="output/assignments.csv",
+route_kpis_csv_output="output/route_kpis.csv",
+exceptions_csv_output="output/exceptions.csv",
+)</p>
+<p>print(result)`</p>
+<h3 id="license-notice-1"><a class="header" href="#license-notice-1">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+<hr />
+<h2 id="generate-network-nodes"><a class="header" href="#generate-network-nodes">Generate Network Nodes</a></h2>
+<p><strong>Function name:</strong> <code>generate_network_nodes</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="k-shortest-paths-network"><a class="header" href="#k-shortest-paths-network">K Shortest Paths Network</a></h2>
+<p><strong>Function name:</strong> <code>k_shortest_paths_network</code></p>
+<p>Experimental</p>
+<p>Finds the k shortest simple paths between start and end coordinates over a line network.</p>
+<p>vector network k-shortest-paths</p>
+<h3 id="parameters-1"><a class="header" href="#parameters-1">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>start_x</code>Start x coordinate.Required<code>0.0</code>
+<code>start_y</code>Start y coordinate.Required<code>0.0</code>
+<code>end_x</code>End x coordinate.Required<code>100.0</code>
+<code>end_y</code>End y coordinate.Required<code>100.0</code>
+<code>k</code>Number of shortest paths to return.Required<code>3</code>
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional—
+<code>max_snap_distance</code>Optional max distance from start/end coordinates to nearest network node.Optional—
+<code>edge_cost_field</code>Optional numeric line field used as an impedance multiplier for segment length.Optional—
+<code>one_way_field</code>Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).Optional—
+<code>blocked_field</code>Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).Optional—
+<code>barriers</code>Optional barrier point layer; nearest network nodes are blocked from traversal.Optional—
+<code>barrier_snap_distance</code>Optional max distance from each barrier point to a network node for blocking.Optional—
+<code>turn_penalty</code>Optional additive cost applied to non-straight turns at network nodes.Optional—
+<code>u_turn_penalty</code>Optional additive cost applied to U-turn transitions.Optional—
+<code>forbid_u_turns</code>If true, disallow U-turn transitions.Optional—
+<code>forbid_left_turns</code>If true, disallow left-turn transitions.Optional—
+<code>forbid_right_turns</code>If true, disallow right-turn transitions.Optional—
+<code>turn_restrictions_csv</code>Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.Optional—
+<code>temporal_cost_profile</code>Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).Optional—
+<code>temporal_edge_id_field</code>Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).Optional—
+<code>departure_time</code>Optional RFC3339 departure time used for temporal profile lookup.Optional—
+<code>temporal_mode</code>Optional temporal interpretation mode: multiplier or absolute.Optional—
+<code>temporal_fallback</code>Optional fallback when temporal row is missing: static_cost or error.Optional—
+<code>temporal_profile_report</code>Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).Optional—
+<code>output</code>Output line vector path.Required—</p>
+<h3 id="examples-1"><a class="header" href="#examples-1">Examples</a></h3>
+<p><em>Computes multiple alternative simple paths between two points on a line network.</em>
+<code>wbe.k_shortest_paths_network(end_x=100.0, end_y=100.0, input='network.shp', k=3, output='k_shortest_paths.shp', start_x=0.0, start_y=0.0)</code></p>
+<hr />
+<h2 id="location-allocation-network"><a class="header" href="#location-allocation-network">Location Allocation Network</a></h2>
+<p><strong>Function name:</strong> <code>location_allocation_network</code></p>
+<p>Experimental</p>
+<p>Selects k facilities and allocates demand points by network cost with greedy or exact solving, optional capacities, and required/forbidden candidate constraints.</p>
+<p>vector network location-allocation allocation</p>
+<h3 id="parameters-2"><a class="header" href="#parameters-2">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>demand_points</code>Demand point layer to allocate.Required<code>demand.shp</code>
+<code>facilities</code>Candidate facility point layer.Required<code>facilities.shp</code>
+<code>facility_count</code>Number of facilities to select (k).Required<code>2</code>
+<code>solver_mode</code>Solver mode: auto, greedy, or exact (exact is intended for smaller problems).Optional—
+<code>demand_weight_field</code>Optional numeric demand weight field in demand_points (default weight=1).Optional—
+<code>facility_capacity_field</code>Optional numeric capacity field in facilities; capacity is consumed by demand_weight_field values.Optional—
+<code>required_facility_field</code>Optional boolean facility field marking candidates that must be selected.Optional—
+<code>forbidden_facility_field</code>Optional boolean facility field marking candidates that must not be selected.Optional—
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional—
+<code>max_snap_distance</code>Optional max distance from demand/facility points to nearest network node.Optional—
+<code>edge_cost_field</code>Optional numeric line field used as an impedance multiplier for segment length.Optional—
+<code>one_way_field</code>Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).Optional—
+<code>blocked_field</code>Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).Optional—
+<code>barriers</code>Optional barrier point layer; nearest network nodes are blocked from traversal.Optional—
+<code>barrier_snap_distance</code>Optional max distance from each barrier point to a network node for blocking.Optional—
+<code>turn_penalty</code>Optional additive cost applied to non-straight turns at network nodes.Optional—
+<code>u_turn_penalty</code>Optional additive cost applied to U-turn transitions.Optional—
+<code>forbid_u_turns</code>If true, disallow U-turn transitions.Optional—
+<code>forbid_left_turns</code>If true, disallow left-turn transitions.Optional—
+<code>forbid_right_turns</code>If true, disallow right-turn transitions.Optional—
+<code>turn_restrictions_csv</code>Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.Optional—
+<code>temporal_cost_profile</code>Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).Optional—
+<code>temporal_edge_id_field</code>Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).Optional—
+<code>departure_time</code>Optional RFC3339 departure time used for temporal profile lookup.Optional—
+<code>temporal_mode</code>Optional temporal interpretation mode: multiplier or absolute.Optional—
+<code>temporal_fallback</code>Optional fallback when temporal row is missing: static_cost or error.Optional—
+<code>temporal_profile_report</code>Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).Optional—
+<code>output</code>Output allocated route line vector path.Required—</p>
+<h3 id="examples-2"><a class="header" href="#examples-2">Examples</a></h3>
+<p><em>Selects facilities and allocates demand points using network travel cost.</em>
+<code>wbe.location_allocation_network(demand_points='demand.shp', facilities='facilities.shp', facility_count=2, input='network.shp', output='location_allocation_routes.shp')</code></p>
+<hr />
+<h2 id="map-matching-v1"><a class="header" href="#map-matching-v1">Map Matching v1</a></h2>
+<p><strong>Function name:</strong> <code>map_matching_v1</code></p>
+<p>Experimental</p>
+<p>Snaps trajectory points onto a line network and reconstructs an inferred route with diagnostics.</p>
+<p>vector network map-matching</p>
+<h3 id="parameters-3"><a class="header" href="#parameters-3">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>trajectory_points</code>Input trajectory point layer.Required<code>trajectory_points.shp</code>
+<code>timestamp_field</code>Trajectory field used for time ordering.Required<code>timestamp</code>
+<code>search_radius</code>Optional candidate search radius around each trajectory point.Optional<code>25.0</code>
+<code>candidate_k</code>Optional number of nearest candidates retained per point.Optional<code>5</code>
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional—
+<code>max_snap_distance</code>Optional max distance for snapping trajectory points to network nodes.Optional—
+<code>edge_cost_field</code>Optional numeric line field used as an impedance multiplier for segment length.Optional—
+<code>one_way_field</code>Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).Optional—
+<code>blocked_field</code>Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).Optional—
+<code>barriers</code>Optional barrier point layer; nearest network nodes are blocked from traversal.Optional—
+<code>barrier_snap_distance</code>Optional max distance from each barrier point to a network node for blocking.Optional—
+<code>turn_penalty</code>Optional additive cost applied to non-straight turns at network nodes.Optional—
+<code>u_turn_penalty</code>Optional additive cost applied to U-turn transitions.Optional—
+<code>forbid_u_turns</code>If true, disallow U-turn transitions.Optional—
+<code>forbid_left_turns</code>If true, disallow left-turn transitions.Optional—
+<code>forbid_right_turns</code>If true, disallow right-turn transitions.Optional—
+<code>turn_restrictions_csv</code>Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.Optional—
+<code>matched_points_output</code>Optional output vector path for per-point diagnostics.Optional—
+<code>match_report</code>Optional JSON output path for summary diagnostics.Optional—
+<code>output</code>Output line vector path for inferred route.Required—</p>
+<h3 id="examples-3"><a class="header" href="#examples-3">Examples</a></h3>
+<p><em>Matches time-ordered trajectory points to a network and emits route and diagnostics outputs.</em>
+<code>wbe.map_matching_v1(candidate_k=5, input='network.shp', matched_points_output='matched_points.shp', output='matched_route.shp', search_radius=25.0, timestamp_field='timestamp', trajectory_points='trajectory_points.shp')</code></p>
+<hr />
+<h2 id="market-access-and-site-intelligence-workflow"><a class="header" href="#market-access-and-site-intelligence-workflow">Market Access And Site Intelligence Workflow</a></h2>
+<p><strong>Function name:</strong> <code>market_access_and_site_intelligence_workflow</code></p>
+<p>PROProduction</p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative-2"><a class="header" href="#workflow-narrative-2">Workflow Narrative</a></h3>
+<p><strong>Market Access and Site Planning</strong></p>
+<h4 id="who-it-is-for-2"><a class="header" href="#who-it-is-for-2">Who It Is For</a></h4>
+<ul>
+<li>Retail chains evaluating expansion locations based on demand accessibility and competitive saturation.</li>
+<li>Healthcare networks rating candidate clinic/hospital sites for market coverage and competitive positioning.</li>
+<li>Franchise developers assessing new territory opportunities via catchment analysis.</li>
+</ul>
+<h4 id="primary-user-2"><a class="header" href="#primary-user-2">Primary User</a></h4>
+<p>Commercial real estate, retail operations, healthcare network planning, franchise development.</p>
+<h4 id="what-it-does-2"><a class="header" href="#what-it-does-2">What It Does</a></h4>
+<ul>
+<li>Evaluates candidate site locations for commercial expansion (retail, healthcare, franchise).</li>
+<li>Computes drive-time catchment areas for each candidate.</li>
+<li>Measures demand coverage and competitive overlap positioning.</li>
+<li>Ranks candidates by composite score: 50% demand coverage + 25% accessibility + 25% low competitive overlap.</li>
+<li>Outputs ranked candidates, competitive analysis, and executive summary with decision metrics.</li>
+<li>Adds opportunity bands and optional market action queue output for expansion triage.</li>
+</ul>
+<h4 id="how-it-works-2"><a class="header" href="#how-it-works-2">How It Works</a></h4>
+<ul>
+<li>For each candidate site:</li>
+<li>Compute demand coverage (% of demand points within max ring cost).</li>
+<li>Compute average distance to demand points (accessibility proxy).</li>
+<li>Compute competitive overlap vs existing/competitor sites (% within catchment radius).</li>
+<li>Existing-site baseline coverage is computed from the existing site layer, not from candidate seed sites.</li>
+<li>Accessibility score is normalized across the evaluated candidate set.</li>
+<li>Composite rank score = 0.50 × coverage + 0.25 × accessibility + 0.25 × (100 - overlap).</li>
+<li><strong>Scope boundary:</strong> Market Access and Site Planning evaluates candidate commercial sites for expansion using drive-time access, demand coverage, and competitive positioning — it is the service-area tool for commercial decisions. Service Area Planning and Coverage Optimization (6.2) addresses public infrastructure coverage diagnostics. Emergency Accessibility Scenario Planning (6.6) simulates disrupted-network scenarios for resilience analysis. Choose this tool for commercial expansion, 6.2 for infrastructure planning, and 6.6 for emergency response planning.</li>
+<li>Rank candidates by composite score; classify each site as <code>expand_now</code>, <code>pilot</code>, <code>monitor</code>, or <code>saturated</code>; emit top candidates + decision gate (coverage &gt; 70% AND overlap ParameterTypeRequiredDescription
+<code>network</code>LineVector pathRequiredStreet/transit network for routing
+<code>sites_existing</code>PointVector pathRequiredExisting own or benchmark competitive sites
+<code>sites_candidates</code>PointVector pathRequiredCandidate expansion site locations
+<code>demand_surface</code>PointVector pathRequiredDemand locations (customers, population centroids)
+<code>competition_sites</code>PointVector pathOptionalCompetitor locations (separate from own/benchmark)
+<code>ring_costs</code>array[float]RequiredDrive-time costs for catchments (e.g., [5, 10, 15])
+<code>catchments_output</code>vector pathRequiredOutput drive-time catchment polygons
+<code>overlap_analysis_output</code>vector pathRequiredOutput competitive overlap analysis layer
+<code>candidate_rank_csv</code>pathRequiredOutput CSV: ranked candidates with KPIs
+<code>executive_summary_json</code>pathRequiredOutput JSON: market metrics and decision gate
+<code>market_action_queue_csv</code>pathOptionalOptional prioritized expansion action queue CSV</li>
+</ul>
+<p><strong>Important input roles:</strong> <code>sites_existing</code> is the incumbent baseline used for existing coverage and coverage-gain calculations. <code>competition_sites</code> is an optional separate competitor layer used for overlap pressure. If <code>competition_sites</code> is omitted, overlap falls back to <code>sites_existing</code>.</p>
+<h3 id="outputs-2"><a class="header" href="#outputs-2">Outputs</a></h3>
+<p>OutputTypeContents
+<code>catchments_output</code>VectorDrive-time catchment polygons per candidate
+<code>overlap_analysis_output</code>Vector/GeoJSONCandidate-level overlap visualization with coverage gain and opportunity band
+<code>candidate_rank_csv</code>CSVrank, site_id, x, y, demand_coverage_pct, coverage_gain_pct, avg_distance_to_demand, competitive_overlap_pct, accessibility_score, composite_rank_score, opportunity_band
+<code>executive_summary_json</code>JSONtotal_candidates, market_metrics, top_candidates, recommendation, decision_gate, decision_rationale
+<code>market_action_queue_csv</code>CSVPrioritized expansion actions by candidate/opportunity band</p>
+<p><strong>Map interpretation:</strong> <code>catchments_output</code> contains one candidate-level polygon per candidate (not separate ring-band polygons). Catchments are convex-hull trade areas of covered demand plus candidate location; if a hull cannot be formed, a small fallback square polygon may be written. <code>overlap_analysis_output</code> is a point layer, and square symbols there are usually marker style.</p>
+<h3 id="python-example-2"><a class="header" href="#python-example-2">Python Example</a></h3>
+<p>`env = WbEnvironment(license_tier="pro")</p>
+<p>result = env.run_tool("market_access_and_site_intelligence_workflow",
+network="city_network.gpkg",
+sites_existing="existing_retail.gpkg",
+sites_candidates="candidate_expansion_sites.gpkg",
+demand_surface="customer_demand_points.gpkg",
+competition_sites="competitor_locations.gpkg",
+ring_costs=[5, 10, 15],
+catchments_output="output/candidate_catchments.gpkg",
+overlap_analysis_output="output/competitive_overlap.gpkg",
+candidate_rank_csv="output/candidate_ranking.csv",
+executive_summary_json="output/market_summary.json",
+market_action_queue_csv="output/market_action_queue.csv",
+)</p>
+<p>print(result)`</p>
+<h3 id="license-notice-2"><a class="header" href="#license-notice-2">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+<hr />
+<h2 id="multimodal-od-cost-matrix"><a class="header" href="#multimodal-od-cost-matrix">Multimodal OD Cost Matrix</a></h2>
+<p><strong>Function name:</strong> <code>multimodal_od_cost_matrix</code></p>
+<p>Experimental</p>
+<p>Computes batched multimodal OD costs and mode summaries between origin and destination point sets.</p>
+<p>vector network multimodal od-matrix</p>
+<h3 id="parameters-4"><a class="header" href="#parameters-4">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>origins</code>Origin point layer.Required<code>origins.shp</code>
+<code>destinations</code>Destination point layer.Required<code>destinations.shp</code>
+<code>mode_field</code>Line attribute field that identifies travel mode per segment.Required<code>MODE</code>
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional—
+<code>max_snap_distance</code>Optional max distance from origin/destination points to nearest network node.Optional—
+<code>default_mode_speed</code>Default mode speed in coordinate-units per time unit (default: 1).Optional<code>1.0</code>
+<code>mode_speed_overrides</code>Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8).Optional—
+<code>allowed_modes</code>Optional comma-separated allow-list of modes to include in routing.Optional—
+<code>transfer_penalty</code>Optional additive penalty applied each time the route changes mode.Optional<code>0.0</code>
+<code>temporal_cost_profile</code>Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).Optional—
+<code>temporal_edge_id_field</code>Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).Optional—
+<code>departure_time</code>Optional RFC3339 departure time used for temporal profile lookup.Optional—
+<code>temporal_mode</code>Optional temporal interpretation mode: multiplier or absolute.Optional—
+<code>temporal_fallback</code>Optional fallback when temporal row is missing: static_cost or error.Optional—
+<code>temporal_profile_report</code>Optional JSON output path for temporal profile diagnostics when using direct temporal input.Optional—
+<code>scenario_bundle_csv</code>Optional CSV listing named temporal scenarios for comparative multi-scenario OD output.Optional—
+<code>output</code>Output CSV path.Required—</p>
+<h3 id="examples-4"><a class="header" href="#examples-4">Examples</a></h3>
+<p><em>Creates a multimodal OD matrix with route cost and mode-sequence summaries.</em>
+<code>wbe.multimodal_od_cost_matrix(default_mode_speed=1.0, destinations='destinations.shp', input='network.shp', mode_field='MODE', mode_speed_overrides='walk:1.4,transit:8', origins='origins.shp', output='multimodal_od_matrix.csv', transfer_penalty=0.0)</code></p>
+<hr />
+<h2 id="multimodal-routes-from-od"><a class="header" href="#multimodal-routes-from-od">Multimodal Routes From OD</a></h2>
+<p><strong>Function name:</strong> <code>multimodal_routes_from_od</code></p>
+<p>Experimental</p>
+<p>Builds route geometries for multimodal origin-destination point pairs with per-route mode summaries.</p>
+<p>vector network multimodal routes</p>
+<h3 id="parameters-5"><a class="header" href="#parameters-5">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>origins</code>Origin point layer.Required<code>origins.shp</code>
+<code>destinations</code>Destination point layer.Required<code>destinations.shp</code>
+<code>mode_field</code>Line attribute field that identifies travel mode per segment.Required<code>MODE</code>
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional—
+<code>max_snap_distance</code>Optional max distance from origin/destination points to nearest network node.Optional—
+<code>default_mode_speed</code>Default mode speed in coordinate-units per time unit (default: 1).Optional<code>1.0</code>
+<code>mode_speed_overrides</code>Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8).Optional—
+<code>allowed_modes</code>Optional comma-separated allow-list of modes to include in routing.Optional—
+<code>transfer_penalty</code>Optional additive penalty applied each time the route changes mode.Optional<code>0.0</code>
+<code>temporal_cost_profile</code>Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).Optional—
+<code>temporal_edge_id_field</code>Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).Optional—
+<code>departure_time</code>Optional RFC3339 departure time used for temporal profile lookup.Optional—
+<code>temporal_mode</code>Optional temporal interpretation mode: multiplier or absolute.Optional—
+<code>temporal_fallback</code>Optional fallback when temporal row is missing: static_cost or error.Optional—
+<code>temporal_profile_report</code>Optional JSON output path for temporal profile diagnostics when using direct temporal input.Optional—
+<code>scenario_bundle_csv</code>Optional CSV listing named temporal scenarios for comparative multi-scenario route output.Optional—
+<code>output</code>Output route line vector path.Required—</p>
+<h3 id="examples-5"><a class="header" href="#examples-5">Examples</a></h3>
+<p><em>Creates route lines for each reachable multimodal origin-destination pair.</em>
+<code>wbe.multimodal_routes_from_od(default_mode_speed=1.0, destinations='destinations.shp', input='network.shp', mode_field='MODE', mode_speed_overrides='walk:1.4,transit:8', origins='origins.shp', output='multimodal_routes_from_od.gpkg', transfer_penalty=0.0)</code></p>
+<hr />
+<h2 id="multimodal-shortest-path"><a class="header" href="#multimodal-shortest-path">Multimodal Shortest Path</a></h2>
+<p><strong>Function name:</strong> <code>multimodal_shortest_path</code></p>
+<p>Experimental</p>
+<p>Finds a mode-aware shortest path over a line network with configurable transfer penalties.</p>
+<p>vector network multimodal shortest-path</p>
+<h3 id="parameters-6"><a class="header" href="#parameters-6">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>start_x</code>Start x coordinate.Required<code>0.0</code>
+<code>start_y</code>Start y coordinate.Required<code>0.0</code>
+<code>end_x</code>End x coordinate.Required<code>100.0</code>
+<code>end_y</code>End y coordinate.Required<code>100.0</code>
+<code>mode_field</code>Line attribute field that identifies travel mode per segment.Required<code>MODE</code>
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional—
+<code>max_snap_distance</code>Optional max distance from start/end coordinates to nearest network node.Optional—
+<code>default_mode_speed</code>Default mode speed in coordinate-units per time unit (default: 1).Optional<code>1.0</code>
+<code>mode_speed_overrides</code>Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8).Optional—
+<code>allowed_modes</code>Optional comma-separated allow-list of modes to include in routing.Optional—
+<code>transfer_penalty</code>Optional additive penalty applied each time the route changes mode.Optional<code>0.0</code>
+<code>output</code>Output line vector path.Required—</p>
+<h3 id="examples-6"><a class="header" href="#examples-6">Examples</a></h3>
+<p><em>Routes between two coordinates using mode-aware costs and transfer penalties.</em>
+<code>wbe.multimodal_shortest_path(default_mode_speed=1.0, end_x=100.0, end_y=100.0, input='network.shp', mode_field='MODE', mode_speed_overrides='walk:1.4,transit:8', output='multimodal_shortest_path.shp', start_x=0.0, start_y=0.0, transfer_penalty=0.0)</code></p>
+<p><em>Demonstrates walk-drive routing with mode filtering and transfer penalty.</em>
+<code>wbe.multimodal_shortest_path(allowed_modes='walk,drive', default_mode_speed=1.0, end_x=100.0, end_y=100.0, input='network.shp', mode_field='MODE', mode_speed_overrides='walk:1.4,drive:12', output='multimodal_walk_drive_path.shp', start_x=0.0, start_y=0.0, transfer_penalty=2.0)</code></p>
+<p><em>Demonstrates walk-transit routing with mode filtering and transfer penalty.</em>
+<code>wbe.multimodal_shortest_path(allowed_modes='walk,transit', default_mode_speed=1.0, end_x=100.0, end_y=100.0, input='network.shp', mode_field='MODE', mode_speed_overrides='walk:1.4,transit:8', output='multimodal_walk_transit_path.shp', start_x=0.0, start_y=0.0, transfer_penalty=1.0)</code></p>
+<hr />
+<h2 id="network-accessibility-metrics"><a class="header" href="#network-accessibility-metrics">Network Accessibility Metrics</a></h2>
+<p><strong>Function name:</strong> <code>network_accessibility_metrics</code></p>
+<p>Experimental</p>
+<p>Computes accessibility indices for origin points based on reachability to destinations with optional impedance cutoffs and decay functions.</p>
+<p>vector network accessibility</p>
+<h3 id="parameters-7"><a class="header" href="#parameters-7">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>origins</code>Origin point layer.Required<code>origins.shp</code>
+<code>destinations</code>Destination point layer.Required<code>destinations.shp</code>
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional<code>0.0</code>
+<code>max_snap_distance</code>Optional max distance from origin/destination points to nearest network node.Optional—
+<code>impedance_cutoff</code>Optional maximum distance threshold for counting reachable destinations (default: infinite).Optional—
+<code>decay_function</code>Optional decay function: 'none' (default), 'linear', or 'exponential' for distance-weighted accessibility.Optional<code>none</code>
+<code>decay_parameter</code>Optional decay parameter (lambda for exponential, rate for linear).Optional—
+<code>edge_cost_field</code>Optional numeric line field used as an impedance multiplier for segment length.Optional—
+<code>one_way_field</code>Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).Optional—
+<code>blocked_field</code>Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).Optional—
+<code>parallel_execution</code>If true (default), evaluate origins in parallel for faster accessibility computation.Optional—
+<code>output</code>Output point vector path (origins with accessibility metrics).Required—</p>
+<h3 id="examples-7"><a class="header" href="#examples-7">Examples</a></h3>
+<p><em>Computes accessibility index for origins to destinations within cutoff distance.</em>
+<code>wbe.network_accessibility_metrics(decay_function='none', destinations='destinations.shp', input='network.shp', origins='origins.shp', output='origins_accessibility.shp', snap_tolerance=0.0)</code></p>
+<hr />
+<h2 id="network-centrality-metrics"><a class="header" href="#network-centrality-metrics">Network Centrality Metrics</a></h2>
+<p><strong>Function name:</strong> <code>network_centrality_metrics</code></p>
+<p>Experimental</p>
+<p>Computes baseline degree, closeness, and betweenness centrality metrics for network nodes.</p>
+<p>vector network centrality</p>
+<h3 id="parameters-8"><a class="header" href="#parameters-8">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional<code>0.0</code>
+<code>edge_cost_field</code>Optional numeric line field used as an impedance multiplier for segment length.Optional—
+<code>one_way_field</code>Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).Optional—
+<code>blocked_field</code>Optional line field marking blocked/closed edges to exclude from graph construction (true/1/yes blocks).Optional—
+<code>output</code>Output point vector path.Required—</p>
+<h3 id="examples-8"><a class="header" href="#examples-8">Examples</a></h3>
+<p><em>Computes node-level centrality metrics for a line network.</em>
+<code>wbe.network_centrality_metrics(input='network.shp', output='network_centrality.gpkg', snap_tolerance=0.0)</code></p>
+<hr />
+<h2 id="network-connected-components"><a class="header" href="#network-connected-components">Network Connected Components</a></h2>
+<p><strong>Function name:</strong> <code>network_connected_components</code></p>
+<p>Experimental</p>
+<p>Assigns a connected-component ID to each line feature in a network.</p>
+<p>vector network components</p>
+<h3 id="parameters-9"><a class="header" href="#parameters-9">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional<code>0.0</code>
+<code>output</code>Output line vector path.Required—</p>
+<h3 id="examples-9"><a class="header" href="#examples-9">Examples</a></h3>
+<p><em>Labels disconnected subnetworks with unique component IDs.</em>
+<code>wbe.network_connected_components(input='network.shp', output='network_components.shp', snap_tolerance=0.0)</code></p>
+<hr />
+<h2 id="network-node-degree"><a class="header" href="#network-node-degree">Network Node Degree</a></h2>
+<p><strong>Function name:</strong> <code>network_node_degree</code></p>
+<p>Experimental</p>
+<p>Extracts network nodes from line features and computes node degree and node type.</p>
+<p>vector network topology</p>
+<h3 id="parameters-10"><a class="header" href="#parameters-10">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional<code>0.0</code>
+<code>output</code>Output point vector path.Required—</p>
+<h3 id="examples-10"><a class="header" href="#examples-10">Examples</a></h3>
+<p><em>Creates a node point layer with network degree attributes.</em>
+<code>wbe.network_node_degree(input='network.shp', output='network_nodes.shp', snap_tolerance=0.0)</code></p>
+<hr />
+<h2 id="network-od-cost-matrix"><a class="header" href="#network-od-cost-matrix">Network OD Cost Matrix</a></h2>
+<p><strong>Function name:</strong> <code>network_od_cost_matrix</code></p>
+<p>Experimental</p>
+<p>Compute origin-destination cost matrix between point pairs. Calculates travel distance or cost along network paths.</p>
+<p>vector network od-matrix</p>
+<h3 id="parameters-11"><a class="header" href="#parameters-11">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>origins</code>Origin point layer.Required<code>origins.shp</code>
+<code>destinations</code>Destination point layer.Required<code>destinations.shp</code>
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional—
+<code>max_snap_distance</code>Optional max distance from origin/destination points to nearest network node.Optional—
+<code>edge_cost_field</code>Optional numeric line field used as an impedance multiplier for segment length.Optional—
+<code>one_way_field</code>Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).Optional—
+<code>blocked_field</code>Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).Optional—
+<code>barriers</code>Optional barrier point layer; nearest network nodes are blocked from traversal.Optional—
+<code>barrier_snap_distance</code>Optional max distance from each barrier point to a network node for blocking.Optional—
+<code>turn_penalty</code>Optional additive cost applied to non-straight turns at network nodes.Optional—
+<code>u_turn_penalty</code>Optional additive cost applied to U-turn transitions.Optional—
+<code>forbid_u_turns</code>If true, disallow U-turn transitions.Optional—
+<code>forbid_left_turns</code>If true, disallow left-turn transitions.Optional—
+<code>forbid_right_turns</code>If true, disallow right-turn transitions.Optional—
+<code>turn_restrictions_csv</code>Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.Optional—
+<code>temporal_cost_profile</code>Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).Optional—
+<code>temporal_edge_id_field</code>Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).Optional—
+<code>departure_time</code>Optional RFC3339 departure time used for temporal profile lookup.Optional—
+<code>temporal_mode</code>Optional temporal interpretation mode: multiplier or absolute.Optional—
+<code>temporal_fallback</code>Optional fallback when temporal row is missing: static_cost or error.Optional—
+<code>temporal_profile_report</code>Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).Optional—
+<code>output</code>Output CSV path.Required—</p>
+<h3 id="examples-11"><a class="header" href="#examples-11">Examples</a></h3>
+<p><em>Creates an OD cost matrix from origins and destinations on a line network.</em>
+<code>wbe.network_od_cost_matrix(destinations='destinations.shp', input='network.shp', origins='origins.shp', output='od_matrix.csv')</code></p>
+<hr />
+<h2 id="network-readiness-and-diagnostics-intelligence"><a class="header" href="#network-readiness-and-diagnostics-intelligence">Network Readiness And Diagnostics Intelligence</a></h2>
+<p><strong>Function name:</strong> <code>network_readiness_and_diagnostics_intelligence</code></p>
+<p>PROProduction</p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative-3"><a class="header" href="#workflow-narrative-3">Workflow Narrative</a></h3>
+<p><strong>Network Readiness and Diagnostics</strong></p>
+<h4 id="problem-it-solves"><a class="header" href="#problem-it-solves">Problem It Solves</a></h4>
+<p>Is this network structurally and cost-wise ready for reliable routing and service optimization workflows?</p>
+<h4 id="who-it-is-for-3"><a class="header" href="#who-it-is-for-3">Who It Is For</a></h4>
+<ul>
+<li>Routing analysts, municipal transportation planning teams, and utility network operations.</li>
+</ul>
+<h4 id="primary-user-3"><a class="header" href="#primary-user-3">Primary User</a></h4>
+<p>Municipal/public works GIS teams, utilities, and logistics operations requiring reproducible network QA gates.</p>
+<h4 id="what-it-does-3"><a class="header" href="#what-it-does-3">What It Does</a></h4>
+<ul>
+<li>Audits line-based transportation/utility networks for operational routing readiness.</li>
+<li>Detects dead-end concentration and cost-consistency anomalies before routing runs.</li>
+<li>Emits a machine-readable readiness score with pass/fail quality gate and diagnostics outputs.</li>
+</ul>
+<h4 id="how-it-works-3"><a class="header" href="#how-it-works-3">How It Works</a></h4>
+<ul>
+<li>Loads a line network and validates geometry is line-based (<code>LineString</code>/<code>MultiLineString</code>).</li>
+<li>Builds node degree counts from line endpoints to quantify dead-end prevalence.</li>
+<li>Computes per-segment length costs and assesses variance using z-score outlier detection.</li>
+<li>Computes weighted readiness score from connectivity and cost-consistency components.</li>
+<li>Indicative formula: <code>overall = 0.6 * connectivity_score + 0.4 * cost_consistency_score</code>.</li>
+</ul>
+<h4 id="why-it-wins"><a class="header" href="#why-it-wins">Why It Wins</a></h4>
+<ul>
+<li>Replaces manual topology spot-checks with a reproducible score + diagnostics package that is machine-checkable and reportable.</li>
+</ul>
+<h4 id="typical-buying-trigger"><a class="header" href="#typical-buying-trigger">Typical Buying Trigger</a></h4>
+<p>Teams encounter unstable routing outcomes and need an auditable pre-routing network quality gate.</p>
+<h4 id="typical-presets"><a class="header" href="#typical-presets">Typical Presets</a></h4>
+<ul>
+<li>default: balanced scoring for day-to-day network readiness checks.</li>
+<li>pre-routing gate: run before route optimization or service-area generation.</li>
+<li>data onboarding QA: run when ingesting new road/utility centerline deliveries.</li>
+</ul>
+<h3 id="inputs-2"><a class="header" href="#inputs-2">Inputs</a></h3>
+<p>ParameterOptionalDescription
+networknoInput line network layer (street, transit, or utility network).
+qa_reportnoOutput CSV path for detailed QA findings and issue counts.
+diagnostics_layernoOutput GeoJSON/GeoPackage path containing diagnostic geometries.
+readiness_scorenoOutput JSON path with readiness score, component scores, and pass/fail gate.</p>
+<h3 id="outputs-3"><a class="header" href="#outputs-3">Outputs</a></h3>
+<p>ParameterTypeDescription
+qa_reportCSVTabular QA findings including severity, check type, count, and descriptive diagnostics.
+diagnostics_layerGeoJSON/GeoPackageSpatial diagnostics layer for issue visualization and spatial triage.
+readiness_scoreJSONMachine-readable readiness contract with overall score, component scores, penalties, and pass/fail gate.
+html_reportHTMLHuman-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</p>
+<h3 id="python-example-3"><a class="header" href="#python-example-3">Python Example</a></h3>
+<p>`import whitebox_workflows as wbw</p>
+<p>wbe = wbw.WbEnvironment(include_pro=True, tier="pro")</p>
+<p>result = wbe.network_readiness_and_diagnostics_intelligence(
+network="data/street_network.shp",
+qa_report="output/network_readiness_qa.csv",
+diagnostics_layer="output/network_readiness_diagnostics.geojson",
+readiness_score="output/network_readiness_score.json",
+)</p>
+<p>print(result)`</p>
+<h3 id="license-notice-3"><a class="header" href="#license-notice-3">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+<hr />
+<h2 id="network-routes-from-od"><a class="header" href="#network-routes-from-od">Network Routes From OD</a></h2>
+<p><strong>Function name:</strong> <code>network_routes_from_od</code></p>
+<p>Experimental</p>
+<p>Builds route geometries for origin-destination point pairs over a line network.</p>
+<p>vector network routes</p>
+<h3 id="parameters-12"><a class="header" href="#parameters-12">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>origins</code>Origin point layer.Required<code>origins.shp</code>
+<code>destinations</code>Destination point layer.Required<code>destinations.shp</code>
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional—
+<code>max_snap_distance</code>Optional max distance from origin/destination points to nearest network node.Optional—
+<code>edge_cost_field</code>Optional numeric line field used as an impedance multiplier for segment length.Optional—
+<code>one_way_field</code>Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).Optional—
+<code>blocked_field</code>Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).Optional—
+<code>barriers</code>Optional barrier point layer; nearest network nodes are blocked from traversal.Optional—
+<code>barrier_snap_distance</code>Optional max distance from each barrier point to a network node for blocking.Optional—
+<code>turn_penalty</code>Optional additive cost applied to non-straight turns at network nodes.Optional—
+<code>u_turn_penalty</code>Optional additive cost applied to U-turn transitions.Optional—
+<code>forbid_u_turns</code>If true, disallow U-turn transitions.Optional—
+<code>forbid_left_turns</code>If true, disallow left-turn transitions.Optional—
+<code>forbid_right_turns</code>If true, disallow right-turn transitions.Optional—
+<code>turn_restrictions_csv</code>Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.Optional—
+<code>temporal_cost_profile</code>Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).Optional—
+<code>temporal_edge_id_field</code>Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).Optional—
+<code>departure_time</code>Optional RFC3339 departure time used for temporal profile lookup.Optional—
+<code>temporal_mode</code>Optional temporal interpretation mode: multiplier or absolute.Optional—
+<code>temporal_fallback</code>Optional fallback when temporal row is missing: static_cost or error.Optional—
+<code>temporal_profile_report</code>Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).Optional—
+<code>output</code>Output route line vector path.Required—</p>
+<h3 id="examples-12"><a class="header" href="#examples-12">Examples</a></h3>
+<p><em>Creates route line features for OD point pairs on a network.</em>
+<code>wbe.network_routes_from_od(destinations='destinations.shp', input='network.shp', origins='origins.shp', output='network_routes.shp')</code></p>
+<hr />
+<h2 id="network-service-area"><a class="header" href="#network-service-area">Network Service Area</a></h2>
+<p><strong>Function name:</strong> <code>network_service_area</code></p>
+<p>Experimental</p>
+<p>Computes reachable network nodes from origin points within a maximum network cost.</p>
+<p>vector network service-area</p>
+<h3 id="parameters-13"><a class="header" href="#parameters-13">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>origins</code>Origin point layer.Required<code>origins.shp</code>
+<code>max_cost</code>Maximum reachable path cost.Required<code>1000.0</code>
+<code>ring_costs</code>Optional comma-separated ring thresholds for multi-ring outputs (for example: 5,10,15).Optional—
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional—
+<code>max_snap_distance</code>Optional max distance from origin points to nearest network node.Optional—
+<code>output_mode</code>Output mode: 'nodes' (default), 'edges' for cost-trimmed reachable edge segments, or 'polygons' for per-origin isochrone-like polygons from reachable edge envelopes.Optional—
+<code>polygon_merge_origins</code>If true and output_mode='polygons', dissolve overlapping origin polygons into merged coverage per ring instead of emitting one polygon per origin.Optional—
+<code>mode_field</code>Optional line attribute field identifying travel mode per segment; enables mode-aware service-area costs.Optional—
+<code>default_mode_speed</code>Default mode speed in coordinate-units per time unit when mode_field is provided (default: 1).Optional—
+<code>mode_speed_overrides</code>Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12).Optional—
+<code>allowed_modes</code>Optional comma-separated allow-list of modes to include when mode_field is provided.Optional—
+<code>edge_cost_field</code>Optional numeric line field used as an impedance multiplier for segment length.Optional—
+<code>one_way_field</code>Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).Optional—
+<code>blocked_field</code>Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).Optional—
+<code>barriers</code>Optional barrier point layer; nearest network nodes are blocked from traversal.Optional—
+<code>barrier_snap_distance</code>Optional max distance from each barrier point to a network node for blocking.Optional—
+<code>turn_penalty</code>Optional additive cost applied to non-straight turns at network nodes.Optional—
+<code>u_turn_penalty</code>Optional additive cost applied to U-turn transitions.Optional—
+<code>forbid_u_turns</code>If true, disallow U-turn transitions.Optional—
+<code>forbid_left_turns</code>If true, disallow left-turn transitions.Optional—
+<code>forbid_right_turns</code>If true, disallow right-turn transitions.Optional—
+<code>turn_restrictions_csv</code>Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.Optional—
+<code>temporal_cost_profile</code>Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).Optional—
+<code>temporal_edge_id_field</code>Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).Optional—
+<code>departure_time</code>Optional RFC3339 departure time used for temporal profile lookup.Optional—
+<code>temporal_mode</code>Optional temporal interpretation mode: multiplier or absolute.Optional—
+<code>temporal_fallback</code>Optional fallback when temporal row is missing: static_cost or error.Optional—
+<code>temporal_profile_report</code>Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).Optional—
+<code>output</code>Output service-area vector path.Required—</p>
+<h3 id="examples-13"><a class="header" href="#examples-13">Examples</a></h3>
+<p><em>Finds all nodes reachable from origins within max_cost.</em>
+<code>wbe.network_service_area(input='network.shp', max_cost=1000.0, origins='origins.shp', output='service_area_nodes.shp')</code></p>
+<hr />
+<h2 id="network-topology-audit"><a class="header" href="#network-topology-audit">Network Topology Audit</a></h2>
+<p><strong>Function name:</strong> <code>network_topology_audit</code></p>
+<p>Experimental</p>
+<p>Audits a line network for topology anomalies—disconnected components, dead ends, and degree anomalies—that cause routing failures.</p>
+<p>vector network diagnostics topology</p>
+<h3 id="parameters-14"><a class="header" href="#parameters-14">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional—
+<code>one_way_field</code>Optional line field marking one-way edges for directional analysis.Optional—
+<code>blocked_field</code>Optional line field marking blocked edges to exclude from analysis.Optional—
+<code>report</code>Optional JSON output path for the audit summary report.Optional—
+<code>output</code>Output point vector path for per-node diagnostics.Required—</p>
+<h3 id="examples-14"><a class="header" href="#examples-14">Examples</a></h3>
+<p><em>Writes per-node degree and component diagnostics and a summary JSON report for the input network.</em>
+<code>wbe.network_topology_audit(input='network.shp', output='network_node_audit.shp', report='audit_report.json')</code></p>
+<hr />
+<h2 id="od-sensitivity-analysis"><a class="header" href="#od-sensitivity-analysis">OD Sensitivity Analysis</a></h2>
+<p><strong>Function name:</strong> <code>od_sensitivity_analysis</code></p>
+<p>Experimental</p>
+<p>Computes OD shortest-path costs with impedance perturbations and outputs sensitivity statistics via Monte Carlo sampling.</p>
+<p>vector network sensitivity</p>
+<h3 id="parameters-15"><a class="header" href="#parameters-15">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>origins</code>Origin point layer.Required<code>origins.shp</code>
+<code>destinations</code>Destination point layer.Required<code>destinations.shp</code>
+<code>edge_cost_field</code>Required numeric line field used as an impedance multiplier for perturbation analysis.Required<code>cost</code>
+<code>impedance_disturbance_range</code>Range for cost perturbation as 'min_factor,max_factor' (e.g., '0.8,1.2' for ±20% variation).Optional<code>0.8,1.2</code>
+<code>monte_carlo_samples</code>Number of Monte Carlo samples for perturbation analysis (default 1, max 100).Optional<code>10</code>
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional—
+<code>max_snap_distance</code>Optional max distance from origin/destination points to nearest network node.Optional—
+<code>one_way_field</code>Optional line field marking one-way digitized edges.Optional—
+<code>blocked_field</code>Optional line field marking blocked/closed edges.Optional—
+<code>parallel_execution</code>If true (default), evaluates origin searches in parallel for baseline and perturbed OD runs.Optional—
+<code>output</code>Output CSV path with OD pairs and sensitivity statistics.Required—</p>
+<h3 id="examples-15"><a class="header" href="#examples-15">Examples</a></h3>
+<p><em>Computes OD costs with Monte Carlo impedance perturbation sensitivity.</em>
+<code>wbe.od_sensitivity_analysis(destinations='destinations.shp', edge_cost_field='cost', impedance_disturbance_range='0.8,1.2', input='network.shp', monte_carlo_samples=10, origins='origins.shp', output='od_sensitivity.csv')</code></p>
+<hr />
+<h2 id="shortest-path-network"><a class="header" href="#shortest-path-network">Shortest Path Network</a></h2>
+<p><strong>Function name:</strong> <code>shortest_path_network</code></p>
+<p>Experimental</p>
+<p>Finds the shortest path between start and end coordinates over a line network.</p>
+<p>vector network shortest-path</p>
+<h3 id="parameters-16"><a class="header" href="#parameters-16">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input line network layer.Required<code>network.shp</code>
+<code>start_x</code>Start x coordinate.Required<code>0.0</code>
+<code>start_y</code>Start y coordinate.Required<code>0.0</code>
+<code>end_x</code>End x coordinate.Required<code>100.0</code>
+<code>end_y</code>End y coordinate.Required<code>100.0</code>
+<code>snap_tolerance</code>Optional node snapping tolerance for graph construction.Optional—
+<code>max_snap_distance</code>Optional max distance from start/end coordinates to nearest network node.Optional—
+<code>edge_cost_field</code>Optional numeric line field used as an impedance multiplier for segment length.Optional—
+<code>one_way_field</code>Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).Optional—
+<code>blocked_field</code>Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).Optional—
+<code>barriers</code>Optional barrier point layer; nearest network nodes are blocked from traversal.Optional—
+<code>barrier_snap_distance</code>Optional max distance from each barrier point to a network node for blocking.Optional—
+<code>turn_penalty</code>Optional additive cost applied to non-straight turns at network nodes.Optional—
+<code>u_turn_penalty</code>Optional additive cost applied to U-turn transitions.Optional—
+<code>forbid_u_turns</code>If true, disallow U-turn transitions.Optional—
+<code>forbid_left_turns</code>If true, disallow left-turn transitions.Optional—
+<code>forbid_right_turns</code>If true, disallow right-turn transitions.Optional—
+<code>turn_restrictions_csv</code>Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.Optional—
+<code>temporal_cost_profile</code>Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).Optional—
+<code>temporal_edge_id_field</code>Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).Optional—
+<code>departure_time</code>Optional RFC3339 departure time used for temporal profile lookup.Optional—
+<code>temporal_mode</code>Optional temporal interpretation mode: multiplier or absolute.Optional—
+<code>temporal_fallback</code>Optional fallback when temporal row is missing: static_cost or error.Optional—
+<code>temporal_profile_report</code>Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).Optional—
+<code>output</code>Output line vector path.Required—</p>
+<h3 id="examples-16"><a class="header" href="#examples-16">Examples</a></h3>
+<p><em>Computes shortest path between two points on a line network.</em>
+<code>wbe.shortest_path_network(end_x=100.0, end_y=100.0, input='network.shp', output='shortest_path.shp', start_x=0.0, start_y=0.0)</code></p>
+<hr />
+<h2 id="split-lines-at-intersections"><a class="header" href="#split-lines-at-intersections">Split Lines At Intersections</a></h2>
+<p><strong>Function name:</strong> <code>split_lines_at_intersections</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="snap-points-to-network"><a class="header" href="#snap-points-to-network">Snap Points To Network</a></h2>
+<p><strong>Function name:</strong> <code>snap_points_to_network</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="service-area-planning-and-coverage-optimization"><a class="header" href="#service-area-planning-and-coverage-optimization">Service Area Planning And Coverage Optimization</a></h2>
+<p><strong>Function name:</strong> <code>service_area_planning_and_coverage_optimization</code></p>
+<p>PROProduction</p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative-4"><a class="header" href="#workflow-narrative-4">Workflow Narrative</a></h3>
+<p><strong>Service Area Planning and Coverage Optimization</strong></p>
+<h4 id="problem-it-solves-1"><a class="header" href="#problem-it-solves-1">Problem It Solves</a></h4>
+<p>Which facilities and scenarios provide the strongest service coverage, and where do unmet demand gaps remain?</p>
+<h4 id="who-it-is-for-4"><a class="header" href="#who-it-is-for-4">Who It Is For</a></h4>
+<ul>
+<li>Accessibility planners, emergency coverage teams, and utility service design analysts.</li>
+</ul>
+<h4 id="primary-user-4"><a class="header" href="#primary-user-4">Primary User</a></h4>
+<p>Municipal/public safety GIS teams, utilities, and logistics planners managing service-area targets.</p>
+<h4 id="what-it-does-4"><a class="header" href="#what-it-does-4">What It Does</a></h4>
+<ul>
+<li>Builds network-based multi-ring service-area polygons from facility points over a line network.</li>
+<li>Flags uncovered demand points outside baseline service coverage.</li>
+<li>Produces scenario summary and candidate ranking CSV outputs for open/close planning workflows.</li>
+</ul>
+<h4 id="how-it-works-4"><a class="header" href="#how-it-works-4">How It Works</a></h4>
+<ul>
+<li>Validates network/facility geometry types and parses ring costs.</li>
+<li>Runs network service-area generation using the OSS network engine with polygon outputs.</li>
+<li>Computes demand coverage and uncovered demand diagnostics against generated polygons.</li>
+<li>Optionally evaluates scenario CSV variants (<code>scenario_id,facility_id,is_open[,capacity]</code>) and exports comparative KPI rows.</li>
+<li>Indicative KPI formula: <code>coverage_pct = 100 * covered_demand / total_demand</code>.</li>
+</ul>
+<h4 id="why-it-wins-1"><a class="header" href="#why-it-wins-1">Why It Wins</a></h4>
+<ul>
+<li>Replaces disconnected manual GIS steps with a reproducible network-derived coverage workflow and explicit planning artifacts.</li>
+</ul>
+<h4 id="typical-buying-trigger-1"><a class="header" href="#typical-buying-trigger-1">Typical Buying Trigger</a></h4>
+<p>Teams need auditable facility coverage plans with scenario comparison outputs for governance or budget review.</p>
+<h4 id="typical-presets-1"><a class="header" href="#typical-presets-1">Typical Presets</a></h4>
+<ul>
+<li>baseline-only: generate default service areas + uncovered demand.</li>
+<li>scenario-planning: include open/close scenario CSV for option analysis.</li>
+<li>candidate-screening: rank facilities by demand coverage proxy for expansion planning.</li>
+</ul>
+<h3 id="inputs-3"><a class="header" href="#inputs-3">Inputs</a></h3>
+<p>ParameterOptionalDescription
+networknoInput line network layer (roads, trails, utility lines).
+facilitiesnoInput facility point layer used as service origins.
+demand_pointsyesOptional demand point layer used for covered/uncovered diagnostics and KPI generation.
+ring_costsnoNumeric array of travel-cost ring thresholds (e.g., <code>[5, 10, 15]</code>).
+scenariosyesOptional CSV with <code>scenario_id,facility_id,is_open[,capacity]</code> for open/close scenario runs.
+service_areasnoOutput vector path for service-area polygons.
+uncovered_demandnoOutput vector path for uncovered demand points.
+scenario_summary_csvnoOutput CSV path for scenario KPIs.
+ranked_candidates_csvnoOutput CSV path for candidate ranking metrics.</p>
+<h3 id="outputs-4"><a class="header" href="#outputs-4">Outputs</a></h3>
+<p>ParameterTypeDescription
+service_areasGeoJSON/GeoPackage/ShapefileBaseline network-derived multi-ring service-area polygons.
+uncovered_demandGeoJSON/GeoPackage/ShapefileDemand points outside baseline service-area coverage.
+scenario_summary_csvCSVScenario-level KPI table (<code>scenario_id,total_demand_covered_pct,avg_accessibility,outlier_count</code>).
+ranked_candidates_csvCSVCandidate ranking table (<code>candidate_id,coverage_gain_pct,avg_distance_improvement,rank</code>).</p>
+<h3 id="python-example-4"><a class="header" href="#python-example-4">Python Example</a></h3>
+<p>`import whitebox_workflows as wbw</p>
+<p>wbe = wbw.WbEnvironment(include_pro=True, tier="pro")</p>
+<p>result = wbe.service_area_planning_and_coverage_optimization(
+network="data/street_network.shp",
+facilities="data/facilities.shp",
+demand_points="data/demand_points.shp",
+ring_costs=[5.0, 10.0, 15.0],
+scenarios="data/service_scenarios.csv",
+service_areas="output/service_areas.geojson",
+uncovered_demand="output/uncovered_demand.geojson",
+scenario_summary_csv="output/scenario_summary.csv",
+ranked_candidates_csv="output/ranked_candidates.csv",
+)</p>
+<p>print(result)`</p>
+<h3 id="license-notice-4"><a class="header" href="#license-notice-4">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+<hr />
+<h2 id="transfer-attributes"><a class="header" href="#transfer-attributes">Transfer Attributes</a></h2>
+<p><strong>Function name:</strong> <code>transfer_attributes</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="travelling-salesman-problem"><a class="header" href="#travelling-salesman-problem">Travelling Salesman Problem</a></h2>
+<p><strong>Function name:</strong> <code>travelling_salesman_problem</code></p>
+<p>This tool finds approximate solutions to <code>travelling salesman problems</code>,  the goal of which is to identify the shortest route connecting a set of locations. The tool uses an algorithm that applies a <code>2-opt heuristic</code> and a  <code>3-opt</code> heuristic as a fall-back if the initial approach  takes too long. The user must specify the names of the input points vector (<code>input</code>) and output lines vector file (<code>output</code>), as well as the duration, in seconds, over which the algorithm is allowed to search for improved solutions (<code>duration</code>). The tool works in parallel to find more optimal solutions.</p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def travelling_salesman_problem(self, input: Vector, duration: int = 60) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="vehicle-routing-cvrp"><a class="header" href="#vehicle-routing-cvrp">Vehicle Routing CVRP</a></h2>
+<p><strong>Function name:</strong> <code>vehicle_routing_cvrp</code></p>
+<p>Experimental</p>
+<p>Builds capacity-constrained multi-depot delivery routes with heterogeneous fleet controls, objective modes, and optional local optimization.</p>
+<p>vector network routing optimization</p>
+<h3 id="parameters-17"><a class="header" href="#parameters-17">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>network</code>Input line network layer (validated for contract parity).Required<code>network.gpkg</code>
+<code>depot_points</code>Depot point layer; each point can contribute one or more vehicles.Required<code>depots.gpkg</code>
+<code>stop_points</code>Delivery stop point layer.Required<code>stops.gpkg</code>
+<code>demand_field</code>Numeric demand field in stop_points (default: demand).Optional<code>demand</code>
+<code>priority_field</code>Optional stop priority field using values like required/high/normal/low or numeric ranks.Optional<code>priority</code>
+<code>allowed_vehicle_profiles_field</code>Optional stop field listing compatible vehicle profiles (comma/semicolon/pipe-delimited).Optional—
+<code>allowed_route_classes_field</code>Optional alias of allowed_vehicle_profiles_field for route-class compatibility rules.Optional—
+<code>depot_id_field</code>Optional depot ID field used in route/assignment outputs.Optional—
+<code>vehicle_count_field</code>Optional depot field for number of vehicles spawned at each depot.Optional—
+<code>vehicle_capacity_field</code>Optional depot field overriding vehicle_capacity per depot/vehicle template.Optional—
+<code>vehicle_fixed_cost_field</code>Optional depot field overriding vehicle_fixed_cost per depot/vehicle template.Optional—
+<code>travel_speed_field</code>Optional depot field overriding travel_speed per depot/vehicle template.Optional—
+<code>max_route_distance_field</code>Optional depot field overriding max_route_distance per depot/vehicle template.Optional—
+<code>max_route_time_field</code>Optional depot field overriding max_route_time per depot/vehicle template.Optional—
+<code>vehicle_profile_field</code>Optional depot field defining vehicle profile/category token used for stop compatibility.Optional—
+<code>vehicle_route_class_field</code>Optional alias of vehicle_profile_field for route-class compatibility rules.Optional—
+<code>vehicle_capacity</code>Per-vehicle capacity (&gt; 0).Required<code>100.0</code>
+<code>vehicle_fixed_cost</code>Optional fixed cost charged per dispatched vehicle/route (default: 0).Optional<code>0.0</code>
+<code>max_vehicles</code>Optional maximum number of vehicles/routes to construct.Optional—
+<code>max_route_distance</code>Optional maximum travel distance per route, including return to depot.Optional—
+<code>travel_speed</code>Travel speed in coordinate-units per time unit (default: 1).Optional—
+<code>max_route_time</code>Optional maximum route duration in model time units, including return to depot.Optional—
+<code>max_stops_per_vehicle</code>Optional maximum number of stops assigned to each vehicle route.Optional—
+<code>objective_mode</code>Route-construction objective: minimize_distance, minimize_vehicles, or minimize_cost.Optional<code>minimize_distance</code>
+<code>apply_local_optimization</code>When true, applies a deterministic 2-opt local improvement pass to each constructed route (default: true).Optional<code>True</code>
+<code>apply_simulated_annealing</code>When true, applies a seeded simulated annealing refinement pass per route after greedy/local optimization (default: false).Optional<code>False</code>
+<code>sa_iterations</code>Maximum simulated annealing iterations per route when apply_simulated_annealing=true (default: 1500).Optional<code>1500</code>
+<code>sa_initial_temperature</code>Initial simulated annealing temperature (&gt; 0, default: 1.0).Optional<code>1.0</code>
+<code>sa_cooling_rate</code>Simulated annealing cooling multiplier in (0, 1); default 0.995.Optional<code>0.995</code>
+<code>sa_seed</code>Optional deterministic random seed for simulated annealing (default: 42).Optional<code>42</code>
+<code>output</code>Output route line vector path.Required—
+<code>assignment_output</code>Optional stop assignment point output with visit order/load diagnostics.Optional—</p>
+<h3 id="examples-17"><a class="header" href="#examples-17">Examples</a></h3>
+<p><em>Builds CVRP routes and writes route lines with deterministic local optimization and optional simulated annealing controls.</em>
+<code>wbe.vehicle_routing_cvrp(apply_local_optimization=True, apply_simulated_annealing=False, demand_field='demand', depot_points='depots.gpkg', network='network.gpkg', objective_mode='minimize_distance', output='cvrp_routes.gpkg', priority_field='priority', sa_cooling_rate=0.995, sa_initial_temperature=1.0, sa_iterations=1500, sa_seed=42, stop_points='stops.gpkg', vehicle_capacity=100.0, vehicle_fixed_cost=0.0)</code></p>
+<hr />
+<h2 id="vehicle-routing-pickup-delivery"><a class="header" href="#vehicle-routing-pickup-delivery">Vehicle Routing Pickup Delivery</a></h2>
+<p><strong>Function name:</strong> <code>vehicle_routing_pickup_delivery</code></p>
+<p>Experimental</p>
+<p>Builds paired pickup-delivery routes with precedence and capacity constraints using a deterministic nearest-neighbour baseline.</p>
+<p>vector network routing optimization pickup-delivery</p>
+<h3 id="parameters-18"><a class="header" href="#parameters-18">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>network</code>Input line network layer (validated for contract parity).Required<code>network.gpkg</code>
+<code>depot_points</code>Depot point layer; first point is used as the active depot in this baseline implementation.Required<code>depots.gpkg</code>
+<code>stop_points</code>Stop point layer containing paired pickup and delivery records.Required<code>stops.gpkg</code>
+<code>request_id_field</code>Request identifier field in stop_points used to pair pickup and delivery records (default: request_id).Optional<code>request_id</code>
+<code>stop_type_field</code>Stop type field in stop_points containing pickup/delivery labels (default: stop_type).Optional<code>stop_type</code>
+<code>demand_field</code>Numeric demand field in stop_points; pickup demand is loaded and delivered demand is ignored (default: demand).Optional<code>demand</code>
+<code>vehicle_capacity</code>Per-vehicle capacity (&gt; 0).Required<code>100.0</code>
+<code>max_vehicles</code>Optional maximum number of vehicles/routes to construct.Optional—
+<code>output</code>Output route line vector path.Required—
+<code>assignment_output</code>Optional stop assignment point output with request and precedence diagnostics.Optional—</p>
+<h3 id="examples-18"><a class="header" href="#examples-18">Examples</a></h3>
+<p><em>Builds baseline pickup-delivery routes and writes route lines.</em>
+<code>wbe.vehicle_routing_pickup_delivery(demand_field='demand', depot_points='depots.gpkg', network='network.gpkg', output='pickup_delivery_routes.gpkg', request_id_field='request_id', stop_points='stops.gpkg', stop_type_field='stop_type', vehicle_capacity=100.0)</code></p>
+<hr />
+<h2 id="vehicle-routing-vrptw"><a class="header" href="#vehicle-routing-vrptw">Vehicle Routing VRPTW</a></h2>
+<p><strong>Function name:</strong> <code>vehicle_routing_vrptw</code></p>
+<p>Experimental</p>
+<p>Builds capacity-constrained multi-depot VRPTW routes with heterogeneous fleet settings, break windows, and objective-mode controls.</p>
+<p>vector network routing optimization time-window</p>
+<h3 id="parameters-19"><a class="header" href="#parameters-19">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>network</code>Input line network layer (validated for contract parity).Required<code>network.gpkg</code>
+<code>depot_points</code>Depot point layer; each point can contribute one or more vehicles.Required<code>depots.gpkg</code>
+<code>stop_points</code>Delivery stop point layer with demand and time-window fields.Required<code>stops.gpkg</code>
+<code>demand_field</code>Numeric demand field in stop_points (default: demand).Optional<code>demand</code>
+<code>priority_field</code>Optional stop priority field using values like required/high/normal/low or numeric ranks.Optional<code>priority</code>
+<code>allowed_vehicle_profiles_field</code>Optional stop field listing compatible vehicle profiles (comma/semicolon/pipe-delimited).Optional—
+<code>allowed_route_classes_field</code>Optional alias of allowed_vehicle_profiles_field for route-class compatibility rules.Optional—
+<code>tw_start_field</code>Numeric time-window start field in stop_points (default: tw_start).Optional<code>tw_start</code>
+<code>tw_end_field</code>Numeric time-window end field in stop_points (default: tw_end).Optional<code>tw_end</code>
+<code>service_time_field</code>Numeric per-stop service time field in stop_points (default: service_time).Optional<code>service_time</code>
+<code>depot_id_field</code>Optional depot ID field used in route/assignment outputs.Optional—
+<code>vehicle_count_field</code>Optional depot field for number of vehicles spawned at each depot.Optional—
+<code>vehicle_capacity_field</code>Optional depot field overriding vehicle_capacity per depot/vehicle template.Optional—
+<code>vehicle_fixed_cost_field</code>Optional depot field overriding vehicle_fixed_cost per depot/vehicle template.Optional—
+<code>travel_speed_field</code>Optional depot field overriding travel_speed per depot/vehicle template.Optional—
+<code>max_route_distance_field</code>Optional depot field overriding max_route_distance per depot/vehicle template.Optional—
+<code>max_route_time_field</code>Optional depot field overriding max_route_time per depot/vehicle template.Optional—
+<code>vehicle_profile_field</code>Optional depot field defining vehicle profile/category token used for stop compatibility.Optional—
+<code>vehicle_route_class_field</code>Optional alias of vehicle_profile_field for route-class compatibility rules.Optional—
+<code>depot_close_time_field</code>Optional depot field overriding depot_close_time per depot/vehicle template.Optional—
+<code>break_start_field</code>Optional depot field overriding break_start_time per depot/vehicle template.Optional—
+<code>break_end_field</code>Optional depot field overriding break_end_time per depot/vehicle template.Optional—
+<code>break_duration_field</code>Optional depot field overriding break_duration per depot/vehicle template.Optional—
+<code>vehicle_capacity</code>Per-vehicle capacity (&gt; 0).Required<code>100.0</code>
+<code>vehicle_fixed_cost</code>Optional fixed cost charged per dispatched vehicle/route (default: 0).Optional<code>0.0</code>
+<code>start_time</code>Route start time in model time units (default: 0).Optional<code>0.0</code>
+<code>travel_speed</code>Travel speed in coordinate-units per time unit (default: 1).Optional<code>1.0</code>
+<code>enforce_time_windows</code>When true, only stops with lateness Optional<code>False</code>
+<code>allowed_lateness</code>Maximum lateness tolerated when enforce_time_windows=true (default: 0).Optional<code>0.0</code>
+<code>depot_close_time</code>Optional hard close time by which each route must return to depot.Optional—
+<code>break_start_time</code>Optional global break-window start time for all vehicles.Optional—
+<code>break_end_time</code>Optional global break-window end time for all vehicles.Optional—
+<code>break_duration</code>Optional global break duration applied once per route when break window is intersected.Optional—
+<code>use_priority_scoring</code>When true, ranks feasible candidates by projected lateness/slack before travel distance; when false, uses nearest-neighbour baseline (default: true).Optional<code>True</code>
+<code>max_vehicles</code>Optional maximum number of vehicles/routes to construct.Optional—
+<code>max_route_distance</code>Optional maximum route travel distance, including return to depot.Optional—
+<code>max_route_time</code>Optional maximum route duration in model time units, including return to depot.Optional—
+<code>max_stops_per_vehicle</code>Optional maximum number of stops assigned to each vehicle route.Optional—
+<code>objective_mode</code>Route-construction objective: minimize_lateness, minimize_distance, minimize_vehicles, or minimize_cost.Optional<code>minimize_lateness</code>
+<code>output</code>Output route line vector path.Required—
+<code>assignment_output</code>Optional stop assignment point output with time-window diagnostics.Optional—</p>
+<h3 id="examples-19"><a class="header" href="#examples-19">Examples</a></h3>
+<p><em>Builds baseline VRPTW routes and reports time-window diagnostics.</em>
+<code>wbe.vehicle_routing_vrptw(allowed_lateness=0.0, demand_field='demand', depot_points='depots.gpkg', enforce_time_windows=False, network='network.gpkg', objective_mode='minimize_lateness', output='vrptw_routes.gpkg', priority_field='priority', service_time_field='service_time', start_time=0.0, stop_points='stops.gpkg', travel_speed=1.0, tw_end_field='tw_end', tw_start_field='tw_start', use_priority_scoring=True, vehicle_capacity=100.0, vehicle_fixed_cost=0.0)</code></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="network-analysis.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="linear-referencing.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="network-analysis.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="linear-referencing.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,398 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Multiscale Signatures - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html" class="active"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="multiscale-signatures"><a class="header" href="#multiscale-signatures">Multiscale Signatures</a></h1>
+<hr />
+<h2 id="max-anisotropy-dev"><a class="header" href="#max-anisotropy-dev">Max Anisotropy Dev</a></h2>
+<p><strong>Function name:</strong> <code>max_anisotropy_dev</code></p>
+<p>Calculates the maximum anisotropy (directionality) in elevation deviation over a range of spatial scales.</p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def max_anisotropy_dev(self, dem: Raster, min_scale: int = 1, max_scale: int = 100, step_size: int = 1) -&gt; Tuple[Raster, Raster]:
+</code></pre>
+<hr />
+<h2 id="max-anisotropy-dev-signature"><a class="header" href="#max-anisotropy-dev-signature">Max Anisotropy Dev Signature</a></h2>
+<p><strong>Function name:</strong> <code>max_anisotropy_dev_signature</code></p>
+<p>/.//</p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def max_anisotropy_dev_signature(self, dem: Raster, points: Vector, output_html_file: str, min_scale: int = 1, max_scale: int = 100, step_size: int = 1) -&gt; None:
+</code></pre>
+<hr />
+<h2 id="max-difference-from-mean"><a class="header" href="#max-difference-from-mean">Max Difference From Mean</a></h2>
+<p><strong>Function name:</strong> <code>max_difference_from_mean</code></p>
+<p>Calculates the maximum difference from mean elevation over a range of spatial scales.</p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def max_difference_from_mean(self, dem: Raster, min_scale: int = 1, max_scale: int = 100, step_size: int = 1) -&gt; Tuple[Raster, Raster]:
+</code></pre>
+<hr />
+<h2 id="max-elevation-deviation"><a class="header" href="#max-elevation-deviation">Max Elevation Deviation</a></h2>
+<p><strong>Function name:</strong> <code>max_elevation_deviation</code></p>
+<p>This tool can be used to calculate the maximum deviation from mean elevation, <em>DEVmax</em> (Lindsay et al. 2015) for each grid cell in a digital elevation model (DEM) across a range specified spatial scales. <em>DEV</em> is an elevation residual index and is essentially equivalent to a local elevation z-score. This attribute measures the <em>relative topographic position</em> as a fraction of local relief, and so is normalized to the local surface roughness. The multi-scaled calculation of <em>DEVmax</em> utilizes an integral image approach (Crow, 1984) to ensure highly efficient filtering that is invariant with filter size, which is the algorithm characteristic that allows for this densely sampled multi-scale analysis. In this way, <code>max_elevation_deviation</code> allows users to estimate the locally optimal scale with which to estimate <em>DEV</em> on a pixel-by-pixel basis. This multi-scaled version of local topographic position can reveal significant terrain characteristics and can aid with soil, vegetation, landform, and other mapping applications that depend on geomorphometric characterization.</p>
+<p>The user must input a digital elevation model (DEM) (<code>dem</code>). The range of scales that are evaluated in calculating <em>DEVmax</em> are determined by the user-specified <code>min_scale</code>, <code>max_scale</code>, and <code>step</code> parameters. All filter radii between the minimum and maximum scales, increasing by <code>step</code>, will be evaluated. The scale parameters are in units of grid cells and specify kernel size "radii" (<em>r</em>), such that:</p>
+<p><em>d</em> = 2<em>r</em> + 1</p>
+<p>That is, a radii of 1, 2, 3... yields a square filters of dimension (<em>d</em>) 3 x 3, 5 x 5, 7 x 7...</p>
+<p><em>DEV</em> is estimated at each tested filter size and every grid cell is assigned the maximum <em>DEV</em> value across the evaluated scales.</p>
+<p>Two output rasters will be generated, including the magnitude (<em>DEVmax</em>) and a second raster the assigns each pixel the scale at which <em>DEVmax</em> is encountered (<em>DEVscale</em>). The <em>DEVscale</em> raster can be very useful for revealing multi-scale landscape structure.</p>
+<h3 id="reference"><a class="header" href="#reference">Reference</a></h3>
+<p>Lindsay J, Cockburn J, Russell H. 2015. An integral image approach to performing multi-scale topographic position analysis. Geomorphology, 245: 51-61.</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>DevFromMeanElev</code>, <code>max_difference_from_mean</code>, <code>multiscale_elevation_percentile</code></p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def max_elevation_deviation(self, dem: Raster, min_scale: int = 1, max_scale: int = 100, step_size: int = 1) -&gt; Tuple[Raster, Raster]:
+</code></pre>
+<hr />
+<h2 id="max-elev-dev-signature"><a class="header" href="#max-elev-dev-signature">Max Elev Dev Signature</a></h2>
+<p><strong>Function name:</strong> <code>max_elev_dev_signature</code></p>
+<p>Experimental</p>
+<p>Calculates multiscale elevation-deviation signatures for input point sites and writes an HTML report.</p>
+<p>geomorphometry terrain signature multiscale legacy-port</p>
+<h3 id="parameters"><a class="header" href="#parameters">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input DEM raster path.Required<code>dem.tif</code>
+<code>points</code>Input vector point or multipoint file path.Required<code>sites.geojson</code>
+<code>min_scale</code>Minimum half-window radius in cells (default 1).Optional<code>1</code>
+<code>max_scale</code>Maximum half-window radius in cells (default 100).Optional<code>100</code>
+<code>step_size</code>Scale increment in cells (default 10). Alias: step.Optional<code>10</code>
+<code>output</code>Optional output path for the HTML signature report.Optional—</p>
+<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
+<p><em>Generate DEV signatures for a set of sample locations.</em>
+<code>wbe.max_elev_dev_signature(input='dem.tif', max_scale=150, min_scale=1, output='max_elev_dev_signature.html', points='sites.geojson', step_size=5)</code></p>
+<hr />
+<h2 id="multiscale-curvatures"><a class="header" href="#multiscale-curvatures">Multiscale Curvatures</a></h2>
+<p><strong>Function name:</strong> <code>multiscale_curvatures</code></p>
+<h3 id="description"><a class="header" href="#description">Description</a></h3>
+<p>This tool calculates several multiscale curvatures and curvature-based indices from an input DEM (<code>--dem</code>). There  are 18 curvature types (<code>--curv_type</code>) available, including: accumulation curvature, curvedness, difference curvature, Gaussian curvature, generating function, horizontal excess curvature, maximal curvature, mean curvature, minimal curvature, plan curvature, profile curvature, ring curvature, rotor, shape index, tangential curvature, total  curvature, unsphericity, and vertical excess curvature. Each of these curvatures can be measured in non-multiscale fashion using the corresponding tools available in either the WhiteboxTools open-core or the Whitebox extension.</p>
+<p>Like many of the multi-scale land-surface parameter tools available in Whitebox, this tool can be run in two different modes: it can either be used to measure curvature at a single specific scale or to generate a curvature <em>scale mosaic</em>. To understand the difference between these two modes, we must first understand how curvatures are measured and how the non-multiscale  curvature tools (e.g. <code>ProfileCurvature</code>) work. Curvatures are generally measured by fitting a mathematically defined surface to the elevation values within the local neighbourhood surrounding each grid cell in a DEM. The Whitebox curvature tools use the algorithms described Florinsky (2016), which use the 25 elevations within a 5 x 5 local neighbouhood for projected DEMs, and the nine elevations within a 3 x 3 neighbourhood for DEMs in geographic coordinate systems. This is what determines the scale at which these land-surface parameters are calculated. Because they are calculated using small local neighbourhoods (kernels), then these algorithms are heavily impacted by micro-topographic roughness and DEM noise. For example, in a fine-resolution DEM containing a great deal of micro-topographic roughness, the measured curvature value will be dominated by topographic variation at the scale of the roughness rather than the hillslopes on which that roughness is superimposed. This mis-matched scaling can be  a problem in many applications, e.g. in landform classification and slope failure modelling applications.</p>
+<p>Using the <code>MultiscaleCurvatures</code> tool, the user can specify a certain desired scale, larger than that defined by the grid resolution and kernel size, over which a curvature should be characterized. The tool will then use a fast  <code>Gaussian scale-space</code> method to remove the topographic variation in the DEM at scales less than the desired scale, and will then characterize the curvature using the usual method based on this scaled DEM. To measure curvature at a single non-local scale, the user must specify a minimum search neighbourhood  radius in grid cells (<code>--min_scale</code>) greater than 0.0. Note that a minimum search neighbourhood of 0.0 will replicate the non-multiscale equivalent curvature tool and any <code>--min_scale</code> value &gt; 0.0 will apply the Gassian scale space method to eliminate  topographic variation less than the scale of the minimum search neighbourhood. The base step size (<code>--step</code>), number of steps (<code>--num_steps</code>), and step  nonlinearity (<code>--step_nonlinearity</code>) parameters should all be left to their default values of 1 in this case. The output curvature raster will be written to the output magnitude file (<code>--out_mag</code>). The following animation shows several multiscale curvature rasters (tangential curvature) measured from a DEM across a range of spatial scales.</p>
+<p>Alternatively, one can use this tool to create a curvature scale mosaic. In this case, the user specifies a range of spatial scales (i.e., a scale space) over which to measure curvature. The curvature scale-space is densely sampled and each grid cell is assigned the maximum absolute curvature value (for the specified curvature type) across the scale space. In this <em>scale-mosaic mode</em>, the user must also specify the output scale file name (<code>--out_scale</code>), which is an output raster that, for each grid cell, specifies the scale at which the maximum absolute curvature was identified. The following is an example of a scale mosaic of unsphericity for an area in Pole Canyon, Utah (<code>min_scale</code>=1.0,  <code>step</code>=1, <code>num_steps</code>=50, <code>step_nonlinearity</code>=1.0).</p>
+<p>Scale mosaics are useful when modelling spatial distributions of land-surface parameters, like curvatures, in complex and  heterogeneous landscapes that contain an abundance of topographic variation (micro-topography, landforms, etc.) at  widely varying spatial scales, often associated with different geomorphic processes. Notice how in the image above,  relatively strong curvature values are being characterized for both the landforms associated with the smaller-scale  mass-movement processes as well as the broader-scale fluvial erosion (i.e. valley incision and hillslopes). It would be  difficult, or impossible, to achieve this effect using a single, uniform scale. Each location in a land-surface  parameter scale mosaic represents the parameter measured at a <em>characteristic scale</em>, given the unique topography of  the site and surroundings.</p>
+<p>The properties of the sampled scale space are determined using the <code>--min_scale</code>, <code>--step</code>, <code>--num_steps</code> (greater than 1), and <code>--step_nonlinearity</code> parameters. Experience with multiscale curvature scales spaces has shown that they are more highly variable at shorter spatial scales and change more gradually at broader scales. Therefore, a nonlinear scale sampling interval is used by this  tool to ensure that the scale sampling density is higher for short scale ranges and coarser at longer tested scales,  such that:</p>
+<p><em>ri</em> = <em>rL</em> + [step × (i - <em>rL</em>)]<em>p</em></p>
+<p>Where <em>ri</em> is the filter radius for step <em>i</em> and <em>p</em> is the nonlinear scaling factor (<code>--step_nonlinearity</code>) and a step size (<code>--step</code>) of <em>step</em>.</p>
+<p>In scale-mosaic mode, the user must also decide whether or not to standardize the curvature values (<code>--standardize</code>). When this parameter is used, the algorithm will convert each curvature raster associated with each sampled region of scale-space to z-scores (i.e. differenced from the raster-wide mean and divided by the raster-wide standard  deviation). It it usually the case that curvature values measured at broader spatial scales will on the whole  become less strongly valued. Because the scale mosaic algorithm used in this tool assigns each grid cell the  maximum absolute curvature observed within sampled scale-space, this implies that the curvature values associated with more local-scale ranges are more likely to be selected for the final scale-mosaic raster. By standardizing each scaled curvature raster, there is greater opportunity for the final scale-mosaic to represent broader scale topographic variation. Whether or not this is appropriate will depend on the application. However, <strong>it is important to stress that the sampled scale-space need not span the full range of possible scales, from the finest scale determined by the grid resolution up to the broadest scale possible, determined by the spatial extent of  the input DEM</strong>. Often, a better approach is to use this tool to create multiple scale mosaics spanning this range, thereby capturing variation within broadly defined scale ranges. For example, one could create a local-scale, meso-scale, and broad-scale curvature scale mosaics, each of which would capture topographic variation and landforms that are present in the landscape and reflective of processing operating at vastly different spatial scales. When this approach is used, it may not be necessary to standardize each scaled curvature raster, since the gradual decline in curvature values as scales increase is less pronounced within each of these broad scale ranges than across the entirety of possible scale-space. Again, however, this will depend on the application and on the characteristics of the landscape at study.</p>
+<p>Raw curvedness values are often challenging to visualize given their range and magnitude,  and as such the user may opt to log-transform the output raster (<code>--log</code>). Transforming the values  applies the equation by Shary et al. (2002):</p>
+<p><em>Θ</em>' = sign(<em>Θ</em>) ln(1 + 10<em>n</em>|<em>Θ</em>|)</p>
+<p>where <em>Θ</em> is the parameter value and <em>n</em> is dependent on the grid cell size.</p>
+<h3 id="references"><a class="header" href="#references">References</a></h3>
+<p>Florinsky, I. (2016). Digital terrain analysis in soil science and geology. Academic Press.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>gaussian_scale_space</code>, <code>accumulation_curvature</code>, <code>curvedness</code>, <code>difference_curvature</code>, <code>gaussian_curvature</code>,  <code>generating_function</code>, <code>horizontal_excess_curvature</code>, <code>maximal_curvature</code>, <code>mean_curvature</code>, <code>minimal_curvature</code>, <code>plan_curvature</code>, <code>profile_curvature</code>, <code>ring_curvature</code>, <code>rotor</code>, <code>shape_index</code>, <code>tangential_curvature</code>,  <code>total_curvature</code>, <code>unsphericity</code>, <code>vertical_excess_curvature</code></p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def multiscale_curvatures(self, dem: Raster, curv_type: str = 'profile', min_scale: int = 4, step_size: int = 1, num_steps: int = 10, step_nonlinearity: float = 1.0, log_transform: bool = True, standardize: bool = False) -&gt; Tuple[Raster, Raster]:
+</code></pre>
+<hr />
+<h2 id="multiscale-elevated-index"><a class="header" href="#multiscale-elevated-index">Multiscale Elevated Index</a></h2>
+<p><strong>Function name:</strong> <code>multiscale_elevated_index</code></p>
+<p>Experimental</p>
+<p>Calculates multiscale elevated-index (MsEI) and key-scale rasters using Gaussian scale-space residuals.</p>
+<p>geomorphometry multiscale gss elevated-index</p>
+<hr />
+<h2 id="multiscale-elevation-percentile"><a class="header" href="#multiscale-elevation-percentile">Multiscale Elevation Percentile</a></h2>
+<p><strong>Function name:</strong> <code>multiscale_elevation_percentile</code></p>
+<p>This tool calculates the most elevation percentile (EP) across a range of spatial scales. EP is a measure of local topographic position (LTP) and expresses the vertical position for a digital elevation model (DEM) grid cell (z0) as the percentile of the elevation distribution within the filter window, such that:</p>
+<p>EP = counti∈C(zi &gt; z0) x (100 / nC)</p>
+<p>where z0 is the elevation of the window's center grid cell, zi is the elevation of cell <em>i</em> contained within the neighboring set C, and nC is the number of grid cells contained within the window.</p>
+<p>EP is unsigned and expressed as a percentage, bound between 0% and 100%. This tool outputs two rasters, the multiscale EP magnitude (<code>out_mag</code>) and the scale at which the most extreme EP value occurs (<code>out_scale</code>). <strong>The magnitude raster is the most extreme EP value (i.e. the furthest from 50%) for each grid cell encountered within the tested scales of EP.</strong></p>
+<p>Quantile-based estimates (e.g., the median and interquartile range) are often used in nonparametric statistics to provide data variability estimates without assuming the distribution is normal. Thus, EP is largely unaffected by irregularly shaped elevation frequency distributions or by outliers in the DEM, resulting in a highly robust metric of LTP. In fact, elevation distributions within small to medium sized neighborhoods often exhibit skewed, multimodal, and non-Gaussian distributions, where the occurrence of elevation errors can often result in distribution outliers. Thus, based on these statistical characteristics, EP is considered one of the most robust representation of LTP.</p>
+<p>The algorithm implemented by this tool uses the relatively efficient running-histogram filtering algorithm of Huang et al. (1979). Because most DEMs contain floating point data, elevation values must be rounded to be binned. The <code>sig_digits</code> parameter is used to determine the level of precision preserved during this binning process. The algorithm is parallelized to further aid with computational efficiency.</p>
+<p>Experience with multiscale EP has shown that it is highly variable at shorter scales and changes more gradually at broader scales. Therefore, a nonlinear scale sampling interval is used by this tool to ensure that the scale sampling density is higher for short scale ranges and coarser at longer tested scales, such that:</p>
+<p><em>ri</em> = <em>rL</em> + [step × (i - <em>rL</em>)]<em>p</em></p>
+<p>Where <em>ri</em> is the filter radius for step <em>i</em> and <em>p</em> is the nonlinear scaling factor (<code>step_nonlinearity</code>) and a step size (<code>step</code>) of <em>step</em>.</p>
+<h3 id="references-1"><a class="header" href="#references-1">References</a></h3>
+<p>Newman, D. R., Lindsay, J. B., and Cockburn, J. M. H. (2018). Evaluating metrics of local topographic position for multiscale geomorphometric analysis. Geomorphology, 312, 40-50.</p>
+<p>Huang, T., Yang, G.J.T.G.Y. and Tang, G., 1979. A fast two-dimensional median filtering algorithm. IEEE Transactions on Acoustics, Speech, and Signal Processing, 27(1), pp.13-18.</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>elevation_percentile</code>, <code>max_elevation_deviation</code>, <code>max_difference_from_mean</code></p>
+<h3 id="python-api-5"><a class="header" href="#python-api-5">Python API</a></h3>
+<pre><code class="language-python">def multiscale_elevation_percentile(self, dem: Raster, num_significant_digits: int = 3, min_scale: int = 4, step_size: int = 1, num_steps: int = 10, step_nonlinearity: float = 1.0) -&gt; Tuple[Raster, Raster]:
+</code></pre>
+<hr />
+<h2 id="multiscale-low-lying-index"><a class="header" href="#multiscale-low-lying-index">Multiscale Low Lying Index</a></h2>
+<p><strong>Function name:</strong> <code>multiscale_low_lying_index</code></p>
+<p>Experimental</p>
+<p>Calculates multiscale low-lying-index (MsLLI) and key-scale rasters using Gaussian scale-space residuals.</p>
+<p>geomorphometry multiscale gss low-lying-index</p>
+<hr />
+<h2 id="multiscale-roughness"><a class="header" href="#multiscale-roughness">Multiscale Roughness</a></h2>
+<p><strong>Function name:</strong> <code>multiscale_roughness</code></p>
+<p>/</p>
+<h3 id="python-api-6"><a class="header" href="#python-api-6">Python API</a></h3>
+<pre><code class="language-python">def multiscale_roughness(self, dem: Raster, min_scale: int = 1, max_scale: int = 100, step_size: int = 1) -&gt; Tuple[Raster, Raster]:
+</code></pre>
+<hr />
+<h2 id="multiscale-roughness-signature"><a class="header" href="#multiscale-roughness-signature">Multiscale Roughness Signature</a></h2>
+<p><strong>Function name:</strong> <code>multiscale_roughness_signature</code></p>
+<p>/</p>
+<h3 id="python-api-7"><a class="header" href="#python-api-7">Python API</a></h3>
+<pre><code class="language-python">def multiscale_roughness_signature(self, dem: Raster, points: Vector, output_html_file: str, min_scale: int = 1, max_scale: int = 100, step_size: int = 1) -&gt; None:
+</code></pre>
+<hr />
+<h2 id="multiscale-std-dev-normals"><a class="header" href="#multiscale-std-dev-normals">Multiscale Std Dev Normals</a></h2>
+<p><strong>Function name:</strong> <code>multiscale_std_dev_normals</code></p>
+<p>This tool can be used to map the spatial pattern of maximum spherical standard deviation (σ<em>s max</em>; <code>out_mag</code>), as well as the scale at which maximum spherical standard deviation occurs (<em>rmax</em>; <code>out_scale</code>), for each grid cell in an input DEM (<code>dem</code>). This serves as a multi-scale measure of surface roughness, or topographic complexity. The spherical standard deviation (σs) is a measure of the angular spread among <em>n</em> unit vectors and is defined as:</p>
+<p>σs = √[-2ln(<em>R</em> / <em>N</em>)] × 180 / π</p>
+<p>Where <em>R</em> is the resultant vector length and is derived from the sum of the <em>x</em>, <em>y</em>, and <em>z</em> components of each of the <em>n</em> normals contained within a filter kernel, which designates a tested spatial scale. Each unit vector is a 3-dimensional measure of the surface orientation and slope at each grid cell center. The maximum spherical standard deviation is:</p>
+<p>σ<em>s max</em>=<em>max</em>{σs(<em>r</em>):<em>r</em>=<em>rL</em>...<em>rU</em>},</p>
+<p>Experience with roughness scale signatures has shown that σ<em>s max</em> is highly variable at shorter scales and changes more gradually at broader scales. Therefore, a nonlinear scale sampling interval is used by this tool to ensure that the scale sampling density is higher for short scale ranges and coarser at longer tested scales, such that:</p>
+<p><em>ri</em> = <em>rL</em> + [step × (i - <em>rL</em>)]<em>p</em></p>
+<p>Where <em>ri</em> is the filter radius for step <em>i</em> and <em>p</em> is the nonlinear scaling factor (<code>step_nonlinearity</code>) and a step size (<code>step</code>) of <em>step</em>.</p>
+<p>Use the <code>spherical_std_dev_of_normals</code> tool if you need to calculate σs for a single scale.</p>
+<h3 id="reference-1"><a class="header" href="#reference-1">Reference</a></h3>
+<p>JB Lindsay, DR Newman, and A  Francioni. 2019 Scale-Optimized Surface Roughness for Topographic Analysis. <em>Geosciences</em>, 9(322) doi: 10.3390/geosciences9070322.</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>spherical_std_dev_of_normals</code>, <code>multiscale_std_dev_normals_signature</code>, <code>multiscale_roughness</code></p>
+<h3 id="python-api-8"><a class="header" href="#python-api-8">Python API</a></h3>
+<pre><code class="language-python">def multiscale_std_dev_normals(self, dem: Raster, min_scale: int = 4, step_size: int = 1, num_steps: int = 10, step_nonlinearity: float = 1.0, html_signature_file: str = "") -&gt; Tuple[Raster, Raster]:
+</code></pre>
+<hr />
+<h2 id="multiscale-std-dev-normals-signature"><a class="header" href="#multiscale-std-dev-normals-signature">Multiscale Std Dev Normals Signature</a></h2>
+<p><strong>Function name:</strong> <code>multiscale_std_dev_normals_signature</code></p>
+<p>/</p>
+<h3 id="python-api-9"><a class="header" href="#python-api-9">Python API</a></h3>
+<pre><code class="language-python">def multiscale_std_dev_normals_signature(self, dem: Raster, points: Vector, output_html_file: str, min_scale: int = 4, step_size: int = 1, num_steps: int = 10, step_nonlinearity: float = 1.0) -&gt; None:
+</code></pre>
+<hr />
+<h2 id="multiscale-topographic-position-image"><a class="header" href="#multiscale-topographic-position-image">Multiscale Topographic Position Image</a></h2>
+<p><strong>Function name:</strong> <code>multiscale_topographic_position_image</code></p>
+<p>This tool creates a multiscale topographic position (MTP) image (<code>see here for an example</code>) from three DEVmax rasters of differing spatial scale ranges. Specifically, <code>multiscale_topographic_position_image</code> takes three DEVmax <em>magnitude</em> rasters, created using the <code>max_elevation_deviation</code> tool, as inputs. The three inputs should correspond to the elevation deviations in the local (<code>local</code>), meso (<code>meso</code>), and broad (<code>broad</code>) scale ranges and will be forced into the blue, green, and red colour components of the colour composite output (<code>output</code>) raster. The image lightness value (<code>lightness</code>) controls the overall brightness of the output image, as depending on the topography and scale ranges, these images can appear relatively dark. Higher values result in brighter, more colourful output images.</p>
+<p>The user may optionally specify an input hillshade raster. When specified, the hillshade will be used to provide a shaded-relief overlaid on top of the coloured multi-scale information, providing a very effective visualization. Any hillshade image may be used for this purpose, but we have found that multi-directional hillshade (<code>multidirectional_hillshade</code>), and  specifically those derived using the 360-degree option, can be most effective for this application. However,  experimentation is likely needed to find the optimal for each unique data set.</p>
+<p>The output images can take some training to interpret correctly and a detailed explanation can be found in Lindsay et al. (2015). Sites within the landscape that occupy prominent topographic positions, either low-lying or elevated, will be apparent by their bright colouring in the MTP image. Those that are coloured more strongly in the blue are promient at the local scale range; locations that are more strongly green coloured are promient at the meso scale; and bright reds in the MTP image are associated with broad-scale landscape prominence. Of course, combination colours are also possible when topography is elevated or low-lying across multiple scale ranges. For example, a yellow area would indicated a site of prominent topographic position across the meso and broadest scale ranges.</p>
+<h3 id="reference-2"><a class="header" href="#reference-2">Reference</a></h3>
+<p>Lindsay J, Cockburn J, Russell H. 2015. An integral image approach to performing multi-scale topographic position analysis. Geomorphology, 245: 51-61.</p>
+<h3 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h3>
+<p><code>max_elevation_deviation</code></p>
+<h3 id="python-api-10"><a class="header" href="#python-api-10">Python API</a></h3>
+<pre><code class="language-python">def multiscale_topographic_position_image(self, local: Raster, meso: Raster, broad: Raster, lightness: float = 1.2) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="topographic-position-animation"><a class="header" href="#topographic-position-animation">Topographic Position Animation</a></h2>
+<p><strong>Function name:</strong> <code>topographic_position_animation</code></p>
+<p>PROExperimental</p>
+<p>Creates an interactive HTML viewer and animated GIF of DEV or DEVmax across nonlinearly sampled scales.</p>
+<p>geomorphometry terrain topographic-position animation integral-image legacy-port</p>
+<h3 id="examples-1"><a class="header" href="#examples-1">Examples</a></h3>
+<p><em>Animate terrain topographic position through a sequence of DEV scales.</em>
+<code>wbe.topographic_position_animation(input='dem.tif', num_steps=8, output='topographic_position_animation.html', use_dev_max=True)</code></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="terrain-landform-indices.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="terrain-general.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="terrain-landform-indices.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="terrain-general.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

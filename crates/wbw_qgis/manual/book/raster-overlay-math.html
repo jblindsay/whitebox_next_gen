@@ -1,0 +1,539 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Overlay and Math - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html" class="active"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="overlay-and-math"><a class="header" href="#overlay-and-math">Overlay and Math</a></h1>
+<hr />
+<h2 id="add"><a class="header" href="#add">Add</a></h2>
+<p><strong>Function name:</strong> <code>add</code></p>
+<p>Experimental</p>
+<p>Adds two rasters on a cell-by-cell basis.</p>
+<p>raster math add legacy-port</p>
+<h3 id="parameters"><a class="header" href="#parameters">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input1</code>First input raster (path string or typed raster object).Required<code>input1.tif</code>
+<code>input2</code>Second input raster (path string or typed raster object).Required<code>input2.tif</code>
+<code>output</code>Optional output raster file path. If omitted, output remains in memory and is returned as a memory:// raster handle.Optional—</p>
+<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
+<p><em>Runs add on two DEM rasters and writes the result to dem_sum.tif.</em>
+<code>wbe.add(input1='dem_a.tif', input2='dem_b.tif', output='dem_sum.tif')</code></p>
+<hr />
+<h2 id="average-overlay"><a class="header" href="#average-overlay">Average Overlay</a></h2>
+<p><strong>Function name:</strong> <code>average_overlay</code></p>
+<p>This tool can be used to find the average value in each cell of a grid from a set of input images (<code>inputs</code>). It is therefore similar to the <code>weighted_sum</code> tool except that each input image is given equal weighting. This tool operates on a cell-by-cell basis. Therefore, each of the input rasters must share the same number of rows and columns and spatial extent. An error will be issued if this is not the case. At least two input rasters are required to run this tool. Like each of the WhiteboxTools overlay tools, this tool has been optimized for parallel processing.</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>weighted_sum</code></p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def average_overlay(self, input_rasters: List[Raster]) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="bool-and"><a class="header" href="#bool-and">Bool And</a></h2>
+<p><strong>Function name:</strong> <code>bool_and</code></p>
+<p>This tool is a Boolean <strong>AND</strong> operator, i.e. it works on <em>True</em> or <em>False</em> (1 and 0) values. Grid cells for which the first and second input rasters (<code>input1</code>; <code>input2</code>) have <em>True</em> values are assigned 1 in the output raster, otherwise grid cells are assigned a value of 0. All non-zero values in the input rasters are considered to be <em>True</em>, while all zero-valued grid cells are considered to be <em>False</em>. Grid cells containing <strong>NoData</strong> values in either of the input rasters will be assigned a <strong>NoData</strong> value in the output raster.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>bool_not</code>, <code>bool_or</code>, <code>bool_xor</code></p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def bool_and(self, input1: Raster, input2: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="bool-not"><a class="header" href="#bool-not">Bool Not</a></h2>
+<p><strong>Function name:</strong> <code>bool_not</code></p>
+<p>This tool is a Boolean <strong>NOT</strong> operator, i.e. it works on <em>True</em> or <em>False</em> (1 and 0) values. Grid cells for which the first input raster (<code>input1</code>) has a <em>True</em> value and the second raster (<code>input2</code>) has a <em>False</em> value are assigned 0 in the output raster, otherwise grid cells are assigned a value of 0. All non-zero values in the input rasters are considered to be <em>True</em>, while all zero-valued grid cells are considered to be <em>False</em>. Grid cells containing <strong>NoData</strong> values in either of the input rasters will be assigned a <strong>NoData</strong> value in the output raster. Notice that the <strong>Not</strong> operator is asymmetrical, and the order of inputs matters.</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>bool_and</code>, <code>bool_or</code>, <code>bool_xor</code></p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def bool_not(self, input1: Raster, input2: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="bool-or"><a class="header" href="#bool-or">Bool Or</a></h2>
+<p><strong>Function name:</strong> <code>bool_or</code></p>
+<p>This tool is a Boolean <strong>OR</strong> operator, i.e. it works on <em>True</em> or <em>False</em> (1 and 0) values. Grid cells for which the either the first or second input rasters (<code>input1</code>; <code>input2</code>) have a <em>True</em> value are assigned 1 in the output raster, otherwise grid cells are assigned a value of 0. All non-zero values in the input rasters are considered to be <em>True</em>, while all zero-valued grid cells are considered to be <em>False</em>. Grid cells containing <strong>NoData</strong> values in either of the input rasters will be assigned a <strong>NoData</strong> value in the output raster.</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>bool_and</code>, <code>bool_not</code>, <code>bool_xor</code></p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def bool_or(self, input1: Raster, input2: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="bool-xor"><a class="header" href="#bool-xor">Bool Xor</a></h2>
+<p><strong>Function name:</strong> <code>bool_xor</code></p>
+<p>This tool is a Boolean <strong>XOR</strong> operator, i.e. it works on <em>True</em> or <em>False</em> (1 and 0) values. Grid cells for which either the first or second input rasters (<code>input1</code>; <code>input2</code>) have a <em>True</em> value but not both are assigned 1 in the output raster, otherwise grid cells are assigned a value of 0. All non-zero values in the input rasters are considered to be <em>True</em>, while all zero-valued grid cells are considered to be <em>False</em>. Grid cells containing <strong>NoData</strong> values in either of the input rasters will be assigned a <strong>NoData</strong> value in the output raster. Notice that the <strong>Not</strong> operator is asymmetrical, and the order of inputs matters.</p>
+<h3 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h3>
+<p><code>bool_and</code>, <code>bool_not</code>, <code>bool_or</code></p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def bool_xor(self, input1: Raster, input2: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="count-if"><a class="header" href="#count-if">Count If</a></h2>
+<p><strong>Function name:</strong> <code>count_if</code></p>
+<p>This tool counts the number of occurrences of a specified value (<code>value</code>) in a stack of input rasters (<code>inputs</code>). Each grid cell in the output raster (<code>output</code>) will contain the number of occurrences of the specified value in the stack of corresponding cells in the input image. At least two input rasters are required to run this tool. Each of the input rasters must share the same number of rows and columns and spatial extent. An error will be issued if this is not the case.</p>
+<h3 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h3>
+<p><code>pick_from_list</code></p>
+<h3 id="python-api-5"><a class="header" href="#python-api-5">Python API</a></h3>
+<pre><code class="language-python">def count_if(self, input_rasters: List[Raster], comparison_value: float) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="divide"><a class="header" href="#divide">Divide</a></h2>
+<p><strong>Function name:</strong> <code>divide</code></p>
+<p>Experimental</p>
+<p>Divides the first raster by the second on a cell-by-cell basis.</p>
+<p>raster math divide legacy-port</p>
+<h3 id="parameters-1"><a class="header" href="#parameters-1">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input1</code>First input raster (path string or typed raster object).Required<code>input1.tif</code>
+<code>input2</code>Second input raster (path string or typed raster object).Required<code>input2.tif</code>
+<code>output</code>Optional output raster file path. If omitted, output remains in memory and is returned as a memory:// raster handle.Optional—</p>
+<h3 id="examples-1"><a class="header" href="#examples-1">Examples</a></h3>
+<p><em>Runs divide on two DEM rasters and writes the result to dem_ratio.tif.</em>
+<code>wbe.divide(input1='dem_a.tif', input2='dem_b.tif', output='dem_ratio.tif')</code></p>
+<hr />
+<h2 id="highest-position"><a class="header" href="#highest-position">Highest Position</a></h2>
+<p><strong>Function name:</strong> <code>highest_position</code></p>
+<p>This tool identifies the stack position (index) of the maximum value within a raster stack on a cell-by-cell basis. For example, if five raster images (<code>inputs</code>) are input to the tool, the output raster (<code>output</code>) would show which of the five input rasters contained the highest value for each grid cell. The index value in the output raster is the zero-order number of the raster stack, i.e. if the highest value in the stack is contained in the first image, the output value would be 0; if the highest stack value were the second image, the output value would be 1, and so on. If any of the cell values within the stack is NoData, the output raster will contain the NoData value for the corresponding grid cell. The index value is related to the order of the input images.</p>
+<h3 id="warning"><a class="header" href="#warning">Warning</a></h3>
+<p>Each of the input rasters must have the same spatial extent and number of rows and columns.</p>
+<h3 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h3>
+<p><code>lowest_position</code>, <code>pick_from_list</code></p>
+<h3 id="python-api-6"><a class="header" href="#python-api-6">Python API</a></h3>
+<pre><code class="language-python">def highest_position(self, input_rasters: List[Raster]) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="lowest-position"><a class="header" href="#lowest-position">Lowest Position</a></h2>
+<p><strong>Function name:</strong> <code>lowest_position</code></p>
+<p>This tool identifies the stack position (index) of the minimum value within a raster stack on a cell-by-cell basis. For example, if five raster images (<code>inputs</code>) are input to the tool, the output raster (<code>output</code>) would show which of the five input rasters contained the lowest value for each grid cell. The index value in the output raster is the zero-order number of the raster stack, i.e. if the lowest value in the stack is contained in the first image, the output value would be 0; if the lowest stack value were the second image, the output value would be 1, and so on. If any of the cell values within the stack is NoData, the output raster will contain the NoData value for the corresponding grid cell. The index value is related to the order of the input images.</p>
+<h3 id="warning-1"><a class="header" href="#warning-1">Warning</a></h3>
+<p>Each of the input rasters must have the same spatial extent and number of rows and columns.</p>
+<h3 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h3>
+<p><code>highest_position</code>, <code>pick_from_list</code></p>
+<h3 id="python-api-7"><a class="header" href="#python-api-7">Python API</a></h3>
+<pre><code class="language-python">def lowest_position(self, input_rasters: List[Raster]) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="max-absolute-overlay"><a class="header" href="#max-absolute-overlay">Max Absolute Overlay</a></h2>
+<p><strong>Function name:</strong> <code>max_absolute_overlay</code></p>
+<p>This tool can be used to find the maximum absolute (non-negative) value in each cell of a grid from a set of input images (<code>inputs</code>). NoData values in any of the input images will result in a NoData pixel in the output image.</p>
+<h3 id="warning-2"><a class="header" href="#warning-2">Warning</a></h3>
+<p>Each of the input rasters must have the same spatial extent and number of rows and columns.</p>
+<h3 id="see-also-8"><a class="header" href="#see-also-8">See Also</a></h3>
+<p><code>max_overlay</code>, <code>min_absolute_overlay</code>, <code>min_overlay</code></p>
+<h3 id="python-api-8"><a class="header" href="#python-api-8">Python API</a></h3>
+<pre><code class="language-python">def max_absolute_overlay(self, input_rasters: List[Raster]) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="max-overlay"><a class="header" href="#max-overlay">Max Overlay</a></h2>
+<p><strong>Function name:</strong> <code>max_overlay</code></p>
+<p>This tool can be used to find the maximum value in each cell of a grid from a set of input images (<code>inputs</code>). NoData values in any of the input images will result in a NoData pixel in the output image (<code>output</code>). It is similar to the <code>Max</code> mathematical tool, except that it will accept more than two input images.</p>
+<h3 id="warning-3"><a class="header" href="#warning-3">Warning</a></h3>
+<p>Each of the input rasters must have the same spatial extent and number of rows and columns.</p>
+<h3 id="see-also-9"><a class="header" href="#see-also-9">See Also</a></h3>
+<p><code>min_overlay</code>, <code>max_absolute_overlay</code></p>
+<h3 id="python-api-9"><a class="header" href="#python-api-9">Python API</a></h3>
+<pre><code class="language-python">def max_overlay(self, input_rasters: List[Raster]) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="min-absolute-overlay"><a class="header" href="#min-absolute-overlay">Min Absolute Overlay</a></h2>
+<p><strong>Function name:</strong> <code>min_absolute_overlay</code></p>
+<p>This tool can be used to find the minimum absolute (non-negative) value in each cell of a grid from a set of input images (<code>inputs</code>). NoData values in any of the input images will result in a NoData pixel in the output image.</p>
+<h3 id="warning-4"><a class="header" href="#warning-4">Warning</a></h3>
+<p>Each of the input rasters must have the same spatial extent and number of rows and columns.</p>
+<h3 id="see-also-10"><a class="header" href="#see-also-10">See Also</a></h3>
+<p><code>min_overlay</code>, <code>max_absolute_overlay</code>, <code>max_overlay</code></p>
+<h3 id="python-api-10"><a class="header" href="#python-api-10">Python API</a></h3>
+<pre><code class="language-python">def min_absolute_overlay(self, input_rasters: List[Raster]) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="min-overlay"><a class="header" href="#min-overlay">Min Overlay</a></h2>
+<p><strong>Function name:</strong> <code>min_overlay</code></p>
+<p>This tool can be used to find the minimum value in each cell of a grid from a set of input images (<code>inputs</code>). NoData values in any of the input images will result in a NoData pixel in the output image (<code>output</code>). It is similar to the <code>Min</code> mathematical tool, except that it will accept more than two input images.</p>
+<h3 id="warning-5"><a class="header" href="#warning-5">Warning</a></h3>
+<p>Each of the input rasters must have the same spatial extent and number of rows and columns.</p>
+<h3 id="see-also-11"><a class="header" href="#see-also-11">See Also</a></h3>
+<p><code>max_overlay</code>, <code>max_absolute_overlay</code>, <code>min_absolute_overlay</code>, <code>Min</code></p>
+<h3 id="python-api-11"><a class="header" href="#python-api-11">Python API</a></h3>
+<pre><code class="language-python">def min_overlay(self, input_rasters: List[Raster]) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="modulo"><a class="header" href="#modulo">Modulo</a></h2>
+<p><strong>Function name:</strong> <code>modulo</code></p>
+<p>Experimental</p>
+<p>Computes the remainder of dividing the first raster by the second on a cell-by-cell basis.</p>
+<p>raster math modulo legacy-port</p>
+<h3 id="parameters-2"><a class="header" href="#parameters-2">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input1</code>First input raster (path string or typed raster object).Required<code>input1.tif</code>
+<code>input2</code>Second input raster (path string or typed raster object).Required<code>input2.tif</code>
+<code>output</code>Optional output raster file path. If omitted, output remains in memory and is returned as a memory:// raster handle.Optional—</p>
+<h3 id="examples-2"><a class="header" href="#examples-2">Examples</a></h3>
+<p><em>Runs modulo on two DEM rasters and writes the result to dem_modulo.tif.</em>
+<code>wbe.modulo(input1='dem_a.tif', input2='dem_b.tif', output='dem_modulo.tif')</code></p>
+<hr />
+<h2 id="multiply"><a class="header" href="#multiply">Multiply</a></h2>
+<p><strong>Function name:</strong> <code>multiply</code></p>
+<p>Experimental</p>
+<p>Multiplies two rasters on a cell-by-cell basis.</p>
+<p>raster math multiply legacy-port</p>
+<h3 id="parameters-3"><a class="header" href="#parameters-3">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input1</code>First input raster (path string or typed raster object).Required<code>input1.tif</code>
+<code>input2</code>Second input raster (path string or typed raster object).Required<code>input2.tif</code>
+<code>output</code>Optional output raster file path. If omitted, output remains in memory and is returned as a memory:// raster handle.Optional—</p>
+<h3 id="examples-3"><a class="header" href="#examples-3">Examples</a></h3>
+<p><em>Runs multiply on two DEM rasters and writes the result to dem_product.tif.</em>
+<code>wbe.multiply(input1='dem_a.tif', input2='dem_b.tif', output='dem_product.tif')</code></p>
+<hr />
+<h2 id="multiply-overlay"><a class="header" href="#multiply-overlay">Multiply Overlay</a></h2>
+<p><strong>Function name:</strong> <code>multiply_overlay</code></p>
+<p>This tool multiplies a stack of raster images (<code>inputs</code>) on a pixel-by-pixel basis. This tool is particularly well suited when you need to create a masking layer from the combination of several Boolean rasters, i.e. for constraint mapping applications. NoData values in any of the input images will result in a NoData pixel in the output image (<code>output</code>).</p>
+<h3 id="warning-6"><a class="header" href="#warning-6">Warning</a></h3>
+<p>Each of the input rasters must have the same spatial extent and number of rows and columns.</p>
+<h3 id="see-also-12"><a class="header" href="#see-also-12">See Also</a></h3>
+<p><code>sum_overlay</code>, <code>weighted_sum</code></p>
+<h3 id="python-api-12"><a class="header" href="#python-api-12">Python API</a></h3>
+<pre><code class="language-python">def multiply_overlay(self, input_rasters: List[Raster]) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="percent-equal-to"><a class="header" href="#percent-equal-to">Percent Equal To</a></h2>
+<p><strong>Function name:</strong> <code>percent_equal_to</code></p>
+<p>This tool calculates the percentage of a raster stack (<code>inputs</code>) that have cell values equal to an input <em>comparison</em> raster. The user must specify the name of the value raster (<code>comparison</code>), the names of the raster files contained in the stack, and an output raster file name (<code>output</code>). The tool, working on a cell-by-cell basis, will count the number of rasters within the stack that have the same grid cell value as the corresponding grid cell in the <em>comparison</em> raster. This count is then expressed as a percentage of the number of rasters contained within the stack and output. If any of the rasters within the stack contain the NoData value, the corresponding grid cell in the output raster will be assigned NoData.</p>
+<h3 id="warning-7"><a class="header" href="#warning-7">Warning</a></h3>
+<p>Each of the input rasters must have the same spatial extent and number of rows and columns.</p>
+<h3 id="see-also-13"><a class="header" href="#see-also-13">See Also</a></h3>
+<p><code>percent_greater_than</code>, <code>percent_less_than</code></p>
+<h3 id="python-api-13"><a class="header" href="#python-api-13">Python API</a></h3>
+<pre><code class="language-python">def percent_equal_to(self, input_rasters: List[Raster], comparison: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="percent-greater-than"><a class="header" href="#percent-greater-than">Percent Greater Than</a></h2>
+<p><strong>Function name:</strong> <code>percent_greater_than</code></p>
+<p>This tool calculates the percentage of a raster stack (<code>inputs</code>) that have cell values greater than an input <em>comparison</em> raster. The user must specify the name of the value raster (<code>comparison</code>), the names of the raster files contained in the stack, and an output raster file name (<code>output</code>). The tool, working on a cell-by-cell basis, will count the number of rasters within the stack with larger grid cell values greater than the corresponding grid cell in the <em>comparison</em> raster. This count is then expressed as a percentage of the number of rasters contained within the stack and output. If any of the rasters within the stack contain the NoData value, the corresponding grid cell in the output raster will be assigned NoData.</p>
+<h3 id="warning-8"><a class="header" href="#warning-8">Warning</a></h3>
+<p>Each of the input rasters must have the same spatial extent and number of rows and columns.</p>
+<h3 id="see-also-14"><a class="header" href="#see-also-14">See Also</a></h3>
+<p><code>percent_less_than</code>, <code>percent_equal_to</code></p>
+<h3 id="python-api-14"><a class="header" href="#python-api-14">Python API</a></h3>
+<pre><code class="language-python">def percent_greater_than(self, input_rasters: List[Raster], comparison: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="percent-less-than"><a class="header" href="#percent-less-than">Percent Less Than</a></h2>
+<p><strong>Function name:</strong> <code>percent_less_than</code></p>
+<p>This tool calculates the percentage of a raster stack (<code>inputs</code>) that have cell values less than an input <em>comparison</em> raster. The user must specify the name of the value raster (<code>comparison</code>), the names of the raster files contained in the stack, and an output raster file name (<code>output</code>). The tool, working on a cell-by-cell basis, will count the number of rasters within the stack with larger grid cell values less than the corresponding grid cell in the <em>comparison</em> raster. This count is then expressed as a percentage of the number of rasters contained within the stack and output. If any of the rasters within the stack contain the NoData value, the corresponding grid cell in the output raster will be assigned NoData.</p>
+<h3 id="warning-9"><a class="header" href="#warning-9">Warning</a></h3>
+<p>Each of the input rasters must have the same spatial extent and number of rows and columns.</p>
+<h3 id="see-also-15"><a class="header" href="#see-also-15">See Also</a></h3>
+<p><code>percent_greater_than</code>, <code>percent_equal_to</code></p>
+<h3 id="python-api-15"><a class="header" href="#python-api-15">Python API</a></h3>
+<pre><code class="language-python">def percent_less_than(self, input_rasters: List[Raster], comparison: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="pick-from-list"><a class="header" href="#pick-from-list">Pick From List</a></h2>
+<p><strong>Function name:</strong> <code>pick_from_list</code></p>
+<p>This tool outputs the cell value from a raster stack specified (<code>inputs</code>) by a position raster (<code>pos_input</code>). The user must specify the name of the position raster, the names of the raster files contained in the stack (i.e. group of rasters), and an output raster file name (<code>output</code>). The tool, working on a cell-by-cell basis, will assign the value to the output grid cell contained in the corresponding cell in the stack image in the position specified by the cell value in the position raster. Importantly, the positions raster should be in zero-based order. That is, the first image in the stack should be assigned the value zero, the second raster is assigned 1, and so on.</p>
+<p>At least two input rasters are required to run this tool. Each of the input rasters must share the same number of rows and columns and spatial extent. An error will be issued if this is not the case.</p>
+<h3 id="see-also-16"><a class="header" href="#see-also-16">See Also</a></h3>
+<p><code>count_if</code></p>
+<h3 id="python-api-16"><a class="header" href="#python-api-16">Python API</a></h3>
+<pre><code class="language-python">def pick_from_list(self, input_rasters: List[Raster], pos_input: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="power"><a class="header" href="#power">Power</a></h2>
+<p><strong>Function name:</strong> <code>power</code></p>
+<p>Experimental</p>
+<p>Raises the first raster to the power of the second on a cell-by-cell basis.</p>
+<p>raster math power legacy-port</p>
+<h3 id="parameters-4"><a class="header" href="#parameters-4">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input1</code>First input raster (path string or typed raster object).Required<code>input1.tif</code>
+<code>input2</code>Second input raster (path string or typed raster object).Required<code>input2.tif</code>
+<code>output</code>Optional output raster file path. If omitted, output remains in memory and is returned as a memory:// raster handle.Optional—</p>
+<h3 id="examples-4"><a class="header" href="#examples-4">Examples</a></h3>
+<p><em>Runs power on two DEM rasters and writes the result to dem_power.tif.</em>
+<code>wbe.power(input1='dem_a.tif', input2='dem_b.tif', output='dem_power.tif')</code></p>
+<hr />
+<h2 id="standard-deviation-overlay"><a class="header" href="#standard-deviation-overlay">Standard Deviation Overlay</a></h2>
+<p><strong>Function name:</strong> <code>standard_deviation_overlay</code></p>
+<p>This tool can be used to find the standard deviation of the values in each raster cell from a set of input rasters (<code>inputs</code>). NoData values in any of the input images will result in a NoData pixel in the output image (<code>output</code>).</p>
+<h3 id="warning-10"><a class="header" href="#warning-10">Warning</a></h3>
+<p>Each of the input rasters must have the same spatial extent and number of rows and columns.</p>
+<h3 id="see-also-17"><a class="header" href="#see-also-17">See Also</a></h3>
+<p><code>min_overlay</code>, <code>max_overlay</code></p>
+<h3 id="python-api-17"><a class="header" href="#python-api-17">Python API</a></h3>
+<pre><code class="language-python">def standard_deviation_overlay(self, input_rasters: List[Raster]) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="subtract"><a class="header" href="#subtract">Subtract</a></h2>
+<p><strong>Function name:</strong> <code>subtract</code></p>
+<p>Experimental</p>
+<p>Subtracts the second raster from the first on a cell-by-cell basis.</p>
+<p>raster math subtract legacy-port</p>
+<h3 id="parameters-5"><a class="header" href="#parameters-5">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input1</code>First input raster (path string or typed raster object).Required<code>input1.tif</code>
+<code>input2</code>Second input raster (path string or typed raster object).Required<code>input2.tif</code>
+<code>output</code>Optional output raster file path. If omitted, output remains in memory and is returned as a memory:// raster handle.Optional—</p>
+<h3 id="examples-5"><a class="header" href="#examples-5">Examples</a></h3>
+<p><em>Runs subtract on two DEM rasters and writes the result to dem_difference.tif.</em>
+<code>wbe.subtract(input1='dem_a.tif', input2='dem_b.tif', output='dem_difference.tif')</code></p>
+<hr />
+<h2 id="sum-overlay"><a class="header" href="#sum-overlay">Sum Overlay</a></h2>
+<p><strong>Function name:</strong> <code>sum_overlay</code></p>
+<p>This tool calculates the sum for each grid cell from a group of raster images (<code>inputs</code>). NoData values in any of the input images will result in a NoData pixel in the output image (<code>output</code>).</p>
+<h3 id="warning-11"><a class="header" href="#warning-11">Warning</a></h3>
+<p>Each of the input rasters must have the same spatial extent and number of rows and columns.</p>
+<h3 id="see-also-18"><a class="header" href="#see-also-18">See Also</a></h3>
+<p><code>weighted_sum</code>, <code>multiply_overlay</code></p>
+<h3 id="python-api-18"><a class="header" href="#python-api-18">Python API</a></h3>
+<pre><code class="language-python">def sum_overlay(self, input_rasters: List[Raster]) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="update-nodata-cells"><a class="header" href="#update-nodata-cells">Update Nodata Cells</a></h2>
+<p><strong>Function name:</strong> <code>update_nodata_cells</code></p>
+<p>This tool will assign the <em>NoData</em> valued cells in an input raster (<code>input1</code>) the values contained in the corresponding grid cells in a second input raster (<code>input2</code>). This operation is sometimes necessary because most other overlay operations exclude areas of <em>NoData</em> values from the analysis. This tool can be used when there is need to update the values of a raster within these missing data areas.</p>
+<h3 id="see-also-19"><a class="header" href="#see-also-19">See Also</a></h3>
+<p><code>IsNodata</code></p>
+<h3 id="python-api-19"><a class="header" href="#python-api-19">Python API</a></h3>
+<pre><code class="language-python">def update_nodata_cells(self, input1: Raster, input2: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="weighted-overlay"><a class="header" href="#weighted-overlay">Weighted Overlay</a></h2>
+<p><strong>Function name:</strong> <code>weighted_overlay</code></p>
+<p>This tool performs a weighted overlay on multiple input images. It can be used to combine multiple factors with varying levels of weight or relative importance. The WeightedOverlay tool is similar to the WeightedSum tool but is more powerful because it automatically converts the input factors to a common user-defined scale and allows the user to specify benefit factors and cost factors. A benefit factor is a factor for which higher values are more suitable. A cost factor is a factor for which higher values are less suitable. By default, WeightedOverlay assumes that input images are benefit factors, unless a cost value of 'true' is entered in the cost array. Constraints are absolute restriction with values of 0 (unsuitable) and 1 (suitable). This tool is particularly useful for performing multi-criteria evaluations (MCE).</p>
+<p>Notice that the algorithm will convert the user-defined factor weights internally such that the sum of the weights is always equal to one. As such, the user can specify the relative weights as decimals, percentages, or relative weightings (e.g. slope is 2 times more important than elevation, in which case the weights may not sum to 1 or 100).</p>
+<p>NoData valued grid cells in any of the input images will be assigned NoData values in the output image. The output raster is of the float data type and continuous data scale.</p>
+<h3 id="warning-12"><a class="header" href="#warning-12">Warning</a></h3>
+<p>Each of the input rasters must have the same spatial extent and number of rows and columns.</p>
+<h3 id="python-api-20"><a class="header" href="#python-api-20">Python API</a></h3>
+<pre><code class="language-python">def weighted_overlay(self, factors: List[Raster], weights: List[float], cost: List[Raster] = None, constraints: List[Raster] = None, scale_max: float = 1.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="weighted-sum"><a class="header" href="#weighted-sum">Weighted Sum</a></h2>
+<p><strong>Function name:</strong> <code>weighted_sum</code></p>
+<p>This tool performs a weighted-sum overlay on multiple input raster images. If you have a stack of rasters that you would like to sum, each with an equal weighting (1.0), then use the <code>sum_overlay</code> tool instead.</p>
+<h3 id="warning-13"><a class="header" href="#warning-13">Warning</a></h3>
+<p>Each of the input rasters must have the same spatial extent and number of rows and columns.</p>
+<h3 id="see-also-20"><a class="header" href="#see-also-20">See Also</a></h3>
+<p><code>sum_overlay</code></p>
+<h3 id="python-api-21"><a class="header" href="#python-api-21">Python API</a></h3>
+<pre><code class="language-python">def weighted_sum(self, input_rasters: List[Raster], weights: List[float]) -&gt; Raster:
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="raster-analysis.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="raster-distance-cost.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="raster-analysis.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="raster-distance-cost.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

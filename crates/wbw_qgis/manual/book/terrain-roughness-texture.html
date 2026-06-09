@@ -1,0 +1,299 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Roughness and Texture - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html" class="active"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="roughness-and-texture"><a class="header" href="#roughness-and-texture">Roughness and Texture</a></h1>
+<hr />
+<h2 id="average-normal-vector-angular-deviation"><a class="header" href="#average-normal-vector-angular-deviation">Average Normal Vector Angular Deviation</a></h2>
+<p><strong>Function name:</strong> <code>average_normal_vector_angular_deviation</code></p>
+<p>This tool characterizes the spatial distribution of the average normal vector angular deviation, a measure of surface roughness. Working in the field of 3D printing, Ko et al. (2016) defined a measure of surface roughness based on quantifying the angular deviations in the direction of the normal vector of a real surface from its ideal (i.e. smoothed) form. This measure of surface complexity is therefore in units of degrees. Specifically, roughness is defined in this study as the neighborhood-averaged difference in the normal vectors of the original DEM and a smoothed DEM surface. Smoothed surfaces are derived by applying a Gaussian blur of the same size as the neighborhood (<code>filter</code>).</p>
+<p>The <code>multiscale_roughness</code> tool calculates the same measure of surface roughness, except that it is designed to work with multiple spatial scales.</p>
+<h3 id="reference"><a class="header" href="#reference">Reference</a></h3>
+<p>Ko, M., Kang, H., ulrim Kim, J., Lee, Y., &amp; Hwang, J. E. (2016, July). How to measure quality of affordable 3D printing: Cultivating quantitative index in the user community. In International Conference on Human-Computer Interaction (pp. 116-121). Springer, Cham.</p>
+<p>Lindsay, J. B., &amp; Newman, D. R. (2018). Hyper-scale analysis of surface roughness. PeerJ Preprints, 6, e27110v1.</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>multiscale_roughness</code>, <code>spherical_std_dev_of_normals</code>, <code>circular_variance_of_aspect</code></p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def average_normal_vector_angular_deviation(self, dem: Raster, filter_size: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="circular-variance-of-aspect"><a class="header" href="#circular-variance-of-aspect">Circular Variance Of Aspect</a></h2>
+<p><strong>Function name:</strong> <code>circular_variance_of_aspect</code></p>
+<p>This tool can be used to calculate the circular variance (i.e. one minus the mean resultant length) of aspect for a digital elevation model (DEM). This is a measure of how variable slope aspect is within a local neighbourhood of a specified size (<code>filter</code>). <code>circular_variance_of_aspect</code> is therefore a measure of <strong>surface shape complexity</strong>, or texture. It will take a value of 0.0 for smooth sites and near 1.0 in areas of high surface roughness or complex topography.</p>
+<p>The local neighbourhood size (<code>filter</code>) must be any odd integer equal to or greater than three. Grohmann et al. (2010) found that vector dispersion, a related measure of angular variance, increases monotonically with scale. This is the result of the angular dispersion measure integrating (accumulating) all of the surface variance of smaller scales up to the test scale. A more interesting scale relation can therefore be estimated by isolating the amount of surface complexity associated with specific scale ranges. That is, at large spatial scales, the metric should reflect the texture of large-scale landforms rather than the accumulated complexity at all smaller scales, including microtopographic roughness. As such, <em><strong>this tool normalizes the surface complexity of scales that are smaller than the filter size by applying Gaussian blur</strong></em> (with a standard deviation of one-third the filter size) to the DEM prior to calculating <code>circular_variance_of_aspect</code>. In this way, the resulting distribution is able to isolate and highlight the surface shape complexity associated with landscape features of a similar scale to that of the filter size.</p>
+<p>This tool makes extensive use of <code>integral images</code> (i.e. summed-area tables) and parallel processing to ensure computational efficiency. It may, however, require substantial memory resources when applied to larger DEMs.</p>
+<h3 id="references"><a class="header" href="#references">References</a></h3>
+<p>Grohmann, C. H., Smith, M. J., &amp; Riccomini, C. (2010). Multiscale analysis of topographic surface roughness in the Midland Valley, Scotland. <em>IEEE Transactions on Geoscience and Remote Sensing</em>, 49(4), 1200-1213.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>aspect</code>, <code>spherical_std_dev_of_normals</code>, <code>multiscale_roughness</code>, <code>edge_density</code>, <code>surface_area_ratio</code>, <code>ruggedness_index</code></p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def circular_variance_of_aspect(self, dem: Raster, filter_size: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="edge-density"><a class="header" href="#edge-density">Edge Density</a></h2>
+<p><strong>Function name:</strong> <code>edge_density</code></p>
+<p>This tool calculates the density of edges, or breaks-in-slope within an input digital elevation model (DEM). A break-in-slope occurs between two neighbouring grid cells if the angular difference between their normal vectors is greater than a user-specified threshold value (<code>norm_diff</code>). <code>edge_density</code> calculates the proportion of edge cells within the neighbouring window, of square filter dimension <code>filter</code>, surrounding each grid cell. Therefore, <code>EdgeDensity</code>is a measure of how complex the topographic surface is within a local neighbourhood. It is therefore a measure of topographic texture. It will take a value near 0.0 for smooth sites and 1.0 in areas of high surface roughness or complex topography.</p>
+<p>The distribution of <code>edge_density</code> is highly dependent upon the value of the <code>norm_diff</code> used in the calculation. This threshold may require experimentation to find an appropriate value and is likely dependent upon the topography and source data. Nonetheless, experience has shown that <code>edge_density</code> provides one of the best measures of surface texture of any of the available roughness tools.</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>circular_variance_of_aspect</code>, <code>multiscale_roughness</code>, <code>surface_area_ratio</code>, <code>ruggedness_index</code></p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def edge_density(self, dem: Raster, filter_size: int = 11, normal_diff_threshold: float = 5.0, z_factor: float = 1.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="ruggedness-index"><a class="header" href="#ruggedness-index">Ruggedness Index</a></h2>
+<p><strong>Function name:</strong> <code>ruggedness_index</code></p>
+<p>The terrain ruggedness index (TRI) is a measure of local topographic relief. The TRI calculates the root-mean-square-deviation (RMSD) for each grid cell in a digital elevation model (DEM), calculating the residuals (i.e. elevation differences) between a grid cell and its eight neighbours. Notice that, unlike the output of this tool, the original Riley et al. (1999) TRI did not normalize for the number of cells in the local window (i.e. it is a root-square-deviation only). However, using the mean has the advantage of allowing for the varying number of neighbouring cells along the grid edges and in areas bordering NoData cells. This modification does however imply that the output of this tool cannot be directly compared with the index ranges of level to extremely rugged terrain provided in Riley et al. (1999)</p>
+<h3 id="reference-1"><a class="header" href="#reference-1">Reference</a></h3>
+<p>Riley, S. J., DeGloria, S. D., and Elliot, R. (1999). Index that quantifies topographic heterogeneity. <em>Intermountain Journal of Sciences</em>, 5(1-4), 23-27.</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>relative_topographic_position</code>, <code>DevFromMeanElev</code></p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def ruggedness_index(self, input: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="spherical-std-dev-of-normals"><a class="header" href="#spherical-std-dev-of-normals">Spherical Std Dev Of Normals</a></h2>
+<p><strong>Function name:</strong> <code>spherical_std_dev_of_normals</code></p>
+<p>This tool can be used to calculate the spherical standard deviation of the distribution of surface normals for an input digital elevation model (DEM; <code>dem</code>). This is a measure of the angular dispersion of the surface normal vectors within a local neighbourhood of a specified size (<code>filter</code>). <code>spherical_std_dev_of_normals</code> is therefore a measure of surface shape complexity, texture, and roughness. The <code> spherical standard deviation</code> (<em>s</em>) is defined as:</p>
+<p><em>s</em> = √[-2ln(<em>R</em> / <em>N</em>)] × 180 / π</p>
+<p>where <em>R</em> is the resultant vector length and <em>N</em> is the number of unit normal vectors within the local neighbourhood. <em>s</em> is measured in degrees and is zero for simple planes and increases infinitely with increasing surface complexity or roughness. Note that this formulation of the spherical standard deviation assumes an underlying wrapped normal distribution.</p>
+<p>The local neighbourhood size (<code>filter</code>) must be any odd integer equal to or greater than three. Grohmann et al. (2010) found that vector dispersion, a related measure of angular dispersion, increases monotonically with scale. This is the result of the angular dispersion measure integrating (accumulating) all of the surface variance of smaller scales up to the test scale. A more interesting scale relation can therefore be estimated by isolating the amount of surface complexity associated with specific scale ranges. That is, at large spatial scales, <em>s</em> should reflect the texture of large-scale landforms rather than the accumulated complexity at all smaller scales, including microtopographic roughness. As such, <em><strong>this tool normalizes the surface complexity of scales that are smaller than the filter size by applying Gaussian blur</strong></em> (with a standard deviation of one-third the filter size) to the DEM prior to calculating <em>R</em>. In this way, the resulting distribution is able to isolate and highlight the surface shape complexity associated with landscape features of a similar scale to that of the filter size.</p>
+<p>This tool makes extensive use of <code>integral images</code> (i.e. summed-area tables) and parallel processing to ensure computational efficiency. It may, however, require substantial memory resources when applied to larger DEMs.</p>
+<h3 id="references-1"><a class="header" href="#references-1">References</a></h3>
+<p>Grohmann, C. H., Smith, M. J., &amp; Riccomini, C. (2010). Multiscale analysis of topographic surface roughness in the Midland Valley, Scotland. <em>IEEE Transactions on Geoscience and Remote Sensing</em>, 49(4), 1200-1213.</p>
+<p>Hodgson, M. E., and Gaile, G. L. (1999). A cartographic modeling approach for surface orientation-related applications. <em>Photogrammetric Engineering and Remote Sensing</em>, 65(1), 85-95.</p>
+<p>Lindsay J. B., Newman* D. R., Francioni, A. 2019. Scale-optimized surface roughness for topographic analysis. <em>Geosciences</em>,  9(7) 322. DOI: 10.3390/geosciences9070322.</p>
+<h3 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h3>
+<p><code>circular_variance_of_aspect</code>, <code>multiscale_roughness</code>, <code>edge_density</code>, <code>surface_area_ratio</code>, <code>ruggedness_index</code></p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def spherical_std_dev_of_normals(self, dem: Raster, filter_size: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="standard-deviation-of-slope"><a class="header" href="#standard-deviation-of-slope">Standard Deviation Of Slope</a></h2>
+<p><strong>Function name:</strong> <code>standard_deviation_of_slope</code></p>
+<p>Calculates the standard deviation of slope from an input DEM, a metric of roughness described by Grohmann et al., (2011).</p>
+<h3 id="python-api-5"><a class="header" href="#python-api-5">Python API</a></h3>
+<pre><code class="language-python">def standard_deviation_of_slope(self, dem: Raster, filter_size: int = 11, z_factor: float = 1.0) -&gt; Raster:
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="terrain-visibility.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="terrain-landform-indices.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="terrain-visibility.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="terrain-landform-indices.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,363 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>I/O and Data Management - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html" class="active"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="io-and-data-management"><a class="header" href="#io-and-data-management">I/O and Data Management</a></h1>
+<hr />
+<h2 id="ascii-to-las"><a class="header" href="#ascii-to-las">Ascii To LAS</a></h2>
+<p><strong>Function name:</strong> <code>ascii_to_las</code></p>
+<p>This tool can be used to convert one or more ASCII files, containing LiDAR point data, into LAS files. The user must specify the name(s) of the input ASCII file(s) (<code>inputs</code>). Each input file will have a correspondingly named output file with a <code>.las</code> file extension. The output point data, each on a separate line, will take the format:</p>
+<p><code>x,y,z,intensity,class,return,num_returns" </code>  ValueInterpretation xx-coordinate yy-coordinate zelevation iintensity value cclassification rnreturn number nrnumber of returns timeGPS time sascan angle rred bblue ggreen</p>
+<p>The <code>x</code>, <code>y</code>, and <code>z</code> patterns must always be specified. If the <code>rn</code> pattern is used, the <code>nr</code> pattern must also be specified. Examples of valid pattern string include:</p>
+<p><code>'x,y,z,i' 'x,y,z,i,rn,nr' 'x,y,z,i,c,rn,nr,sa' 'z,x,y,rn,nr' 'x,y,z,i,rn,nr,r,g,b' </code> Use the <code>las_to_ascii</code> tool to convert a LAS file into a text file containing LiDAR point data.</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>las_to_ascii</code></p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def ascii_to_las(self, input_ascii_files: List[str], pattern: str, epsg_code: int) -&gt; None:
+</code></pre>
+<hr />
+<h2 id="las-to-ascii"><a class="header" href="#las-to-ascii">LAS To Ascii</a></h2>
+<p><strong>Function name:</strong> <code>las_to_ascii</code></p>
+<p>This tool can be used to convert one or more LAS file, containing LiDAR data, into ASCII files. The user must specify the name(s) of the input LAS file(s) (<code>inputs</code>). Each input file will have a correspondingly named output file with a <code>.csv</code> file extension. CSV files are comma separated value files and contain tabular data with each column corresponding to a field in the table and each row a point value. Fields are separated by commas in the ASCII formatted file. The output point data, each on a separate line, will take the format:</p>
+<p><code>X,Y,Z,INTENSITY,CLASS,RETURN,NUM_RETURN,SCAN_ANGLE </code> If the LAS file has a point format that contains RGB data, the final three columns will contain the RED, GREEN, and BLUE values respectively. Use the <code>ascii_to_las</code> tool to convert a text file containing LiDAR point data into a LAS file.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>ascii_to_las</code></p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def las_to_ascii(self, input_lidar: Optional[Lidar]) -&gt; None:
+</code></pre>
+<hr />
+<h2 id="las-to-shapefile"><a class="header" href="#las-to-shapefile">LAS To Shapefile</a></h2>
+<p><strong>Function name:</strong> <code>las_to_shapefile</code></p>
+<p>This tool converts one or more LAS files into a POINT vector. When the input parameter is not specified, the tool grids all LAS files contained within the working directory. The attribute table of the output Shapefile will contain fields for the z-value, intensity, point class, return number, and number of return.</p>
+<p>This tool can be used in place of the <code>LasToMultipointShapefile</code> tool when the number of points are relatively low and when the desire is to represent more than simply the x,y,z position of points. Notice however that because each point in the input LAS file will be represented as a separate record in the output Shapefile, the output file will be many time larger than the equivalent output of the <code>LasToMultipointShapefile</code> tool. There is also a practical limit on the total number of records that can be held in a single Shapefile and large LAS files approach this limit. In these cases, the <code>LasToMultipointShapefile</code> tool should be preferred instead.</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>LasToMultipointShapefile</code></p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def las_to_shapefile(self, input_lidar: Optional[Lidar], output_multipoint: bool = False) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="lidar-colourize"><a class="header" href="#lidar-colourize">LiDAR Colourize</a></h2>
+<p><strong>Function name:</strong> <code>lidar_colourize</code></p>
+<p>This tool can be used to add red-green-blue (RGB) colour values to the points contained within an input LAS file (<code>in_lidar</code>), based on the pixel values of an overlapping input colour image (<code>in_image</code>). Ideally, the image has been acquired at the same time as the LiDAR point cloud. If this is not the case, one may expect that transient objects (e.g. cars) in both input data sets will be incorrectly coloured. The input image should overlap in extent with the LiDAR data set and the two data sets should share the same projection. You may use the <code>lidar_tile_footprint</code> tool to determine the spatial extent of the LAS file.</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>colourize_based_on_class</code>, <code>colourize_based_on_point_returns</code>, <code>lidar_tile_footprint</code></p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def lidar_colourize(self, in_lidar: Lidar, in_image: Raster) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="lidar-join"><a class="header" href="#lidar-join">LiDAR Join</a></h2>
+<p><strong>Function name:</strong> <code>lidar_join</code></p>
+<p>This tool can be used to merge multiple LiDAR LAS files into a single output LAS file. Due to their large size, LiDAR data sets are often tiled into smaller, non-overlapping tiles. Sometimes it is more convenient to combine multiple tiles together for data processing and <code>lidar_join</code> can be used for this purpose.</p>
+<h3 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h3>
+<p><code>lidar_tile</code></p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def lidar_join(self, inputs: List[Lidar]) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="lidar-shift"><a class="header" href="#lidar-shift">LiDAR Shift</a></h2>
+<p><strong>Function name:</strong> <code>lidar_shift</code></p>
+<p>This tool can be used to shift the x,y,z coordinates of points within a LiDAR file. The user must specify  the name of the input file (<code>input</code>) and the output file (<code>output</code>). Additionally, the user must specify the x,y,z shift values (<code>x_shift</code>, <code>y_shift</code>, <code>z_shift</code>). At least one non-zero shift value is needed to run the tool. Notice that shifting the x,y,z coordinates of LiDAR points is also possible using the  <code>modify_lidar</code> tool, which can also be used for more sophisticated point property manipulation (e.g. rotations).</p>
+<h3 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h3>
+<p><code>modify_lidar</code>, <code>lidar_elevation_slice</code>, <code>height_above_ground</code></p>
+<h3 id="python-api-5"><a class="header" href="#python-api-5">Python API</a></h3>
+<pre><code class="language-python">def lidar_shift(self, input: Lidar, x_shift: float = 0.0, y_shift: float = 0.0, z_shift: float = 0.0) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="lidar-tile"><a class="header" href="#lidar-tile">LiDAR Tile</a></h2>
+<p><strong>Function name:</strong> <code>lidar_tile</code></p>
+<p>single LAS file. The user must specify the parameter of the tile grid, including its origin (<code>origin_x</code> and <code>origin_y</code>) and the tile width and height (<code>width</code> and <code>height</code>). Tiles containing fewer points than specified in the <code>min_points</code> parameter will not be output. This can be useful when tiling terrestrial LiDAR datasets because the low point density at the edges of the point cloud (i.e. most distant from the scan station) can result in poorly populated tiles containing relatively few points.</p>
+<h3 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h3>
+<p><code>lidar_join</code>, <code>lidar_tile_footprint</code></p>
+<h3 id="python-api-6"><a class="header" href="#python-api-6">Python API</a></h3>
+<pre><code class="language-python">def lidar_tile(self, input_lidar: Lidar, tile_width: float = 1000.0, tile_height: float = 1000.0, origin_x: float = 0.0, origin_y: float = 0.0, min_points_in_tile: int = 2, output_laz_format: bool = True) -&gt; None:
+</code></pre>
+<hr />
+<h2 id="lidar-tophat-transform"><a class="header" href="#lidar-tophat-transform">LiDAR Tophat Transform</a></h2>
+<p><strong>Function name:</strong> <code>lidar_tophat_transform</code></p>
+<p>This tool performs a white <code>top-hat transform</code> on a LiDAR point cloud (<code>input</code>). A top-hat transform is a common digital image processing operation used for various tasks, such as feature extraction, background equalization, and image enhancement. When applied to a LiDAR point cloud, the white top-hat transform provides an estimate of <em>height above ground</em>, which is useful for modelling the vegetation canopy.</p>
+<p>As an example, notice that the input point cloud on the top of the image below has a substantial amount of topographic variability. After applying the top-hat transform (bottom point cloud), all of this topographic  variability has been removed and point elevations values effectively become height above ground.</p>
+<p>The white top-hat transform is defined as the difference between a point's original elevation and its <code>opening</code>. The opening operation can be thought of as the local neighbourhood maximum of a previous local minimum surface. The user must specify the size of the neighbourhood using the <code>radius</code> parameter. Setting this parameter can require some experimentation. Generally, it is appropriate to use a radius of a few meters in non-urban landscapes. However, in urban areas, the radius may need to be set much larger, reflective of the size of the largest building.</p>
+<p>If the input point cloud already has ground points classified, it may be better to use the <code>height_above_ground</code>, which simply measures the difference in height between each point and its nearest ground classified point within the search radius.</p>
+<h3 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h3>
+<p><code>height_above_ground</code>, <code>tophat_transform</code>, <code>closing</code>, <code>opening</code></p>
+<h3 id="python-api-7"><a class="header" href="#python-api-7">Python API</a></h3>
+<pre><code class="language-python">def lidar_tophat_transform(self, input: Lidar, search_radius: float) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="recover-flightline-info"><a class="header" href="#recover-flightline-info">Recover Flightline Info</a></h2>
+<p><strong>Function name:</strong> <code>recover_flightline_info</code></p>
+<h3 id="description"><a class="header" href="#description">Description</a></h3>
+<p>Raw airborne LiDAR data are collected along flightlines and multiple flightlines are typically merged into square tiles to simplify data handling and processing. Commonly the <em>Point Source ID</em> attribute is used to store information about the origin flightline of each point. However, sometimes this information is lost (e.g. during data format conversion) or is omitted from some data sets. This tool can be used to identify groups of points within a LiDAR file (<code>input</code>) that belong to the same flightline.</p>
+<p>The tool works by sorting points based on their timestamp and then identifying points for which the time difference from the previous point is greater than a user-specified maximum time difference (<code>max_time_diff</code>), which are deemed to be the start of a different flightline. The operational assumption is that the time between consecutive points within a flightline is usually quite small (usually a fraction of a second), while the time between points in different flightlines is often relatively large (consider the aircraft turning time needed to take multiple passes of the study area). By default the maximum time difference is set to 5.0 seconds, although it may be necessary to increase this value depending on the characteristics of a particular data set.</p>
+<p>The tool works on individual LiDAR tiles and the flightline identifiers will range from 0 to the number of flightlines detected within the tile, minus one. Therefore, the flightline identifier created by this tool will not extend beyond the boundaries of the tile and into adjacent tiles. That is, a flightline that extends across multiple adjacent LiDAR tiles may have different flightline identifiers used in each tile. The identifiers are intended to discriminate between flighlines within a single file. The flightline identifier value can be optionally assigned to the <em>Point Source ID</em> point attribute (<code>pt_src_id</code>), the <em>User Data</em> point attribute (<code>user_data</code>), and the red-green-blue point colour data (<code>rgb</code>) within the output file (<code>output</code>). At least one of these output options must be selected and it is possible to select multiple output options. Notice that if the input file contains any information within the selected output fields, the original information will be over-written, and therefore lost--of course, it will remain unaltered within the input file, which this tool does not modify. If the input file does not contain RGB colour data and the <code>rgb</code> output option is selected, the output file point format will be altered from the input file to accommodate the addition of RGB colour data. Flightlines are assigned random colours. The LAS <em>User Data</em> point attribute is stored as a single byte and, therefore, if this output option is selected and the input file contains more than 256 flightlines, the tool will assign the same flightline identifier to more than one flightline. It is very rare for this condition to be the case in a typical 1 km-square tiles. The <em>Point Source ID</em> attribute is stored as a 16-bit integer and can therefore store 65,536 unique flightline identifiers.</p>
+<p>Outputting flightline information within the colour data point attribute can be useful for visualizing areas of flightline overlap within a file. This can be an important quality assurance/quality control (QA/QC) step after acquiring a new LiDAR data set.</p>
+<p>Please note that because this tool sorts points by their timestamps, the order of points in the output file may not match that of the input file.</p>
+<h3 id="see-also-8"><a class="header" href="#see-also-8">See Also</a></h3>
+<p><code>flightline_overlap</code>, <code>find_flightline_edge_points</code>, <code>LidarSortByTime</code></p>
+<h3 id="python-api-8"><a class="header" href="#python-api-8">Python API</a></h3>
+<pre><code class="language-python">def recover_flightline_info(self, input: Lidar, max_time_diff: float = 5.0, pt_src_id: bool = False, user_data: bool = False, rgb: bool = False) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="select-tiles-by-polygon"><a class="header" href="#select-tiles-by-polygon">Select Tiles By Polygon</a></h2>
+<p><strong>Function name:</strong> <code>select_tiles_by_polygon</code></p>
+<p>This tool copies LiDAR tiles overlapping with a polygon into an output directory. In actuality, the tool performs point-in-polygon operations, using the four corner points, the center point, and the four mid-edge points of each LiDAR tile bounding box and the polygons. This representation of overlapping geometry aids with performance. This approach generally works well when the polygon size is large relative to the LiDAR tiles. If, however, the input polygon is small relative to the tile size, this approach may miss some copying some tiles. It is advisable to buffer the polygon if this occurs.</p>
+<h3 id="see-also-9"><a class="header" href="#see-also-9">See Also</a></h3>
+<p><code>lidar_tile_footprint</code></p>
+<h3 id="python-api-9"><a class="header" href="#python-api-9">Python API</a></h3>
+<pre><code class="language-python">def select_tiles_by_polygon(self, input_directory: str, output_directory: str, polygons: Vector) -&gt; None:
+</code></pre>
+<hr />
+<h2 id="sort-lidar"><a class="header" href="#sort-lidar">Sort LiDAR</a></h2>
+<p><strong>Function name:</strong> <code>sort_lidar</code></p>
+<h3 id="description-1"><a class="header" href="#description-1">Description</a></h3>
+<p>This tool can be used to sort the points in an input LiDAR file (<code>input</code>) based on their properties with respect to one or more sorting criteria (<code>criteria</code>). The sorting criteria may include: the x, y or z coordinates (<code>x</code>, <code>y</code>, <code>z</code>), the intensity data (<code>intensity</code>), the point class value (<code>class</code>), the point user data field (<code>user_data</code>), the return number (<code>ret_num</code>), the point source ID (<code>point_source_id</code>), the point scan angle data (<code>scan_angle</code>), the scanner channel (<code>scanner_channel</code>; LAS 1.4 datasets only), and the acquisition time (<code>time</code>). The following is an example of a complex sorting criteria statement that includes multiple criteria:</p>
+<p><code>x 100.0, y 100.0, z 10.0, scan_angle</code></p>
+<p>Criteria should be separated by a comma, semicolon, or pipe (|). Each criteria may have an associated bin value. In the example above, point <code>x</code> values are sorted into bins of 100 m, which are then sorted by <code>y</code> values into bins of 100 m, and sorted by point <code>z</code> values into bins of 10 m, and finally sorted by their <code>scan_angle</code>.</p>
+<p>Sorting point values can have a significant impact on the compression rate when using certain compressed LiDAR data formats (e.g. LAZ, zLidar). Sorting values can also improve the visualization speed in some rendering software.</p>
+<p>Note that if the user does not specify the optional input LiDAR file, the tool will search for all valid LiDAR (*.las, *.laz, *.zlidar) files contained within the current working directory. This feature can be useful for processing a large number of LiDAR files in batch mode. When this batch mode is applied, the output file names will be the same as the input file names but with a '_sorted' suffix added to the end.</p>
+<h3 id="python-api-10"><a class="header" href="#python-api-10">Python API</a></h3>
+<pre><code class="language-python">def sort_lidar(self, sort_criteria: str, input_lidar: Optional[Lidar]) -&gt; Optional[Lidar]:
+</code></pre>
+<hr />
+<h2 id="split-lidar"><a class="header" href="#split-lidar">Split LiDAR</a></h2>
+<p><strong>Function name:</strong> <code>split_lidar</code></p>
+<h3 id="description-2"><a class="header" href="#description-2">Description</a></h3>
+<p>This tool can be used to split an input LiDAR file (<code>input</code>) into a series of output files, placing points into each output based on their properties with respect to a grouping criterion (<code>criterion</code>). Points can be grouped based on a specified the number of points in the output file (<code>num_pts</code>; note the last file may contain fewer points), the x, y or z coordinates (<code>x</code>, <code>y</code>, <code>z</code>), the intensity data (<code>intensity</code>), the point class value (<code>class</code>), the point user data field (<code>user_data</code>), the point source ID (<code>point_source_id</code>), the point scan angle data (<code>scan_angle</code>), and the acquisition time (<code>time</code>). Points are binned into groupings based on a user-specified interval value (<code>interval</code>). For example, if an interval of 50.0 is used with the <code>z</code> criterion, a series of files will be output that are elevation bands of 50 m. The user may also optionally specify the minimum number of points needed before a particular grouping file is saved (<code>min_pts</code>). The interval value is not used for the <code>class</code> and <code>point_source_id</code> criteria.</p>
+<p>With this tool, a single input file can generate many output files. The names of the output files will be reflective of the point attribute used for the grouping and the bin. For example, running the tool with the on an input file named my_file.las using <code>intensity</code> criterion and with an interval of 1000 may produce the following files:</p>
+<ul>
+<li>my_file_intensity0.las</li>
+<li>my_file_intensity1000.las</li>
+<li>my_file_intensity2000.las</li>
+<li>my_file_intensity3000.las</li>
+<li>my_file_intensity4000.las</li>
+</ul>
+<p>Where the number after the attribute (intensity, in this case) reflects the lower boundary of the bin. Thus, the first file contains all of the input points with intensity values from 0 to just less than 1000.</p>
+<p>Note that if the user does not specify the optional input LiDAR file, the tool will search for all valid LiDAR (*.las, *.laz, *.zlidar) files contained within the current working directory. This feature can be useful for processing a large number of LiDAR files in batch mode. When this batch mode is applied, the output file names will be the same as the input file names but with a suffix added to the end reflective of the split criterion and value (see above).</p>
+<h3 id="see-also-10"><a class="header" href="#see-also-10">See Also</a></h3>
+<p><code>sort_lidar</code>, <code>filter_lidar</code>, <code>modify_lidar</code>, <code>lidar_elevation_slice</code></p>
+<h3 id="python-api-11"><a class="header" href="#python-api-11">Python API</a></h3>
+<pre><code class="language-python">def split_lidar(self, split_criterion: str, input_lidar: Optional[Lidar], interval: float = 5.0, min_pts: int = 5) -&gt; None:
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="lidar-processing.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="lidar-filtering-classification.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="lidar-processing.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="lidar-filtering-classification.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

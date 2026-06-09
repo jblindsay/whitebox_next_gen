@@ -1,0 +1,318 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Landform Indices - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html" class="active"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="landform-indices"><a class="header" href="#landform-indices">Landform Indices</a></h1>
+<hr />
+<h2 id="elev-relative-to-min-max"><a class="header" href="#elev-relative-to-min-max">Elev Relative To Min Max</a></h2>
+<p><strong>Function name:</strong> <code>elev_relative_to_min_max</code></p>
+<p>This tool can be used to express the elevation of a grid cell in a digital elevation model (DEM) as a percentage of the relief between the DEM minimum and maximum values. As such, it provides a basic measure of relative topographic position.</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>elev_relative_to_watershed_min_max</code>, <code>elevation_above_stream</code>, <code>ElevAbovePit</code></p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def elev_relative_to_min_max(self, dem: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="geomorphons"><a class="header" href="#geomorphons">Geomorphons</a></h2>
+<p><strong>Function name:</strong> <code>geomorphons</code></p>
+<p>This tool can be used to perform a geomorphons landform classification based on an input digital elevation model (<code>dem</code>). The geomorphons concept is based on line-of-sight analysis for the eight topographic profiles in the cardinal directions surrounding each grid cell in the input DEM. The relative sizes of the zenith angle of a profile's maximum elevation angle (i.e. horizon angle) and the nadir angle of a profile's minimum elevation angle are then used to generate a ternary (base-3) digit: 0 when the nadir angle is less than the zenith angle, 1 when the two angles differ by less than a user-defined flatness threshold (<code>threshold</code>), and 2 when the nadir angle is greater than the zenith angle. A ternary number is then derived from the digits assigned to each of the eight profiles, with digits sequenced counter-clockwise from east. This ternary number forms the  geomorphons code assigned to the grid cell. There are 38 = 6561 possible codes, although many of these codes are equivalent geomorphons through rotations and reflections. Some of the remaining geomorphons also rarely if ever occur in natural topography. Jasiewicz et al. (2013) identified 10 common landform types by reclassifying related geomorphons codes. The user may choose to output these common forms (<code>forms</code>) rather than the the raw ternary code. These landforms include:  ValueLandform Type 1Flat 2Peak (summit) 3Ridge 4Shoulder 5Spur (convex) 6Slope 7Hollow (concave) 8Footslope 9Valley 10Pit (depression)</p>
+<p>One of the main advantages of the geomrophons method is that, being based on minimum/maximum elevation angles, the scale used to estimate the landform type at a site adapts to the surrounding terrain. In principle, choosing a large value of search distance (<code>search</code>) should result in identification of a landform element regardless of its scale.</p>
+<p>An experimental feature has been added to correct for global inclination. Global inclination biases the flatness threshold angle becasue it is measured relative to the z-axis, especially in locally flat areas. Including the <code>residuals</code> flag "flattens" the input by converting elevation to residuals of a 2-d linear model.</p>
+<h3 id="reference"><a class="header" href="#reference">Reference</a></h3>
+<p>Jasiewicz, J., and Stepinski, T. F. (2013). Geomorphons — a pattern recognition approach to classification and mapping of landforms. Geomorphology, 182, 147-156.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>PennockLandformClass</code></p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def geomorphons(self, dem: Raster, search_distance: int = 1, flatness_threshold: float = 1.0, flatness_distance: int = 0, skip_distance: int = 0, output_forms: bool = True, analyze_residuals: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="hypsometric-analysis"><a class="header" href="#hypsometric-analysis">Hypsometric Analysis</a></h2>
+<p><strong>Function name:</strong> <code>hypsometric_analysis</code></p>
+<p>This tool can be used to derive the hypsometric curve, or area-altitude curve, of one or more input digital elevation models (DEMs) ('inputs'). A hypsometric curve is a histogram or cumulative distribution function of elevations in a geographical area.</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>SlopeVsElevationPlot</code></p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def hypsometric_analysis(self, dem_rasters: List[Raster], output_html_file: str, watershed_rasters: List[Raster] = None) -&gt; None:
+</code></pre>
+<hr />
+<h2 id="multiscale-topographic-position-class"><a class="header" href="#multiscale-topographic-position-class">Multiscale Topographic Position Class</a></h2>
+<p><strong>Function name:</strong> <code>multiscale_topographic_position_class</code></p>
+<h3 id="description"><a class="header" href="#description">Description</a></h3>
+<p>This tool classifies each DEM grid cell into one of nine multiscale topographic position classes by combining local- and broad-scale maximum standardized elevation deviation (DEVmax) responses. The tool computes DEVmax internally for two user-defined scale ranges and then applies ternary thresholds to both responses. The broad-scale response separates <em>lowland</em>, <em>intermediate</em>, and <em>upland</em> settings, while the local-scale response separates <em>hollow</em>, <em>mid-position</em>, and <em>knoll</em> settings.</p>
+<p>The combined output classes are: 0 Lowland hollow, 1 Lowland mid-position, 2 Lowland knoll, 3 Intermediate hollow, 4 Intermediate mid-position, 5 Intermediate knoll, 6 Upland hollow, 7 Upland mid-position, and 8 Upland knoll. The output raster is categorical and is intended to be displayed using a fixed nine-class palette.</p>
+<p>The local and broad scale ranges are each defined by minimum scale, maximum scale, and step size parameters. Thresholds (<code>local_threshold</code> and <code>broad_threshold</code>) control the ternary classification of the corresponding DEVmax mosaics. The optional <code>min_patch_size</code> parameter can be used to suppress very small mapped patches after classification. The optional <code>output_confidence</code> raster stores a class confidence value in the range [0, 1] based on the margin from the classification thresholds.</p>
+<h3 id="reference-1"><a class="header" href="#reference-1">Reference</a></h3>
+<p>Lindsay, J. B., Cockburn, J. M. H., and Russell, H. A. J. (2015). An integral image approach to performing multi-scale topographic position analysis. Geomorphology, 245, 51-61.</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>max_elevation_deviation</code>, <code>multiscale_topographic_position_image</code></p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def multiscale_topographic_position_class(self, input: Raster, local_min_scale: int = 5, local_max_scale: int = 80, local_step_size: int = 1, broad_min_scale: int = 500, broad_max_scale: int = 2000, broad_step_size: int = 20, local_threshold: float = 0.5, broad_threshold: float = 0.5, min_patch_size: int = 0, output_path: Optional[str] = None, output_confidence_path: Optional[str] = None, callback: Any = None) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="pennock-landform-classification"><a class="header" href="#pennock-landform-classification">Pennock Landform Classification</a></h2>
+<p><strong>Function name:</strong> <code>pennock_landform_classification</code></p>
+<p>Tool can be used to perform a simple landform classification based on measures of slope gradient and curvature derived from a user-specified digital elevation model (DEM). The classification scheme is based on the method proposed by Pennock, Zebarth, and DeJong (1987). The scheme divides a landscape into seven element types, including: convergent footslopes (CFS), divergent footslopes (DFS), convergent shoulders (CSH), divergent shoulders (DSH), convergent backslopes (CBS), divergent backslopes (DBS), and level terrain (L). The output raster image will record each of these base element types as:</p>
+<p>Element Type  |  Code  ------------- | -------  CFS           |  1  DFS           |  2  CSH           |  3  DSH           |  4  CBS           |  5  DBS           |  6  L             |  7</p>
+<p>The definition of each of the elements, based on the original Pennock et al. (1987) paper, is as follows:  PROFILEGRADIENTPLANElement Concave ( -0.10)High &gt;3.0Concave 0.0CFS Concave ( -0.10)High &gt;3.0Convex &gt;0.0DFS Convex (&gt;0.10)High &gt;3.0Concave 0.0CSH Convex (&gt;0.10)High &gt;3.0Convex &gt;0.0DSH Linear (-0.10...0.10)High &gt;3.0Concave 0.0CBS Linear (-0.10...0.10)High &gt;3.0Convex &gt;0.0DBS</p>
+<p>Where PROFILE is profile curvature, GRADIENT is the slope gradient, and PLAN is the plan curvature. Note that these values are likely landscape and data specific and can be adjusted by the user. Landscape classification schemes that are based on terrain attributes are highly sensitive to short-range topographic variability (i.e. roughness) and can benefit from pre-processing the DEM with a smoothing filter to reduce the effect of surface roughness and emphasize the longer-range topographic signal. The <code>feature_preserving_smoothing</code> tool offers excellent performance in smoothing DEMs without removing the sharpness of breaks-in-slope.</p>
+<h3 id="reference-2"><a class="header" href="#reference-2">Reference</a></h3>
+<p>Pennock, D.J., Zebarth, B.J., and DeJong, E. (1987) Landform classification and soil distribution in hummocky terrain, Saskatchewan, Canada. Geoderma, 40: 297-315.</p>
+<h3 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h3>
+<p><code>feature_preserving_smoothing</code></p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def pennock_landform_classification(self, dem: Raster, slope_threshold: float = 3.0, prof_curv_threshold: float = 0.1, plan_curv_threshold: float = 0.0, z_factor: float = 1.0) -&gt; Tuple[Raster, str]:
+</code></pre>
+<hr />
+<h2 id="percent-elev-range"><a class="header" href="#percent-elev-range">Percent Elev Range</a></h2>
+<p><strong>Function name:</strong> <code>percent_elev_range</code></p>
+<p>Percent elevation range (PER) is a measure of local topographic position (LTP). It expresses the vertical position for a digital elevation model (DEM) grid cell (z0) as the percentage of the elevation range within the neighbourhood filter window, such that:</p>
+<p>PER = z0 / (zmax - zmin) x 100</p>
+<p>where z0 is the elevation of the window's center grid cell, zmax is the maximum neighbouring elevation, and zmin is the minimum neighbouring elevation.</p>
+<p>Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code>flags. These dimensions should be odd, positive integer values (e.g. 3, 5, 7, 9, etc.).</p>
+<p>Compared with <code>ElevPercentile</code> and <code>DevFromMeanElev</code>, PER is a less robust measure of LTP that is susceptible to outliers in neighbouring elevations (e.g. the presence of off-terrain objects in the DEM).</p>
+<h3 id="references"><a class="header" href="#references">References</a></h3>
+<p>Newman, D. R., Lindsay, J. B., and Cockburn, J. M. H. (2018). Evaluating metrics of local topographic position for multiscale geomorphometric analysis. Geomorphology, 312, 40-50.</p>
+<h3 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h3>
+<p><code>ElevPercentile</code>, <code>DevFromMeanElev</code>, <code>DiffFromMeanElev</code>, <code>relative_topographic_position</code></p>
+<h3 id="python-api-5"><a class="header" href="#python-api-5">Python API</a></h3>
+<pre><code class="language-python">def percent_elev_range(self, dem: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="relative-topographic-position"><a class="header" href="#relative-topographic-position">Relative Topographic Position</a></h2>
+<p><strong>Function name:</strong> <code>relative_topographic_position</code></p>
+<p>Relative topographic position (RTP) is an index of local topographic position (i.e. how elevated or low-lying a site is relative to its surroundings) and is a modification of percent elevation range (PER; <code>percent_elev_range</code>) and accounts for the elevation distribution. Rather than positioning the central cell's elevation solely between the filter extrema, RTP is a piece-wise function that positions the central elevation relative to the minimum (zmin), mean (μ), and maximum values (zmax), within a local neighbourhood of a user-specified size (<code>filterx</code>, <code>filtery</code>), such that:</p>
+<p>RTP = (z0 − μ) / (μ − zmin), if z0 &lt; μ</p>
+<p>OR</p>
+<p>RTP = (z0 − μ) / (zmax - μ), if z0 &gt;= μ </p>
+<p>The resulting index is bound by the interval [−1, 1], where the sign indicates if the cell is above or below than the filter mean. Although RTP uses the mean to define two linear functions, the reliance on the filter extrema is expected to result in sensitivity to outliers. Furthermore, the use of the mean implies assumptions of unimodal and symmetrical elevation distribution.</p>
+<p>In many cases, Elevation Percentile (<code>ElevPercentile</code>) and deviation from mean elevation (<code>DevFromMeanElev</code>) provide more suitable and robust measures of relative topographic position.</p>
+<h3 id="reference-3"><a class="header" href="#reference-3">Reference</a></h3>
+<p>Newman, D. R., Lindsay, J. B., and Cockburn, J. M. H. (2018). Evaluating metrics of local topographic position for multiscale geomorphometric analysis. Geomorphology, 312, 40-50.</p>
+<h3 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h3>
+<p><code>DevFromMeanElev</code>, <code>DiffFromMeanElev</code>, <code>ElevPercentile</code>, <code>percent_elev_range</code></p>
+<h3 id="python-api-6"><a class="header" href="#python-api-6">Python API</a></h3>
+<pre><code class="language-python">def relative_topographic_position(self, dem: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster:
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="terrain-roughness-texture.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="terrain-multiscale-signatures.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="terrain-roughness-texture.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="terrain-multiscale-signatures.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,653 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Tool Reference - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html" class="active"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="general-tools"><a class="header" href="#general-tools">General Tools</a></h1>
+<hr />
+<h2 id="field-trafficability-and-operation-planning"><a class="header" href="#field-trafficability-and-operation-planning">Field Trafficability And Operation Planning</a></h2>
+<p><strong>Function name:</strong> <code>field_trafficability_and_operation_planning</code></p>
+<p>PROProduction</p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative"><a class="header" href="#workflow-narrative">Workflow Narrative</a></h3>
+<p><strong>Field Trafficability and Operation Planning</strong></p>
+<h4 id="problem-it-solves"><a class="header" href="#problem-it-solves">Problem It Solves</a></h4>
+<p>Where can equipment operate safely now, and which areas should be delayed or rerouted?</p>
+<h4 id="who-it-is-for"><a class="header" href="#who-it-is-for">Who It Is For</a></h4>
+<ul>
+<li>Machinery planning teams, farm managers, and field operations coordinators.</li>
+</ul>
+<h4 id="primary-user"><a class="header" href="#primary-user">Primary User</a></h4>
+<p>Farm operations teams and precision agriculture service providers.</p>
+<h4 id="what-it-does"><a class="header" href="#what-it-does">What It Does</a></h4>
+<ul>
+<li>Scores field trafficability and operation timing risk from terrain and saturation context.</li>
+<li>Produces operation classes for go/hold/reroute-style field execution decisions.</li>
+</ul>
+<h4 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h4>
+<ul>
+<li>Derives slope from DEM and harmonizes moisture/rainfall context to the same grid.</li>
+<li>Blends terrain, soil saturation, and rainfall-risk penalties into trafficability scores.</li>
+<li>Converts continuous scores into operation classes for practical planning use.</li>
+<li>QA acceptance guidance:</li>
+<li><code>status=pass</code> indicates low-trafficability burden stayed within baseline tolerance.</li>
+<li><code>diagnostics.acceptance_thresholds.low_trafficability_fraction_review</code> defines review escalation threshold.</li>
+<li>High <code>summary.low_trafficability_fraction</code> should trigger cautious equipment scheduling and field confirmation.</li>
+<li>MVP hardening assets:</li>
+<li>Benchmark scaffold: <code>tests/fixtures/precision_ag_ops_benchmark/</code></li>
+<li>Promotion guide: <code>docs/internal/development/TERRAIN_PRECISION_AG_BENCHMARK_PROMOTION_GUIDE_2026_04_14.md</code></li>
+</ul>
+<h3 id="inputs"><a class="header" href="#inputs">Inputs</a></h3>
+<p>ParameterOptionalDescription
+demnoDEM raster for terrain slope context.
+soil_moisturenoSoil saturation/moisture raster normalized to [0,1].
+rainfall_forecastyesOptional rainfall-risk raster normalized to [0,1].</p>
+<h3 id="outputs"><a class="header" href="#outputs">Outputs</a></h3>
+<p>ParameterTypeDescription
+trafficability_scoreGeoTIFFContinuous trafficability score [0,1] (higher is better).
+operation_classGeoTIFFDiscrete operation class raster (1 favorable to 4 poor).
+summaryJSONMachine-readable summary report containing run metadata, QA diagnostics, and key metrics.
+html_reportHTMLHuman-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</p>
+<h3 id="python-example"><a class="header" href="#python-example">Python Example</a></h3>
+<p>`import whitebox_workflows as wbw</p>
+<p>wbe = wbw.WbEnvironment(include_pro=True, tier="pro")</p>
+<p>traffic, op_class, summary = wbe.field_trafficability_and_operation_planning(
+dem="data/dem.tif",
+soil_moisture="data/soil_saturation.tif",
+rainfall_forecast="data/rain_risk.tif",
+output_prefix="output/field_trafficability",
+)</p>
+<p>print(traffic)
+print(op_class)
+print(summary)`</p>
+<h3 id="license-notice"><a class="header" href="#license-notice">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+<hr />
+<h2 id="in-season-crop-stress-intervention-planning"><a class="header" href="#in-season-crop-stress-intervention-planning">In Season Crop Stress Intervention Planning</a></h2>
+<p><strong>Function name:</strong> <code>in_season_crop_stress_intervention_planning</code></p>
+<p>PROProduction</p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative-1"><a class="header" href="#workflow-narrative-1">Workflow Narrative</a></h3>
+<p><strong>In-Season Crop Stress Intervention Planning</strong></p>
+<h4 id="problem-it-solves-1"><a class="header" href="#problem-it-solves-1">Problem It Solves</a></h4>
+<p>Where should interventions be prioritized this week to limit stress-driven yield loss?</p>
+<h4 id="who-it-is-for-1"><a class="header" href="#who-it-is-for-1">Who It Is For</a></h4>
+<ul>
+<li>Agronomy advisors and farm operations teams managing in-season response.</li>
+</ul>
+<h4 id="primary-user-1"><a class="header" href="#primary-user-1">Primary User</a></h4>
+<p>Precision agronomy service providers and large production farms.</p>
+<h4 id="what-it-does-1"><a class="header" href="#what-it-does-1">What It Does</a></h4>
+<ul>
+<li>Prioritizes intervention zones from in-season crop stress indicators.</li>
+<li>Combines vigor decline with optional thermal and moisture stress context.</li>
+</ul>
+<h4 id="how-it-works-1"><a class="header" href="#how-it-works-1">How It Works</a></h4>
+<ul>
+<li>Uses NDVI/vigor deficit as the primary stress signal.</li>
+<li>Harmonizes optional canopy-temperature and soil-moisture rasters to the NDVI grid.</li>
+<li>Produces intervention-priority and intervention-class surfaces.</li>
+<li>QA acceptance guidance:</li>
+<li><code>status=pass</code> indicates intervention burden is below review threshold.</li>
+<li><code>diagnostics.acceptance_thresholds.high_priority_fraction_review</code> defines escalation threshold for broad intervention risk.</li>
+<li>High <code>summary.high_priority_fraction</code> should trigger stress-source verification before large-scale treatment rollout.</li>
+<li>MVP hardening assets:</li>
+<li>Benchmark scaffold: <code>tests/fixtures/precision_ag_ops_benchmark/</code></li>
+<li>Promotion guide: <code>docs/internal/development/TERRAIN_PRECISION_AG_BENCHMARK_PROMOTION_GUIDE_2026_04_14.md</code></li>
+</ul>
+<h3 id="inputs-1"><a class="header" href="#inputs-1">Inputs</a></h3>
+<p>ParameterOptionalDescription
+ndvinoNDVI/vigor raster normalized to [0,1].
+canopy_temperatureyesOptional thermal-stress raster normalized to [0,1].
+soil_moistureyesOptional moisture-deficit raster normalized to [0,1].</p>
+<h3 id="outputs-1"><a class="header" href="#outputs-1">Outputs</a></h3>
+<p>ParameterTypeDescription
+intervention_priorityGeoTIFFContinuous intervention-priority score [0,1].
+intervention_classGeoTIFFDiscrete intervention class raster (1 low to 4 urgent).
+summaryJSONMachine-readable summary report containing run metadata, QA diagnostics, and key metrics.
+html_reportHTMLHuman-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</p>
+<h3 id="python-example-1"><a class="header" href="#python-example-1">Python Example</a></h3>
+<p>`import whitebox_workflows as wbw</p>
+<p>wbe = wbw.WbEnvironment(include_pro=True, tier="pro")</p>
+<p>priority, classes, summary = wbe.in_season_crop_stress_intervention_planning(
+ndvi="data/ndvi_current.tif",
+canopy_temperature="data/canopy_temp_stress.tif",
+soil_moisture="data/moisture_deficit.tif",
+output_prefix="output/in_season_stress",
+)</p>
+<p>print(priority)
+print(classes)
+print(summary)`</p>
+<h3 id="license-notice-1"><a class="header" href="#license-notice-1">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+<hr />
+<h2 id="precision-irrigation-optimization"><a class="header" href="#precision-irrigation-optimization">Precision Irrigation Optimization</a></h2>
+<p><strong>Function name:</strong> <code>precision_irrigation_optimization</code></p>
+<p>PROProduction</p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative-2"><a class="header" href="#workflow-narrative-2">Workflow Narrative</a></h3>
+<p><strong>Precision Irrigation Optimization</strong></p>
+<h4 id="problem-it-solves-2"><a class="header" href="#problem-it-solves-2">Problem It Solves</a></h4>
+<p>Where should irrigation depth be increased or reduced to achieve target moisture with less water waste?</p>
+<h4 id="who-it-is-for-2"><a class="header" href="#who-it-is-for-2">Who It Is For</a></h4>
+<ul>
+<li>Precision agriculture teams, irrigation planners, and agronomy analytics groups.</li>
+</ul>
+<h4 id="primary-user-2"><a class="header" href="#primary-user-2">Primary User</a></h4>
+<p>Large growers, precision ag service providers, and irrigation technology partners.</p>
+<h4 id="what-it-does-2"><a class="header" href="#what-it-does-2">What It Does</a></h4>
+<ul>
+<li>Generates variable-rate irrigation prescription depth from terrain and moisture context.</li>
+<li>Estimates moisture stress risk to prioritize intervention zones.</li>
+<li>Emits summary diagnostics suitable for irrigation planning dashboards.</li>
+</ul>
+<h4 id="how-it-works-2"><a class="header" href="#how-it-works-2">How It Works</a></h4>
+<ul>
+<li>Estimates local moisture deficit from target_moisture and measured or terrain-inferred moisture.</li>
+<li>Adjusts prescription depth by slope-derived terrain factor and max_irrigation_mm limits.</li>
+<li>Converts prescribed depth to VRI zones and computes moisture-stress risk index.</li>
+<li>Indicative formula: prescribed_mm = max(0, target - moisture) * max_irrigation_mm * terrain_factor.</li>
+</ul>
+<h4 id="why-it-wins"><a class="header" href="#why-it-wins">Why It Wins</a></h4>
+<ul>
+<li>Produces direct raster-ready prescription depths and risk diagnostics from reproducible inputs.</li>
+</ul>
+<h4 id="typical-buying-trigger"><a class="header" href="#typical-buying-trigger">Typical Buying Trigger</a></h4>
+<p>A grower or consultant needs to shift from uniform irrigation to variable-rate execution.</p>
+<h4 id="typical-presets"><a class="header" href="#typical-presets">Typical Presets</a></h4>
+<ul>
+<li>fast for quick field-scale recommendations.</li>
+<li>balanced for default VRI planning.</li>
+<li>conservative for stronger terrain-risk penalties.</li>
+</ul>
+<h3 id="inputs-2"><a class="header" href="#inputs-2">Inputs</a></h3>
+<p>ParameterOptionalDescription
+demnoDigital elevation model used as the terrain reference surface.
+optional soil_moistureyesOptional soil moisture raster used to refine irrigation need and stress scoring.
+profile: fast | balanced | conservativenoProcessing profile controlling sensitivity, quality strictness, and runtime tradeoffs.
+target_moisturenoTarget moisture level used to compute irrigation prescription amounts.
+max_irrigation_mmnoMaximum irrigation depth allowed in generated irrigation recommendations.</p>
+<h3 id="outputs-2"><a class="header" href="#outputs-2">Outputs</a></h3>
+<p>ParameterTypeDescription
+irrigation_prescriptionGeoTIFFIrrigation prescription raster indicating recommended application depth.
+moisture_stress_riskGeoTIFFMoisture stress risk raster supporting irrigation prioritization.
+vri_zonesGeoTIFFVariable-rate irrigation zone raster.
+summaryJSONMachine-readable summary report containing run metadata, QA diagnostics, and key metrics.
+html_reportHTMLHuman-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</p>
+<p>When <code>sweep_spec</code> is supplied, the workflow also emits <code>run_matrix_summary</code>, <code>sensitivity_report</code>, <code>sensitivity_report_html</code>, and <code>stability_map</code>. The sensitivity report includes <code>metrics.primary_metric</code>, <code>metrics.primary_relative_span</code>, and <code>metrics.stability_class</code> (<code>high</code>, <code>medium</code>, <code>low</code>), while <code>stability_map</code> uses classes <code>3=high</code>, <code>2=medium</code>, <code>1=low</code>.</p>
+<h3 id="python-example-2"><a class="header" href="#python-example-2">Python Example</a></h3>
+<p>`import whitebox_workflows as wbw</p>
+<p>wbe = wbw.WbEnvironment(include_pro=True, tier="pro")</p>
+<p>prescription, stress, zones, summary = wbe.precision_irrigation_optimization(
+dem="data/dem.tif",
+soil_moisture="data/soil_moisture.tif",
+profile="balanced",
+target_moisture=0.6,
+max_irrigation_mm=18.0,
+output_prefix="output/irrigation",
+)</p>
+<p>print(prescription)
+print(stress)
+print(zones)
+print(summary)`</p>
+<h3 id="license-notice-2"><a class="header" href="#license-notice-2">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+<hr />
+<h2 id="precision-ag-yield-zone-intelligence"><a class="header" href="#precision-ag-yield-zone-intelligence">Precision Ag Yield Zone Intelligence</a></h2>
+<p><strong>Function name:</strong> <code>precision_ag_yield_zone_intelligence</code></p>
+<p>PROProduction</p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative-3"><a class="header" href="#workflow-narrative-3">Workflow Narrative</a></h3>
+<p><strong>Precision Ag Yield Zone Analysis</strong></p>
+<h4 id="problem-it-solves-3"><a class="header" href="#problem-it-solves-3">Problem It Solves</a></h4>
+<p>Which management zones should receive differentiated input strategy based on stable productivity patterns?</p>
+<h4 id="who-it-is-for-3"><a class="header" href="#who-it-is-for-3">Who It Is For</a></h4>
+<ul>
+<li>Precision agronomy teams and farm analytics providers.</li>
+</ul>
+<h4 id="primary-user-3"><a class="header" href="#primary-user-3">Primary User</a></h4>
+<p>Enterprise farms, agronomy consultancies, and digital ag platforms.</p>
+<h4 id="what-it-does-3"><a class="header" href="#what-it-does-3">What It Does</a></h4>
+<ul>
+<li>Builds yield-stability surfaces from yield productivity context.</li>
+<li>Integrates optional terrain context to improve zone differentiation.</li>
+<li>Produces management-zone rasters for variable-rate strategy design.</li>
+</ul>
+<h4 id="how-it-works-3"><a class="header" href="#how-it-works-3">How It Works</a></h4>
+<ul>
+<li>Normalizes yield response and computes local stability/variability signatures.</li>
+<li>Optionally blends terrain_context influence with profile-dependent weighting.</li>
+<li>Partitions pixels into zone_count management classes and emits zone confidence and polygons.</li>
+<li>Indicative formula: zone_score ~= w_y<em>yield_stability + w_t</em>terrain_term; zone = discretize(zone_score, zone_count).</li>
+</ul>
+<h4 id="why-it-wins-1"><a class="header" href="#why-it-wins-1">Why It Wins</a></h4>
+<ul>
+<li>Converts yield and terrain context into explicit, contract-backed management zone outputs.</li>
+</ul>
+<h4 id="typical-buying-trigger-1"><a class="header" href="#typical-buying-trigger-1">Typical Buying Trigger</a></h4>
+<p>A farm program is formalizing zone-based management for seed, fertility, and water decisions.</p>
+<h4 id="typical-presets-1"><a class="header" href="#typical-presets-1">Typical Presets</a></h4>
+<ul>
+<li>fast for high-throughput zone generation.</li>
+<li>balanced for default zone planning.</li>
+<li>conservative for stronger terrain-context influence.</li>
+</ul>
+<h3 id="inputs-3"><a class="header" href="#inputs-3">Inputs</a></h3>
+<p>ParameterOptionalDescription
+yield_surfacenoYield raster used to estimate productivity stability and zone segmentation.
+optional terrain_contextyesOptional terrain context raster used to strengthen management-zone differentiation.
+profile: fast | balanced | conservativenoProcessing profile controlling sensitivity, quality strictness, and runtime tradeoffs.
+zone_count (2..8)noRequested number of management zones to generate.</p>
+<h3 id="outputs-3"><a class="header" href="#outputs-3">Outputs</a></h3>
+<p>ParameterTypeDescription
+yield_stabilityGeoTIFFYield stability raster used to delineate management zones.
+management_zonesGeoTIFFManagement-zone classification raster.
+management_zones_vectorGeoPackageVectorized management zones for operations and reporting.
+zone_confidenceGeoTIFFConfidence surface associated with generated management zones.
+summaryJSONMachine-readable summary report containing run metadata, QA diagnostics, and key metrics.
+html_reportHTMLHuman-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</p>
+<p>When <code>sweep_spec</code> is supplied, the workflow also emits <code>run_matrix_summary</code>, <code>sensitivity_report</code>, <code>sensitivity_report_html</code>, and <code>stability_map</code>. The sensitivity report includes <code>metrics.primary_metric</code>, <code>metrics.primary_relative_span</code>, and <code>metrics.stability_class</code> (<code>high</code>, <code>medium</code>, <code>low</code>), while <code>stability_map</code> uses classes <code>3=high</code>, <code>2=medium</code>, <code>1=low</code>.</p>
+<h3 id="python-example-3"><a class="header" href="#python-example-3">Python Example</a></h3>
+<p>`import whitebox_workflows as wbw</p>
+<p>wbe = wbw.WbEnvironment(include_pro=True, tier="pro")</p>
+<p>stability, zones, zone_polys, confidence, summary = wbe.precision_ag_yield_zone_intelligence(
+yield_surface="data/yield_surface.tif",
+terrain_context="data/terrain_context.tif",
+profile="balanced",
+zone_count=4,
+max_zone_features=5000,
+output_prefix="output/yield_zone",
+)</p>
+<p>print(stability)
+print(zones)
+print(zone_polys)
+print(confidence)
+print(summary)`</p>
+<h3 id="license-notice-3"><a class="header" href="#license-notice-3">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+<hr />
+<h2 id="soil-landscape-classification"><a class="header" href="#soil-landscape-classification">Soil Landscape Classification</a></h2>
+<p><strong>Function name:</strong> <code>soil_landscape_classification</code></p>
+<p>PROProduction</p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative-4"><a class="header" href="#workflow-narrative-4">Workflow Narrative</a></h3>
+<p><strong>Soil Landscape Classification</strong></p>
+<h4 id="problem-it-solves-4"><a class="header" href="#problem-it-solves-4">Problem It Solves</a></h4>
+<p>Which terrain-defined landform units dominate the area, and how can they guide management zoning or sampling strategy?</p>
+<h4 id="who-it-is-for-4"><a class="header" href="#who-it-is-for-4">Who It Is For</a></h4>
+<ul>
+<li>Geomorphometry analysts, soil-landscape researchers, and precision-ag planning teams.</li>
+</ul>
+<h4 id="primary-user-4"><a class="header" href="#primary-user-4">Primary User</a></h4>
+<p>Agronomy/land capability groups, environmental consulting teams, and land resource agencies.</p>
+<h4 id="what-it-does-4"><a class="header" href="#what-it-does-4">What It Does</a></h4>
+<ul>
+<li>Classifies landform units using multiscale curvature and slope signatures.</li>
+<li>Produces raster class maps and optional polygon outputs.</li>
+<li>Emits summary distributions for each landform class.</li>
+</ul>
+<h4 id="how-it-works-4"><a class="header" href="#how-it-works-4">How It Works</a></h4>
+<ul>
+<li>Computes slope, profile curvature, and plan curvature at fine and coarse scales.</li>
+<li>Applies rule-based landform assignment thresholds to each pixel.</li>
+<li>Optionally polygonizes class regions and aggregates class-area summary statistics.</li>
+<li>Indicative formula: landform_class = rule(slope, k_profile, k_plan, multiscale_signature).</li>
+</ul>
+<h4 id="why-it-wins-2"><a class="header" href="#why-it-wins-2">Why It Wins</a></h4>
+<ul>
+<li>Couples interpretable geomorphometric classes with optional polygon outputs for direct planning integration.</li>
+</ul>
+<h4 id="typical-buying-trigger-2"><a class="header" href="#typical-buying-trigger-2">Typical Buying Trigger</a></h4>
+<p>A land management or agronomy program needs terrain-driven zones for sampling design or variable-rate planning.</p>
+<h4 id="typical-presets-2"><a class="header" href="#typical-presets-2">Typical Presets</a></h4>
+<ul>
+<li>default thresholds for general terrain partitioning.</li>
+<li>tune fine/coarse scales for local vs regional landform emphasis.</li>
+</ul>
+<h3 id="inputs-4"><a class="header" href="#inputs-4">Inputs</a></h3>
+<p>ParameterOptionalDescription
+input DEMnoInput DEM used for terrain-derivative and landform classification workflows.
+flat/profile/plan thresholdsnoCurvature and surface-form thresholds used to separate landform classes.
+fine_scale, coarse_scalenoMultiscale analysis windows used to capture local and broad terrain structure.
+optional landform_polygons_outputyesOptional switch/path to emit vectorized landform polygons.</p>
+<h3 id="outputs-4"><a class="header" href="#outputs-4">Outputs</a></h3>
+<p>ParameterTypeDescription
+landform_unitsGeoTIFFCategorical landform unit raster from terrain analysis.
+multiscale_signatureGeoTIFFMultiscale terrain-signature raster for landscape interpretation.
+landform_polygonsoptional vectorOptional vectorized landform polygons for cartographic/reporting use.
+summaryJSONMachine-readable summary report containing run metadata, QA diagnostics, and key metrics.
+html_reportHTMLHuman-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</p>
+<h3 id="python-example-4"><a class="header" href="#python-example-4">Python Example</a></h3>
+<p>`import whitebox_workflows as wbw</p>
+<p>wbe = wbw.WbEnvironment(include_pro=True, tier="pro")</p>
+<p>landform, signature, polygons, summary = wbe.soil_landscape_classification(
+input="data/dem.tif",
+fine_scale=2.0,
+coarse_scale=8.0,
+output_prefix="output/soil_landscape",
+landform_polygons_output="output/landforms.gpkg",
+)</p>
+<p>print(landform)
+print(signature)
+print(polygons)
+print(summary)`</p>
+<h3 id="license-notice-4"><a class="header" href="#license-notice-4">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+<hr />
+<h2 id="yield-data-conditioning-and-qa"><a class="header" href="#yield-data-conditioning-and-qa">Yield Data Conditioning And QA</a></h2>
+<p><strong>Function name:</strong> <code>yield_data_conditioning_and_qa</code></p>
+<p>PROProduction</p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative-5"><a class="header" href="#workflow-narrative-5">Workflow Narrative</a></h3>
+<p><strong>Yield Data Conditioning and QA</strong></p>
+<h4 id="problem-it-solves-5"><a class="header" href="#problem-it-solves-5">Problem It Solves</a></h4>
+<p>How do we turn raw, noisy harvest monitor points into defensible, analysis-ready yield products for management decisions?</p>
+<h4 id="who-it-is-for-5"><a class="header" href="#who-it-is-for-5">Who It Is For</a></h4>
+<ul>
+<li>Precision-ag service providers, agronomy analytics teams, and farm data engineering groups.</li>
+</ul>
+<h4 id="primary-user-5"><a class="header" href="#primary-user-5">Primary User</a></h4>
+<p>Enterprise farms, precision agriculture consultancies, and digital agronomy platforms.</p>
+<h4 id="what-it-does-5"><a class="header" href="#what-it-does-5">What It Does</a></h4>
+<ul>
+<li>Runs an end-to-end conditioning pipeline for noisy combine-harvester yield points.</li>
+<li>Orchestrates edge QA, pass reconstruction, optional multi-header reconciliation, filtering, normalization, and swath map generation.</li>
+<li>Produces contract-ready summary outputs for auditability and downstream zoning workflows.</li>
+</ul>
+<h4 id="how-it-works-5"><a class="header" href="#how-it-works-5">How It Works</a></h4>
+<ul>
+<li>Flags/removes likely edge points using local neighborhood support.</li>
+<li>Optionally filters telemetry anomalies using speed and heading consistency thresholds.</li>
+<li>Auto-resolves common monitor-export field aliases when requested names are missing.</li>
+<li>Reconstructs pass structure from point geometry and heading continuity, then smooths yield using pass-aware neighborhood statistics.</li>
+<li>Optionally applies distance-based lag correction along reconstructed passes to compensate harvest monitor delay.</li>
+<li>Optionally converts raw yield to a target moisture basis using moisture_field_name and target_moisture_pct.</li>
+<li>Optionally applies robust MAD-based clipping on filtered yield values before normalization.</li>
+<li>Propagates a QA confidence score to final point outputs, then builds swath polygons for map-ready products.</li>
+<li>Indicative formula: filtered_yield ~= weighted_neighborhood(yield) with outlier replacement when z = |y - mean_adjacent_pass| / sd_adjacent_pass exceeds threshold.</li>
+</ul>
+<h4 id="why-it-wins-3"><a class="header" href="#why-it-wins-3">Why It Wins</a></h4>
+<ul>
+<li>Provides a reproducible and transparent preprocessing chain with explicit QA outputs rather than opaque one-click cleaning.</li>
+</ul>
+<h4 id="typical-buying-trigger-3"><a class="header" href="#typical-buying-trigger-3">Typical Buying Trigger</a></h4>
+<p>A team needs to standardize inconsistent yield data cleaning before zone generation, variable-rate planning, or year-over-year analytics.</p>
+<h4 id="typical-presets-3"><a class="header" href="#typical-presets-3">Typical Presets</a></h4>
+<ul>
+<li>fast: lighter cleanup with larger tolerances for rapid turnaround.</li>
+<li>balanced: default production profile.</li>
+<li>strict: stronger edge/outlier controls for high-confidence analytics.</li>
+</ul>
+<h3 id="inputs-5"><a class="header" href="#inputs-5">Inputs</a></h3>
+<p>ParameterOptionalDescription
+input (yield point vector)noRaw yield telemetry points used as input to the conditioning and QA pipeline.
+yield_field_name, moisture_field_name, target_moisture_pct, header_field_namenoField-name mappings for yield/moisture/header attributes used by cleaning stages.
+use_field_aliasesnoWhether known attribute aliases should be resolved automatically.
+speed_field_name, heading_field_namenoTelemetry field mappings used for speed and heading quality checks.
+min_speed_kmh, max_speed_kmh, max_heading_change_degnoOperating-speed and heading-change limits used for telemetry QC filtering.
+profile: fast | balanced | strictnoOperational profile controlling sensitivity and QA strictness for risk workflows.
+swath_width, edge_radius, reconcile_radius, normalization_radiusnoGeometric parameters controlling swath-edge handling and neighborhood reconciliation.
+lag_correction_mode: none | distancenoLag correction mode controlling whether and how harvest lag compensation is applied.
+lag_distance_mnoDistance offset used when distance-based lag correction is enabled.
+filtering_mode: standard | robustnoOutlier-filtering method selection for yield cleaning.
+robust_mad_threshold, z_score_threshold, min_yield, max_yieldnoStatistical thresholds and hard limits used for yield outlier rejection.
+optional mean_tonnageyesOptional mean tonnage override used during normalization/reconciliation steps.</p>
+<h3 id="outputs-5"><a class="header" href="#outputs-5">Outputs</a></h3>
+<p>ParameterTypeDescription
+qa_flagsGeoPackageQA flag layer identifying records that failed yield telemetry checks.
+telemetry_qc_pointsoptional GeoPackageOptional point layer of telemetry QC diagnostics by record.
+clean_pointsGeoPackageCleaned yield points after telemetry and statistical filtering.
+clean_mapGeoPackageCartography-ready cleaned yield layer for rapid map production.
+confidence_pointsGeoPackagePoint-level confidence diagnostics for cleaned yield records.
+pass_linesGeoPackageHarvest pass line features inferred from telemetry trajectories.
+pass_pointsGeoPackageHarvest pass points used in overlap and reconciliation analyses.
+lag_corrected_pointsoptional GeoPackageOptional points after lag-correction adjustment.
+moisture_adjusted_pointsoptional GeoPackageOptional points after moisture normalization adjustments.
+filtered_pointsGeoPackagePoints retained after standard filtering criteria are applied.
+robust_filtered_pointsoptional GeoPackageOptional points retained by robust filtering mode diagnostics.
+normalized_pointsGeoPackageYield points after normalization to common analytical basis.
+reconciled_pointsoptional GeoPackageOptional reconciled points after overlap and pass harmonization.
+summaryJSONMachine-readable summary report containing run metadata, QA diagnostics, and key metrics.
+html_reportHTMLHuman-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</p>
+<h3 id="python-example-5"><a class="header" href="#python-example-5">Python Example</a></h3>
+<p>`import whitebox_workflows as wbw</p>
+<p>wbe = wbw.WbEnvironment(include_pro=True, tier="pro")</p>
+<p>result = wbe.yield_data_conditioning_and_qa(
+input="data/yield_points.gpkg",
+yield_field_name="YIELD",
+header_field_name="HEADER",
+profile="balanced",
+swath_width=6.096,
+output_prefix="output/yield_pipeline",
+)</p>
+<p>print(result)`</p>
+<h3 id="license-notice-5"><a class="header" href="#license-notice-5">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="precision-agriculture.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="data-conversion.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="precision-agriculture.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="data-conversion.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

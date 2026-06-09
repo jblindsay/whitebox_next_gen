@@ -95,6 +95,16 @@ except ImportError:  # pragma: no cover
     QColor = _Dummy
 
 
+# Point cloud layer hint for auto-loading lidar outputs into QGIS.
+try:
+    from qgis.core import QgsProcessingUtils
+    _PC_LAYER_HINT: int = getattr(
+        getattr(QgsProcessingUtils, "LayerHint", None), "PointCloud", 0
+    )
+except Exception:
+    _PC_LAYER_HINT = 0
+
+
 _MULTISCALE_TOPOGRAPHIC_POSITION_CLASSES: list[tuple[int, str, str]] = [
     # Local class uses hue (hollow/mid/knoll); broad class uses tint (low/intermediate/upland).
     (0, "Lowland hollow", "#7A3E2E"),
@@ -267,6 +277,18 @@ def _extract_enum_options(name: str, description: str, default_value: Any) -> li
             candidates = [s.strip() for s in paren_match.group(1).split(",")]
             if all(len(s) <= 32 and re.match(r'^[a-z][a-z0-9_]*$', s) for s in candidates):
                 options = candidates
+
+    # Curly-brace enum list: {a|b|c} or {a|b|c+d} — common in backend parameter
+    # descriptions. Allows identifiers with '+' for combination modes like rgb+user_data.
+    if not options:
+        brace_match = re.search(r'\{([^}]+)\}', d)
+        if brace_match:
+            inner = brace_match.group(1)
+            if '|' in inner:
+                parts = [p.strip() for p in inner.split('|')]
+                _brace_ident = re.compile(r'^[a-z][a-z0-9_+]*$')
+                if len(parts) >= 2 and all(len(p) <= 40 and _brace_ident.match(p) for p in parts):
+                    options = parts
 
     # Colon-prefix list: "Label: a | b | c" or "Label: a, b, c".
     # Use the FIRST colon so trailing "Default: x." clauses are excluded from
@@ -2267,7 +2289,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                 qgs_param = QgsProcessingParameterFileDestination(
                     name,
                     output_description,
-                    fileFilter="LiDAR files (*.las *.laz *.zlidar *.copc *.e57 *.ply)",
+                    fileFilter="LiDAR files (*.las *.laz *.copc *.e57 *.ply)",
                     defaultValue=None,
                     optional=False,
                 )
@@ -2427,7 +2449,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     qgs_param = QgsProcessingParameterFileDestination(
                         name,
                         description,
-                        fileFilter="LiDAR files (*.las *.laz *.zlidar *.copc *.e57 *.ply)",
+                        fileFilter="LiDAR files (*.las *.laz *.copc *.e57 *.ply)",
                         defaultValue=None,
                         optional=False,
                     )
@@ -2972,6 +2994,32 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             kind = str(spec.get("kind", ""))
             if kind in ("file_out", "raster_out", "vector_out", "lidar_out") and name in args:
                 result[name] = args[name]
+
+        # Register lidar outputs for auto-loading into QGIS as point cloud layers.
+        # QgsProcessingParameterFileDestination does not trigger auto-loading on its
+        # own; calling addLayerToLoadOnCompletion explicitly causes QGIS to load the
+        # .las/.laz output into the Layers panel rather than just showing a file link.
+        for spec in self._param_specs:
+            _lname = str(spec.get("name", ""))
+            _lkind = str(spec.get("kind", ""))
+            if _lkind == "lidar_out" and _lname in result:
+                _lpath = result[_lname]
+                if not isinstance(_lpath, str) or not _lpath.strip():
+                    continue
+                try:
+                    _add_fn = getattr(context, "addLayerToLoadOnCompletion", None)
+                    if callable(_add_fn):
+                        _details_cls = getattr(type(context), "LayerDetails", None)
+                        if _details_cls is not None:
+                            _disp = os.path.splitext(os.path.basename(_lpath))[0]
+                            _proj = context.project()
+                            try:
+                                _det = _details_cls(_disp, _proj, _lname, _PC_LAYER_HINT)
+                            except TypeError:
+                                _det = _details_cls(_disp, _proj, _lname)
+                            _add_fn(_lpath, _det)
+                except Exception:
+                    pass
 
         # Assign-projection wrappers update files in place; emit an explicit
         # completion message so users get visible confirmation in the dialog log.

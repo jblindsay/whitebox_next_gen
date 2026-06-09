@@ -1,0 +1,392 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Interpolation and Gridding - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html" class="active"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="interpolation-and-gridding"><a class="header" href="#interpolation-and-gridding">Interpolation and Gridding</a></h1>
+<hr />
+<h2 id="flightline-overlap"><a class="header" href="#flightline-overlap">Flightline Overlap</a></h2>
+<p><strong>Function name:</strong> <code>flightline_overlap</code></p>
+<p>This tool can be used to map areas of overlapping flightlines in an input LiDAR (LAS) file (<code>input</code>).  The output raster file (<code>output</code>) will contain the number of different flightlines that are contained within each grid cell. The user must specify the desired cell size (<code>resolution</code>). The flightline  associated with a LiDAR point is assumed to be contained within the point's <code>Point Source ID</code> property. Thus, the tool essentially counts the number of different Point Source ID values among the points contained within each grid cell. If the Point Source ID property is not set, or has been lost, users may with to apply the <code>recover_flightline_info</code> tool prior to running <code>flightline_overlap</code>.</p>
+<p>It is important to set the <code>resolution</code> parameter appropriately, as setting this value too high will yield the mis-characterization of non-overlap areas, and setting the resolution to low will result in fewer than expected overlap areas. An appropriate resolution size value may require experimentation, however a value that is 2-3 times the nominal point spacing has been previously recommended. The nominal point spacing can be determined using the <code>lidar_info</code> tool.</p>
+<p>Note that this tool is intended to be applied to LiDAR tile data containing points that have been merged from multiple overlapping flightlines. It is commonly the case that airborne LiDAR data from each of the flightlines from a survey are merged and then tiled into 1 km2 tiles, which are the target dataset for this tool.</p>
+<p>Like many of the LiDAR related tools, the input and output file parameters are optional. If left unspecified, the tool will locate all valid LiDAR files within the current Whitebox working directory and use these for calculation (specifying the output raster file name based on the associated input LiDAR file). This can be a helpful way to run the tool on a batch of user inputs within a specific directory.</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>classify_overlap_points</code>, <code>recover_flightline_info</code>, <code>lidar_info</code></p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def flightline_overlap(self, input_lidar: Lidar, resolution: float = 1.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="lidar-block-maximum"><a class="header" href="#lidar-block-maximum">LiDAR Block Maximum</a></h2>
+<p><strong>Function name:</strong> <code>lidar_block_maximum</code></p>
+<p>This function superimposes a raster grid overtop of an input LiDAR point cloud (<code>input_lidar</code>) of a user-specified resolution (<code>cell_size</code>) and identifies the highest point in each block. The output raster therefore appoximates a digital surface model (DSM), representing the elevation of the ground surface in open areas and the elevations of off-terrain objects (OTOs), such as buildings and vegetation. While this function will be faster, it is recommended that if you use the <code>lidar_digital_surface_model</code> instead if you are trying to create a DSM. This method will  generally produce better results.</p>
+<p>Like many of the LiDAR functions, the input LiDAR point cloud (<code>input_lidar</code>) is optional. If an input LiDAR file  is not specified, the tool will search for all valid LiDAR (*.las, *.laz, *.zlidar) files contained within the current working directory. This feature can be very useful when you need to process a large number of LiDAR files contained within a directory. This batch processing mode enables the function to run in a more optimized parallel manner. When run in this batch mode, no output LiDAR object will be created. Instead the function will create an output file (saved to disc) with the same name as each input LiDAR file, but with the .tif extension. This can provide a very efficient means for processing extremely large LiDAR data sets.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>lidar_block_minimum</code>, <code>lidar_digital_surface_model</code>, <code>filterfilter_lidar_by_percentile_lidar</code></p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def lidar_block_maximum(self, input_lidar: Optional[Lidar], cell_size: float = 1.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="lidar-block-minimum"><a class="header" href="#lidar-block-minimum">LiDAR Block Minimum</a></h2>
+<p><strong>Function name:</strong> <code>lidar_block_minimum</code></p>
+<p>This function superimposes a raster grid overtop of an input LiDAR point cloud (<code>input_lidar</code>) of a user-specified resolution (<code>cell_size</code>) and identifies the lowest point in each block. The output raster therefore appoximates a bare-earth digital elevation model (DEM), or a digital terrain model (DTM), although it is likely to contain several off-terrain objects (OTOs), such as buildings. Under heavier forest cover, the minimum-surface will also very likely contain some blocks that are not coinincident with the ground surface, but rather will represent the elevation of the lower position of tree trunks and low vegetation.</p>
+<p>Like many of the LiDAR functions, the input LiDAR point cloud (<code>input_lidar</code>) is optional. If an input LiDAR file  is not specified, the tool will search for all valid LiDAR (*.las, *.laz, *.zlidar) files contained within the current working directory. This feature can be very useful when you need to process a large number of LiDAR files contained within a directory. This batch processing mode enables the function to run in a more optimized parallel manner. When run in this batch mode, no output LiDAR object will be created. Instead the function will create an output file (saved to disc) with the same name as each input LiDAR file, but with the .tif extension. This can provide a very efficient means for processing extremely large LiDAR data sets.</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>lidar_block_maximum</code>, <code>filterfilter_lidar_by_percentile_lidar</code></p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def lidar_block_minimum(self, input_lidar: Optional[Lidar], cell_size: float = 1.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="lidar-construct-vector-tin"><a class="header" href="#lidar-construct-vector-tin">LiDAR Construct Vector TIN</a></h2>
+<p><strong>Function name:</strong> <code>lidar_construct_vector_tin</code></p>
+<p>This tool creates a vector triangular irregular network (TIN) for a set of LiDAR points (<code>input</code>) using a 2D <code>Delaunay triangulation</code> algorithm. LiDAR points may be excluded from the triangulation operation based on a number of criteria, include the point return number (<code>returns</code>), point classification value (<code>exclude_cls</code>), or a minimum (<code>minz</code>) or maximum (<code>maxz</code>) elevation.</p>
+<p>For vector points, use the <code>construct_vector_tin</code> tool instead.</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>construct_vector_tin</code></p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def lidar_construct_vector_tin(self, input_lidar: Optional[Lidar], returns_included: str = "all", excluded_classes: List[int] = None, min_elev: float = float('-inf'), max_elev: float = float('inf'), max_triangle_edge_length: float = float('inf')) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="lidar-contour"><a class="header" href="#lidar-contour">LiDAR Contour</a></h2>
+<p><strong>Function name:</strong> <code>lidar_contour</code></p>
+<h3 id="description"><a class="header" href="#description">Description</a></h3>
+<p>This tool can be used to create a <code>contour</code> (i.e. isolines of elevation values) vector coverage from an input LiDAR points data set (<code>input</code>). The tool works by first creating a <code>triangulation</code> of the input LiDAR points. The user must specify the contour interval (<code>interval</code>), or vertical spacing between contour lines. The <code>smooth</code> parameter can be used to increase or decrease the degree to which contours are smoothed. This parameter should be an odd integer value (0, 1, 3, 5...), with 0 indicating no smoothing. The tool can interpolate contours based on the LiDAR point elevation values, intensity data, or the user data field (<code>parameter</code>), with 'elevation' as the default parameter. LiDAR points may be excluded from the contouring process based on a number of criteria, including their return value (<code>returns</code>, which may be 'all', 'last', 'first'), their class value (<code>exclude_cls</code>), and whether they fall outside of a user-specified elevation range (<code>minz</code> and <code>maxz</code>). The optional <code>max_triangle_edge_length</code> parameter can be used to exclude the output of contours within areas that are sparsely populated areas of the data set, where the triangles formed by the Delaunay triangulation are too large. This is often the case within bodies of water; long and narrow triangular facets can also occur within the concave portions of the hull, or polygon enclosing, the points, when the data have an irregular shaped extent. Setting this parameter can help alleviate the problem of contouring beyond the data footprint.</p>
+<p>Like many of the LiDAR tools, both the <code>input</code> and <code>output</code> parameters are optional. If these parameters are not specified by the user, the tool will search for all LAS files contained within the current WhiteboxTools working directory. This feature can be useful when you need to contour a large number of LiDAR tiles. This batch processing mode enables the tool to enable parallel data processing, which can significantly improve the efficiency of data conversion for datasets with many LiDAR tiles. When run in this batch mode, the output file (<code>output</code>) also need not be specified; the tool will instead create an output file with the same name as each input LiDAR file, but with the <code>.shp</code> extension.</p>
+<p>It is important to note that contouring is better suited to well-defined surfaces (e.g. the ground surface or building heights), rather than volume features, such as vegetation, which tend to produce extremely complex contour sets. It is advisable to use this tool with last-returns and/or ground-classified point returns. If the input data set does not contain ground classification, consider pre-processing with the <code>lidar_ground_point_filter</code> tool.</p>
+<h3 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h3>
+<p><code>contours_from_points</code>, <code>contours_from_raster</code>, <code>lidar_ground_point_filter</code></p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def lidar_contour(self, input_lidar: Optional[Lidar], contour_interval: float = 10.0, base_contour: float = 0.0, smooth: int = 5, interpolation_parameter: str = "elevation", returns_included: str = "all",  excluded_classes: Optional[List[int]] = None, min_elev: float = float('-inf'), max_elev: float = float('inf'), tile_overlap: float = 0.0, max_triangle_edge_length: float = float('inf')) -&gt; Optional[Vector]:
+</code></pre>
+<hr />
+<h2 id="lidar-digital-surface-model"><a class="header" href="#lidar-digital-surface-model">LiDAR Digital Surface Model</a></h2>
+<p><strong>Function name:</strong> <code>lidar_digital_surface_model</code></p>
+<p>This tool creates a digital surface model (DSM) from a LiDAR point cloud. A DSM reflects the elevation of the tops of all off-terrain objects (i.e. non-ground features) contained within the data set. For example, a DSM will model the canopy top as well as building roofs. This is in stark contrast to a bare-earth digital elevation model (DEM), which models the ground surface without off-terrain objects present. Bare-earth DEMs can be derived from LiDAR data by interpolating last-return points using one of the other LiDAR interpolators (e.g. <code>lidar_tin_gridding</code>). The algorithm used for interpolation in this tool is based on gridding a triangulation (TIN) fit to top-level points in the input LiDAR point cloud. All points in the input LiDAR data set that are below other neighbouring points, within a specified search radius (<code>radius</code>), and that have a large inter-point slope, are filtered out. Thus, this tool will remove the ground surface beneath as well as any intermediate points within a forest canopy, leaving only the canopy top surface to be interpolated. Similarly, building wall points and any ground points beneath roof overhangs will also be remove prior to interpolation. Note that because the ground points beneath overhead wires and utility lines are filtered out by this operation, these features tend to be appear as 'walls' in the output DSM. If these points are classified in the input LiDAR file, you may wish to filter them out before using this tool (<code>filter_lidar_classes</code>).</p>
+<p>The following images show the differences between creating a DSM using the <code>lidar_digital_surface_model</code> and by interpolating first-return points only using the <code>lidar_tin_gridding</code> tool respectively. Note, the images show <code>time_in_daylight</code>, which is a more effective way of hillshading DSMs than the traditional <code>hillshade</code> method. Compare how the DSM created <code>lidar_digital_surface_model</code> tool (above) has far less variability in areas of tree-cover, more effectively capturing the canopy top. As well, notice how building rooftops are more extensive and straighter in the <code>lidar_digital_surface_model</code> DSM image. This is because this method eliminates ground returns beneath roof overhangs before the triangulation operation.</p>
+<p>The user must specify the grid resolution of the output raster (<code>resolution</code>), and optionally, the name of the input LiDAR file (<code>input</code>) and output raster (<code>output</code>). Note that if an input LiDAR file (<code>input</code>) is not specified by the user, the tool will search for all valid LiDAR (*.las, *.laz, *.zlidar) files contained within the current working directory. This feature can be very useful when you need to interpolate a DSM for a large number of LiDAR files. Not only does this batch processing mode enable the tool to run in a more optimized parallel manner, but it will also allow the tool to include a small buffer of points extending into adjacent tiles when interpolating an individual file. This can significantly reduce edge-effects when the output tiles are later mosaicked together. When run in this batch mode, the output file (<code>output</code>) also need not be specified; the tool will instead create an output file with the same name as each input LiDAR file, but with the .tif extension. This can provide a very efficient means for processing extremely large LiDAR data sets.</p>
+<p>Users may also exclude points from the interpolation if they fall below or above the minimum (<code>minz</code>) or maximum (<code>maxz</code>) thresholds respectively. This can be a useful means of excluding anomalously high or low points. Note that points that are classified as low points (LAS class 7) or high noise (LAS class 18) are automatically excluded from the interpolation operation.</p>
+<p>Triangulation will generally completely fill the convex hull containing the input point data. This can sometimes result in very long and narrow triangles at the edges of the data or connecting vertices on either side of void areas. In LiDAR data, these void areas are often associated with larger waterbodies, and triangulation can result in very unnatural interpolated patterns within these areas. To avoid this problem, the user may specify a the maximum allowable triangle edge length (<code>max_triangle_edge_length</code>) and all grid cells within triangular facets with edges larger than this threshold are simply assigned the NoData values in the output DSM. These NoData areas can later be better dealt with using the <code>fill_missing_data</code> tool after interpolation.</p>
+<h3 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h3>
+<p><code>lidar_tin_gridding</code>, <code>filter_lidar_classes</code>, <code>fill_missing_data</code>, <code>time_in_daylight</code></p>
+<h3 id="python-api-5"><a class="header" href="#python-api-5">Python API</a></h3>
+<pre><code class="language-python">def lidar_digital_surface_model(self, input_lidar: Optional[Lidar], cell_size: float = 1.0, search_radius: float = 0.5, min_elev: float = float('-inf'), max_elev: float = float('inf'), max_triangle_edge_length: float = float('inf')) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="lidar-hex-bin"><a class="header" href="#lidar-hex-bin">LiDAR Hex Bin</a></h2>
+<p><strong>Function name:</strong> <code>lidar_hex_bin</code></p>
+<p>The practice of binning point data to form a type of 2D histogram, density plot, or what is sometimes called a heatmap, is quite useful as an alternative for the cartographic display of of very dense points sets. This is particularly the case when the points experience significant overlap at the displayed scale. The <code>lidar_point_density</code> tool can be used to perform binning based on a regular grid (raster output). This tool, by comparison, bases the binning on a hexagonal grid.</p>
+<p>The tool is similar to the <code>CreateHexagonalVectorGrid</code> tool, however instead will create an output hexagonal grid in which each hexagonal cell possesses a <code>COUNT</code> attribute which specifies the number of points from an input points file (LAS file) that are contained within the hexagonal cell. The tool will also calculate the minimum and maximum elevations and intensity values and outputs these data to the attribute table.</p>
+<p>In addition to the names of the input points file and the output Shapefile, the user must also specify the desired hexagon width (w), which is the distance between opposing sides of each hexagon. The size (s) each side of the hexagon can then be calculated as, s = w / [2 x cos(PI / 6)]. The area of each hexagon (A) is, A = 3s(w / 2). The user must also specify the orientation of the grid with options of horizontal (pointy side up) and vertical (flat side up).</p>
+<h3 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h3>
+<p><code>vector_hex_binning</code>, <code>lidar_point_density</code>, <code>CreateHexagonalVectorGrid</code></p>
+<h3 id="python-api-6"><a class="header" href="#python-api-6">Python API</a></h3>
+<pre><code class="language-python">def lidar_hex_bin(self, input_lidar: Lidar, width: float, orientation: str = "h") -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="lidar-hillshade"><a class="header" href="#lidar-hillshade">LiDAR Hillshade</a></h2>
+<p><strong>Function name:</strong> <code>lidar_hillshade</code></p>
+<h3 id="python-api-7"><a class="header" href="#python-api-7">Python API</a></h3>
+<pre><code class="language-python">def lidar_hillshade(self, input: Lidar, search_radius: float = -1.0, azimuth: float = 315.0, altitude: float = 30.0) -&gt; Lidar:
+</code></pre>
+<hr />
+<h2 id="lidar-idw-interpolation"><a class="header" href="#lidar-idw-interpolation">LiDAR IDW Interpolation</a></h2>
+<p><strong>Function name:</strong> <code>lidar_idw_interpolation</code></p>
+<p>This tool interpolates LiDAR files using <code>inverse-distance weighting</code> (IDW) scheme. The user must specify the value of the IDW weight parameter (<code>weight</code>). The output grid can be based on any of the stored LiDAR point parameters (<code>parameter</code>), including elevation (in which case the output grid is a digital elevation model, DEM), intensity, class, return number, number of returns, scan angle, RGB (colour) values, and user data values. Similarly, the user may specify which point return values (<code>returns</code>) to include in the interpolation, including all points, last returns (including single return points), and first returns (including single return points).</p>
+<p>The user must specify the grid resolution of the output raster (<code>resolution</code>), and optionally, the name of the input LiDAR file (<code>input</code>) and output raster (<code>output</code>). Note that if an input LiDAR file (<code>input</code>) is not specified by the user, the tool will search for all valid LiDAR (*.las, *.laz, *.zlidar) files contained within the current working directory. This feature can be very useful when you need to interpolate a DEM for a large number of LiDAR files. Not only does this batch processing mode enable the tool to run in a more optimized parallel manner, but it will also allow the tool to include a small buffer of points extending into adjacent tiles when interpolating an individual file. This can significantly reduce edge-effects when the output tiles are later mosaicked together. When run in this batch mode, the output file (<code>output</code>) also need not be specified; the tool will instead create an output file with the same name as each input LiDAR file, but with the .tif extension. This can provide a very efficient means for processing extremely large LiDAR data sets.</p>
+<p>Users may excluded points from the interpolation based on point classification values, which follow the LAS classification scheme. Excluded classes are specified using the <code>exclude_cls</code> parameter. For example, to exclude all vegetation and building classified points from the interpolation, use --exclude_cls='3,4,5,6'. Users may also exclude points from the interpolation if they fall below or above the minimum (<code>minz</code>) or maximum (<code>maxz</code>) thresholds respectively. This can be a useful means of excluding anomalously high or low points. Note that points that are classified as low points (LAS class 7) or high noise (LAS class 18) are automatically excluded from the interpolation operation.</p>
+<p>The tool will search for the nearest input LiDAR point to each grid cell centre, up to a maximum search distance (<code>radius</code>). If a grid cell does not have a LiDAR point within this search distance, it will be assigned the NoData value in the output raster. In LiDAR data, these void areas are often associated with larger waterbodies. These NoData areas can later be better dealt with using the <code>fill_missing_data</code> tool after interpolation.</p>
+<h3 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h3>
+<p><code>lidar_tin_gridding</code>, <code>lidar_nearest_neighbour_gridding</code>, <code>lidar_sibson_interpolation</code></p>
+<h3 id="python-api-8"><a class="header" href="#python-api-8">Python API</a></h3>
+<pre><code class="language-python">def lidar_idw_interpolation(self, input_lidar: Optional[Lidar], interpolation_parameter: str = "elevation", returns_included: str = "all", cell_size: float = 1.0, idw_weight: float = 1.0, search_radius: float = 2.5, excluded_classes: List[int] = None, min_elev: float = float('-inf'), max_elev: float = float('inf')) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="lidar-nearest-neighbour-gridding"><a class="header" href="#lidar-nearest-neighbour-gridding">LiDAR Nearest Neighbour Gridding</a></h2>
+<p><strong>Function name:</strong> <code>lidar_nearest_neighbour_gridding</code></p>
+<p>This tool grids LiDAR files using nearest-neighbour (NN) scheme, that is, each grid cell in the output image will be assigned the parameter value of the point nearest the grid cell centre. This method should not be confused for the similarly named <code>natural-neighbour interpolation</code> (a.k.a Sibson's method). Nearest neighbour gridding is generally regarded as a poor way of interpolating surfaces from low-density point sets and results in the creation of a <code>Voronoi diagram</code>. However, this method has several advantages when applied to LiDAR data. NN gridding is one of the fastest methods for generating raster surfaces from large LiDAR data sets. NN gridding is one of the few interpolation methods, along with triangulation, that will preserve vertical breaks-in-slope, such as occur at the edges of building. This characteristic can be important when using some post-processing methods, such as the <code>remove_off_terrain_objects</code> tool. Furthermore, because most LiDAR data sets have remarkably high point densities compared with other types of geographic data, this approach does often produce a satisfactory result; this is particularly true when the point density is high enough that there are multiple points in the majority of grid cells.</p>
+<p>The output grid can be based on any of the stored LiDAR point parameters (<code>parameter</code>), including elevation (in which case the output grid is a digital elevation model, DEM), intensity, class, return number, number of returns, scan angle, RGB (colour) values, time, and user data values. Similarly, the user may specify which point return values (<code>returns</code>) to include in the interpolation, including all points, last returns (including single return points), and first returns (including single return points).</p>
+<p>The user must specify the grid resolution of the output raster (<code>resolution</code>), and optionally, the name of the input LiDAR file (<code>input</code>) and output raster (<code>output</code>). Note that if an input LiDAR file (<code>input</code>) is not specified by the user, the tool will search for all valid LiDAR (*.las, *.laz, *.zlidar) files contained within the current working directory. This feature can be very useful when you need to interpolate a DEM for a large number of LiDAR files. Not only does this batch processing mode enable the tool to run in a more optimized parallel manner, but it will also allow the tool to include a small buffer of points extending into adjacent tiles when interpolating an individual file. This can significantly reduce edge-effects when the output tiles are later mosaicked together. When run in this batch mode, the output file (<code>output</code>) also need not be specified; the tool will instead create an output file with the same name as each input LiDAR file, but with the .tif extension. This can provide a very efficient means for processing extremely large LiDAR data sets.</p>
+<p>Users may excluded points from the interpolation based on point classification values, which follow the LAS classification scheme. Excluded classes are specified using the <code>exclude_cls</code> parameter. For example, to exclude all vegetation and building classified points from the interpolation, use --exclude_cls='3,4,5,6'. Users may also exclude points from the interpolation if they fall below or above the minimum (<code>minz</code>) or maximum (<code>maxz</code>) thresholds respectively. This can be a useful means of excluding anomalously high or low points. Note that points that are classified as low points (LAS class 7) or high noise (LAS class 18) are automatically excluded from the interpolation operation.</p>
+<p>The tool will search for the nearest input LiDAR point to each grid cell centre, up to a maximum search distance (<code>radius</code>). If a grid cell does not have a LiDAR point within this search distance, it will be assigned the NoData value in the output raster. In LiDAR data, these void areas are often associated with larger waterbodies. These NoData areas can later be better dealt with using the <code>fill_missing_data</code> tool after interpolation.</p>
+<h3 id="see-also-8"><a class="header" href="#see-also-8">See Also</a></h3>
+<p><code>lidar_tin_gridding</code>, <code>lidar_idw_interpolation</code>, <code>lidar_tin_gridding</code>, <code>remove_off_terrain_objects</code>, <code>fill_missing_data</code></p>
+<h3 id="python-api-9"><a class="header" href="#python-api-9">Python API</a></h3>
+<pre><code class="language-python">def lidar_nearest_neighbour_gridding(self, input_lidar: Optional[Lidar], interpolation_parameter: str = "elevation", returns_included: str = "all", cell_size: float = 1.0, search_radius: float = 2.5, excluded_classes: List[int] = None, min_elev: float = float('-inf'), max_elev: float = float('inf')) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="lidar-radial-basis-function-interpolation"><a class="header" href="#lidar-radial-basis-function-interpolation">LiDAR Radial Basis Function Interpolation</a></h2>
+<p><strong>Function name:</strong> <code>lidar_radial_basis_function_interpolation</code></p>
+<h3 id="python-api-10"><a class="header" href="#python-api-10">Python API</a></h3>
+<pre><code class="language-python">def lidar_radial_basis_function_interpolation(self, input_lidar: Optional[Lidar], interpolation_parameter: str = "elevation", returns_included: str = "all", cell_size: float = 1.0, num_points: int = 15, excluded_classes: List[int] = None, min_elev: float = float('-inf'), max_elev: float = float('inf'), func_type: str = "thinplatespline", poly_order: str = "none", weight: float = 0.1) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="lidar-sibson-interpolation"><a class="header" href="#lidar-sibson-interpolation">LiDAR Sibson Interpolation</a></h2>
+<p><strong>Function name:</strong> <code>lidar_sibson_interpolation</code></p>
+<h3 id="description-1"><a class="header" href="#description-1">Description</a></h3>
+<p>This tool interpolates LiDAR files using <code>Sibson's interpolation method</code>, sometimes referred to as natural-neighbour interpolation (not to be confused with nearest-neighbour interpolation, <code>lidar_nearest_neighbour_gridding</code>). Sibon's method is based on assigning weight to points for which inserting a grid point would result in captured areas of the <code>Voronoi tessellation</code> of the input point set. The larger the captured area, the higher the weight assigned to the associated point. One of the main advantages of this natural neighbour approach to interpolation over similar techniques, such as inverse-distance weighting (IDW <code>lidar_idw_interpolation</code>), is that there is no need to specify a search distance or other interpolation weighting parameters. Sibson's approach frequently provides a very suitable interpolation for LiDAR data. The method requires the calculation of a Delaunay triangulation, from which the Voronoi tessellation is calculated.</p>
+<p>The user must specify the value of the IDW weight parameter (<code>weight</code>). The output grid can be based on any of the stored LiDAR point parameters (<code>parameter</code>), including elevation (in which case the output grid is a digital elevation model, DEM), intensity, class, return number, number of returns, scan angle values, and user data values. Similarly, the user may specify which point return values (<code>returns</code>) to include in the interpolation, including all points, last returns (including single return points), and first returns (including single return points).</p>
+<p>The user must specify the grid resolution of the output raster (<code>resolution</code>), and optionally, the name of the input LiDAR file (<code>input</code>) and output raster (<code>output</code>). Note that if an input LiDAR file (<code>input</code>) is not specified by the user, the tool will search for all valid LiDAR (*.las, *.laz, *.zlidar) files contained within the current working directory. This feature can be useful when you need to interpolate a DEM for a large number of LiDAR files. This batch processing mode enables the tool to include a small buffer of points extending into adjacent tiles when interpolating an individual file. This can significantly reduce edge-effects when the output tiles are later mosaicked together. When run in this batch mode, the output file (<code>output</code>) also need not be specified; the tool will instead create an output file with the same name as each input LiDAR file, but with the .tif extension. This can provide a very efficient means for processing extremely large LiDAR data sets.</p>
+<p>Users may excluded points from the interpolation based on point classification values, which follow the LAS classification scheme. Excluded classes are specified using the <code>exclude_cls</code> parameter. For example, to exclude all vegetation and building classified points from the interpolation, use --exclude_cls='3,4,5,6'. Users may also exclude points from the interpolation if they fall below or above the minimum (<code>minz</code>) or maximum (<code>maxz</code>) thresholds respectively. This can be a useful means of excluding anomalously high or low points. Note that points that are classified as low points (LAS class 7) or high noise (LAS class 18) are automatically excluded from the interpolation operation.</p>
+<h3 id="see-also-9"><a class="header" href="#see-also-9">See Also</a></h3>
+<p><code>lidar_tin_gridding</code>, <code>lidar_nearest_neighbour_gridding</code>, <code>lidar_idw_interpolation</code></p>
+<h3 id="python-api-11"><a class="header" href="#python-api-11">Python API</a></h3>
+<pre><code class="language-python">def lidar_sibson_interpolation(self, input_lidar: Optional[Lidar], interpolation_parameter: str = "elevation", resolution: float = 1.0, returns_included: str = "all", excluded_classes: Optional[List[int]] = None, min_elev: float = float('-inf'), max_elev: float = float('inf')) -&gt; Optional[Raster]:
+</code></pre>
+<hr />
+<h2 id="lidar-thin"><a class="header" href="#lidar-thin">LiDAR Thin</a></h2>
+<p><strong>Function name:</strong> <code>lidar_thin</code></p>
+<p>Thins a LiDAR point cloud, reducing point density.</p>
+<h3 id="python-api-12"><a class="header" href="#python-api-12">Python API</a></h3>
+<pre><code class="language-python">def lidar_thin(self, input: Lidar, resolution: float = 1.0, selection_method: str = "first", save_filtered: bool = False) -&gt; Tuple[Lidar, Union[Lidar, None]]:
+</code></pre>
+<hr />
+<h2 id="lidar-thin-high-density"><a class="header" href="#lidar-thin-high-density">LiDAR Thin High Density</a></h2>
+<p><strong>Function name:</strong> <code>lidar_thin_high_density</code></p>
+<p>Thins points from high density areas within a LiDAR point cloud.</p>
+<h3 id="python-api-13"><a class="header" href="#python-api-13">Python API</a></h3>
+<pre><code class="language-python">def lidar_thin_high_density(self, input: Lidar, density: float, resolution: float = 1.0, save_filtered: bool = False) -&gt; Tuple[Lidar, Union[Lidar, None]]:
+</code></pre>
+<hr />
+<h2 id="lidar-tile-footprint"><a class="header" href="#lidar-tile-footprint">LiDAR Tile Footprint</a></h2>
+<p><strong>Function name:</strong> <code>lidar_tile_footprint</code></p>
+<p>This tool can be used to create a vector polygon of the bounding box or convex hull of a LiDAR point cloud (i.e. LAS file). If the user specified an input file (<code>input</code>) and output file (<code>output</code>), the tool will calculate the footprint, containing all of the data points, and output this feature to a vector polygon file. If the <code>input</code> and <code>output</code> parameters are left unspecified, the tool will calculate the footprint of every LAS file contained within the working directory and output these features to a single vector polygon file. If this is the desired mode of operation, it is important to specify the working directory (<code>wd</code>) containing the group of LAS files; do not specify the optional <code>input</code> and <code>output</code> parameters in this case. Each polygon in the output vector will contain a <code>LAS_NM</code> field, specifying the source LAS file name, a <code>NUM_PNTS</code> field, containing the number of points within the source file, and Z_MIN and Z_MAX fields, containing the minimum and maximum elevations. This output can therefore be useful to create an index map of a large tiled LiDAR dataset.</p>
+<p>By default, this tool identifies the axis-aligned minimum rectangular hull, or bounding box, containing the points in each of the input tiles. If the user specifies the <code>hull</code> flag, the tool will identify the <code>minimum convex hull</code> instead of the bounding box. This option is considerably more computationally intensive and will be a far longer running operation if many tiles are specified as inputs.</p>
+<p><strong>A note on LAZ file inputs:</strong> While WhiteboxTools does not currently support the reading and writing of the compressed LiDAR format <code>LAZ</code>, it is able to read <code>LAZ</code> file headers. This tool, when run in in the bounding box mode (rather than the convex hull mode), is able to take <code>LAZ</code> input files.</p>
+<p><code>lidar_tile</code>, <code>LayerFootprint</code>, <code>minimum_bounding_box</code>, <code>minimum_convex_hull</code></p>
+<h3 id="python-api-14"><a class="header" href="#python-api-14">Python API</a></h3>
+<pre><code class="language-python">def lidar_tile_footprint(self, input_lidar: Optional[Lidar], output_hulls: bool = False) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="lidar-tin-gridding"><a class="header" href="#lidar-tin-gridding">LiDAR TIN Gridding</a></h2>
+<p><strong>Function name:</strong> <code>lidar_tin_gridding</code></p>
+<p>This tool creates a raster grid based on a Delaunay triangular irregular network (TIN) fitted to LiDAR points. The output grid can be based on any of the stored LiDAR point parameters (<code>parameter</code>), including elevation (in which case the output grid is a digital elevation model, DEM), intensity, class, return number, number of returns, scan angle, RGB (colour) values, and user data values. Similarly, the user may specify which point return values (<code>returns</code>) to include in the interpolation, including all points, last returns (including single return points), and first returns (including single return points).</p>
+<p>The user must specify the grid resolution of the output raster (<code>resolution</code>), and optionally, the name of the input LiDAR file (<code>input</code>) and output raster (<code>output</code>). Note that if an input LiDAR file (<code>input</code>) is not specified by the user, the tool will search for all valid LiDAR (*.las, *.laz, *.zlidar) files contained within the current working directory. This feature can be very useful when you need to interpolate a DEM for a large number of LiDAR files. Not only does this batch processing mode enable the tool to run in a more optimized parallel manner, but it will also allow the tool to include a small buffer of points extending into adjacent tiles when interpolating an individual file. This can significantly reduce edge-effects when the output tiles are later mosaicked together. When run in this batch mode, the output file (<code>output</code>) also need not be specified; the tool will instead create an output file with the same name as each input LiDAR file, but with the .tif extension. This can provide a very efficient means for processing extremely large LiDAR data sets.</p>
+<p>Users may excluded points from the interpolation based on point classification values, which follow the LAS classification scheme. Excluded classes are specified using the <code>exclude_cls</code> parameter. For example, to exclude all vegetation and building classified points from the interpolation, use --exclude_cls='3,4,5,6'. Users may also exclude points from the interpolation if they fall below or above the minimum (<code>minz</code>) or maximum (<code>maxz</code>) thresholds respectively. This can be a useful means of excluding anomalously high or low points. Note that points that are classified as low points (LAS class 7) or high noise (LAS class 18) are automatically excluded from the interpolation operation.</p>
+<p>Triangulation will generally completely fill the convex hull containing the input point data. This can sometimes result in very long and narrow triangles at the edges of the data or connecting vertices on either side of void areas. In LiDAR data, these void areas are often associated with larger waterbodies, and triangulation can result in very unnatural interpolated patterns within these areas. To avoid this problem, the user may specify a the maximum allowable triangle edge length (<code>max_triangle_edge_length</code>) and all grid cells within triangular facets with edges larger than this threshold are simply assigned the NoData values in the output DSM. These NoData areas can later be better dealt with using the <code>fill_missing_data</code> tool after interpolation.</p>
+<h3 id="see-also-10"><a class="header" href="#see-also-10">See Also</a></h3>
+<p><code>lidar_idw_interpolation</code>, <code>lidar_nearest_neighbour_gridding</code>, <code>lidar_tin_gridding</code>, <code>filter_lidar_classes</code>, <code>fill_missing_data</code></p>
+<h3 id="python-api-15"><a class="header" href="#python-api-15">Python API</a></h3>
+<pre><code class="language-python">def lidar_tin_gridding(self, input_lidar: Optional[Lidar], interpolation_parameter: str = "elevation", returns_included: str = "all", cell_size: float = 1.0, excluded_classes: List[int] = None, min_elev: float = float('-inf'), max_elev: float = float('inf'), max_triangle_edge_length: float = float('inf')) -&gt; Raster:
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="lidar-filtering-classification.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="lidar-analysis-metrics.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="lidar-filtering-classification.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="lidar-analysis-metrics.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

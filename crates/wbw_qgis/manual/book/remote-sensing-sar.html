@@ -1,0 +1,535 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>SAR Processing - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html" class="active"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="sar-processing"><a class="header" href="#sar-processing">SAR Processing</a></h1>
+<hr />
+<h2 id="cloude-pottier-decomposition"><a class="header" href="#cloude-pottier-decomposition">Cloude Pottier Decomposition</a></h2>
+<p><strong>Function name:</strong> <code>cloude_pottier_decomposition</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="enhanced-lee-filter"><a class="header" href="#enhanced-lee-filter">Enhanced Lee Filter</a></h2>
+<p><strong>Function name:</strong> <code>enhanced_lee_filter</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="freeman-durden-decomposition"><a class="header" href="#freeman-durden-decomposition">Freeman Durden Decomposition</a></h2>
+<p><strong>Function name:</strong> <code>freeman_durden_decomposition</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="frost-filter"><a class="header" href="#frost-filter">Frost Filter</a></h2>
+<p><strong>Function name:</strong> <code>frost_filter</code></p>
+<p>Experimental</p>
+<p>Speckle reduction for SAR intensity imagery using Frost adaptive filtering.</p>
+<p>remote_sensing raster filter frost_filter legacy-port</p>
+<h3 id="parameters"><a class="header" href="#parameters">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input raster path or typed raster object.Required<code>input.tif</code>
+<code>radius</code>Local window radius in pixels (default 2).Optional<code>2</code>
+<code>damping_factor</code>Frost damping factor controlling exponential decay (default 2.0).Optional<code>2.0</code>
+<code>output</code>Optional output path. If omitted, output remains in memory.Optional—</p>
+<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
+<p><em>Applies frost_filter to an input raster.</em>
+<code>wbe.frost_filter(input='image.tif', output='frost_filter.tif')</code></p>
+<hr />
+<h2 id="gamma-map-filter"><a class="header" href="#gamma-map-filter">Gamma Map Filter</a></h2>
+<p><strong>Function name:</strong> <code>gamma_map_filter</code></p>
+<p>Experimental</p>
+<p>Gamma-MAP speckle filter for SAR imagery with ENL-aware noise modeling.</p>
+<p>remote_sensing raster filter gamma_map_filter legacy-port</p>
+<h3 id="parameters-1"><a class="header" href="#parameters-1">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input raster path or typed raster object.Required<code>input.tif</code>
+<code>radius</code>Local window radius in pixels (default 2).Optional<code>2</code>
+<code>enl</code>Equivalent number of looks (default 1.0).Optional<code>1.0</code>
+<code>output</code>Optional output path. If omitted, output remains in memory.Optional—</p>
+<h3 id="examples-1"><a class="header" href="#examples-1">Examples</a></h3>
+<p><em>Applies gamma_map_filter to an input raster.</em>
+<code>wbe.gamma_map_filter(input='image.tif', output='gamma_map_filter.tif')</code></p>
+<hr />
+<h2 id="h-alpha-wisart-classification"><a class="header" href="#h-alpha-wisart-classification">H Alpha Wisart Classification</a></h2>
+<p><strong>Function name:</strong> <code>h_alpha_wisart_classification</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="kuan-filter"><a class="header" href="#kuan-filter">Kuan Filter</a></h2>
+<p><strong>Function name:</strong> <code>kuan_filter</code></p>
+<p>Experimental</p>
+<p>Kuan adaptive speckle filter for SAR intensity data.</p>
+<p>remote_sensing raster filter kuan_filter legacy-port</p>
+<h3 id="parameters-2"><a class="header" href="#parameters-2">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input raster path or typed raster object.Required<code>input.tif</code>
+<code>radius</code>Local window radius in pixels (default 2).Optional<code>2</code>
+<code>enl</code>Equivalent number of looks (default 1.0).Optional<code>1.0</code>
+<code>output</code>Optional output path. If omitted, output remains in memory.Optional—</p>
+<h3 id="examples-2"><a class="header" href="#examples-2">Examples</a></h3>
+<p><em>Applies kuan_filter to an input raster.</em>
+<code>wbe.kuan_filter(input='image.tif', output='kuan_filter.tif')</code></p>
+<hr />
+<h2 id="refined-lee-filter"><a class="header" href="#refined-lee-filter">Refined Lee Filter</a></h2>
+<p><strong>Function name:</strong> <code>refined_lee_filter</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="sar-analysis-readiness"><a class="header" href="#sar-analysis-readiness">SAR Analysis Readiness</a></h2>
+<p><strong>Function name:</strong> <code>sar_analysis_readiness</code></p>
+<p>PROProduction</p>
+<p>Evaluate SAR scene readiness for downstream analysis, including optional terrain and pairwise coherence-proxy checks.</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative"><a class="header" href="#workflow-narrative">Workflow Narrative</a></h3>
+<p><strong>SAR Readiness QA</strong></p>
+<h4 id="problem-it-solves"><a class="header" href="#problem-it-solves">Problem It Solves</a></h4>
+<p>Are SAR scenes normalized enough for robust multi-scene comparison and downstream analytics?</p>
+<h4 id="who-it-is-for"><a class="header" href="#who-it-is-for">Who It Is For</a></h4>
+<ul>
+<li>SAR specialists and all-weather monitoring teams.</li>
+</ul>
+<h4 id="primary-user"><a class="header" href="#primary-user">Primary User</a></h4>
+<p>Disaster/hazard monitoring units, remote sensing service firms, and infrastructure monitoring groups.</p>
+<h4 id="what-it-does"><a class="header" href="#what-it-does">What It Does</a></h4>
+<ul>
+<li>Produces analysis-ready SAR derivatives from SAR + DEM.</li>
+<li>Applies calibration, speckle filtering, and RTC-support factor generation.</li>
+<li>Accepts either direct SAR rasters or supported SAR bundles and records bundle metadata provenance.</li>
+<li>Optionally emits a pair-based coherence proxy and can auto-coregister the pair first when explicit opt-in alignment is requested.</li>
+</ul>
+<h4 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h4>
+<ul>
+<li>Converts input SAR intensity to calibrated backscatter-compatible values.</li>
+<li>Applies configurable speckle-window filtering for noise suppression.</li>
+<li>Computes terrain correction factors from DEM geometry, resolves bundle metadata when present, and optionally evaluates a pair coherence proxy.</li>
+<li>Indicative formula: gamma0 ~= sigma0 / cos(local_incidence), then local-window filtering and optional pair coherence estimation.</li>
+</ul>
+<h4 id="why-it-wins"><a class="header" href="#why-it-wins">Why It Wins</a></h4>
+<ul>
+<li>Couples SAR preprocessing with terrain support, bundle-native provenance, and explicit geometry guardrails, while still allowing an audited auto-coregistration handoff when pair alignment is not pre-established.</li>
+<li>Boundary note:</li>
+<li><code>sar_analysis_readiness</code> is not the dedicated interferogram+coherence production workflow.</li>
+<li>Dedicated companion tool (single combined workflow): <code>sar_interferogram_coherence</code>.</li>
+<li>Design spec and scope details: <code>docs/sar_interferogram_coherence_spec.md</code>.</li>
+</ul>
+<h4 id="typical-buying-trigger"><a class="header" href="#typical-buying-trigger">Typical Buying Trigger</a></h4>
+<p>An organization needs dependable all-weather monitoring where optical imagery is frequently unavailable.</p>
+<h4 id="typical-presets"><a class="header" href="#typical-presets">Typical Presets</a></h4>
+<ul>
+<li>default with single scene for preprocessing.</li>
+<li>pair mode with either direct raster pairs or bundle-resolved pair inputs for coherence-proxy output.</li>
+</ul>
+<h3 id="inputs"><a class="header" href="#inputs">Inputs</a></h3>
+<p>ParameterOptionalDescription
+input_sar or input_sar_bundle, input_demnoPrimary SAR source plus terrain model used for radiometric terrain correction and readiness metrics.
+input_measurement_keyyesOptional bundle measurement selector when the input SAR bundle contains multiple assets.
+optional pair_sar or pair_sar_bundle and look-angle controlsyesOptional secondary SAR source and geometry controls used for pair-based coherence-proxy diagnostics.
+pair_measurement_keyyesOptional bundle measurement selector when the pair SAR bundle contains multiple assets.
+auto_coregister_pair, coreg_max_offset_px, coreg_decimation, coreg_min_overlap_fractionyesOptional opt-in handoff to translation-mode pair alignment before coherence-proxy estimation when CRS/grid do not already match.
+speckle_window, z_factornoNoise-filter window and vertical scaling controls used in SAR preprocessing.</p>
+<h3 id="outputs"><a class="header" href="#outputs">Outputs</a></h3>
+<p>ParameterTypeDescription
+sar_backscatter_calibratedGeoTIFFCalibrated SAR backscatter raster suitable for quantitative comparison.
+speckle_filteredGeoTIFFSpeckle-reduced SAR raster for improved interpretability and downstream analysis.
+rtc_factorGeoTIFFRadiometric terrain correction factor raster used to normalize SAR signal.
+coherence_proxyoptional GeoTIFFOptional pair-based amplitude-domain coherence proxy raster when a compatible SAR pair is provided.
+summaryJSONMachine-readable summary report containing run metadata, QA diagnostics, and key metrics.
+html_reportHTMLHuman-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</p>
+<h3 id="python-example"><a class="header" href="#python-example">Python Example</a></h3>
+<p>`import whitebox_workflows as wbw</p>
+<p>wbe = wbw.WbEnvironment(include_pro=True, tier="pro")</p>
+<p>result = wbe.sar_analysis_readiness(
+input_sar_bundle="data/S1_reference.SAFE",
+input_measurement_key="vv",
+input_dem="data/dem.tif",
+pair_sar_bundle="data/S1_pair.SAFE",
+pair_measurement_key="vv",
+auto_coregister_pair=True,
+coreg_max_offset_px=24,
+speckle_window=5,
+output_prefix="output/sar_ready",
+)</p>
+<p>print(result)`</p>
+<h3 id="license-notice"><a class="header" href="#license-notice">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+<hr />
+<h2 id="sar-coregistration"><a class="header" href="#sar-coregistration">SAR Coregistration</a></h2>
+<p><strong>Function name:</strong> <code>sar_coregistration</code></p>
+<p>PROProduction</p>
+<p>Coregister moving SAR imagery to a reference grid (translation/affine/local-offset-grid modes).</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative-1"><a class="header" href="#workflow-narrative-1">Workflow Narrative</a></h3>
+<p><strong>SAR Coregistration</strong></p>
+<h4 id="problem-it-solves-1"><a class="header" href="#problem-it-solves-1">Problem It Solves</a></h4>
+<p>Can we put a moving SAR scene on the reference scene grid with enough geometric confidence for pairwise analytics?</p>
+<h4 id="who-it-is-for-1"><a class="header" href="#who-it-is-for-1">Who It Is For</a></h4>
+<ul>
+<li>SAR analysts, infrastructure monitoring teams, and registration-first EO pipelines.</li>
+</ul>
+<h4 id="primary-user-1"><a class="header" href="#primary-user-1">Primary User</a></h4>
+<p>InSAR/infrastructure monitoring teams, geospatial intelligence groups, and SAR QA operations.</p>
+<h4 id="what-it-does-1"><a class="header" href="#what-it-does-1">What It Does</a></h4>
+<ul>
+<li>Aligns a moving SAR raster or resolved SAR-bundle measurement onto a reference SAR grid.</li>
+<li>Supports <code>translation</code>, <code>affine</code>, and <code>local_offset_grid</code> modes (<code>affine</code> and <code>local_offset_grid</code> remain experimental).</li>
+<li>Emits aligned output plus transform/summary diagnostics, including compatibility and acceptance gates for machine-checkable downstream use.</li>
+</ul>
+<h4 id="how-it-works-1"><a class="header" href="#how-it-works-1">How It Works</a></h4>
+<ul>
+<li>Harmonizes the moving SAR raster to the reference CRS/grid when needed and evaluates strict scene compatibility where metadata allows.</li>
+<li>Applies amplitude-domain matching with bounded search and subpixel refinement, then executes the selected transform model.</li>
+<li>Emits per-run QA including burst diagnostics (Sentinel-1), continuity checks, and Phase-A acceptance gates.</li>
+<li>Indicative formula: $\rho(\Delta x, \Delta y) = \mathrm{corr}(\log(1 + I_{ref}), \log(1 + I_{mov}(x-\Delta x, y-\Delta y)))$.</li>
+</ul>
+<h4 id="why-it-wins-1"><a class="header" href="#why-it-wins-1">Why It Wins</a></h4>
+<ul>
+<li>Accepts both direct rasters and supported SAR bundles while turning pair alignment into a reproducible audited workflow artifact instead of an opaque manual preprocessing step.</li>
+</ul>
+<h4 id="typical-buying-trigger-1"><a class="header" href="#typical-buying-trigger-1">Typical Buying Trigger</a></h4>
+<p>A team needs a defensible alignment stage before coherence, pair differencing, or cross-sensor fusion.</p>
+<h4 id="typical-presets-1"><a class="header" href="#typical-presets-1">Typical Presets</a></h4>
+<ul>
+<li>translation: default global shift path.</li>
+<li>affine: global affine refinement (experimental).</li>
+<li>local_offset_grid: local residual warp model (experimental).</li>
+</ul>
+<h3 id="inputs-1"><a class="header" href="#inputs-1">Inputs</a></h3>
+<p>ParameterOptionalDescription
+reference_sar or reference_sar_bundlenoReference SAR source provided either as a raster path or a supported SAR bundle.
+moving_sar or moving_sar_bundlenoMoving SAR source provided either as a raster path or a supported SAR bundle.
+reference_measurement_key, moving_measurement_keyyesOptional bundle measurement selectors when either SAR bundle contains multiple measurement assets.
+coreg_modeyesCoregistration mode: <code>translation</code>, <code>affine</code>, or <code>local_offset_grid</code> (experimental for affine/local).
+max_offset_px, decimation, min_overlap_fractionyesSearch-radius and sampled-overlap controls for correlation-based shift estimation.
+input_dem, dem_z_factoryesOptional DEM-assisted initialization controls used for geometry-informed matching support.
+phase_a_* thresholdsyesOptional acceptance/continuity threshold overrides for deterministic quality gating.
+resample_method, output_prefixyesOutput resampling mode and artifact prefix.</p>
+<h3 id="outputs-1"><a class="header" href="#outputs-1">Outputs</a></h3>
+<p>ParameterTypeDescription
+moving_alignedGeoTIFFMoving SAR raster resampled onto the reference SAR grid.
+offset_xGeoTIFFConstant x-offset surface in map units for the estimated translation.
+offset_yGeoTIFFConstant y-offset surface in map units for the estimated translation.
+transformJSONMachine-readable transform and QA summary for the estimated alignment.
+summaryJSONMachine-readable workflow report containing parameters, QA diagnostics, and artifact paths.
+html_reportHTMLHuman-readable report generated from the summary contract for review and traceability.</p>
+<h3 id="python-example-1"><a class="header" href="#python-example-1">Python Example</a></h3>
+<p>`import whitebox_workflows as wbw</p>
+<p>wbe = wbw.WbEnvironment(include_pro=True, tier="pro")</p>
+<p>result = wbe.sar_coregistration(
+reference_sar_bundle="data/S1_reference.SAFE",
+reference_measurement_key="vv",
+moving_sar_bundle="data/S1_pair.SAFE",
+moving_measurement_key="vv",
+max_offset_px=24,
+decimation=4,
+resample_method="bilinear",
+output_prefix="output/sar_coreg",
+)</p>
+<p>print(result)`</p>
+<h3 id="license-notice-1"><a class="header" href="#license-notice-1">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+<hr />
+<h2 id="sar-interferogram-coherence"><a class="header" href="#sar-interferogram-coherence">SAR Interferogram Coherence</a></h2>
+<p><strong>Function name:</strong> <code>sar_interferogram_coherence</code></p>
+<p>PROProduction</p>
+<p>Estimate interferometric coherence between SAR acquisitions (direct, complex, or bundle modes).</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative-2"><a class="header" href="#workflow-narrative-2">Workflow Narrative</a></h3>
+<p><strong>SAR Interferogram and Coherence</strong></p>
+<h4 id="problem-it-solves-2"><a class="header" href="#problem-it-solves-2">Problem It Solves</a></h4>
+<p>Can this SAR pair be converted into defensible interferogram/coherence products with auditable provenance and QA diagnostics?</p>
+<h4 id="who-it-is-for-2"><a class="header" href="#who-it-is-for-2">Who It Is For</a></h4>
+<ul>
+<li>InSAR practitioners and SAR operations teams requiring repeatable pair-level coherence/interferogram products.</li>
+</ul>
+<h4 id="primary-user-2"><a class="header" href="#primary-user-2">Primary User</a></h4>
+<p>Infrastructure deformation monitoring teams, hazard intelligence groups, and SAR analytics operations.</p>
+<h4 id="what-it-does-2"><a class="header" href="#what-it-does-2">What It Does</a></h4>
+<ul>
+<li>Produces interferogram, coherence, and valid-mask outputs from compatible SAR pairs in one dedicated workflow.</li>
+<li>Accepts either direct SAR rasters, supported SAR bundles, or complex split real/imag SAR inputs.</li>
+<li>Emits standardized machine-readable summary and optional HTML report artifacts for auditable downstream use.</li>
+</ul>
+<h4 id="how-it-works-2"><a class="header" href="#how-it-works-2">How It Works</a></h4>
+<ul>
+<li>Resolves reference and moving SAR inputs from either direct raster mode, bundle mode, or complex component mode.</li>
+<li>Optionally performs internal <code>sar_coregistration</code> handoff when grids are mismatched, unless the caller explicitly asserts a prealigned pair.</li>
+<li>Computes either complex-domain interferometric phase and coherence magnitude (complex mode) or amplitude-domain proxy interferogram/coherence (scalar mode).</li>
+<li>Uses summed-area coherence kernels and parallel row-chunk evaluation to reduce runtime on larger scenes; optional fast mode can further decimate coherence sampling.</li>
+<li>Indicative formulas: $\phi = \mathrm{atan2}(\Im(z), \Re(z))$ for interferometric phase where $z = s_{ref},\overline{s_{mov}}$, and local-window coherence proxy from normalized cross-correlation magnitude.</li>
+</ul>
+<h4 id="why-it-wins-2"><a class="header" href="#why-it-wins-2">Why It Wins</a></h4>
+<ul>
+<li>Unifies SAR pair ingest, optional alignment handoff, product generation, acceptance gating, and QA/report artifacts in one reproducible contract workflow.</li>
+<li>Operational note:</li>
+<li>When <code>auto_coregister_pair=true</code>, this tool invokes the existing <code>sar_coregistration</code> engine internally if the pair grids do not already match.</li>
+<li>If the pair is known to already be aligned, prefer <code>assume_prealigned_pair=true</code> and leave <code>auto_coregister_pair=false</code> to avoid unnecessary alignment work.</li>
+<li>Failed acceptance on the coreg residual gate indicates the pair/alignment should not be treated as registration-quality enough for trusted downstream interpretation.</li>
+</ul>
+<h4 id="typical-buying-trigger-2"><a class="header" href="#typical-buying-trigger-2">Typical Buying Trigger</a></h4>
+<p>Teams need a dedicated production stage for interferogram/coherence outputs instead of ad hoc post-processing scripts.</p>
+<h4 id="typical-presets-2"><a class="header" href="#typical-presets-2">Typical Presets</a></h4>
+<ul>
+<li>scalar raster pair: direct amplitude-domain processing with optional auto-coregistration.</li>
+<li>bundle pair: bundle-native measurement resolution with identical output contract.</li>
+<li>complex split mode: complex-domain phase/coherence computation from explicit real/imag rasters.</li>
+<li>fast large-scene mode: reduced coherence workload via <code>performance_profile="fast"</code>, optional <code>coherence_decimation</code>, and selective artifact writing.</li>
+</ul>
+<h3 id="inputs-2"><a class="header" href="#inputs-2">Inputs</a></h3>
+<p>ParameterOptionalDescription
+reference_sar or reference_sar_bundleno (unless complex mode)Reference SAR source provided either as a direct raster path or supported SAR bundle root.
+moving_sar or moving_sar_bundleno (unless complex mode)Moving SAR source provided either as a direct raster path or supported SAR bundle root.
+reference_sar_real, reference_sar_imag, moving_sar_real, moving_sar_imagno (complex mode)Complex input mode components for explicit complex-domain interferogram/coherence processing.
+reference_measurement_key, moving_measurement_keyyesOptional bundle measurement selectors when SAR bundles include multiple measurement assets.
+auto_coregister_pair, assume_prealigned_pair, coreg_modeyesPair-alignment controls: either invoke internal <code>sar_coregistration</code> when needed or explicitly assert the pair is already aligned.
+coreg_max_offset_px, coreg_decimation, coreg_min_overlap_fractionyesOptional scalar-mode coreg handoff tuning controls for search radius, sampling stride, and minimum overlap.
+coherence_window, performance_profile, coherence_decimationyesCoherence kernel controls. Fast mode can reduce effective window size and decimate coherence sampling on very large scenes.
+input_demyesOptional DEM used for terrain-context masking and geometry-support pathways.
+write_interferogram, write_coherence, write_valid_mask, write_html_reportyesOptional artifact suppression controls used to reduce heavy-run output cost.
+output_layout, output_compression, output_tile_sizeyesGeoTIFF write-profile controls for standard vs COG-style output and compression behavior.
+output_prefixyesOutput artifact prefix.</p>
+<h3 id="outputs-2"><a class="header" href="#outputs-2">Outputs</a></h3>
+<p>ParameterTypeDescription
+interferogramoptional GeoTIFFInterferogram raster (complex phase in complex mode, amplitude-domain proxy in scalar mode) when writing is enabled.
+coherenceoptional GeoTIFFCoherence magnitude raster from local-window pair statistics when writing is enabled.
+valid_maskoptional GeoTIFFBinary/flag mask indicating valid pair-support pixels used during computation when writing is enabled.
+summaryJSONMachine-readable summary report containing run metadata, QA diagnostics, timings, and artifact paths.
+html_reportoptional HTMLHuman-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability when writing is enabled.</p>
+<h3 id="python-example-2"><a class="header" href="#python-example-2">Python Example</a></h3>
+<p>`import whitebox_workflows as wbw</p>
+<p>wbe = wbw.WbEnvironment(include_pro=True, tier="pro")</p>
+<p>result = wbe.sar_interferogram_coherence(
+reference_sar="output/sar_coreg_reference.tif",
+moving_sar="output/sar_coreg_moving_aligned.tif",
+assume_prealigned_pair=True,
+coherence_window=7,
+performance_profile="balanced",
+output_prefix="output/sar_ifg_coh",
+)</p>
+<p>print(result)`</p>
+<h3 id="license-notice-2"><a class="header" href="#license-notice-2">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+<hr />
+<h2 id="wisart-iterative-clustering"><a class="header" href="#wisart-iterative-clustering">Wisart Iterative Clustering</a></h2>
+<p><strong>Function name:</strong> <code>wisart_iterative_clustering</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="yamaguchi-4component-decomposition"><a class="header" href="#yamaguchi-4component-decomposition">Yamaguchi 4component Decomposition</a></h2>
+<p><strong>Function name:</strong> <code>yamaguchi_4component_decomposition</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="remote-sensing-spectral-analytics.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="remote-sensing-workflow-products.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="remote-sensing-spectral-analytics.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="remote-sensing-workflow-products.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

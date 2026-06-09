@@ -6,6 +6,19 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [2.0.5] - 2026-06-09
+
+### Added
+- Added `is_pip_available()` utility function to detect when pip module is missing in the Python environment. Used for platform-aware diagnostics, particularly for detecting OSGeo4W installations on Windows.
+- Added `get_osgeo4w_pip_error_message()` helper function to generate platform-specific error guidance for pip bootstrap issues. On Windows/OSGeo4W, provides step-by-step instructions for `ensurepip` or direct pip bootstrap script; on Unix-like systems provides generic pip installation guidance.
+
+### Changed
+- Enhanced error reporting in `install_or_upgrade_whitebox_workflows()` to provide helpful, context-aware error messages when pip is not available. Previously raised a generic error; now detects the pip missing case and returns structured guidance text suitable for user-facing dialogs.
+- Improved plugin integration architecture to decouple tool-specific error handling from backend bootstrap logic. New diagnostic utilities (`is_pip_available`, `get_osgeo4w_pip_error_message`) enable frontend clients (QGIS, R, Python scripts) to implement context-appropriate error recovery strategies.
+
+### Fixed
+- Fixed ImportError handling in `install_or_upgrade_whitebox_workflows()` to catch and re-report pip import failures with user-friendly remediation steps, particularly for Windows OSGeo4W environments where pip is not included by default.
+
 ## [2.0.4] - 2026-06-07
 
 ### Added

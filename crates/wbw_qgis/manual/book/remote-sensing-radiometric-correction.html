@@ -1,0 +1,393 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Radiometric Correction - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html" class="active"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="radiometric-correction"><a class="header" href="#radiometric-correction">Radiometric Correction</a></h1>
+<hr />
+<h2 id="brdf-surface-reflectance-consistency"><a class="header" href="#brdf-surface-reflectance-consistency">BRDF Surface Reflectance Consistency</a></h2>
+<p><strong>Function name:</strong> <code>brdf_surface_reflectance_consistency</code></p>
+<p>PROProduction</p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative"><a class="header" href="#workflow-narrative">Workflow Narrative</a></h3>
+<p><strong>Surface Reflectance Consistency Analysis</strong></p>
+<h4 id="problem-it-solves"><a class="header" href="#problem-it-solves">Problem It Solves</a></h4>
+<p>Are directional and terrain illumination effects sufficiently normalized for reliable scene-to-scene reflectance comparison?</p>
+<h4 id="who-it-is-for"><a class="header" href="#who-it-is-for">Who It Is For</a></h4>
+<ul>
+<li>Optical remote sensing teams preparing cross-scene reflectance products for trend/change workflows.</li>
+</ul>
+<h4 id="primary-user"><a class="header" href="#primary-user">Primary User</a></h4>
+<p>EO product teams, environmental mapping agencies, and analytics groups with multi-date reflectance pipelines.</p>
+<h4 id="what-it-does"><a class="header" href="#what-it-does">What It Does</a></h4>
+<ul>
+<li>Harmonizes reflectance across dates and sensors after terrain correction.</li>
+<li>Quantifies normalization magnitude and confidence for QA-aware downstream analysis.</li>
+<li>Packages reflectance consistency as a reproducible workflow-stage product.</li>
+</ul>
+<h4 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h4>
+<ul>
+<li>Runs an OSS terrain-correction prep stage when the input scene is still topographically distorted.</li>
+<li>Derives normalization delta from pre/post correction residual magnitude.</li>
+<li>Computes consistency confidence using exponential damping of large correction residuals.</li>
+<li>Indicative formula: $C = \exp(-\Delta / s) \cdot Q$, where $\Delta$ is normalization delta and $Q$ is quality confidence.</li>
+</ul>
+<h4 id="why-it-wins"><a class="header" href="#why-it-wins">Why It Wins</a></h4>
+<ul>
+<li>Couples normalization output with explicit delta and confidence diagnostics, enabling QA-aware downstream acceptance rules.</li>
+</ul>
+<h4 id="typical-buying-trigger"><a class="header" href="#typical-buying-trigger">Typical Buying Trigger</a></h4>
+<p>Teams observe inconsistent reflectance behavior across acquisition geometries and need a reproducible consistency gate.</p>
+<h4 id="typical-presets"><a class="header" href="#typical-presets">Typical Presets</a></h4>
+<ul>
+<li>fast: quicker normalization for large-area throughput.</li>
+<li>balanced: default quality/speed tradeoff.</li>
+<li>conservative: stronger correction confidence thresholding.</li>
+</ul>
+<h3 id="inputs"><a class="header" href="#inputs">Inputs</a></h3>
+<p>ParameterOptionalDescription
+input_red, input_nir, input_demnoCore optical + terrain inputs used for topographic/reflectance normalization workflows.
+solar_zenith_deg, solar_azimuth_degnoSolar geometry parameters used to model illumination and terrain incidence effects.
+optional input_greenyesOptional green band used by workflows that include green-channel diagnostics.
+profile: fast | balanced | conservativenoProcessing profile controlling sensitivity, quality strictness, and runtime tradeoffs.</p>
+<h3 id="outputs"><a class="header" href="#outputs">Outputs</a></h3>
+<p>ParameterTypeDescription
+brdf_normalized_reflectanceGeoTIFFBRDF-normalized reflectance raster with improved angular consistency.
+normalization_deltaGeoTIFFDifference layer showing magnitude of BRDF normalization adjustments.
+consistency_confidenceGeoTIFFConfidence surface indicating reflectance consistency after normalization.
+summaryJSONMachine-readable summary report containing run metadata, QA diagnostics, and key metrics.
+html_reportHTMLHuman-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</p>
+<h3 id="python-example"><a class="header" href="#python-example">Python Example</a></h3>
+<p>`import whitebox_workflows as wbw</p>
+<p>wbe = wbw.WbEnvironment(include_pro=True, tier="pro")</p>
+<p>normalized, delta, confidence, summary = wbe.brdf_surface_reflectance_consistency(
+input_red="data/red.tif",
+input_nir="data/nir.tif",
+input_dem="data/dem.tif",
+input_green="data/green.tif",
+solar_zenith_deg=40.0,
+solar_azimuth_deg=165.0,
+profile="balanced",
+output_prefix="output/brdf_consistency",
+)</p>
+<p>print(normalized)
+print(delta)
+print(confidence)
+print(summary)`</p>
+<h3 id="license-notice"><a class="header" href="#license-notice">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+<hr />
+<h2 id="brdf-normalization"><a class="header" href="#brdf-normalization">BRDF Normalization</a></h2>
+<p><strong>Function name:</strong> <code>brdf_normalization</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="correct-vignetting"><a class="header" href="#correct-vignetting">Correct Vignetting</a></h2>
+<p><strong>Function name:</strong> <code>correct_vignetting</code></p>
+<p>This tool can be used to reduce vignetting within an image. Vignetting refers to the reduction of image brightness away from the image centre (i.e. the principal point). Vignetting is a radiometric distortion resulting from lens characteristics. The algorithm calculates the brightness value in the output image (BVout) as:</p>
+<p>BVout = BVin / [cos^n(arctan(d / f))]</p>
+<p>Where d is the photo-distance from the principal point in millimetres, f is the focal length of the camera, in millimeters, and n is a user-specified parameter. Pixel distances are converted to photo-distances (in millimetres) using the specified image width, i.e. distance between left and right edges (mm). For many cameras, 4.0 is an appropriate value of the n parameter. A second pass of the image is used to rescale the output image so that it possesses the same minimum and maximum values as the input image.</p>
+<p>If an RGB image is input, the analysis will be performed on the intensity component of the HSI transform.</p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def correct_vignetting(self, image: Raster, principal_point: Vector, focal_length: float = 304.8, image_width: float = 228.6, n_param: float = 4.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="dark-object-subtraction"><a class="header" href="#dark-object-subtraction">Dark Object Subtraction</a></h2>
+<p><strong>Function name:</strong> <code>dark_object_subtraction</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="dn-to-toa-reflectance"><a class="header" href="#dn-to-toa-reflectance">Dn To Toa Reflectance</a></h2>
+<p><strong>Function name:</strong> <code>dn_to_toa_reflectance</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="terrain-corrected-optical-analytics"><a class="header" href="#terrain-corrected-optical-analytics">Terrain Corrected Optical Analytics</a></h2>
+<p><strong>Function name:</strong> <code>terrain_corrected_optical_analytics</code></p>
+<p>PROProduction</p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative-1"><a class="header" href="#workflow-narrative-1">Workflow Narrative</a></h3>
+<p><strong>Terrain-Corrected Optical Prep</strong></p>
+<h4 id="problem-it-solves-1"><a class="header" href="#problem-it-solves-1">Problem It Solves</a></h4>
+<p>Can we reduce terrain illumination bias so downstream indices and change products are defensible?</p>
+<h4 id="who-it-is-for-1"><a class="header" href="#who-it-is-for-1">Who It Is For</a></h4>
+<ul>
+<li>Remote sensing practitioners working in high-relief terrain.</li>
+</ul>
+<h4 id="primary-user-1"><a class="header" href="#primary-user-1">Primary User</a></h4>
+<p>EO analytics teams, natural resource agencies, and monitoring service providers.</p>
+<h4 id="what-it-does-1"><a class="header" href="#what-it-does-1">What It Does</a></h4>
+<ul>
+<li>Applies terrain-aware optical correction (C-correction style) using DEM-derived geometry.</li>
+<li>Builds cloud/shadow masks and quality confidence diagnostics alongside corrected bands.</li>
+<li>Produces analysis-ready corrected optical outputs for downstream monitoring/classification.</li>
+</ul>
+<h4 id="how-it-works-1"><a class="header" href="#how-it-works-1">How It Works</a></h4>
+<ul>
+<li>Derives slope/aspect illumination terms from the DEM and solar geometry parameters.</li>
+<li>Applies per-band topographic normalization (C-correction style) to reduce relief-driven bias.</li>
+<li>Generates cloud-shadow and quality layers from correction residual behavior and masking rules.</li>
+<li>Indicative formula: L_corr ~= L_obs * (cos(theta_s) + C) / (cos(i) + C), where i is incidence angle from DEM slope/aspect.</li>
+</ul>
+<h4 id="why-it-wins-1"><a class="header" href="#why-it-wins-1">Why It Wins</a></h4>
+<ul>
+<li>Integrates correction and QA/mask outputs in one workflow rather than forcing separate ad hoc preprocessing scripts.</li>
+</ul>
+<h4 id="typical-buying-trigger-1"><a class="header" href="#typical-buying-trigger-1">Typical Buying Trigger</a></h4>
+<p>Teams see unstable index/change outputs across steep terrain and need a standardized correction stage.</p>
+<h4 id="typical-presets-1"><a class="header" href="#typical-presets-1">Typical Presets</a></h4>
+<ul>
+<li>conservative: stricter correction and masking behavior.</li>
+<li>balanced: default profile.</li>
+<li>fast: quicker execution on large scenes.</li>
+</ul>
+<h3 id="inputs-1"><a class="header" href="#inputs-1">Inputs</a></h3>
+<p>ParameterOptionalDescription
+input_red, input_nir, input_demnoCore optical + terrain inputs used for topographic/reflectance normalization workflows.
+optional input_greenyesOptional green band used by workflows that include green-channel diagnostics.
+solar_zenith_deg, solar_azimuth_degnoSolar geometry parameters used to model illumination and terrain incidence effects.
+profile: conservative | balanced | fastnoProcessing profile controlling quality-vs-throughput behavior for correction workflow execution.</p>
+<h3 id="outputs-1"><a class="header" href="#outputs-1">Outputs</a></h3>
+<p>ParameterTypeDescription
+corrected optical bandsGeoTIFFTerrain-corrected optical bands for downstream index and classification workflows.
+cloud_shadow_maskGeoTIFFCloud and shadow mask used to suppress unreliable optical pixels.
+topographic_correction_factorGeoTIFFPer-pixel topographic correction factor used in radiometric normalization.
+quality_confidenceGeoTIFFConfidence surface indicating reliability of corrected optical values.
+summaryJSONMachine-readable summary report containing run metadata, QA diagnostics, and key metrics.
+html_reportHTMLHuman-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</p>
+<h3 id="python-example-1"><a class="header" href="#python-example-1">Python Example</a></h3>
+<p>`import whitebox_workflows as wbw</p>
+<p>wbe = wbw.WbEnvironment(include_pro=True, tier="pro")</p>
+<p>result = wbe.terrain_corrected_optical_analytics(
+input_red="data/red.tif",
+input_nir="data/nir.tif",
+input_dem="data/dem.tif",
+solar_zenith_deg=40.0,
+solar_azimuth_deg=165.0,
+profile="balanced",
+output_prefix="output/tco",
+)</p>
+<p>print(result)`</p>
+<h3 id="license-notice-1"><a class="header" href="#license-notice-1">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="remote-sensing-change-detection.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="remote-sensing-thermal-emissivity.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="remote-sensing-change-detection.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="remote-sensing-thermal-emissivity.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

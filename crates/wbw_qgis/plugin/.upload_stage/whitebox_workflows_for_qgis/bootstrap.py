@@ -169,6 +169,61 @@ def _parse_next_gen_capabilities(raw: str, runtime_label: str) -> dict:
     return parsed
 
 
+def is_pip_available() -> bool:
+    """Check if pip is importable in the current Python environment.
+
+    Returns True if pip can be imported, False otherwise.
+    This is used to detect OSGeo4W environments where pip is not included by default.
+    """
+    try:
+        import pip  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def get_osgeo4w_pip_error_message() -> dict:
+    """Return a structured error message for OSGeo4W pip missing issue.
+
+    Returns a dict with 'title' and 'details' keys containing formatted help text.
+    """
+    is_windows = os.name == "nt"
+
+    if is_windows:
+        return {
+            "title": "⚠️ Backend Installation Failed: pip Not Found (OSGeo4W)",
+            "details": (
+                "<b>The whitebox-workflows backend installation failed because pip is not available.</b><br><br>"
+                "This is a known issue with the <b>OSGeo4W</b> installer for QGIS on Windows. "
+                "Unlike the standalone QGIS installer, OSGeo4W does not include pip by default.<br><br>"
+                "<b>To fix this:</b><br>"
+                "1. Open the <b>OSGeo4W Shell</b> (search for it in the Windows Start menu)<br>"
+                "2. Run the following commands to install pip:<br>"
+                "<code>python -m ensurepip<br>"
+                "python -m pip install --upgrade pip</code><br><br>"
+                "If <code>ensurepip</code> is unavailable, download and run the pip bootstrap script:<br>"
+                "<code>curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py<br>"
+                "python get-pip.py</code><br><br>"
+                "3. After pip is installed, run the backend installation from the OSGeo4W Shell:<br>"
+                "<code>python -m pip install whitebox-workflows</code><br><br>"
+                "4. Restart QGIS and the tools should populate normally.<br><br>"
+                "<i>If you frequently encounter this, consider switching to the "
+                "<a href='https://qgis.org/download/'>standalone QGIS installer</a> which includes pip by default.</i>"
+            ),
+        }
+    else:
+        return {
+            "title": "⚠️ Backend Installation Failed: pip Not Found",
+            "details": (
+                "<b>The whitebox-workflows backend installation failed because pip is not available.</b><br><br>"
+                "This is an unusual issue on this system. Please ensure Python's pip package is installed:<br>"
+                "<code>python -m ensurepip<br>"
+                "python -m pip install --upgrade pip</code><br><br>"
+                "After installing pip, restart QGIS and try the backend installation again."
+            ),
+        }
+
+
 class ExternalRuntimeSession:
     def __init__(self, python_executable: str, include_pro: bool, tier: str):
         self._python_executable = python_executable
@@ -1015,11 +1070,12 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
 
     try:
         from pip._internal.cli.main import main as pip_main  # type: ignore[import]
-    except ImportError:
+    except ImportError as exc:
+        # Provide a more helpful error message for the pip missing case
+        error_msg = get_osgeo4w_pip_error_message()
         raise RuntimeBootstrapError(
-            "pip is not available in this Python environment. "
-            "Install whitebox-workflows manually and restart QGIS."
-        )
+            f"{error_msg['title']}\n\n{error_msg['details']}"
+        ) from exc
 
     import io  # noqa: F401 — imported for future use if pip output capture is needed
     exit_code = 1

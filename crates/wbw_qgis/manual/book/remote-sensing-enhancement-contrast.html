@@ -1,0 +1,500 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Image Enhancement and Contrast - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html" class="active"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="image-enhancement-and-contrast"><a class="header" href="#image-enhancement-and-contrast">Image Enhancement and Contrast</a></h1>
+<hr />
+<h2 id="balance-contrast-enhancement"><a class="header" href="#balance-contrast-enhancement">Balance Contrast Enhancement</a></h2>
+<p><strong>Function name:</strong> <code>balance_contrast_enhancement</code></p>
+<p>This tool can be used to reduce colour bias in a colour composite image based on the technique described by Liu (1991). Colour bias is a common phenomena with colour images derived from multispectral imagery, whereby a higher average brightness value in one band results in over-representation of that band in the colour composite. The tool essentially applies a parabolic stretch to each of the three bands in a user specified RGB colour composite, forcing the histograms of each band to have the same minimum, maximum, and average values while maintaining their overall histogram shape. For greater detail on the operation of the tool, please see Liu (1991). Aside from the names of the input and output colour composite images, the user must also set the value of E, the desired output band mean, where 20 &lt; E &lt; 235.</p>
+<h3 id="reference"><a class="header" href="#reference">Reference</a></h3>
+<p>Liu, J.G. (1991) Balance contrast enhancement technique and its application in image colour composition. <em>International Journal of Remote Sensing</em>, 12:10.</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>direct_decorrelation_stretch</code>, <code>histogram_matching</code>, <code>histogram_matching_two_images</code>, <code>histogram_equalization</code>, <code>gaussian_contrast_stretch</code></p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def balance_contrast_enhancement(self, image: Raster, band_mean: float = 100.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="create-colour-composite"><a class="header" href="#create-colour-composite">Create Colour Composite</a></h2>
+<p><strong>Function name:</strong> <code>create_colour_composite</code></p>
+<p>This tool can be used to create a colour-composite image from three bands of multi-spectral imagery. The user must input images to enter into the red, green, and blue channels of the resulting composite image. The output image uses the 32-bit aRGB colour model, and therefore, in addition to red, green and blue bands, the user may optionally specify a fourth image that will be used to determine pixel opacity (the 'a' channel). If no opacity image is specified, each pixel will be opaque. This can be useful for cropping an image to an irregular-shaped boundary. The opacity channel can also be used to create transparent gradients in the composite image.</p>
+<p>A balance contrast enhancement (BCE) can optionally be performed on the bands prior to creation of the colour composite. While this operation will add to the runtime of <code>create_colour_composite</code>, if the individual input bands have not already had contrast enhancements, then it is advisable that the BCE option be used to improve the quality of the resulting colour composite image.</p>
+<p>NoData values in any of the input images are assigned NoData values in the output image and are not taken into account when performing the BCE operation. Please note, not all images have NoData values identified. When this is the case, and when the background value is 0 (often the case with multispectral imagery), then the <code>create_colour_composite</code> tool can be told to ignore zero values using the <code>zeros</code> flag.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>balance_contrast_enhancement</code>, <code>split_colour_composite</code></p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def create_colour_composite(self, red: Raster, green: Raster, blue: Raster, opacity: Raster = None, enhance: bool = True, treat_zeros_as_nodata: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="direct-decorrelation-stretch"><a class="header" href="#direct-decorrelation-stretch">Direct Decorrelation Stretch</a></h2>
+<p><strong>Function name:</strong> <code>direct_decorrelation_stretch</code></p>
+<p>The Direct Decorrelation Stretch (DDS) is a simple type of saturation stretch. The stretch is applied to a colour composite image and is used to improve the saturation, or colourfulness, of the image. The DDS operates by reducing the achromatic (grey) component of a pixel's colour by a scale factor (<em>k</em>), such that the red (r), green (g), and blue (b) components of the output colour are defined as:</p>
+<p>r<em>k</em> = r - <em>k</em> min(r, g, b)</p>
+<p>g<em>k</em> = g - <em>k</em> min(r, g, b)</p>
+<p>b<em>k</em> = b - <em>k</em> min(r, g, b)</p>
+<p>The achromatic factor (<em>k</em>) can range between 0 (no effect) and 1 (full saturation stretch), although typical values range from 0.3 to 0.7. A linear stretch is used afterwards to adjust overall image brightness. Liu and Moore (1996) recommend applying a colour balance stretch, such as <code>balance_contrast_enhancement</code> before using the DDS.</p>
+<h3 id="reference-1"><a class="header" href="#reference-1">Reference</a></h3>
+<p>Liu, J.G., and Moore, J. (1996) Direct decorrelation stretch technique for RGB colour composition. International Journal of Remote Sensing, 17:5, 1005-1018.</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>create_colour_composite</code>, <code>balance_contrast_enhancement</code></p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def direct_decorrelation_stretch(self, image: Raster, achromatic_factor: float = 0.5, clip_percent: float = 1.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="false-colour-composite"><a class="header" href="#false-colour-composite">False Colour Composite</a></h2>
+<p><strong>Function name:</strong> <code>false_colour_composite</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="gamma-correction"><a class="header" href="#gamma-correction">Gamma Correction</a></h2>
+<p><strong>Function name:</strong> <code>gamma_correction</code></p>
+<p>This tool performs a gamma colour correction transform on an input image (<code>input</code>), such that each input pixel value (zin) is mapped to the corresponding output value (zout) as:</p>
+<p>zout = zin<code>gamma</code></p>
+<p>The user must specify the value of the <code>gamma</code> parameter. The input image may be of either a greyscale or RGB colour composite data type.</p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def gamma_correction(self, raster: Raster, gamma_value: float = 0.5) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="gaussian-contrast-stretch"><a class="header" href="#gaussian-contrast-stretch">Gaussian Contrast Stretch</a></h2>
+<p><strong>Function name:</strong> <code>gaussian_contrast_stretch</code></p>
+<p>This tool performs a Gaussian stretch on a raster image. The observed histogram of the input image is fitted to a Gaussian histogram, i.e. normal distribution. A histogram matching technique is used to map the values from the input image onto the output Gaussian distribution. The user must input the number of tones (<code>num_tones</code>) used.</p>
+<p>This tool is related to the more general <code>histogram_matching</code> tool, which can be used to fit any frequency distribution to an input image, and other contrast enhancement tools such as <code>histogram_equalization</code>, <code>min_max_contrast_stretch</code>, <code>percentage_contrast_stretch</code>, <code>sigmoidal_contrast_stretch</code>, and <code>standard_deviation_contrast_stretch</code>.</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>piecewise_contrast_stretch</code>, <code>histogram_equalization</code>, <code>min_max_contrast_stretch</code>, <code>percentage_contrast_stretch</code>, <code>sigmoidal_contrast_stretch</code>, <code>standard_deviation_contrast_stretch</code>, <code>histogram_matching</code></p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def gaussian_contrast_stretch(self, raster: Raster, num_tones: int = 256) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="histogram-equalization"><a class="header" href="#histogram-equalization">Histogram Equalization</a></h2>
+<p><strong>Function name:</strong> <code>histogram_equalization</code></p>
+<p>This tool alters the cumulative distribution function (CDF) of a raster image to match, as closely as possible, the CDF of a uniform distribution. Histogram equalization works by first calculating the histogram of the input image. This input histogram is then converted into a CDF. Each grid cell value in the input image is then mapped to the corresponding value in the uniform distribution's CDF that has an equivalent (or as close as possible) cumulative probability value. Histogram equalization provides a very effective means of performing image contrast adjustment in an efficient manner with little need for human input.</p>
+<p>The user must specify the name of the input image to perform histogram equalization on. The user must also specify the number of tones, corresponding to the number of histogram bins used in the analysis.</p>
+<p><code>histogram_equalization</code> is related to the <code>histogram_matching_two_images</code> tool (used when an image's CDF is to be matched to a reference CDF derived from a reference image). Similarly, <code>histogram_matching</code>, and <code>gaussian_contrast_stretch</code> are similarly related tools frequently used for image contrast adjustment, where the reference CDFs are uniform and Gaussian (normal) respectively.</p>
+<p><strong>Notes</strong>:</p>
+<ul>
+<li>The algorithm can introduces gaps in the histograms (steps in the CDF). This is to be expected because the histogram is being distorted. This is more prevalent for integer-level images.</li>
+<li>Histogram equalization is not appropriate for images containing categorical (class) data.</li>
+</ul>
+<h3 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h3>
+<p><code>piecewise_contrast_stretch</code>, <code>histogram_matching</code>, <code>histogram_matching_two_images</code>, <code>gaussian_contrast_stretch</code></p>
+<h3 id="python-api-5"><a class="header" href="#python-api-5">Python API</a></h3>
+<pre><code class="language-python">def histogram_equalization(self, raster: Raster, num_tones: int = 256) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="histogram-matching"><a class="header" href="#histogram-matching">Histogram Matching</a></h2>
+<p><strong>Function name:</strong> <code>histogram_matching</code></p>
+<p>This tool alters the cumulative distribution function (CDF) of a raster image to match, as closely as possible, the CDF of a reference histogram. Histogram matching works by first calculating the histogram of the input image. This input histogram and reference histograms are each then converted into CDFs. Each grid cell value in the input image is then mapped to the corresponding value in the reference CDF that has an equivalent (or as close as possible) cumulative probability value. Histogram matching provides the most flexible means of performing image contrast adjustment.</p>
+<p>The reference histogram must be specified to the tool in the form of a text file (.txt), provided using the <code>histo_file</code> flag. This file must contain two columns (delimited by a tab, space, comma, colon, or semicolon) where the first column contains the x value (i.e. the values that will be assigned to the grid cells in the output image) and the second column contains the frequency or probability. Note that 1) the file must not contain a header row, 2) each x value/frequency pair must be on a separate row. It is possible to create this type of histogram using the wide range of distribution tools available in most spreadsheet programs (e.g. Excel or LibreOffice's Calc program). You must save the file as a text-only (ASCII) file.</p>
+<p><code>histogram_matching</code> is related to the <code>histogram_matching_two_images</code> tool, which can be used when a reference CDF can be derived from a reference image. <code>histogram_equalization</code> and <code>gaussian_contrast_stretch</code> are similarly related tools frequently used for image contrast adjustment, where the reference CDFs are uniform and Gaussian (normal) respectively.</p>
+<p><strong>Notes:</strong> - The algorithm can introduces gaps in the histograms (steps in the CDF). This is to be expected because the histogram is being distorted. This is more prevalent for integer-level images. - Histogram matching is not appropriate for images containing categorical (class) data. - This tool is not intended for images containing RGB data. If this is the case, the colour channels should be split using the <code>split_colour_composite</code> tool.</p>
+<h3 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h3>
+<p><code>histogram_matching_two_images</code>, <code>histogram_equalization</code>, <code>gaussian_contrast_stretch</code>, <code>split_colour_composite</code></p>
+<h3 id="python-api-6"><a class="header" href="#python-api-6">Python API</a></h3>
+<pre><code class="language-python">def histogram_matching(self, image: Raster, histogram: List[List[float]], histo_is_cumulative: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="histogram-matching-two-images"><a class="header" href="#histogram-matching-two-images">Histogram Matching Two Images</a></h2>
+<p><strong>Function name:</strong> <code>histogram_matching_two_images</code></p>
+<p>This tool alters the cumulative distribution function (CDF) of a raster image to match, as closely as possible, the CDF of a reference image. Histogram matching works by first calculating the histograms of the input image (i.e. the image to be adjusted) and the reference image. These histograms are then converted into CDFs. Each grid cell value in the input image is then mapped to the corresponding value in the reference CDF that has the an equivalent (or as close as possible) cumulative probability value. A common application of this is to match the images from two sensors with slightly different responses, or images from the same sensor, but the sensor's response is known to change over time.The size of the two images (rows and columns) do not need to be the same, nor do they need to be geographically overlapping.</p>
+<p><code>histogram_matching_two_images</code> is related to the <code>histogram_matching</code> tool, which can be used when a reference CDF is used directly rather than deriving it from a reference image. <code>histogram_equalization</code> and <code>gaussian_contrast_stretch</code> are similarly related tools, where the reference CDFs are uniform and Gaussian (normal) respectively.</p>
+<p>The algorithm may introduces gaps in the histograms (steps in the CDF). This is to be expected because the histograms are being distorted. This is more prevalent for integer-level images. Histogram matching is not appropriate for images containing categorical (class) data. It is also not intended for images containing RGB data, in which case, the colour channels should be split using the <code>split_colour_composite</code> tool.</p>
+<h3 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h3>
+<p><code>histogram_matching</code>, <code>histogram_equalization</code>, <code>gaussian_contrast_stretch</code>, <code>split_colour_composite</code></p>
+<h3 id="python-api-7"><a class="header" href="#python-api-7">Python API</a></h3>
+<pre><code class="language-python">def histogram_matching_two_images(self, image1: Raster, image2: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="ihs-to-rgb"><a class="header" href="#ihs-to-rgb">IHS To RGB</a></h2>
+<p><strong>Function name:</strong> <code>ihs_to_rgb</code></p>
+<p>This tool transforms three intensity, hue, and saturation (IHS; sometimes HSI or HIS) raster images into three equivalent multispectral images corresponding with the red, green, and blue channels of an RGB composite. Intensity refers to the brightness of a color, hue is related to the dominant wavelength of light and is perceived as color, and saturation is the purity of the color (Koutsias et al., 2000). There are numerous algorithms for performing a red-green-blue (RGB) to IHS transformation. This tool uses the transformation described by Haydn (1982). Note that, based on this transformation, the input IHS values must follow the ranges:</p>
+<p>0 &lt; I &lt; 1</p>
+<p>0 &lt; H &lt; 2PI</p>
+<p>0 &lt; S &lt; 1</p>
+<p>The output red, green, and blue images will have values ranging from 0 to 255. The user must specify the names of the intensity, hue, and saturation images (<code>intensity</code>, <code>hue</code>, <code>saturation</code>). These images will generally be created using the <code>rgb_to_ihs</code> tool. The user must also specify the names of the output red, green, and blue images (<code>red</code>, <code>green</code>, <code>blue</code>). Image enhancements, such as contrast stretching, are often performed on the individual IHS components, which are then inverse transformed back in RGB components using this tool. The output RGB components can then be used to create an improved color composite image.</p>
+<h3 id="references"><a class="header" href="#references">References</a></h3>
+<p>Haydn, R., Dalke, G.W. and Henkel, J. (1982) Application of the IHS color transform to the processing of multisensor data and image enhancement. Proc. of the Inter- national Symposium on Remote Sensing of Arid and Semiarid Lands, Cairo, 599-616.</p>
+<p>Koutsias, N., Karteris, M., and Chuvico, E. (2000). The use of intensity-hue-saturation transformation of Landsat-5 Thematic Mapper data for burned land mapping. Photogrammetric Engineering and Remote Sensing, 66(7), 829-840.</p>
+<h3 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h3>
+<p><code>rgb_to_ihs</code>, <code>balance_contrast_enhancement</code>, <code>direct_decorrelation_stretch</code></p>
+<h3 id="python-api-8"><a class="header" href="#python-api-8">Python API</a></h3>
+<pre><code class="language-python">def ihs_to_rgb(self, intensity: Raster, hue: Raster, saturation: Raster) -&gt; Tuple[Raster, Raster, Raster]:
+</code></pre>
+<hr />
+<h2 id="min-max-contrast-stretch"><a class="header" href="#min-max-contrast-stretch">Min Max Contrast Stretch</a></h2>
+<p><strong>Function name:</strong> <code>min_max_contrast_stretch</code></p>
+<p>This tool performs a Gaussian stretch on a raster image. The observed histogram of the input image is fitted to a Gaussian histogram, i.e. normal distribution. A histogram matching technique is used to map the values from the input image onto the output Gaussian distribution. The user must the number of tones (<code>num_tones</code>) used.</p>
+<p>This tool is related to the more general <code>histogram_matching</code> tool, which can be used to fit any frequency distribution to an input image, and other contrast enhancement tools such as <code>histogram_equalization</code>, <code>min_max_contrast_stretch</code>, <code>percentage_contrast_stretch</code>, <code>sigmoidal_contrast_stretch</code>, and <code>standard_deviation_contrast_stretch</code>.</p>
+<h3 id="see-also-8"><a class="header" href="#see-also-8">See Also</a></h3>
+<p><code>piecewise_contrast_stretch</code>, <code>histogram_equalization</code>, <code>min_max_contrast_stretch</code>, <code>percentage_contrast_stretch</code>, <code>sigmoidal_contrast_stretch</code>, <code>standard_deviation_contrast_stretch</code>, <code>histogram_matching</code></p>
+<h3 id="python-api-9"><a class="header" href="#python-api-9">Python API</a></h3>
+<pre><code class="language-python">def min_max_contrast_stretch(self, raster: Raster, min_val: float, max_val: float, num_tones: int = 256) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="mosaic"><a class="header" href="#mosaic">Mosaic</a></h2>
+<p><strong>Function name:</strong> <code>mosaic</code></p>
+<p>This tool will create an image mosaic from one or more input image files using one of three resampling methods including, nearest neighbour, bilinear interpolation, and cubic convolution. The order of the input source image files is important. Grid cells in the output image will be assigned the corresponding value determined from the last image found in the list to possess an overlapping coordinate.</p>
+<p>Note that when the <code>inputs</code> parameter is left unspecified, the tool will use all of the <em>.tif</em>, <em>.tiff</em>, <em>.rdc</em>, <em>.flt</em>, <em>.sdat</em>, and <em>.dep</em> files located in the working directory. This can be a useful way of mosaicing large number of tiles, particularly when the text string that would be required to specify all of the input tiles is longer than the allowable limit.</p>
+<p>This is the preferred mosaicing tool to use when appending multiple images with little to no overlapping areas, e.g. tiled data. When images have significant overlap areas, users are advised to use the <code>mosaic_with_feathering</code> tool instead.</p>
+<p>Resample is very similar in operation to the Mosaic tool. The Resample tool should be used when there is an existing image into which you would like to dump information from one or more source images. If the source images are more extensive than the destination image, i.e. there are areas that extend beyond the destination image boundaries, these areas will not be represented in the updated image. Grid cells in the destination image that are not overlapping with any of the input source images will not be updated, i.e. they will possess the same value as before the resampling operation. The Mosaic tool is used when there is no existing destination image. In this case, a new image is created that represents the bounding rectangle of each of the two or more input images. Grid cells in the output image that do not overlap with any of the input images will be assigned the NoData value.</p>
+<h3 id="see-also-9"><a class="header" href="#see-also-9">See Also</a></h3>
+<p><code>mosaic_with_feathering</code></p>
+<h3 id="python-api-10"><a class="header" href="#python-api-10">Python API</a></h3>
+<pre><code class="language-python">def mosaic(self, images: List[Raster], resampling_method: str = "cc") -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="mosaic-with-feathering"><a class="header" href="#mosaic-with-feathering">Mosaic With Feathering</a></h2>
+<p><strong>Function name:</strong> <code>mosaic_with_feathering</code></p>
+<p>This tool will create a mosaic from two input images. It is similar in operation to the <code>mosaic</code> tool, however, this tool is the preferred method of mosaicing images when there is significant overlap between the images. For areas of overlap, the feathering method will calculate the output value as a weighted combination of the two input values, where the weights are derived from the squared distance of the pixel to the edge of the data in each of the input raster files. Therefore, less weight is assigned to an image's pixel value where the pixel is very near the edge of the image. Note that the distance is actually calculated to the edge of the grid and not necessarily the edge of the data, which can differ if the image has been rotated during registration.  The result of this feathering method is that the output mosaic image should have very little evidence of the original image edges within the overlapping area.</p>
+<p>Unlike the Mosaic tool, which can take multiple input images, this tool only accepts two input images. Mosaic is therefore useful when there are many, adjacent or only slightly overlapping images, e.g. for tiled data sets.</p>
+<p>Users may want to use the <code>histogram_matching</code> tool prior to mosaicing if the two input images differ significantly in their radiometric properties. i.e. if image contrast differences exist.</p>
+<h3 id="see-also-10"><a class="header" href="#see-also-10">See Also</a></h3>
+<p><code>mosaic</code>, <code>histogram_matching</code></p>
+<h3 id="python-api-11"><a class="header" href="#python-api-11">Python API</a></h3>
+<pre><code class="language-python">def mosaic_with_feathering(self, image1: Raster, image2: Raster, resampling_method: str = "cc", distance_weight: float = 4.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="normalized-difference-index"><a class="header" href="#normalized-difference-index">Normalized Difference Index</a></h2>
+<p><strong>Function name:</strong> <code>normalized_difference_index</code></p>
+<p>This tool can be used to calculate a normalized difference index (NDI) from two bands of multispectral image data. A NDI of two band images (<code>image1</code> and <code>image2</code>) takes the general form:</p>
+<p>NDI = (image1 - image2) / (image1 + image2 + <em>c</em>)</p>
+<p>Where <em>c</em> is a correction factor sometimes used to avoid division by zero. It is, however, often set to 0.0. In fact, the <code>normalized_difference_index</code> tool will set all pixels where <code>image1 + image2 = 0</code> to 0.0 in the output image. While this is not strictly mathematically correct (0 / 0 = infinity), it is often the intended output in these cases.</p>
+<p>NDIs generally takes the value range -1.0 to 1.0, although in practice the range of values for a particular image scene may be more restricted than this.</p>
+<p>NDIs have two important properties that make them particularly useful for remote sensing applications. First, they emphasize certain aspects of the shape of the spectral signatures of different land covers. Secondly, they can be used to de-emphasize the effects of variable illumination within a scene. NDIs are therefore frequently used in the field of remote sensing to create vegetation indices and other indices for emphasizing various land-covers and as inputs to analytical operations like image classification. For example, the normalized difference vegetation index (NDVI), one of the most common image-derived products in remote sensing, is calculated as:</p>
+<p>NDVI = (NIR - RED) / (NIR + RED)</p>
+<p>The optimal soil adjusted vegetation index (OSAVI) is:</p>
+<p>OSAVI = (NIR - RED) / (NIR + RED + 0.16)</p>
+<p>The normalized difference water index (NDWI), or normalized difference moisture index (NDMI), is:</p>
+<p>NDWI = (NIR - SWIR) / (NIR + SWIR)</p>
+<p>The normalized burn ratio 1 (NBR1) and normalized burn ration 2 (NBR2) are:</p>
+<p>NBR1 = (NIR - SWIR2) / (NIR + SWIR2)</p>
+<p>NBR2 = (SWIR1 - SWIR2) / (SWIR1 + SWIR2)</p>
+<p>In addition to NDIs, <em>Simple Ratios</em> of image bands, are also commonly used as inputs to other remote sensing applications like image classification. Simple ratios can be calculated using the <code>Divide</code> tool. Division by zero, in this case, will result in an output NoData value.</p>
+<h3 id="see-also-11"><a class="header" href="#see-also-11">See Also</a></h3>
+<p><code>Divide</code></p>
+<h3 id="python-api-12"><a class="header" href="#python-api-12">Python API</a></h3>
+<pre><code class="language-python">def normalized_difference_index(self, nir_image: Raster, red_image: Raster, clip_percent: float = 0.0, correction_value: float = 0.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="panchromatic-sharpening"><a class="header" href="#panchromatic-sharpening">Panchromatic Sharpening</a></h2>
+<p><strong>Function name:</strong> <code>panchromatic_sharpening</code></p>
+<p>Panchromatic sharpening, or simply pan-sharpening, refers to a range of techniques that can be used to merge finer spatial resolution panchromatic images with coarser spatial resolution multi-spectral images. The multi-spectral data provides colour information while the panchromatic image provides improved spatial information. This procedure is sometimes called image fusion. Jensen (2015) describes panchromatic sharpening in detail.</p>
+<p>Whitebox provides two common methods for panchromatic sharpening including the Brovey transformation and the Intensity-Hue-Saturation (IHS) methods. Both of these techniques provide the best results when the range of wavelengths detected by the panchromatic image overlap significantly with the wavelength range covered by the three multi-spectral bands that are used. When this is not the case, the resulting colour composite will likely have colour properties that are dissimilar to the colour composite generated by the original multispectral images. For Landsat ETM+ data, the panchromatic band is sensitive to EMR in the range of 0.52-0.90 micrometres. This corresponds closely to the green (band 2), red (band 3), and near-infrared (band 4).</p>
+<h3 id="reference-2"><a class="header" href="#reference-2">Reference</a></h3>
+<p>Jensen, J. R. (2015). Introductory Digital Image Processing: A Remote Sensing Perspective.</p>
+<h3 id="see-also-12"><a class="header" href="#see-also-12">See Also</a></h3>
+<p><code>create_colour_composite</code></p>
+<h3 id="python-api-13"><a class="header" href="#python-api-13">Python API</a></h3>
+<pre><code class="language-python">def panchromatic_sharpening(self, pan: Raster, colour_composite: Raster, red: Raster, green: Raster, blue: Raster, fusion_method: str = "brovey") -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="percentage-contrast-stretch"><a class="header" href="#percentage-contrast-stretch">Percentage Contrast Stretch</a></h2>
+<p><strong>Function name:</strong> <code>percentage_contrast_stretch</code></p>
+<p>This tool performs a percentage contrast stretch on a raster image. This operation maps each grid cell value in the input raster image (zin) onto a new scale that ranges from a lower-tail clip value (<code>min_val</code>) to the upper-tail clip value (<code>max_val</code>), with the user-specified number of tonal values (<code>num_tones</code>), such that:</p>
+<p>zout = ((zin – min_val)/(max_val – min_val)) x num_tones</p>
+<p>where zout is the output value. The values of <code>min_val</code> and <code>max_val</code> are determined from the frequency distribution and the user-specified tail clip value (<code>clip</code>). For example, if a value of 1% is specified, the tool will determine the values in the input image for which 1% of the grid cells have a lower value <code>min_val</code> and 1% of the grid cells have a higher value <code>max_val</code>. The user must also specify which tails (upper, lower, or both) to clip (<code>tail</code>).</p>
+<p>This is a type of linear contrast stretch with saturation at the tails of the frequency distribution. This is the same kind of stretch that is used to display raster type data on the fly in many GIS software packages, such that the lower and upper tail values are set using the minimum and maximum display values and the number of tonal values is determined by the number of palette entries.</p>
+<h3 id="see-also-13"><a class="header" href="#see-also-13">See Also</a></h3>
+<p><code>piecewise_contrast_stretch</code>, <code>gaussian_contrast_stretch</code>, <code>histogram_equalization</code>, <code>min_max_contrast_stretch</code>, <code>sigmoidal_contrast_stretch</code>, <code>standard_deviation_contrast_stretch</code></p>
+<h3 id="python-api-14"><a class="header" href="#python-api-14">Python API</a></h3>
+<pre><code class="language-python">def percentage_contrast_stretch(self, raster: Raster, clip: float = 1.0, tail: str = "both", num_tones: int = 256) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="piecewise-contrast-stretch"><a class="header" href="#piecewise-contrast-stretch">Piecewise Contrast Stretch</a></h2>
+<p><strong>Function name:</strong> <code>piecewise_contrast_stretch</code></p>
+<h3 id="description"><a class="header" href="#description">Description</a></h3>
+<p>This tool can be used to perform a piecewise contrast stretch on an input image (<code>input</code>). The input image can be either a single-band image or a colour composite, in which case the contrast stretch will be performed on the intensity values of the hue-saturation-intensity (HSI) transform of the colour image. The user must also specify the name of the output image (<code>output</code>) and the break-points that define the piecewise function used to transfer brightness values from the input to the output image. The break-point values are specified as a string parameter (<code>function</code>), with each break-point taking the form of (input value, output proportion); (input value, output proportion); (input value, output proportion), etc. Piecewise functions can have as many break-points as desired, and each break-point should be separated by a semicolon (;). The input values are specifies as brightness values in the same units as the input image (unless it is an input colour composite, in which case the intensity values range from 0 to 1). The output function must be specified as a proportion (from 0 to 1) of the output value range, which is specified by the number of output greytones (<code>greytones</code>). The <code>greytones</code> parameter is ignored if the input image is a colour composite.  Note that there is no need to specify the initial break-point to the piecewise function, as (input min value; 0.0) will be inserted automatically. Similarly, an upper bound of the piecewise function of (input max value; 1.0) will also be inserted automatically.</p>
+<p>Generally you want to set breakpoints by examining the image histogram. Typically it is desirable to map large unpopulated ranges of input brightness values in the input image onto relatively narrow ranges of the output brightness values (i.e. a shallow sloped segment of the piecewise function), and areas of the histogram that are well populated with pixels in the input image with a larger range of brightness values in the output image (i.e. a steeper slope segment). This will have the effect of reducing the number of tones used to display the under-populated tails of the distribution and spreading out the well-populated regions of the histogram, thereby improving the overall contrast and the visual interpretability of the output image. The flexibility of the piecewise contrast stretch can often provide a very suitable means of significantly improving image quality.</p>
+<h3 id="see-also-14"><a class="header" href="#see-also-14">See Also</a></h3>
+<p><code>raster_histogram</code>, <code>gaussian_contrast_stretch</code>, <code>min_max_contrast_stretch</code>, <code>standard_deviation_contrast_stretch</code></p>
+<h3 id="python-api-15"><a class="header" href="#python-api-15">Python API</a></h3>
+<pre><code class="language-python">def piecewise_contrast_stretch(self, raster: Raster, transformation_statement: str, num_greytones: float = 1024.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="resample"><a class="header" href="#resample">Resample</a></h2>
+<p><strong>Function name:</strong> <code>resample</code></p>
+<p>This tool can be used to modify the grid resolution of one or more rasters. The user specifies the names of one or more input rasters (<code>inputs</code>).  The resolution of the output raster is determined either using a specified <code>cell_size</code> parameter, in which case the output extent is determined by the combined extent of the inputs, or by an optional base raster (<code>base</code>), in which case the output raster spatial extent matches that of the base file. This operation is similar to the <code>mosaic</code> tool, except that <code>resample</code> modifies the output resolution. The <code>resample</code> tool may also be used with a single input raster (when the user wants to modify its spatial resolution, whereas, <code>mosaic</code> always includes multiple inputs.</p>
+<p>If the input source images are more extensive than the base image (if optionally specified), these areas will not be represented in the output image. Grid cells in the output image that are not overlapping with any of the input source images will not be assigned the NoData value, which will be the same as the first input image. Grid cells in the output image that overlap with multiple input raster cells will be assigned the last input value in the stack. Thus, the order of input images is important.</p>
+<h3 id="see-also-15"><a class="header" href="#see-also-15">See Also</a></h3>
+<p><code>mosaic</code></p>
+<h3 id="python-api-16"><a class="header" href="#python-api-16">Python API</a></h3>
+<pre><code class="language-python">def resample(self, input_rasters: List[Raster], cell_size: float = 0.0, base_raster: Raster = None, method: str = "cc") -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="rgb-to-ihs"><a class="header" href="#rgb-to-ihs">RGB To IHS</a></h2>
+<p><strong>Function name:</strong> <code>rgb_to_ihs</code></p>
+<p>This tool transforms three raster images of multispectral data (red, green, and blue channels) into their equivalent intensity, hue, and saturation (IHS; sometimes HSI or HIS) images. Intensity refers to the brightness of a color, hue is related to the dominant wavelength of light and is perceived as color, and saturation is the purity of the color (Koutsias et al., 2000). There are numerous algorithms for performing a red-green-blue (RGB) to IHS transformation. This tool uses the transformation described by Haydn (1982). Note that, based on this transformation, the output IHS values follow the ranges:</p>
+<p>0 &lt; I &lt; 1</p>
+<p>0 &lt; H &lt; 2PI</p>
+<p>0 &lt; S &lt; 1</p>
+<p>The user must specify the names of the red, green, and blue images (<code>red</code>, <code>green</code>, <code>blue</code>). Importantly, these images need not necessarily correspond with the specific regions of the electromagnetic spectrum that are red, green, and blue. Rather, the input images are three multispectral images that could be used to create a RGB color composite. The user must also specify the names of the output intensity, hue, and saturation images (<code>intensity</code>, <code>hue</code>, <code>saturation</code>). Image enhancements, such as contrast stretching, are often performed on the IHS components, which are then inverse transformed back in RGB components to then create an improved color composite image.</p>
+<h3 id="references-1"><a class="header" href="#references-1">References</a></h3>
+<p>Haydn, R., Dalke, G.W. and Henkel, J. (1982) Application of the IHS color transform to the processing of multisensor data and image enhancement. Proc. of the Inter- national Symposium on Remote Sensing of Arid and Semiarid Lands, Cairo, 599-616.</p>
+<p>Koutsias, N., Karteris, M., and Chuvico, E. (2000). The use of intensity-hue-saturation transformation of Landsat-5 Thematic Mapper data for burned land mapping. Photogrammetric Engineering and Remote Sensing, 66(7), 829-840.</p>
+<h3 id="see-also-16"><a class="header" href="#see-also-16">See Also</a></h3>
+<p><code>ihs_to_rgb</code>, <code>balance_contrast_enhancement</code>, <code>direct_decorrelation_stretch</code></p>
+<h3 id="python-api-17"><a class="header" href="#python-api-17">Python API</a></h3>
+<pre><code class="language-python">def rgb_to_ihs(self, red: Optional[Raster] = None, green: Optional[Raster] = None, blue: Optional[Raster] = None, composite: Optional[Raster] = None) -&gt; Tuple[Raster, Raster, Raster]:
+</code></pre>
+<hr />
+<h2 id="sigmoidal-contrast-stretch"><a class="header" href="#sigmoidal-contrast-stretch">Sigmoidal Contrast Stretch</a></h2>
+<p><strong>Function name:</strong> <code>sigmoidal_contrast_stretch</code></p>
+<p>This tool performs a sigmoidal stretch on a raster image. This is a transformation where the input image value for a grid cell (zin) is transformed to an output value zout such that:</p>
+<p>zout = (1.0 / (1.0 + exp(<em>gain</em>(<em>cutoff</em> - z))) - <em>a</em> ) / <em>b</em> x <em>num_tones</em></p>
+<p>where,</p>
+<p>z = (zin - <em>MIN</em>) / <em>RANGE</em>,</p>
+<p><em>a</em> = 1.0 / (1.0 + exp(<em>gain</em> x <em>cutoff</em>)),</p>
+<p><em>b</em> = 1.0 / (1.0 + exp(<em>gain</em> x (<em>cutoff</em> - 1.0))) - 1.0 / (1.0 + exp(<em>gain</em> x <em>cutoff</em>)),</p>
+<p><em>MIN</em> and <em>RANGE</em> are the minimum value and data range in the input image respectively and <em>gain</em> and <em>cutoff</em> are user specified parameters (<code>gain</code>, <code>cutoff</code>).</p>
+<p>Like all of <em>WhiteboxTools</em>'s contrast enhancement tools, this operation will work on either greyscale or RGB input images.</p>
+<h3 id="see-also-17"><a class="header" href="#see-also-17">See Also</a></h3>
+<p><code>piecewise_contrast_stretch</code>, <code>gaussian_contrast_stretch</code>, <code>histogram_equalization</code>, <code>min_max_contrast_stretch</code>,  <code>percentage_contrast_stretch</code>, <code>standard_deviation_contrast_stretch</code></p>
+<h3 id="python-api-18"><a class="header" href="#python-api-18">Python API</a></h3>
+<pre><code class="language-python">def sigmoidal_contrast_stretch(self, raster: Raster, cutoff: float = 0.0, gain: float = 1.0, num_tones: int = 256) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="split-colour-composite"><a class="header" href="#split-colour-composite">Split Colour Composite</a></h2>
+<p><strong>Function name:</strong> <code>split_colour_composite</code></p>
+<p>This tool can be used to split a red-green-blue (RGB) colour-composite image into three separate bands of multi-spectral imagery. The user must specify the input image (<code>input</code>) and output red, green, blue images.</p>
+<h3 id="see-also-18"><a class="header" href="#see-also-18">See Also</a></h3>
+<p><code>create_colour_composite</code></p>
+<h3 id="python-api-19"><a class="header" href="#python-api-19">Python API</a></h3>
+<pre><code class="language-python">def split_colour_composite(self, composite_image: Raster) -&gt; Tuple[Raster, Raster, Raster]:
+</code></pre>
+<hr />
+<h2 id="standard-deviation-contrast-stretch"><a class="header" href="#standard-deviation-contrast-stretch">Standard Deviation Contrast Stretch</a></h2>
+<p><strong>Function name:</strong> <code>standard_deviation_contrast_stretch</code></p>
+<p>This tool performs a standard deviation contrast stretch on a raster image. This operation maps each grid cell value in the input raster image (zin) onto a new scale that ranges from a lower-tail clip value (<code>min_val</code>) to the upper-tail clip value (<code>max_val</code>), with the user-specified number of tonal values (<code>num_tones</code>), such that:</p>
+<p>zout = ((zin – min_val)/(max_val – min_val)) x num_tones</p>
+<p>where zout is the output value. The values of <code>min_val</code> and <code>max_val</code> are determined based on the image mean and standard deviation. Specifically, the user must specify the number of standard deviations (<code>clip</code> or <code>stdev</code>) to be used in determining the min and max clip values. The tool will then calculate the input image mean and standard deviation and estimate the clip values from these statistics.</p>
+<p>This is the same kind of stretch that is used to display raster type data on the fly in many GIS software packages.</p>
+<h3 id="see-also-19"><a class="header" href="#see-also-19">See Also</a></h3>
+<p><code>piecewise_contrast_stretch</code>, <code>gaussian_contrast_stretch</code>, <code>histogram_equalization</code>, <code>min_max_contrast_stretch</code>,  <code>percentage_contrast_stretch</code>, <code>sigmoidal_contrast_stretch</code></p>
+<h3 id="python-api-20"><a class="header" href="#python-api-20">Python API</a></h3>
+<pre><code class="language-python">def standard_deviation_contrast_stretch(self, raster: Raster, clip: float = 2.0, num_tones: int = 256) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="true-colour-composite"><a class="header" href="#true-colour-composite">True Colour Composite</a></h2>
+<p><strong>Function name:</strong> <code>true_colour_composite</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="remote-sensing.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="remote-sensing-filters.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="remote-sensing.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="remote-sensing-filters.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

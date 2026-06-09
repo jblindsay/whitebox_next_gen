@@ -1,0 +1,372 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Watersheds and Basins - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html" class="active"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="watersheds-and-basins"><a class="header" href="#watersheds-and-basins">Watersheds and Basins</a></h1>
+<hr />
+<h2 id="basins"><a class="header" href="#basins">Basins</a></h2>
+<p><strong>Function name:</strong> <code>basins</code></p>
+<p>This tool can be used to delineate all of the drainage basins contained within a local drainage direction, or flow pointer raster (<code>d8_pntr</code>), and draining to the edge of the data. The flow pointer raster must be derived using the <code>d8_pointer</code> tool and should have been extracted from a digital elevation model (DEM) that has been hydrologically pre-processed to remove topographic depressions and flat areas, e.g. using the <code>breach_depressions_least_cost</code> tool. By default, the flow pointer raster is assumed to use the clockwise indexing method used by WhiteboxTools:  ... 641281 3202 1684</p>
+<p>If the pointer file contains ESRI flow direction values instead, the <code>esri_pntr</code> parameter must be specified.</p>
+<p>The <code>basins</code> and <code>watershed</code> tools are similar in function but while the <code>watershed</code> tool identifies the upslope areas that drain to one or more user-specified outlet points, the <code>basins</code> tool automatically sets outlets to all grid cells situated along the edge of the data that do not have a defined flow direction (i.e. they do not have a lower neighbour). Notice that these edge outlets need not be situated along the edges of the flow-pointer raster, but rather along the edges of the region of valid data. That is, the DEM from which the flow-pointer has been extracted may incompletely fill the containing raster, if it is irregular shaped, and NoData regions may occupy the peripherals. Thus, the entire region of valid data in the flow pointer raster will be divided into a set of mutually exclusive basins using this tool.</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>watershed</code>, <code>d8_pointer</code>, <code>breach_depressions_least_cost</code></p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def basins(self, d8_pntr: Raster, esri_pntr: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="flood-order"><a class="header" href="#flood-order">Flood Order</a></h2>
+<p><strong>Function name:</strong> <code>flood_order</code></p>
+<p>This tool takes an input digital elevation model (DEM) and creates an output raster where every grid cell contains the flood order of that cell within the DEM. The flood order is the sequence of grid cells that are encountered during a search, starting from the raster grid edges and the lowest grid cell, moving inward at increasing elevations. This is in fact similar to how the highly efficient Wang and Liu (2006) depression filling algorithm and the Breach Depressions (Fast) operates. The output flood order raster contains the sequential order, from lowest edge cell to the highest pixel in the DEM.</p>
+<p>Like the <code>fill_depressions</code> tool, <code>flood_order</code> will read the entire DEM into memory. This may make the algorithm ill suited to processing massive DEMs except where the user's computer has substantial memory (RAM) resources.</p>
+<h3 id="reference"><a class="header" href="#reference">Reference</a></h3>
+<p>Wang, L., and Liu, H. (2006). An efficient method for identifying and filling surface depressions in digital elevation models for hydrologic analysis and modelling. International Journal of Geographical Information Science, 20(2), 193-213.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>fill_depressions</code></p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def flood_order(self, dem: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="hillslopes"><a class="header" href="#hillslopes">Hillslopes</a></h2>
+<p><strong>Function name:</strong> <code>hillslopes</code></p>
+<p>This tool decrements (lowers) the elevations of pixels within an input digital elevation model (DEM) (<code>dem</code>) along an input vector stream network (<code>streams</code>) at the sites of road (<code>roads</code>) intersections. In addition to the input data layers, the user must specify the output raster DEM (<code>output</code>), and the maximum road embankment width (<code>width</code>), in map units. The road width parameter is used to determine the length of channel along stream lines, at the junctions between streams and roads, that the burning (i.e. decrementing) operation occurs. The algorithm works by identifying stream-road intersection cells, then traversing along the rasterized stream path in the upstream and downstream directions by half the maximum road embankment width. The minimum elevation in each stream traversal is identified and then elevations that are higher than this value are lowered to the minimum elevation during a second stream traversal.</p>
+<h3 id="reference-1"><a class="header" href="#reference-1">Reference</a></h3>
+<p>Lindsay JB. 2016. <code>The practice of DEM stream burning revisited</code>.  Earth Surface Processes and Landforms, 41(5): 658–668. DOI: 10.1002/esp.3888</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>raster_streams_to_vector</code>, <code>rasterize_streams</code></p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def hillslopes(self, d8_pntr: Raster, streams: Raster, esri_pntr: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="isobasins"><a class="header" href="#isobasins">Isobasins</a></h2>
+<p><strong>Function name:</strong> <code>isobasins</code></p>
+<p>This tool can be used to divide a landscape into a group of nearly equal-sized watersheds, known as <em>isobasins</em>. The user must specify the name (<code>dem</code>) of a digital elevation model (DEM), the output raster name (<code>output</code>), and the isobasin target area (<code>size</code>) specified in units of grid cells. The DEM must have been hydrologically corrected to remove all spurious depressions and flat areas. DEM pre-processing is usually achieved using either the <code>breach_depressions_least_cost</code> or <code>fill_depressions</code> tool. Several temporary rasters are created during the execution and stored in memory of this tool.</p>
+<p>The tool can optionally (<code>connections</code>) output a CSV table that contains the upstream/downstream connections among isobasins. That is, this table will identify the downstream basin of each isobasin, or will list N/A in the event that there is no downstream basin, i.e. if it drains to an edge. Additionally, the CSV file will contain information about the number of grid cells in each isobasin and the isobasin outlet's row and column number and flow direction. The output CSV file will have the same name as the output raster, but with a *.csv file extension.</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>watershed</code>, <code>basins</code>, <code>breach_depressions_least_cost</code>, <code>fill_depressions</code></p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def isobasins(self, dem: Raster, target_size: float, connections: bool = False, csv_file: str = "" ) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="jenson-snap-pour-points"><a class="header" href="#jenson-snap-pour-points">Jenson Snap Pour Points</a></h2>
+<p><strong>Function name:</strong> <code>jenson_snap_pour_points</code></p>
+<p>This tool measures the depth that each grid cell in an input (<code>dem</code>) raster digital elevation model (DEM) lies within a sink feature, i.e. a closed topographic depression. A sink, or depression, is a bowl-like landscape feature, which is characterized by interior drainage and groundwater recharge. The <code>depth_in_sink</code> tool operates by differencing a filled DEM, using the same depression filling method as <code>fill_depressions</code>, and the original surface model.</p>
+<p>In addition to the names of the input DEM (<code>dem</code>) and the output raster (<code>output</code>), the user must specify whether the background value (i.e. the value assigned to grid cells that are not contained within sinks) should be set to 0.0 (<code>zero_background</code>) Without this optional parameter specified, the tool will use the NoData value as the background value.</p>
+<h3 id="reference-2"><a class="header" href="#reference-2">Reference</a></h3>
+<p>Antonić, O., Hatic, D., &amp; Pernar, R. (2001). DEM-based depth in sink as an environmental estimator. Ecological Modelling, 138(1-3), 247-254.</p>
+<h3 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h3>
+<p><code>fill_depressions</code></p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def jenson_snap_pour_points(self, pour_pts: Vector, streams: Raster, snap_dist: float = 0.0) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="longest-flowpath"><a class="header" href="#longest-flowpath">Longest Flowpath</a></h2>
+<p><strong>Function name:</strong> <code>longest_flowpath</code></p>
+<p>This tool delineates the longest flowpaths for a group of subbasins or watersheds. Flowpaths are initiated along drainage divides and continue along the D8-defined flow direction until either the subbasin outlet or DEM edge is encountered. Each input subbasin/watershed will have an associated vector flowpath in the output image. <code>longest_flowpath</code> is similar to the <code>r.lfp</code> plugin tool for GRASS GIS. The length of the longest flowpath draining to an outlet is related to the time of concentration, which is a parameter used in certain hydrological models.</p>
+<p>The user must input the filename of a digital elevation model (DEM), a basins raster, and the output vector. The DEM must be depressionless and should have been pre-processed using the <code>breach_depressions_least_cost</code> or <code>fill_depressions</code> tool. The <em>basins raster</em> must contain features that are delineated by categorical (integer valued) unique identifier values. All non-NoData, non-zero valued grid cells in the basins raster are interpreted as belonging to features. In practice, this tool is usual run using either a single watershed, a group of contiguous non-overlapping watersheds, or a series of nested subbasins. These are often derived using the <code>watershed</code> tool, based on a series of input outlets, or the <code>subbasins</code> tool, based on an input stream network. If subbasins are input to <code>longest_flowpath</code>, each traced flowpath will include only the non-overlapping portions within nested areas. Therefore, this can be a convenient method of delineating the longest flowpath to each bifurcation in a stream network.</p>
+<p>The output vector file will contain fields in the attribute table that identify the associated basin unique identifier (<em>BASIN</em>), the elevation of the flowpath source point on the divide (<em>UP_ELEV</em>), the elevation of the outlet point (<em>DN_ELEV</em>), the length of the flowpath (<em>LENGTH</em>), and finally, the average slope (<em>AVG_SLOPE</em>) along the flowpath, measured as a percent grade.</p>
+<h3 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h3>
+<p><code>max_upslope_flowpath_length</code>, <code>breach_depressions_least_cost</code>, <code>fill_depressions</code>, <code>watershed</code>, <code>subbasins</code></p>
+<h3 id="python-api-5"><a class="header" href="#python-api-5">Python API</a></h3>
+<pre><code class="language-python">def longest_flowpath(self, dem: Raster, basins: Raster) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="max-branch-length"><a class="header" href="#max-branch-length">Max Branch Length</a></h2>
+<p><strong>Function name:</strong> <code>max_branch_length</code></p>
+<p>Maximum branch length (<code>Bmax</code>) is the longest branch length between a grid cell's flowpath and the flowpaths initiated at each of its neighbours. It can be conceptualized as the downslope distance that a volume of water that is split into two portions by a drainage divide would travel before reuniting.</p>
+<p>If the two flowpaths of neighbouring grid cells do not intersect, <code>Bmax</code> is simply the flowpath length from the starting cell to its terminus at the edge of the grid or a cell with undefined flow direction (i.e. a pit cell either in a topographic depression or at the edge of a major body of water).</p>
+<p>The pattern of <code>Bmax</code> derived from a DEM should be familiar to anyone who has interpreted upslope contributing area images. In fact, <code>Bmax</code> can be thought of as the complement of upslope contributing area. Whereas contributing area is greatest along valley bottoms and lowest at drainage divides, <code>Bmax</code> is greatest at divides and lowest along channels. The two topographic attributes are also distinguished by their units of measurements; <code>Bmax</code> is a length rather than an area. The presence of a major drainage divide between neighbouring grid cells is apparent in a <code>Bmax</code> image as a linear feature, often two grid cells wide, of relatively high values. This property makes <code>Bmax</code> a useful land surface parameter for mapping ridges and divides.</p>
+<p><code>Bmax</code> is useful in the study of landscape structure, particularly with respect to drainage patterns. The index gives the relative significance of a specific location along a divide, with respect to the dispersion of materials across the landscape, in much the same way that stream ordering can be used to assess stream size.</p>
+<h3 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h3>
+<p><code>flow_length_diff</code></p>
+<h3 id="reference-3"><a class="header" href="#reference-3">Reference</a></h3>
+<p>Lindsay JB, Seibert J. 2013. Measuring the significance of a divide to local drainage patterns. International Journal of Geographical Information Science, 27: 1453-1468. DOI: 10.1080/13658816.2012.705289</p>
+<h3 id="python-api-6"><a class="header" href="#python-api-6">Python API</a></h3>
+<pre><code class="language-python">def max_branch_length(self, dem: Raster, log_transform: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="snap-pour-points"><a class="header" href="#snap-pour-points">Snap Pour Points</a></h2>
+<p><strong>Function name:</strong> <code>snap_pour_points</code></p>
+<p>This tool measures the depth that each grid cell in an input (<code>dem</code>) raster digital elevation model (DEM) lies within a sink feature, i.e. a closed topographic depression. A sink, or depression, is a bowl-like landscape feature, which is characterized by interior drainage and groundwater recharge. The <code>depth_in_sink</code> tool operates by differencing a filled DEM, using the same depression filling method as <code>fill_depressions</code>, and the original surface model.</p>
+<p>In addition to the names of the input DEM (<code>dem</code>) and the output raster (<code>output</code>), the user must specify whether the background value (i.e. the value assigned to grid cells that are not contained within sinks) should be set to 0.0 (<code>zero_background</code>) Without this optional parameter specified, the tool will use the NoData value as the background value.</p>
+<h3 id="reference-4"><a class="header" href="#reference-4">Reference</a></h3>
+<p>Antonić, O., Hatic, D., &amp; Pernar, R. (2001). DEM-based depth in sink as an environmental estimator. Ecological Modelling, 138(1-3), 247-254.</p>
+<h3 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h3>
+<p><code>fill_depressions</code></p>
+<h3 id="python-api-7"><a class="header" href="#python-api-7">Python API</a></h3>
+<pre><code class="language-python">def snap_pour_points(self, pour_pts: Vector, flow_accum: Raster, snap_dist: float = 0.0) -&gt; Vector:
+</code></pre>
+<hr />
+<h2 id="subbasins"><a class="header" href="#subbasins">Subbasins</a></h2>
+<p><strong>Function name:</strong> <code>subbasins</code></p>
+<p>This tool will identify the catchment areas to each link in a user-specified stream network, i.e. the network's sub-basins. <code>subbasins</code> effectively performs a stream link ID operation (<code>stream_link_identifier</code>) followed by a <code>watershed</code> operation. The user must specify the name of a flow pointer (flow direction) raster (<code>d8_pntr</code>), a streams raster (<code>streams</code>), and the output raster (<code>output</code>). The flow pointer and streams rasters should be generated using the <code>d8_pointer</code> algorithm. This will require a depressionless DEM, processed using either the <code>breach_depressions_least_cost</code> or <code>fill_depressions</code> tool.</p>
+<p><code>hillslopes</code> are conceptually similar to sub-basins, except that sub-basins do not distinguish between the right-bank and left-bank catchment areas of stream links. The Sub-basins tool simply assigns a unique identifier to each stream link in a stream network.</p>
+<p>By default, the pointer raster is assumed to use the clockwise indexing method used by WhiteboxTools. If the pointer file contains ESRI flow direction values instead, the <code>esri_pntr</code> parameter must be specified.</p>
+<p>NoData values in the input flow pointer raster are assigned NoData values in the output image.</p>
+<h3 id="see-also-8"><a class="header" href="#see-also-8">See Also</a></h3>
+<p><code>stream_link_identifier</code>, <code>watershed</code>, <code>hillslopes</code>, <code>d8_pointer</code>, <code>breach_depressions_least_cost</code>, <code>fill_depressions</code></p>
+<h3 id="python-api-8"><a class="header" href="#python-api-8">Python API</a></h3>
+<pre><code class="language-python">def subbasins(self, d8_pntr: Raster, streams: Raster, esri_pntr: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="unnest-basins"><a class="header" href="#unnest-basins">Unnest Basins</a></h2>
+<p><strong>Function name:</strong> <code>unnest_basins</code></p>
+<p>In some applications it is necessary to relate a measured variable for a group of hydrometric stations (e.g. characteristics of flow timing and duration or water chemistry) to some characteristics of each outlet's catchment (e.g. mean slope, area of wetlands, etc.). When the group of outlets are nested, i.e. some stations are located downstream of others, then performing a watershed operation will result in inappropriate watershed delineation. In particular, the delineated watersheds of each nested outlet will not include the catchment areas of upstream outlets. This creates a serious problem for this type of application.</p>
+<p>The Unnest Basin tool can be used to perform a watershedding operation based on a group of specified pour points, i.e. outlets or target cells, such that each complete watershed is delineated. The user must specify the name of a flow pointer (flow direction) raster, a pour point raster, and the name of the output rasters. Multiple numbered outputs will be created, one for each nesting level. Pour point, or target, cells are denoted in the input pour-point image as any non-zero, non-NoData value. The flow pointer raster should be generated using the D8 algorithm.</p>
+<h3 id="python-api-9"><a class="header" href="#python-api-9">Python API</a></h3>
+<pre><code class="language-python">def unnest_basins(self, d8_pointer: Raster, pour_points: Vector, esri_pntr: bool = False) -&gt; List[Raster]:
+</code></pre>
+<hr />
+<h2 id="watershed"><a class="header" href="#watershed">Watershed</a></h2>
+<p><strong>Function name:</strong> <code>watershed</code></p>
+<p>This tool will perform a watershedding operation based on a group of input vector pour points (<code>pour_pts</code>), i.e. outlets or points-of-interest. Watershedding is a procedure that identifies all of the cells upslope of a cell of interest (pour point) that are connected to the pour point by a flow-path. The user must input a D8-derived flow pointer (flow direction) raster (<code>d8_pntr</code>) and a vector pour point file (<code>pour_pts</code>). The pour points must be of a Point ShapeType (i.e. Point, PointZ, PointM, MultiPoint, MultiPointZ, MultiPointM). Watersheds will be assigned the input pour point FID value. The flow pointer raster must be generated using the D8 algorithm, <code>d8_pointer</code>.</p>
+<p>Pour point vectors can be attained by on-screen digitizing to designate these points-of-interest locations. Because pour points are usually, although not always, situated on a stream network, it is recommended that you use Jenson's method (<code>jenson_snap_pour_points</code>) to snap pour points on the stream network. This will ensure that the digitized outlets are coincident with the digital stream contained within the DEM flowpaths. If this is not done prior to inputting a pour-point set to the <code>watershed</code> tool, anomalously small watersheds may be output, as pour points that fall off of the main flow path (even by one cell) in the D8 pointer will yield very different catchment areas.</p>
+<p>If a raster pour point is specified instead of vector points, the watershed labels will derive their IDs from the grid cell values of all non-zero, non-NoData valued grid cells in the pour points file. Notice that this file can contain any integer data. For example, if a lakes raster, with each lake possessing a unique ID, is used as the pour points raster, the tool will map the watersheds draining to each of the input lake features. Similarly, a pour points raster may actually be a streams file, such as what is generated by the <code>stream_link_identifier</code> tool.</p>
+<p>By default, the pointer raster is assumed to use the clockwise indexing method used by Whitebox Workflows. If the pointer file contains ESRI flow direction values instead, the <code>esri_pntr</code> must be True.</p>
+<p>There are several tools that perform similar watershedding operations in Whitebox Workflows. <code>watershed</code> is appropriate to use when you have a set of specific locations for which you need to derive the watershed areas. Use the <code>basins</code> tool instead when you simply want to find the watersheds draining to each outlet situated along the edge of a DEM. The <code>isobasins</code> tool can be used to divide a landscape into roughly equally sized watersheds. The <code>subbasins</code> and <code>strahler_order_basins</code> are useful when you need to find the areas draining to each link within a stream network. Finally, <code>hillslopes</code> can be used to identify the areas draining the each of the left and right banks of a stream network.</p>
+<h3 id="reference-5"><a class="header" href="#reference-5">Reference</a></h3>
+<p>Jenson, S. K. (1991), Applications of hydrological information automatically extracted from digital elevation models, Hydrological Processes, 5, 31–44, doi:10.1002/hyp.3360050104.</p>
+<p>Lindsay JB, Rothwell JJ, and Davies H. 2008. Mapping outlet points used for watershed delineation onto DEM-derived stream networks, Water Resources Research, 44, W08442, doi:10.1029/2007WR006507.</p>
+<h3 id="see-also-9"><a class="header" href="#see-also-9">See Also</a></h3>
+<p><code>d8_pointer</code>, <code>basins</code>, <code>subbasins</code>, <code>isobasins</code>, <code>strahler_order_basins</code>, <code>hillslopes</code>, <code>jenson_snap_pour_points</code>, <code>breach_depressions_least_cost</code>, <code>fill_depressions</code></p>
+<h3 id="python-api-10"><a class="header" href="#python-api-10">Python API</a></h3>
+<pre><code class="language-python">def watershed(self, d8_pointer: Raster, pour_points: Vector, esri_pntr: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="watershed-from-raster-pour-points"><a class="header" href="#watershed-from-raster-pour-points">Watershed From Raster Pour Points</a></h2>
+<p><strong>Function name:</strong> <code>watershed_from_raster_pour_points</code></p>
+<p>This tool will perform a watershedding operation based on a group of input raster containing point points (<code>pour_points</code>).  Watershedding is a procedure that identifies all of the cells upslope of a cell of interest (pour point) that are connected to the pour point by a flow-path. The user must input a D8-derived flow pointer (flow direction) raster (<code>d8_pointer</code>) and a pour points raster (<code>pour_points</code>). The flow pointer raster must be generated using the D8 algorithm, <code>d8_pointer</code>.</p>
+<p>Watershed labels will derive their IDs from the grid cell values of all non-zero, non-NoData valued grid cells in the pour points file. Notice that this file can contain any integer data. For example, if a lakes raster, with each lake possessing a unique ID, is used as the pour points raster, the tool will map the watersheds draining to each of the input lake features. Similarly, a pour points raster may actually be a streams file, such as what is generated by the <code>stream_link_identifier</code> tool.</p>
+<p>By default, the pointer raster is assumed to use the clockwise indexing method used by Whitebox Workflows. If the pointer file contains ESRI flow direction values instead, the <code>esri_pntr</code> parameter must be specified.</p>
+<p>There are several tools that perform similar watershedding operations in Whitebox Workflows. <code>watershed</code> is appropriate to use when you have a set of specific locations for which you need to derive the watershed areas. Use the <code>basins</code> tool instead when you simply want to find the watersheds draining to each outlet situated along the edge of a DEM. The <code>isobasins</code> tool can be used to divide a landscape into roughly equally sized watersheds. The <code>subbasins</code> and <code>strahler_order_basins</code> are useful when you need to find the areas draining to each link within a stream network. Finally, <code>hillslopes</code> can be used to identify the areas draining the each of the left and right banks of a stream network.</p>
+<h3 id="reference-6"><a class="header" href="#reference-6">Reference</a></h3>
+<p>Jenson, S. K. (1991), Applications of hydrological information automatically extracted from digital elevation models, Hydrological Processes, 5, 31–44, doi:10.1002/hyp.3360050104.</p>
+<p>Lindsay JB, Rothwell JJ, and Davies H. 2008. Mapping outlet points used for watershed delineation onto DEM-derived stream networks, Water Resources Research, 44, W08442, doi:10.1029/2007WR006507.</p>
+<h3 id="see-also-10"><a class="header" href="#see-also-10">See Also</a></h3>
+<p><code>d8_pointer</code>, <code>basins</code>, <code>subbasins</code>, <code>isobasins</code>, <code>strahler_order_basins</code>, <code>hillslopes</code>, <code>jenson_snap_pour_points</code>, <code>breach_depressions_least_cost</code>, <code>fill_depressions</code></p>
+<h3 id="python-api-11"><a class="header" href="#python-api-11">Python API</a></h3>
+<pre><code class="language-python">def watershed_from_raster_pour_points(self, d8_pointer: Raster, pour_points: Raster, esri_pntr: bool = False) -&gt; Raster:
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="hydrology-depressions-storage.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="hydrology-hydrologic-indices.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="hydrology-depressions-storage.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="hydrology-hydrologic-indices.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

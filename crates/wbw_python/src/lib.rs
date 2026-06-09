@@ -2700,6 +2700,7 @@ fn deactivate_license(from_transfer: bool) -> PyResult<String> {
 }
 
 #[pyfunction]
+#[cfg(feature = "pro")]
 fn transfer_license() -> PyResult<String> {
     let state = read_license_state_json().map_err(map_tool_error)?;
     let key = read_license_state_string_field(&state, "floating_license_id").map_err(map_tool_error)?;
@@ -2719,8 +2720,7 @@ fn transfer_license() -> PyResult<String> {
         .unwrap_or_default()
         .to_string();
 
-    // Best-effort: release the activation slot so the destination machine can activate.
-    #[cfg(feature = "pro")]
+    // Release the activation slot on the server so the key can be reused.
     if !key.is_empty() && !provider_url.is_empty() {
         notify_server_deactivation(&key, &provider_url);
     }
@@ -2735,6 +2735,14 @@ fn transfer_license() -> PyResult<String> {
         "customer_id": customer_id,
     }))
     .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+#[pyfunction]
+#[cfg(not(feature = "pro"))]
+fn transfer_license() -> PyResult<String> {
+    Err(PyRuntimeError::new_err(
+        "transfer_license requires a Pro-enabled build",
+    ))
 }
 
 #[pyfunction]

@@ -1,0 +1,403 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Change Detection - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html" class="active"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="change-detection"><a class="header" href="#change-detection">Change Detection</a></h1>
+<hr />
+<h2 id="change-vector-analysis"><a class="header" href="#change-vector-analysis">Change Vector Analysis</a></h2>
+<p><strong>Function name:</strong> <code>change_vector_analysis</code></p>
+<p>Change Vector Analysis (CVA) is a change detection method that characterizes the magnitude and change direction in spectral space between two times. A change vector is the difference vector between two vectors in n-dimensional feature space defined for two observations of the same geographical location (i.e. corresponding pixels) during two dates. The CVA inputs include the set of raster images corresponding to the multispectral data for each date. Note that there must be the same number of image files (bands) for the two dates and they must be entered in the same order, i.e. if three bands, red, green, and blue are entered for date one, these same bands must be entered in the same order for date two.</p>
+<p>CVA outputs two image files. The first image contains the change vector length, i.e. magnitude, for each pixel in the multi-spectral dataset. The second image contains information about the direction of the change event in spectral feature space, which is related to the type of change event, e.g. deforestation will likely have a different change direction than say crop growth. The vector magnitude is a continuous numerical variable. The change vector direction is presented in the form of a code, referring to the multi-dimensional sector in which the change vector occurs. A text output will be produced to provide a key describing sector codes, relating the change vector to positive or negative shifts in n-dimensional feature space.</p>
+<p>It is common to apply a simple thresholding operation on the magnitude data to determine 'actual' change (i.e. change above some assumed level of error). The type of change (qualitatively) is then defined according to the corresponding sector code. Jensen (2015) provides a useful description of this approach to change detection.</p>
+<h3 id="reference"><a class="header" href="#reference">Reference</a></h3>
+<p>Jensen, J. R. (2015). Introductory Digital Image Processing: A Remote Sensing Perspective.</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>write_function_memory_insertion</code></p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def change_vector_analysis(self, date1_rasters: List[Raster], date2_rasters: List[Raster]) -&gt; Tuple[Raster, Raster, str]:
+</code></pre>
+<hr />
+<h2 id="image-difference-change-detection"><a class="header" href="#image-difference-change-detection">Image Difference Change Detection</a></h2>
+<p><strong>Function name:</strong> <code>image_difference_change_detection</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="pca-based-change-detection"><a class="header" href="#pca-based-change-detection">PCA Based Change Detection</a></h2>
+<p><strong>Function name:</strong> <code>pca_based_change_detection</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="post-classification-change"><a class="header" href="#post-classification-change">Post Classification Change</a></h2>
+<p><strong>Function name:</strong> <code>post_classification_change</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="remote-sensing-change-detection"><a class="header" href="#remote-sensing-change-detection">Remote Sensing Change Detection</a></h2>
+<p><strong>Function name:</strong> <code>remote_sensing_change_detection</code></p>
+<p>PROProduction</p>
+<p>Detect spectral change between baseline and change-date multispectral bundles with profile-based sensitivity.</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative"><a class="header" href="#workflow-narrative">Workflow Narrative</a></h3>
+<p><strong>Remote Sensing Change Detection</strong></p>
+<h4 id="problem-it-solves"><a class="header" href="#problem-it-solves">Problem It Solves</a></h4>
+<p>Where is meaningful vegetation change occurring, and which detections are reliable enough for reporting?</p>
+<h4 id="who-it-is-for"><a class="header" href="#who-it-is-for">Who It Is For</a></h4>
+<ul>
+<li>Environmental monitoring analysts and EO operations teams.</li>
+</ul>
+<h4 id="primary-user"><a class="header" href="#primary-user">Primary User</a></h4>
+<p>Environmental consultancies, forestry/conservation agencies, and compliance programs.</p>
+<h4 id="what-it-does"><a class="header" href="#what-it-does">What It Does</a></h4>
+<ul>
+<li>Detects vegetation loss/gain between two dates using NDVI-style change logic.</li>
+<li>Uses bundle-native multiband inputs with explicit red/NIR band indices.</li>
+<li>Produces a signed change raster and a confidence raster for analyst triage.</li>
+</ul>
+<h4 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h4>
+<ul>
+<li>Computes NDVI-like indices per date from selected red and NIR bands.</li>
+<li>Calculates signed per-pixel delta between change-date and baseline NDVI-like response.</li>
+<li>Applies profile-dependent thresholds and local consistency checks to derive confidence.</li>
+<li>Indicative formula: NDVI = (NIR - Red) / (NIR + Red), then change = NDVI_change - NDVI_baseline.</li>
+</ul>
+<h4 id="why-it-wins"><a class="header" href="#why-it-wins">Why It Wins</a></h4>
+<ul>
+<li>Bundle-native inputs reduce parameter mismatch errors and make cross-date processing more reproducible.</li>
+</ul>
+<h4 id="typical-buying-trigger"><a class="header" href="#typical-buying-trigger">Typical Buying Trigger</a></h4>
+<p>A client or regulator requires repeatable, confidence-scored vegetation change evidence for periodic reporting.</p>
+<h4 id="typical-presets"><a class="header" href="#typical-presets">Typical Presets</a></h4>
+<ul>
+<li>aggressive: lower change threshold, more sensitive detection.</li>
+<li>balanced: default tradeoff for general monitoring.</li>
+<li>conservative: stricter thresholds, fewer false positives.</li>
+</ul>
+<h3 id="inputs"><a class="header" href="#inputs">Inputs</a></h3>
+<p>ParameterOptionalDescription
+baseline_bundle, baseline_red_band_index, baseline_nir_band_indexnoBaseline multispectral bundle and red/NIR band selectors used to compute baseline vegetation response.
+change_bundle, change_red_band_index, change_nir_band_indexnoChange-date multispectral bundle and red/NIR band selectors used for signed change estimation.
+optional intermediate_ndviyesIntermediate-date NDVI raster used to strengthen temporal plausibility scoring.
+profile: aggressive | balanced | conservativeyesProcessing profile controlling sensitivity, quality strictness, and runtime tradeoffs.
+high_confidence_thresholdyesConfidence threshold used for summary metrics (default <code>0.85</code>).</p>
+<h3 id="outputs"><a class="header" href="#outputs">Outputs</a></h3>
+<p>ParameterTypeDescription
+change_mapGeoTIFFPrimary change-intelligence raster showing direction and magnitude of detected change.
+confidenceGeoTIFFConfidence layer quantifying reliability of modeled outputs.
+summaryJSONMachine-readable summary report containing run metadata, QA diagnostics, and key metrics.
+html_reportHTMLHuman-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</p>
+<h3 id="python-example"><a class="header" href="#python-example">Python Example</a></h3>
+<p>`import whitebox_workflows as wbw</p>
+<p>wbe = wbw.WbEnvironment(include_pro=True, tier="pro")</p>
+<p>change_map, confidence, summary = wbe.remote_sensing_change_detection(
+baseline_bundle="data/baseline_bundle.tif",
+baseline_red_band_index=0,
+baseline_nir_band_index=1,
+change_bundle="data/change_bundle.tif",
+change_red_band_index=0,
+change_nir_band_index=1,
+profile="balanced",
+output="output/rs_change",
+)</p>
+<p>print(change_map)
+print(confidence)
+print(summary)`</p>
+<h3 id="license-notice"><a class="header" href="#license-notice">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+<hr />
+<h2 id="time-series-change-intelligence"><a class="header" href="#time-series-change-intelligence">Time Series Change Intelligence</a></h2>
+<p><strong>Function name:</strong> <code>time_series_change_intelligence</code></p>
+<p>PROProduction</p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p>workflow pro</p>
+<h3 id="workflow-narrative-1"><a class="header" href="#workflow-narrative-1">Workflow Narrative</a></h3>
+<p><strong>Time-Series Change Analysis</strong></p>
+<h4 id="problem-it-solves-1"><a class="header" href="#problem-it-solves-1">Problem It Solves</a></h4>
+<p>Where and when are structural shifts emerging in the time series, and how confident are those signals?</p>
+<h4 id="who-it-is-for-1"><a class="header" href="#who-it-is-for-1">Who It Is For</a></h4>
+<ul>
+<li>Time-series monitoring teams and geospatial data science groups.</li>
+</ul>
+<h4 id="primary-user-1"><a class="header" href="#primary-user-1">Primary User</a></h4>
+<p>Regional planning programs, policy/compliance analytics groups, and EO product teams.</p>
+<h4 id="what-it-does-1"><a class="header" href="#what-it-does-1">What It Does</a></h4>
+<ul>
+<li>Performs multi-date trend and breakpoint analysis from temporal stacks.</li>
+<li>Supports mode-dependent decomposition/segmentation behavior.</li>
+<li>Emits confidence-scored temporal change surfaces.</li>
+</ul>
+<h4 id="how-it-works-1"><a class="header" href="#how-it-works-1">How It Works</a></h4>
+<ul>
+<li>Traverses each pixel time series and estimates trend response over the observation window.</li>
+<li>Uses algorithm_mode-specific breakpoint logic to detect structural shifts.</li>
+<li>Converts fit strength, breakpoint support, and observation sufficiency into confidence output.</li>
+<li>Indicative formula: confidence ~= f(|trend|, breakpoint_support, n_observations), bounded to [0, 1].</li>
+</ul>
+<h4 id="why-it-wins-1"><a class="header" href="#why-it-wins-1">Why It Wins</a></h4>
+<ul>
+<li>Provides mode flexibility (fast/iterative/bfast) so users can balance throughput and analytical depth.</li>
+</ul>
+<h4 id="typical-buying-trigger-1"><a class="header" href="#typical-buying-trigger-1">Typical Buying Trigger</a></h4>
+<p>A monitoring program moves from two-date snapshots to sustained time-series surveillance.</p>
+<h4 id="typical-presets-1"><a class="header" href="#typical-presets-1">Typical Presets</a></h4>
+<ul>
+<li>fast: throughput-oriented screening.</li>
+<li>iterative: stronger breakpoint refinement.</li>
+<li>bfast: decomposition-oriented analysis.</li>
+</ul>
+<h3 id="inputs-1"><a class="header" href="#inputs-1">Inputs</a></h3>
+<p>ParameterOptionalDescription
+input_stack (required)noPrimary temporal raster stack used for trend and breakpoint analysis.
+optional qa_stackyesOptional temporal QA stack used to weight or suppress low-quality observations.
+algorithm_mode and thresholding controlsnoTime-series change algorithm mode and threshold controls.</p>
+<h3 id="outputs-1"><a class="header" href="#outputs-1">Outputs</a></h3>
+<p>ParameterTypeDescription
+trend_changeGeoTIFFPrimary change-intelligence raster showing direction and magnitude of detected change.
+breakpoint_countGeoTIFFPer-pixel count of detected temporal breakpoints.
+breakpoint_dateGeoTIFFEstimated timing raster for dominant detected breakpoint events.
+change_confidenceGeoTIFFConfidence surface for the time-series change detection result.
+summaryJSONMachine-readable summary report containing run metadata, QA diagnostics, and key metrics.
+html_reportHTMLHuman-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</p>
+<h3 id="python-example-1"><a class="header" href="#python-example-1">Python Example</a></h3>
+<p>`import whitebox_workflows as wbw</p>
+<p>wbe = wbw.WbEnvironment(include_pro=True, tier="pro")</p>
+<p>result = wbe.time_series_change_intelligence(
+input_stack="data/time_stack.tif",
+qa_stack="data/time_stack_qa.tif",
+algorithm_mode="bfast",
+output_prefix="output/ts_change",
+)</p>
+<p>print(result)`</p>
+<h3 id="license-notice-1"><a class="header" href="#license-notice-1">License Notice</a></h3>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <code>www.whiteboxgeo.com</code> to purchase a license.</p>
+<hr />
+<h2 id="write-function-memory-insertion"><a class="header" href="#write-function-memory-insertion">Write Function Memory Insertion</a></h2>
+<p><strong>Function name:</strong> <code>write_function_memory_insertion</code></p>
+<p>Jensen (2015) describes write function memory (WFM) insertion as a simple yet effective method of visualizing land-cover change between two or three dates. WFM insertion may be used to qualitatively inspect change in any type of registered, multi-date imagery. The technique operates by creating a red-green-blue (RGB) colour composite image based on co-registered imagery from two or three dates. If two dates are input, the first date image will be put into the red channel, while the second date image will be put into both the green and blue channels. The result is an image where the areas of change are displayed as red (date 1 is brighter than date 2) and cyan (date 1 is darker than date 2), and areas of little change are represented in grey-tones. The larger the change in pixel brightness between dates, the more intense the resulting colour will be.</p>
+<p>If images from three dates are input, the resulting composite can contain many distinct colours. Again, more intense the colours are indicative of areas of greater land-cover change among the dates, while areas of little change are represented in grey-tones. Interpreting the direction of change is more difficult when three dates are used. Note that for multi-spectral imagery, only one band from each date can be used for creating a WFM insertion image.</p>
+<h3 id="reference-1"><a class="header" href="#reference-1">Reference</a></h3>
+<p>Jensen, J. R. (2015). Introductory Digital Image Processing: A Remote Sensing Perspective.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>create_colour_composite</code>, <code>change_vector_analysis</code></p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def write_function_memory_insertion(self, image1: Raster, image2: Raster, image3: Raster) -&gt; Raster:
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="remote-sensing-obia.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="remote-sensing-radiometric-correction.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="remote-sensing-obia.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="remote-sensing-radiometric-correction.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

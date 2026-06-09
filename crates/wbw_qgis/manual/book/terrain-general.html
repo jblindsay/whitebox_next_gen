@@ -1,0 +1,647 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>General Tools - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="terrain-derivatives.html"><strong aria-hidden="true">11.1.</strong> Terrain Derivatives</a></li><li class="chapter-item expanded "><a href="terrain-visibility.html"><strong aria-hidden="true">11.2.</strong> Visibility Analysis</a></li><li class="chapter-item expanded "><a href="terrain-roughness-texture.html"><strong aria-hidden="true">11.3.</strong> Roughness and Texture</a></li><li class="chapter-item expanded "><a href="terrain-landform-indices.html"><strong aria-hidden="true">11.4.</strong> Landform Indices</a></li><li class="chapter-item expanded "><a href="terrain-multiscale-signatures.html"><strong aria-hidden="true">11.5.</strong> Multiscale Signatures</a></li><li class="chapter-item expanded "><a href="terrain-general.html" class="active"><strong aria-hidden="true">11.6.</strong> General Tools</a></li><li class="chapter-item expanded "><a href="terrain-workflow-products.html"><strong aria-hidden="true">11.7.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="hydrology-flow-routing.html"><strong aria-hidden="true">12.1.</strong> Flow Routing</a></li><li class="chapter-item expanded "><a href="hydrology-depressions-storage.html"><strong aria-hidden="true">12.2.</strong> Depressions and Storage</a></li><li class="chapter-item expanded "><a href="hydrology-watersheds-basins.html"><strong aria-hidden="true">12.3.</strong> Watersheds and Basins</a></li><li class="chapter-item expanded "><a href="hydrology-hydrologic-indices.html"><strong aria-hidden="true">12.4.</strong> Hydrologic Indices</a></li><li class="chapter-item expanded "><a href="streams-network-extraction.html"><strong aria-hidden="true">12.5.</strong> Stream Network Extraction</a></li><li class="chapter-item expanded "><a href="streams-longitudinal-analysis.html"><strong aria-hidden="true">12.6.</strong> Longitudinal Profile Analysis</a></li><li class="chapter-item expanded "><a href="streams-ordering-metrics.html"><strong aria-hidden="true">12.7.</strong> Stream Ordering and Metrics</a></li></ol></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lidar-io-management.html"><strong aria-hidden="true">13.1.</strong> I/O and Data Management</a></li><li class="chapter-item expanded "><a href="lidar-filtering-classification.html"><strong aria-hidden="true">13.2.</strong> Filtering and Classification</a></li><li class="chapter-item expanded "><a href="lidar-interpolation-gridding.html"><strong aria-hidden="true">13.3.</strong> Interpolation and Gridding</a></li><li class="chapter-item expanded "><a href="lidar-analysis-metrics.html"><strong aria-hidden="true">13.4.</strong> Analysis and Metrics</a></li><li class="chapter-item expanded "><a href="lidar-workflow-products.html"><strong aria-hidden="true">13.5.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="remote-sensing-enhancement-contrast.html"><strong aria-hidden="true">14.1.</strong> Image Enhancement and Contrast</a></li><li class="chapter-item expanded "><a href="remote-sensing-filters.html"><strong aria-hidden="true">14.2.</strong> Image Filters</a></li><li class="chapter-item expanded "><a href="remote-sensing-edge-feature-detection.html"><strong aria-hidden="true">14.3.</strong> Edge and Feature Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-classification.html"><strong aria-hidden="true">14.4.</strong> Image Classification</a></li><li class="chapter-item expanded "><a href="remote-sensing-obia.html"><strong aria-hidden="true">14.5.</strong> Object-Based Image Analysis</a></li><li class="chapter-item expanded "><a href="remote-sensing-change-detection.html"><strong aria-hidden="true">14.6.</strong> Change Detection</a></li><li class="chapter-item expanded "><a href="remote-sensing-radiometric-correction.html"><strong aria-hidden="true">14.7.</strong> Radiometric Correction</a></li><li class="chapter-item expanded "><a href="remote-sensing-thermal-emissivity.html"><strong aria-hidden="true">14.8.</strong> Thermal and Emissivity</a></li><li class="chapter-item expanded "><a href="remote-sensing-spectral-analytics.html"><strong aria-hidden="true">14.9.</strong> Spectral Analytics</a></li><li class="chapter-item expanded "><a href="remote-sensing-sar.html"><strong aria-hidden="true">14.10.</strong> SAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing-workflow-products.html"><strong aria-hidden="true">14.11.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="raster-overlay-math.html"><strong aria-hidden="true">15.1.</strong> Overlay and Math</a></li><li class="chapter-item expanded "><a href="raster-distance-cost.html"><strong aria-hidden="true">15.2.</strong> Distance and Cost</a></li><li class="chapter-item expanded "><a href="raster-spatial-statistics.html"><strong aria-hidden="true">15.3.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="raster-reclass-mask.html"><strong aria-hidden="true">15.4.</strong> Reclass and Mask</a></li><li class="chapter-item expanded "><a href="raster-local-neighborhood.html"><strong aria-hidden="true">15.5.</strong> Local and Neighborhood</a></li><li class="chapter-item expanded "><a href="raster-general.html"><strong aria-hidden="true">15.6.</strong> General Tools</a></li></ol></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-overlay-analysis.html"><strong aria-hidden="true">16.1.</strong> Overlay Analysis</a></li><li class="chapter-item expanded "><a href="vector-geometry-processing.html"><strong aria-hidden="true">16.2.</strong> Geometry Processing</a></li><li class="chapter-item expanded "><a href="vector-shape-metrics.html"><strong aria-hidden="true">16.3.</strong> Shape Metrics</a></li><li class="chapter-item expanded "><a href="vector-sampling-gridding.html"><strong aria-hidden="true">16.4.</strong> Sampling and Gridding</a></li><li class="chapter-item expanded "><a href="vector-attribute-analysis.html"><strong aria-hidden="true">16.5.</strong> Attribute Analysis</a></li><li class="chapter-item expanded "><a href="vector-spatial-statistics.html"><strong aria-hidden="true">16.6.</strong> Spatial Statistics</a></li><li class="chapter-item expanded "><a href="vector-online-data.html"><strong aria-hidden="true">16.7.</strong> Online Data</a></li><li class="chapter-item expanded "><a href="vector-workflow-products.html"><strong aria-hidden="true">16.8.</strong> Workflow Products</a></li></ol></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-network-analysis.html"><strong aria-hidden="true">17.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="vector-linear-referencing.html"><strong aria-hidden="true">18.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="projection-georeferencing.html"><strong aria-hidden="true">19.</strong> Projection and Georeferencing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="projection-georeferencing-tools.html"><strong aria-hidden="true">19.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="precision-agriculture.html"><strong aria-hidden="true">20.</strong> Precision Agriculture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="precision-agriculture-tools.html"><strong aria-hidden="true">20.1.</strong> Tool Reference</a></li></ol></li><li class="chapter-item expanded "><a href="data-conversion.html"><strong aria-hidden="true">21.</strong> Data Conversion</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="conversion-vector-table-io.html"><strong aria-hidden="true">21.1.</strong> Vector and Table I/O</a></li><li class="chapter-item expanded "><a href="conversion-geometry-topology.html"><strong aria-hidden="true">21.2.</strong> Geometry and Topology</a></li><li class="chapter-item expanded "><a href="conversion-raster-vector.html"><strong aria-hidden="true">21.3.</strong> Raster-Vector Conversion</a></li></ol></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">22.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">23.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="general-tools"><a class="header" href="#general-tools">General Tools</a></h1>
+<hr />
+<h2 id="assess-route"><a class="header" href="#assess-route">Assess Route</a></h2>
+<p><strong>Function name:</strong> <code>assess_route</code></p>
+<p>PROExperimental</p>
+<p>Segments route lines and evaluates per-segment terrain metrics from a DEM.</p>
+<p>geomorphometry route vector legacy-port</p>
+<hr />
+<h2 id="breakline-mapping"><a class="header" href="#breakline-mapping">Breakline Mapping</a></h2>
+<p><strong>Function name:</strong> <code>breakline_mapping</code></p>
+<p>PROExperimental</p>
+<p>Maps breaklines by thresholding log-transformed curvedness and vectorizing thinned linear features.</p>
+<p>geomorphometry breaklines curvature vectorization legacy-port</p>
+<h3 id="parameters"><a class="header" href="#parameters">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input DEM raster path or typed raster object.Required<code>dem.tif</code>
+<code>threshold</code>Minimum log-curvedness threshold used for breakline extraction (default 0.8).Optional<code>0.8</code>
+<code>min_length</code>Minimum output line length in grid cells (default 3).Optional<code>3</code>
+<code>output</code>Optional output vector path (default temporary .shp).Optional<code>breaklines.shp</code></p>
+<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
+<p><em>Extract breakline vectors from a DEM.</em>
+<code>wbe.breakline_mapping(input='dem.tif', min_length=6, output='breaklines.shp', threshold=2.0)</code></p>
+<hr />
+<h2 id="convergence-index"><a class="header" href="#convergence-index">Convergence Index</a></h2>
+<p><strong>Function name:</strong> <code>convergence_index</code></p>
+<p>This tool calculates the convergence index (C), described by Koethe and Lehmeier (1996) and Kiss (2004), for each grid cell in an input digital elevation model (DEM). The convergence index measures the average amount by which the aspect value of each of the eight neighbours in a 3x3 kernel deviates from an aspect aligned with the direction towards  the center cell. As such the index measures the degree to which the surrounding topography converges on the center cell.</p>
+<p>C = 1 / 8 Σ|Φ - Az0| - 90</p>
+<p>Where Φ is the aspect of a neighbour of the center cell and Az0 is the azimuth from the neighbour directed towards the center cell. Note, -90 &lt; C &lt; 90, where highly convergent areas have  values near -90 and highly divergent areas have values near 90. Therefore, in actuality, C is more properly  an index of divergence rather than a convergence index, despite its name.</p>
+<p>The user must specify the name of the input DEM (<code>dem</code>) and the  output raster (<code>output</code>). The Z conversion factor (<code>zfactor</code>) is only important when the vertical and  horizontal units are not the same in the DEM, and the DEM is in a projected coordinate system. When this is the case, the algorithm will multiply each elevation  in the DEM by the Z Conversion Factor to perform the unit conversion.</p>
+<p>For DEMs in projected coordinate systems, the tool uses the 3rd-order bivariate Taylor polynomial method described by Florinsky (2016). Based on a polynomial fit of the elevations within the 5x5 neighbourhood surrounding each cell, this method is considered more robust against outlier elevations (noise) than other methods. For DEMs in geographic coordinate systems (i.e. angular units), the tool uses the 3x3 polynomial fitting method for equal angle grids also described by Florinsky (2016).</p>
+<h3 id="reference"><a class="header" href="#reference">Reference</a></h3>
+<p>Florinsky, I. (2016). Digital terrain analysis in soil science and geology. Academic Press.</p>
+<p>Kiss, R. (2004). Determination of drainage network in digital elevation models, utilities and  limitations. Journal of Hungarian geomathematics, 2, 17-29.</p>
+<p>Koethe, R. and Lehmeier, F. (1996): SARA - System zur Automatischen Relief-Analyse. User Manual,  2. Edition [Dept. of Geography, University of Goettingen, unpublished]</p>
+<h3 id="see-also"><a class="header" href="#see-also">See Also</a></h3>
+<p><code>aspect</code>, <code>plan_curvature</code>, <code>profile_curvature</code></p>
+<h3 id="python-api"><a class="header" href="#python-api">Python API</a></h3>
+<pre><code class="language-python">def convergence_index(self, dem: Raster, z_factor: float = 1.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="dem-void-filling"><a class="header" href="#dem-void-filling">DEM Void Filling</a></h2>
+<p><strong>Function name:</strong> <code>dem_void_filling</code></p>
+<h3 id="description"><a class="header" href="#description">Description</a></h3>
+<p>This tool implements a modified version of the Delta Surface Fill method of Grohman et al. (2006). It can fill voids (i.e., data holes) contained within a digital elevation model (<code>dem</code>) by fusing the data with a second DEM (<code>fill</code>) that defines the topographic surface within the void areas. The two surfaces are fused seamlessly so that the transition from the source and fill surfaces is undetectable. The fill surface need not have the same resolution as the source DEM.</p>
+<p>The algorithm works by computing a DEM-of-difference (DoD) for each valid grid cell in the source DEM that also has a valid elevation in the corresponding location within the fill DEM. This difference surface is then used to define offsets within the near void-edge locations. The fill surface elevations are then combined with interpolated offsets, with the interpolation based on near-edge offsets, and used to define a new surface within the void areas of the source DEM in such a way that the data transitions seamlessly from the source data source to the fill data. The image below provides an example of this method.</p>
+<p>The user must specify the <code>mean_plane_dist</code> parameter, which defines the distance (measured in grid cells)  within a void area from the void's edge. Grid cells within larger voids that are beyond this distance  from their edges have their vertical offsets, needed during the fusion of the DEMs, set to the mean offset for all grid cells that have both valid source and fill elevations. Void cells that are nearer their void  edges have vertical offsets that are interpolated based on nearby offset values (i.e., the DEM of difference). The interpolation uses inverse-distance weighted (IDW) scheme, with a user-specified weight parameter (<code>weight_value</code>).</p>
+<p>The <code>edge_treatment</code> parameter describes how the data fusion operates at the edges of voids, i.e., the first line of grid cells for which there are both source and fill elevation values. This parameter has values of "use DEM", "use Fill", and "average". Grohman et al. (2006) state that sometimes, due to a weakened signal within these marginal locations between the area of valid data and voids, the estimated elevation values are inaccurate. When this is the case, it is best to use fill elevations in the transitional areas. If this isn't the case, the  "use DEM" is the better option. A compromise between the two options is to average the two elevation sources.</p>
+<h3 id="references"><a class="header" href="#references">References</a></h3>
+<p>Grohman, G., Kroenung, G. and Strebeck, J., 2006. Filling SRTM voids: The delta surface fill method.  Photogrammetric Engineering and Remote Sensing, 72(3), pp.213-216.</p>
+<h3 id="python-api-1"><a class="header" href="#python-api-1">Python API</a></h3>
+<pre><code class="language-python">def dem_void_filling(self, dem: Raster, fill: Raster, mean_plane_dist: int = 20, edge_treatment: str = "dem", weight_value: float = 2.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="deviation-from-mean-elevation"><a class="header" href="#deviation-from-mean-elevation">Deviation From Mean Elevation</a></h2>
+<p><strong>Function name:</strong> <code>deviation_from_mean_elevation</code></p>
+<p>This tool can be used to calculate the difference between the elevation of each grid cell and the mean elevation of the centering local neighbourhood, normalized by standard deviation. Therefore, this index of topographic residual is essentially equivalent to a local z-score. This attribute measures the <em>relative topographic position</em> as a fraction of local relief, and so is normalized to the local surface roughness. <code>DevFromMeanElev</code> utilizes an integral image approach (Crow, 1984) to ensure highly efficient filtering that is invariant with filter size.</p>
+<p>The user must input a digital elevation model (DEM) (<code>dem</code>) and the size of the neighbourhood in the <em>x</em> and <em>y</em> directions (<code>filterx</code> and <code>filtery</code>), measured in grid size.</p>
+<p>While <code>DeviationFromMeanElev</code> calculates the deviation from mean elevation (DEV) at a single, user-defined scale, the <code>max_elevation_deviation</code> tool can be used to output the per-pixel maximum DEV value across a range of input scales.</p>
+<h3 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h3>
+<p><code>DiffFromMeanElev</code>, <code>max_elevation_deviation</code></p>
+<h3 id="python-api-2"><a class="header" href="#python-api-2">Python API</a></h3>
+<pre><code class="language-python">def deviation_from_mean_elevation(self, dem: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="difference-from-mean-elevation"><a class="header" href="#difference-from-mean-elevation">Difference From Mean Elevation</a></h2>
+<p><strong>Function name:</strong> <code>difference_from_mean_elevation</code></p>
+<p>This tool can be used to calculate the difference between the elevation of each grid cell and the mean elevation of the centering local neighbourhood. This is similar to what a high-pass filter calculates for imagery data, but is intended to work with DEM data instead. This attribute measures the <em>relative topographic position</em>. <code>DiffFromMeanElev</code> utilizes an integral image approach (Crow, 1984) to ensure highly efficient filtering that is invariant with filter size.</p>
+<p>The user must specify a digital elevation model (DEM) (<code>dem</code>) , and the size of the neighbourhood in the <em>x</em> and <em>y</em> directions (<code>filterx</code> and <code>filtery</code>), measured in grid size.</p>
+<p>While <code>DevFromMeanElev</code> calculates the DIFF at a single, user-defined scale, the <code>max_difference_from_mean</code> tool can be used to output the per-pixel maximum DIFF value across a range of input scales.</p>
+<h3 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h3>
+<p><code>DevFromMeanElev</code>, <code>max_difference_from_mean</code></p>
+<h3 id="python-api-3"><a class="header" href="#python-api-3">Python API</a></h3>
+<pre><code class="language-python">def difference_from_mean_elevation(self, dem: Raster, filter_size_x: int = 11, filter_size_y: int = 11) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="directional-relief"><a class="header" href="#directional-relief">Directional Relief</a></h2>
+<p><strong>Function name:</strong> <code>directional_relief</code></p>
+<p>This tool calculates the relief for each grid cell in a digital elevation model (DEM) in a specified direction. Directional relief is an index of the degree to which a DEM grid cell is higher or lower than its surroundings. It is calculated by subtracting the elevation of a DEM grid cell from the average elevation of those cells which lie between it and the edge of the DEM in a specified compass direction. Thus, positive values indicate that a grid cell is lower than the average elevation of the grid cells in a specific direction (i.e. relatively sheltered), whereas a negative directional relief indicates that the grid cell is higher (i.e. relatively exposed). The algorithm is based on a modification of the procedure described by Lapen and Martz (1993). The modifications include: (1) the ability to specify any direction between 0-degrees and 360-degrees (<code>azimuth</code>), and (2) the ability to use a distance-limited search (<code>max_dist</code>), such that the ray-tracing procedure terminates before the DEM edge is reached for longer search paths. The algorithm works by tracing a ray from each grid cell in the direction of interest and evaluating the average elevation along the ray. Linear interpolation is used to estimate the elevation of the surface where a ray does not intersect the DEM grid precisely at one of its nodes. The user must input a DEM raster file (<code>dem</code>) and a hypothetical wind direction. Furthermore, the user is able to constrain the maximum search distance for the ray tracing. If no maximum search distance is specified, each ray will be traced to the edge of the DEM. The units of the output image are the same as the input DEM.</p>
+<p>Ray-tracing is a highly computationally intensive task and therefore this tool may take considerable time to operate for larger sized DEMs. This tool is parallelized to aid with computational efficiency. NoData valued grid cells in the input image will be assigned NoData values in the output image. The output raster is of the float data type and continuous data scale. Directional relief is best displayed using the blue-white-red bipolar palette to distinguish between the positive and negative values that are present in the output.</p>
+<h3 id="reference-1"><a class="header" href="#reference-1">Reference</a></h3>
+<p>Lapen, D. R., &amp; Martz, L. W. (1993). The measurement of two simple topographic indices of wind sheltering-exposure from raster digital elevation models. Computers &amp; Geosciences, 19(6), 769-779.</p>
+<h3 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h3>
+<p><code>fetch_analysis</code>, <code>horizon_angle</code>, <code>relative_aspect</code></p>
+<h3 id="python-api-4"><a class="header" href="#python-api-4">Python API</a></h3>
+<pre><code class="language-python">def directional_relief(self, dem: Raster, azimuth: float = 0.0, max_dist: float = float('inf')) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="elev-above-pit"><a class="header" href="#elev-above-pit">Elev Above Pit</a></h2>
+<p><strong>Function name:</strong> <code>elev_above_pit</code></p>
+<p>Experimental</p>
+<p>Calculate elevation above the nearest depression (pit). Useful for drainage analysis and identifying topographic prominence.</p>
+<p>geomorphometry terrain relative-elevation legacy-port</p>
+<hr />
+<h2 id="elev-above-pit-dist"><a class="header" href="#elev-above-pit-dist">Elev Above Pit Dist</a></h2>
+<p><strong>Function name:</strong> <code>elev_above_pit_dist</code></p>
+<p>Experimental</p>
+<p>Compatibility alias for elev_above_pit.</p>
+<p>geomorphometry terrain legacy-port</p>
+<hr />
+<h2 id="elevation-percentile"><a class="header" href="#elevation-percentile">Elevation Percentile</a></h2>
+<p><strong>Function name:</strong> <code>elevation_percentile</code></p>
+<p>Elevation percentile (EP) is a measure of local topographic position (LTP). It expresses the vertical position for a digital elevation model (DEM) grid cell (z0) as the percentile of the elevation distribution within the filter window, such that:</p>
+<p>EP = counti∈C(zi &gt; z0) x (100 / nC)</p>
+<p>where z0 is the elevation of the window's center grid cell, zi is the elevation of cell <em>i</em> contained within the neighboring set C, and nC is the number of grid cells contained within the window.</p>
+<p>EP is unsigned and expressed as a percentage, bound between 0% and 100%. Quantile-based estimates (e.g., the median and interquartile range) are often used in nonparametric statistics to provide data variability estimates without assuming the distribution is normal. Thus, EP is largely unaffected by irregularly shaped elevation frequency distributions or by outliers in the DEM, resulting in a highly robust metric of LTP. In fact, elevation distributions within small to medium sized neighborhoods often exhibit skewed, multimodal, and non-Gaussian distributions, where the occurrence of elevation errors can often result in distribution outliers. Thus, based on these statistical characteristics, EP is considered one of the most robust representation of LTP.</p>
+<p>The algorithm implemented by this tool uses the relatively efficient running-histogram filtering algorithm of Huang et al. (1979). Because most DEMs contain floating point data, elevation values must be rounded to be binned. The <code>sig_digits</code> parameter is used to determine the level of precision preserved during this binning process. The algorithm is parallelized to further aid with computational efficiency.</p>
+<p>Neighbourhood size, or filter size, is specified in the x and y dimensions using the <code>filterx</code> and <code>filtery</code> flags. These dimensions should be odd, positive integer values (e.g. 3, 5, 7, 9, etc.).</p>
+<h3 id="references-1"><a class="header" href="#references-1">References</a></h3>
+<p>Newman, D. R., Lindsay, J. B., and Cockburn, J. M. H. (2018). Evaluating metrics of local topographic position for multiscale geomorphometric analysis. Geomorphology, 312, 40-50.</p>
+<p>Huang, T., Yang, G.J.T.G.Y. and Tang, G., 1979. A fast two-dimensional median filtering algorithm. IEEE Transactions on Acoustics, Speech, and Signal Processing, 27(1), pp.13-18.</p>
+<h3 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h3>
+<p><code>DevFromMeanElev</code>, <code>DiffFromMeanElev</code></p>
+<h3 id="python-api-5"><a class="header" href="#python-api-5">Python API</a></h3>
+<pre><code class="language-python">def elevation_percentile(self, dem: Raster, filter_size_x: int = 11, filter_size_y: int = 11, sig_digits: int = 2) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="embankment-mapping"><a class="header" href="#embankment-mapping">Embankment Mapping</a></h2>
+<p><strong>Function name:</strong> <code>embankment_mapping</code></p>
+<p>This tool can be used to map and/or remove road embankments from an input fine-resolution digital elevation  model (<code>dem</code>). Fine-resolution LiDAR DEMs can represent surface features such as road and railway  embankments with high fidelity. However, transportation embankments are problematic for several  environmental modelling applications, including soil an vegetation distribution mapping, where the pre-embankment topography is the contolling factor. The algorithm utilizes repositioned (<code>search_dist</code>) transportation  network cells, derived from rasterizing a transportation vector (<code>road_vec</code>), as seed points in a  region-growing operation. The embankment region grows based on derived morphometric parameters, including  road surface width (<code>min_road_width</code>), embankment width (<code>typical_width</code> and <code>max_width</code>), embankment  height (<code>max_height</code>), and absolute slope (<code>spillout_slope</code>). The tool can be run in two modes. By default the tool will simply map embankment cells, with a Boolean output raster. If, however, the <code>remove_embankments</code> flag is specified, the tool will instead output a DEM for which the mapped embankment grid cells have been excluded and new surfaces have been interpolated based on the surrounding elevation values (see below).</p>
+<p>Hillshade from original DEM:</p>
+<p>Hillshade from embankment-removed DEM:</p>
+<h3 id="references-2"><a class="header" href="#references-2">References</a></h3>
+<p>Van Nieuwenhuizen, N, Lindsay, JB, DeVries, B. 2021. <code>Automated mapping of transportation embankments in  fine-resolution LiDAR DEMs</code>. Remote Sensing. 13(7), 1308; https://doi.org/10.3390/rs13071308</p>
+<h3 id="see-also-5"><a class="header" href="#see-also-5">See Also:</a></h3>
+<p><code>remove_off_terrain_objects</code>, <code>smooth_vegetation_residual</code></p>
+<h3 id="python-api-6"><a class="header" href="#python-api-6">Python API</a></h3>
+<pre><code class="language-python">def embankment_mapping(self, dem: Raster, roads_vector: Vector, search_dist: float = 2.5, min_road_width: float = 6.0, typical_embankment_width: float = 30.0, typical_embankment_max_height: float = 2.0, embankment_max_width: float = 60.0, max_upwards_increment: float = 0.05, spillout_slope: float = 4.0, remove_embankments: bool = False) -&gt; Tuple[Raster, Union[Raster, None]]:
+</code></pre>
+<hr />
+<h2 id="exposure-towards-wind-flux"><a class="header" href="#exposure-towards-wind-flux">Exposure Towards Wind Flux</a></h2>
+<p><strong>Function name:</strong> <code>exposure_towards_wind_flux</code></p>
+<p>This tool creates a new raster in which each grid cell is assigned the exposure of the land-surface to  a hypothetical wind flux. It can be conceptualized as the angle between a plane orthogonal to the wind  and a plane that represents the local topography at a grid cell (Bohner and Antonic, 2007). The user must input a digital elevation model (<code>dem</code>), as well as the dominant wind azimuth (<code>azimuth</code>) and a maximum search distance (<code>max_dist</code>) used to calclate the horizon angle. Notice that the specified azimuth represents a regional average wind direction.</p>
+<p>Exposure towards the sloped wind flux essentially combines the relative terrain aspect and the maximum upwind  slope (i.e. horizon angle). This terrain attribute accounts for land-surface orientation, relative to the wind,  and shadowing effects of distant topographic features but does not account for deflection of the wind by  topography. This tool should not be used on very extensive areas over which Earth's curvature must be taken into  account. DEMs in projected coordinate systems are preferred.</p>
+<p><strong>Algorithm Description:</strong></p>
+<p>Exposure is measured based on the equation presented in Antonic and Legovic (1999):</p>
+<p>cos(<em>E</em>) = cos(<em>S</em>) sin(<em>H</em>) + sin(<em>S</em>) cos(<em>H</em>) cos(<em>Az</em> - <em>A</em>)</p>
+<p>Where, <em>E</em> is angle between a plane defining the local terrain and a plane orthogonal to the wind flux, <em>S</em>  is the terrain slope, <em>A</em> is the terrain aspect, <em>Az</em> is the azimuth of the wind flux, and <em>H</em> is the horizon  angle of the wind flux, which is zero when only the horizontal component of the wind flux is accounted for.</p>
+<p>Exposure images are best displayed using a greyscale or bipolar palette to distinguish between the positive  and negative values that are present in the output.</p>
+<h3 id="references-3"><a class="header" href="#references-3">References</a></h3>
+<p>Antonić, O., &amp; Legović, T. 1999. Estimating the direction of an unknown air pollution source using a digital  elevation model and a sample of deposition. <em>Ecological modelling</em>, 124(1), 85-95.</p>
+<p>Böhner, J., &amp; Antonić, O. 2009. Land-surface parameters specific to topo-climatology. Developments in Soil  Science, 33, 195-226.</p>
+<h3 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h3>
+<p><code>relative_aspect</code></p>
+<h3 id="python-api-7"><a class="header" href="#python-api-7">Python API</a></h3>
+<pre><code class="language-python">def exposure_towards_wind_flux(self, dem: Raster, azimuth: float = 0.0, max_dist: float = float('inf'), z_factor: float = 1.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="feature-preserving-smoothing"><a class="header" href="#feature-preserving-smoothing">Feature Preserving Smoothing</a></h2>
+<p><strong>Function name:</strong> <code>feature_preserving_smoothing</code></p>
+<h3 id="description-1"><a class="header" href="#description-1">Description</a></h3>
+<p>This tool implements a highly modified form of the DEM de-noising algorithm described by Sun et al. (2007). It is very effective at removing surface roughness from digital elevation models (DEMs), without significantly altering breaks-in-slope. As such, this tool should be used for smoothing DEMs rather than either smoothing with low-pass filters (e.g. mean, median, Gaussian filters) or grid size coarsening by resampling. The algorithm works by 1) calculating the surface normal 3D vector of each grid cell in the DEM, 2) smoothing the normal vector field using a filtering scheme that applies more weight to neighbours with lower angular difference in surface normal vectors, and 3) uses the smoothed normal vector field to update the elevations in the input DEM.</p>
+<p>Sun et al.'s (2007) original method was intended to work on input point clouds and fitted triangular irregular networks (TINs). The algorithm has been modified to work with input raster DEMs instead. In so doing, this algorithm calculates surface normal vectors from the planes fitted to 3 x 3 neighbourhoods surrounding each grid cell, rather than the triangular facet. The normal vector field smoothing and elevation updating procedures are also based on raster filtering operations. These modifications make this tool more efficient than Sun's original method, but will also result in a slightly different output than what would be achieved with Sun's method.</p>
+<p>The user must specify the values of three key parameters, including the filter size (<code>filter</code>), the normal difference threshold (<code>norm_diff</code>), and the number of iterations (<code>num_iter</code>). Lindsay et al. (2019) found that <strong>the degree of smoothing was less impacted by the filter size than it was either the normal difference threshold and the number of iterations</strong>. A filter size of 11, the default value, tends to work well in many cases. To increase the level of smoothing applied to the DEM, consider increasing the normal difference threshold, i.e. the angular difference in normal vectors between the center cell of a filter window and a neighbouring cell. This parameter determines which neighbouring values are included in a filtering operation and higher values will result in a greater number of neighbouring cells included, and therefore smoother surfaces. Similarly, increasing the number of iterations from the default value of 3 to upwards of 5-10 will result in significantly greater smoothing.</p>
+<p>Before smoothing treatment:</p>
+<p>After smoothing treatment with FPS:</p>
+<p>For a video tutorial on how to use the <code>feature_preserving_smoothing</code> tool, please see <code>this YouTube video</code>.</p>
+<h3 id="reference-2"><a class="header" href="#reference-2">Reference</a></h3>
+<p>Lindsay JB, Francioni A, Cockburn JMH. 2019. LiDAR DEM smoothing and the preservation of drainage features. <em>Remote Sensing</em>, 11(16), 1926; DOI: 10.3390/rs11161926.</p>
+<p>Sun, X., Rosin, P., Martin, R., &amp; Langbein, F. (2007). Fast and effective feature-preserving mesh denoising. <em>IEEE Transactions on Visualization &amp; Computer Graphics</em>, (5), 925-938.</p>
+<h3 id="parameters-1"><a class="header" href="#parameters-1">Parameters</a></h3>
+<p>dem (Raster):     The input digital elevation model (DEM)</p>
+<p>filter_size (int):     The filter size used for smoothing. Default is 11.</p>
+<p>normal_diff_threshold (float):     The maximum allowable difference in the angle of the normals between two grid cells on the same facet. Default is 8.0.</p>
+<p>iterations (int):     The number of iterations used during smoothing. Default is 3.</p>
+<p>max_elevation_diff (float):     The maximum allowable vertical distance that a cell's elevation is allowed to be changed by</p>
+<p>z_factor (float):     Used to convert elevation units so that they match the horizontal units. Unless the two units differ,      this should be set to 1.0. Default is 1.0.</p>
+<h3 id="returns"><a class="header" href="#returns">Returns</a></h3>
+<p>Raster: return value</p>
+<h3 id="python-api-8"><a class="header" href="#python-api-8">Python API</a></h3>
+<pre><code class="language-python">def feature_preserving_smoothing(self, dem: Raster, filter_size: int = 11, normal_diff_threshold: float = 8.0, iterations: int = 3, max_elevation_diff: float = float('inf'), z_factor: float = 1.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="feature-preserving-smoothing-multiscale"><a class="header" href="#feature-preserving-smoothing-multiscale">Feature Preserving Smoothing Multiscale</a></h2>
+<p><strong>Function name:</strong> <code>feature_preserving_smoothing_multiscale</code></p>
+<p><em>No help documentation available for this tool.</em></p>
+<hr />
+<h2 id="fetch-analysis"><a class="header" href="#fetch-analysis">Fetch Analysis</a></h2>
+<p><strong>Function name:</strong> <code>fetch_analysis</code></p>
+<p>This tool creates a new raster in which each grid cell is assigned the distance, in meters, to the nearest topographic obstacle in a specified direction. It is a modification of the algorithm described by Lapen and Martz (1993). Unlike the original algorithm, Fetch Analysis is capable of analyzing fetch in any direction from 0-360 degrees. The user must input a digital elevation model (DEM) raster file, a hypothetical wind direction,  and a value for the height increment parameter. The algorithm searches each grid cell in a path following the specified wind direction until the following condition is met:</p>
+<p><em>Z</em>test &gt;= <em>Z</em>core + <em>DI</em></p>
+<p>where <em>Z</em>core is the elevation of the grid cell at which fetch is being determined, <em>Z</em>test is the elevation of the grid cell being tested as a topographic obstacle, <em>D</em> is the distance between the two grid cells in meters, and <em>I</em> is the height increment in m/m. Lapen and Martz (1993) suggest values for <em>I</em> in the range of 0.025 m/m to 0.1 m/m based on their study of snow re-distribution in low-relief agricultural landscapes of the Canadian Prairies. If the directional search does not identify an obstacle grid cell before the edge of the DEM is reached, the distance between the DEM edge and Zcore is entered. Edge distances are assigned negative values to differentiate between these artificially truncated fetch values and those for which a valid topographic obstacle was identified. Notice that linear interpolation is used to estimate the elevation of the surface where a ray (i.e. the search path) does not intersect the DEM grid precisely at one of its nodes.</p>
+<p>Ray-tracing is a highly computationally intensive task and therefore this tool may take considerable time to operate for larger sized DEMs. This tool is parallelized to aid with computational efficiency. NoData valued grid cells in the input image will be assigned NoData values in the output image. Fetch Analysis images are best displayed using the blue-white-red bipolar palette to distinguish between the positive and negative values that are present in the output.</p>
+<h3 id="reference-3"><a class="header" href="#reference-3">Reference</a></h3>
+<p>Lapen, D. R., &amp; Martz, L. W. (1993). The measurement of two simple topographic indices of wind sheltering-exposure from raster digital elevation models. Computers &amp; Geosciences, 19(6), 769-779.</p>
+<h3 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h3>
+<p><code>directional_relief</code>, <code>horizon_angle</code>, <code>relative_aspect</code></p>
+<h3 id="python-api-9"><a class="header" href="#python-api-9">Python API</a></h3>
+<pre><code class="language-python">def fetch_analysis(self, dem: Raster, azimuth: float = 0.0, height_increment: float = 0.05) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="fill-missing-data"><a class="header" href="#fill-missing-data">Fill Missing Data</a></h2>
+<p><strong>Function name:</strong> <code>fill_missing_data</code></p>
+<p>This tool can be used to fill in small gaps in a raster or digital elevation model (DEM). The gaps, or holes, must have recognized NoData values. If gaps do not currently have this characteristic, use the <code>set_nodata_value</code> tool and ensure that the data are stored using a raster format that supports NoData values. All valid, non-NoData values in the input raster will be assigned the same value in the output image.</p>
+<p>The algorithm uses an inverse-distance weighted (IDW) scheme based on the valid values on the edge of NoData gaps to estimate gap values. The user must specify the filter size (<code>filter</code>), which determines the size of gap that is filled, and the IDW weight (<code>weight</code>).</p>
+<p>The filter size, specified in grid cells, is used to determine how far the algorithm will search for valid, non-NoData values. Therefore, setting a larger filter size allows for the filling of larger gaps in the input raster.</p>
+<p>The <code>no_edges</code> flag can be used to exclude NoData values that are connected to the edges of the raster. It is usually the case that irregularly shaped DEMs have large regions of NoData values along the containing raster edges. This flag can be used to exclude these regions from the gap-filling operation, leaving only interior gaps for filling.</p>
+<h3 id="see-also-8"><a class="header" href="#see-also-8">See Also</a></h3>
+<p><code>set_nodata_value</code></p>
+<h3 id="python-api-10"><a class="header" href="#python-api-10">Python API</a></h3>
+<pre><code class="language-python">def fill_missing_data(self, dem: Raster, filter_size: int = 11, weight: float = 2.0, exclude_edge_nodata: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="find-ridges"><a class="header" href="#find-ridges">Find Ridges</a></h2>
+<p><strong>Function name:</strong> <code>find_ridges</code></p>
+<p>This tool can be used to identify ridge cells in a digital elevation model (DEM). Ridge cells are those that have lower neighbours either to the north and south or the east and west. Line thinning can optionally be used to create single-cell wide ridge networks by specifying the <code>line_thin</code> parameter.</p>
+<h3 id="python-api-11"><a class="header" href="#python-api-11">Python API</a></h3>
+<pre><code class="language-python">def find_ridges(self, dem: Raster, line_thin: bool = True) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="hillshade"><a class="header" href="#hillshade">Hillshade</a></h2>
+<p><strong>Function name:</strong> <code>hillshade</code></p>
+<p>This tool performs a hillshade operation (also called shaded relief) on an input digital elevation model (DEM). The user must input a DEM. Other parameters that must be specified include the illumination source azimuth (<code>azimuth</code>), or sun direction (0-360 degrees), the illumination source altitude (<code>altitude</code>; i.e. the elevation of the sun above the horizon, measured as an angle from 0 to 90 degrees) and the Z conversion factor (<code>zfactor</code>). The <em>Z conversion factor</em> is only important when the vertical and horizontal units are not the same in the DEM, and the DEM is in a projected coordinate system. When this is the case, the algorithm will multiply each elevation in the DEM by the Z conversion factor. If the DEM is in the geographic coordinate system (latitude and longitude), the following equation is used:</p>
+<p>zfactor = 1.0 / (111320.0 x cos(mid_lat))</p>
+<p>where <code>mid_lat</code> is the latitude of the centre of the raster, in radians.</p>
+<p>The hillshade value (<em>HS</em>) of a DEM grid cell is calculate as:</p>
+<p><em>HS</em> = tan(<em>s</em>) / [1 - tan(<em>s</em>)2]0.5 x [sin(<em>Alt</em>) / tan(<em>s</em>) - cos(<em>Alt</em>) x sin(<em>Az</em> - <em>a</em>)]</p>
+<p>where <em>s</em> and <em>a</em> are the local slope gradient and aspect (orientation) respectively and <em>Alt</em> and <em>Az</em> are the illumination source altitude and azimuth respectively. Slope and aspect are calculated using Horn's (1981) 3rd-order finate difference method.</p>
+<h3 id="reference-4"><a class="header" href="#reference-4">Reference</a></h3>
+<p>Gallant, J. C., and J. P. Wilson, 2000, Primary topographic attributes, in Terrain Analysis: Principles and Applications, edited by J. P. Wilson and J. C. Gallant pp. 51-86, John Wiley, Hoboken, N.J.</p>
+<h3 id="see-also-9"><a class="header" href="#see-also-9">See Also</a></h3>
+<p><code>hypsometrically_tinted_hillshade</code>, <code>multidirectional_hillshade</code>, <code>aspect</code>, <code>slope</code></p>
+<h3 id="python-api-12"><a class="header" href="#python-api-12">Python API</a></h3>
+<pre><code class="language-python">def hillshade(self, dem: Raster, azimuth: float = 315.0, altitude: float = 30.0, z_factor: float = 1.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="hypsometrically-tinted-hillshade"><a class="header" href="#hypsometrically-tinted-hillshade">Hypsometrically Tinted Hillshade</a></h2>
+<p><strong>Function name:</strong> <code>hypsometrically_tinted_hillshade</code></p>
+<p>This tool creates a hypsometrically tinted shaded relief (Swiss hillshading) image from an input digital elevation model (DEM). The tool combines a colourized version of the DEM with varying illumination provided by a hillshade image, to produce a composite relief model that can be used to visual topography for more effective interpretation of landscapes. The output of the tool is a 24-bit red-green-blue (RGB) colour image.</p>
+<p>The user must input a DEM. Other parameters that must be specified include the illumination source azimuth (<code>azimuth</code>), or sun direction (0-360 degrees), the illumination source altitude (<code>altitude</code>; i.e. the elevation of the sun above the horizon, measured as an angle from 0 to 90 degrees), the hillshade weight (<code>hs_weight</code>; 0-1), image brightness (<code>brightness</code>; 0-1), and atmospheric effects (<code>atmospheric</code>; 0-1). The hillshade weight can be used to increase or subdue the relative prevalence of the hillshading effect in the output image. The image brightness parameter is used to create an overall brighter or darker version of the terrain rendering; note however, that very high values may over-saturate the well-illuminated portions of the terrain. The atmospheric effects parameter can be used to introduce a haze or atmosphere effect to the output image. It is intended to reproduce the effect of viewing mountain valley bottoms through a thicker and more dense atmosphere. Values greater than zero will introduce a slightly blue tint, particularly at lower altitudes, blur the hillshade edges slightly, and create a random haze-like speckle in lower areas. The user must also specify the Z conversion factor (<code>zfactor</code>). The <em>Z conversion factor</em> is only important when the vertical and horizontal units are not the same in the DEM. When this is the case, the algorithm will multiply each elevation in the DEM by the Z conversion factor. If the DEM is in the geographic coordinate system (latitude and longitude), the following equation is used:</p>
+<p>zfactor = 1.0 / (111320.0 x cos(mid_lat))</p>
+<p>where <code>mid_lat</code> is the latitude of the centre of the raster, in radians.</p>
+<h3 id="see-also-10"><a class="header" href="#see-also-10">See Also</a></h3>
+<p><code>hillshade</code>, <code>multidirectional_hillshade</code>, <code>aspect</code>, <code>slope</code></p>
+<h3 id="python-api-13"><a class="header" href="#python-api-13">Python API</a></h3>
+<pre><code class="language-python">def hypsometrically_tinted_hillshade(self, dem: Raster, solar_altitude: float = 45.0, hillshade_weight: float = 0.5, brightness: float = 0.5, atmospheric_effects: float = 0.0, palette: str = "atlas", reverse_palette: bool = False, full_360_mode: bool = False, z_factor: float = 1.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="local-hypsometric-analysis"><a class="header" href="#local-hypsometric-analysis">Local Hypsometric Analysis</a></h2>
+<p><strong>Function name:</strong> <code>local_hypsometric_analysis</code></p>
+<p>PROExperimental</p>
+<p>Computes the minimum local hypsometric integral across a nonlinearly sampled range of neighbourhood scales.</p>
+<p>geomorphometry multiscale hypsometry legacy-port</p>
+<h3 id="parameters-2"><a class="header" href="#parameters-2">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input DEM raster path or typed raster object.Required<code>dem.tif</code>
+<code>min_scale</code>Minimum half-window radius in cells (default 4).Optional<code>4</code>
+<code>step_size</code>Base step size in cells (default 1). Alias: step.Optional<code>1</code>
+<code>num_steps</code>Number of scales to evaluate (default 10).Optional<code>10</code>
+<code>step_nonlinearity</code>Scale-step nonlinearity in [1,4] (default 1.0).Optional<code>1.0</code>
+<code>output</code>Optional output path for local HI minimum raster.Optional—
+<code>output_scale</code>Optional output path for scale-of-minimum-HI raster.Optional—</p>
+<h3 id="examples-1"><a class="header" href="#examples-1">Examples</a></h3>
+<p><em>Compute minimum local hypsometric integral and associated scale.</em>
+<code>wbe.local_hypsometric_analysis(input='dem.tif', min_scale=4, num_steps=10, output='local_hypsometric_analysis.tif', output_scale='local_hypsometric_analysis_scale.tif', step_nonlinearity=1.0, step_size=1)</code></p>
+<hr />
+<h2 id="low-points-on-headwater-divides"><a class="header" href="#low-points-on-headwater-divides">Low Points On Headwater Divides</a></h2>
+<p><strong>Function name:</strong> <code>low_points_on_headwater_divides</code></p>
+<p>PROExperimental</p>
+<p>Locates low pass points along divides between neighboring headwater subbasins.</p>
+<p>geomorphometry streams subbasins passes legacy-port</p>
+<h3 id="parameters-3"><a class="header" href="#parameters-3">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>dem</code>Input depressionless DEM raster path or typed raster object.Required<code>dem.tif</code>
+<code>streams</code>Input stream raster path (positive values indicate channel cells).Required<code>streams.tif</code>
+<code>output</code>Optional output vector path (default temporary .shp).Optional<code>low_points_on_headwater_divides.shp</code></p>
+<h3 id="examples-2"><a class="header" href="#examples-2">Examples</a></h3>
+<p><em>Find low pass points between neighboring headwater basins.</em>
+<code>wbe.low_points_on_headwater_divides(dem='dem.tif', output='low_points_on_headwater_divides.shp', streams='streams.tif')</code></p>
+<hr />
+<h2 id="max-downslope-elev-change"><a class="header" href="#max-downslope-elev-change">Max Downslope Elev Change</a></h2>
+<p><strong>Function name:</strong> <code>max_downslope_elev_change</code></p>
+<p>This tool calculates the maximum elevation drop between each grid cell and its neighbouring cells within a digital elevation model (DEM). The user must input a DEM (<code>dem</code>).</p>
+<h3 id="see-also-11"><a class="header" href="#see-also-11">See Also</a></h3>
+<p><code>max_upslope_elev_change</code>, <code>min_downslope_elev_change</code>, <code>num_downslope_neighbours</code></p>
+<h3 id="python-api-14"><a class="header" href="#python-api-14">Python API</a></h3>
+<pre><code class="language-python">def max_downslope_elev_change(self, raster: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="max-upslope-elev-change"><a class="header" href="#max-upslope-elev-change">Max Upslope Elev Change</a></h2>
+<p><strong>Function name:</strong> <code>max_upslope_elev_change</code></p>
+<p>a digital elevation model (DEM). The user must input DEM (<code>dem</code>).</p>
+<h3 id="see-also-12"><a class="header" href="#see-also-12">See Also</a></h3>
+<p><code>max_downslope_elev_change</code></p>
+<h3 id="python-api-15"><a class="header" href="#python-api-15">Python API</a></h3>
+<pre><code class="language-python">def max_upslope_elev_change(self, raster: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="min-downslope-elev-change"><a class="header" href="#min-downslope-elev-change">Min Downslope Elev Change</a></h2>
+<p><strong>Function name:</strong> <code>min_downslope_elev_change</code></p>
+<p>This tool calculates the minimum elevation drop between each grid cell and its neighbouring cells within a digital elevation model (DEM). The user must input a DEM (<code>dem</code>).</p>
+<h3 id="see-also-13"><a class="header" href="#see-also-13">See Also</a></h3>
+<p><code>max_downslope_elev_change</code>, <code>num_downslope_neighbours</code></p>
+<h3 id="python-api-16"><a class="header" href="#python-api-16">Python API</a></h3>
+<pre><code class="language-python">def min_downslope_elev_change(self, raster: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="multidirectional-hillshade"><a class="header" href="#multidirectional-hillshade">Multidirectional Hillshade</a></h2>
+<p><strong>Function name:</strong> <code>multidirectional_hillshade</code></p>
+<p>This tool performs a hillshade operation (also called shaded relief) on an input digital elevation model (DEM) with multiple sources of illumination. The user must input a DEM (<code>dem</code>). Other parameters that must be specified include the altitude of the illumination sources (<code>altitude</code>; i.e. the elevation of the sun above the horizon, measured as an angle from 0 to 90 degrees) and the Z conversion factor (<code>zfactor</code>). The <em>Z conversion factor</em> is only important when the vertical and horizontal units are not the same in the DEM, and the DEM is in a projected coordinate system. When this is the case, the algorithm will multiply each elevation in the DEM by the Z conversion factor.</p>
+<p>The hillshade value (<em>HS</em>) of a DEM grid cell is calculate as:</p>
+<p><em>HS</em> = tan(<em>s</em>) / [1 - tan(<em>s</em>)2]0.5 x [sin(<em>Alt</em>) / tan(<em>s</em>) - cos(<em>Alt</em>) x sin(<em>Az</em> - <em>a</em>)]</p>
+<p>where <em>s</em> and <em>a</em> are the local slope gradient and aspect (orientation) respectively and <em>Alt</em> and <em>Az</em> are the illumination source altitude and azimuth respectively. Slope and aspect are calculated using Horn's (1981) 3rd-order finate difference method.</p>
+<p>Lastly, the user must specify whether or not to use full 360-degrees of illumination sources (<code>full_mode</code>). When this flag is not specified, the tool will perform a weighted summation of the hillshade images from four illumination azimuth positions at 225, 270, 315, and 360 (0) degrees, given weights of 0.1, 0.4, 0.4, and 0.1 respectively. When run in the full 360-degree mode, eight illumination source azimuths are used to calculate the output at 0, 45, 90, 135, 180, 225, 270, and 315 degrees, with weights of 0.15, 0.125, 0.1, 0.05, 0.1, 0.125, 0.15, and 0.2 respectively.</p>
+<p>Classic hillshade (Azimuth=315, Altitude=45.0)</p>
+<p>Multi-directional hillshade (Altitude=45.0, Four-direction mode)</p>
+<p>Multi-directional hillshade (Altitude=45.0, 360-degree mode)</p>
+<h3 id="see-also-14"><a class="header" href="#see-also-14">See Also</a></h3>
+<p><code>hillshade</code>, <code>hypsometrically_tinted_hillshade</code>, <code>aspect</code>, <code>slope</code></p>
+<h3 id="python-api-17"><a class="header" href="#python-api-17">Python API</a></h3>
+<pre><code class="language-python">def multidirectional_hillshade(self, dem: Raster, altitude: float = 30.0, z_factor: float = 1.0, full_360_mode: bool = False) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="num-downslope-neighbours"><a class="header" href="#num-downslope-neighbours">Num Downslope Neighbours</a></h2>
+<p><strong>Function name:</strong> <code>num_downslope_neighbours</code></p>
+<p>This tool calculates the number of downslope neighbours of each grid cell in a raster digital elevation model (DEM). The user must input a DEM (<code>dem</code>). The tool examines the eight neighbouring cells for each grid cell in a the DEM and counts the number of neighbours with an elevation less than the centre cell of the 3 x 3 window. The output image can therefore have values raning from 0 to 8. A raster grid cell with eight downslope neighbours is a peak and a cell with zero downslope neighbours is a pit. This tool can be used with the <code>NumUpslopeNeighbours</code> tool to assess the degree of local flow divergence/convergence.</p>
+<h3 id="see-also-15"><a class="header" href="#see-also-15">See Also</a></h3>
+<p><code>NumUpslopeNeighbours</code></p>
+<h3 id="python-api-18"><a class="header" href="#python-api-18">Python API</a></h3>
+<pre><code class="language-python">def num_downslope_neighbours(self, dem: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="num-upslope-neighbours"><a class="header" href="#num-upslope-neighbours">Num Upslope Neighbours</a></h2>
+<p><strong>Function name:</strong> <code>num_upslope_neighbours</code></p>
+<p>Experimental</p>
+<p>Counts the number of 8-neighbour cells higher than each DEM cell.</p>
+<p>geomorphometry terrain flow legacy-port</p>
+<hr />
+<h2 id="profile"><a class="header" href="#profile">Profile</a></h2>
+<p><strong>Function name:</strong> <code>profile</code></p>
+<p>This tool can be used to plot the data profile, along a set of one or more vector lines (<code>lines</code>), in an input (<code>surface</code>) digital elevation model (DEM), or other surface model. The data profile plots surface height (y-axis) against distance along profile (x-axis). The tool outputs an interactive SVG line graph embedded in an HTML document (<code>output</code>). If the vector lines file contains multiple line features, the output plot will contain each of the input profiles.</p>
+<p>If you want to extract the <code>longitudinal profile</code> of a river, use the <code>long_profile</code> tool instead.</p>
+<h3 id="see-also-16"><a class="header" href="#see-also-16">See Also</a></h3>
+<p><code>long_profile</code>, <code>hypsometric_analysis</code></p>
+<h3 id="python-api-19"><a class="header" href="#python-api-19">Python API</a></h3>
+<pre><code class="language-python">def profile(self, lines_vector: Vector, surface: Raster, output_html_file: str) -&gt; None:
+</code></pre>
+<hr />
+<h2 id="slope-vs-aspect-plot"><a class="header" href="#slope-vs-aspect-plot">Slope Vs Aspect Plot</a></h2>
+<p><strong>Function name:</strong> <code>slope_vs_aspect_plot</code></p>
+<p>PROExperimental</p>
+<p>Creates an HTML radial slope-vs-aspect analysis plot for an input DEM.</p>
+<p>geomorphometry terrain plot html legacy-port</p>
+<hr />
+<h2 id="slope-vs-elev-plot"><a class="header" href="#slope-vs-elev-plot">Slope Vs Elev Plot</a></h2>
+<p><strong>Function name:</strong> <code>slope_vs_elev_plot</code></p>
+<p>This tool can be used to create a slope versus average elevation plot for one or more digital elevation models (DEMs). Similar to a hypsometric analysis (<code>hypsometric_analysis</code>), the slope-elevation relation can reveal the basic topographic character of a site. The output of this analysis is an HTML document (<code>output</code>) that contains the slope-elevation chart. The tool can plot multiple slope-elevation analyses on the same chart by specifying multiple input DEM files (<code>inputs</code>). Each input DEM can have an optional watershed in which the slope-elevation analysis is confined by specifying the optional <code>watershed</code> flag. If multiple input DEMs are used, and a watershed is used to confine the analysis to a sub-area, there must be the same number of input raster watershed files as input DEM files. The order of the DEM and watershed files must the be same (i.e. the first DEM file must correspond to the first watershed file, the second DEM file to the second watershed file, etc.). Each watershed file may contain one or more watersheds, designated by unique identifiers.</p>
+<h3 id="see-also-17"><a class="header" href="#see-also-17">See Also</a></h3>
+<p><code>hypsometric_analysis</code>, <code>slope_vs_aspect_plot</code></p>
+<h3 id="python-api-20"><a class="header" href="#python-api-20">Python API</a></h3>
+<pre><code class="language-python">def slope_vs_elev_plot(self, dem_rasters: List[Raster], output_html_file: str, watershed_rasters: List[Raster]) -&gt; None:
+</code></pre>
+<hr />
+<h2 id="surface-area-ratio"><a class="header" href="#surface-area-ratio">Surface Area Ratio</a></h2>
+<p><strong>Function name:</strong> <code>surface_area_ratio</code></p>
+<p>This tool calculates the ratio between the surface area and planar area of grid cells within digital elevation models (DEMs). The tool uses the method of Jenness (2004) to estimate the surface area of a DEM grid cell based on the elevations contained within the 3 x 3 neighbourhood surrounding each cell. The surface area ratio has a lower bound of 1.0 for perfectly flat grid cells and is greater than 1.0 for other conditions. In particular, surface area ratio is a measure of neighbourhood surface shape complexity (texture) and elevation variability (local slope).</p>
+<h3 id="reference-5"><a class="header" href="#reference-5">Reference</a></h3>
+<p>Jenness, J. S. (2004). Calculating landscape surface area from digital elevation models. Wildlife Society Bulletin, 32(3), 829-839.</p>
+<h3 id="see-also-18"><a class="header" href="#see-also-18">See Also</a></h3>
+<p><code>ruggedness_index</code>, <code>multiscale_roughness</code>, <code>circular_variance_of_aspect</code>, <code>edge_density</code></p>
+<h3 id="python-api-21"><a class="header" href="#python-api-21">Python API</a></h3>
+<pre><code class="language-python">def surface_area_ratio(self, dem: Raster) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="topographic-hachures"><a class="header" href="#topographic-hachures">Topographic Hachures</a></h2>
+<p><strong>Function name:</strong> <code>topographic_hachures</code></p>
+<p>PROExperimental</p>
+<p>Creates topographic hachure polylines from a DEM using contour-seeded downslope and upslope flowlines. Legacy authorship attribution is intentionally preserved for this tool.</p>
+<p>geomorphometry hachures contours vector legacy-port</p>
+<hr />
+<h2 id="map-off-terrain-objects"><a class="header" href="#map-off-terrain-objects">Map Off Terrain Objects</a></h2>
+<p><strong>Function name:</strong> <code>map_off_terrain_objects</code></p>
+<p>This tool can be used to map off-terrain objects in a digital surface model (DSM) based on cell-to-cell differences in elevations and local slopes. The algorithm works by using a region-growing operation to connect neighbouring grid cells outwards from seed cells. Two neighbouring cells are considered connected if the slope between the two cells is less than the user-specified maximum slope value (<code>max_slope</code>). Mapped segments that are less than the minimum feature size (<code>min_size</code>), in grid cells, are assigned a common background value. Note that this method of mapping off-terrain objects, and thereby separating ground cells from non-ground objects in DSMs, works best with fine-resolution DSMs that have been interpolated using a non-smoothing method, such as triangulation (TINing) or nearest-neighbour interpolation.</p>
+<h3 id="see-also-19"><a class="header" href="#see-also-19">See Also</a></h3>
+<p><code>remove_off_terrain_objects</code></p>
+<h3 id="python-api-22"><a class="header" href="#python-api-22">Python API</a></h3>
+<pre><code class="language-python">def map_off_terrain_objects(self, dem: Raster, max_slope: float = float('inf'), min_feature_size: int = 0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="remove-off-terrain-objects"><a class="header" href="#remove-off-terrain-objects">Remove Off Terrain Objects</a></h2>
+<p><strong>Function name:</strong> <code>remove_off_terrain_objects</code></p>
+<p>This tool can be used to create a bare-earth DEM from a fine-resolution digital surface model. The tool is typically applied to LiDAR DEMs which frequently contain numerous off-terrain objects (OTOs) such as buildings, trees and other vegetation, cars, fences and other anthropogenic objects. The algorithm works by finding and removing steep-sided peaks within the DEM. All peaks within a sub-grid, with a dimension of the user-specified maximum OTO size (<code>filter</code>), in pixels, are identified and removed. Each of the edge cells of the peaks are then examined to see if they have a slope that is less than the user-specified minimum OTO edge slope (<code>slope</code>) and a back-filling procedure is used. This ensures that OTOs are distinguished from natural topographic features such as hills. The DEM is preprocessed using a white top-hat transform, such that elevations are normalized for the underlying ground surface.</p>
+<p>Note that this tool is appropriate to apply to rasterized LiDAR DEMs. Use the <code>lidar_ground_point_filter</code> tool to remove or classify OTOs within a LiDAR point-cloud.</p>
+<h3 id="reference-6"><a class="header" href="#reference-6">Reference</a></h3>
+<p>J.B. Lindsay (2018) A new method for the removal of off-terrain objects from LiDAR-derived raster surface models. Available online, DOI: <code>10.13140/RG.2.2.21226.62401</code></p>
+<h3 id="see-also-20"><a class="header" href="#see-also-20">See Also</a></h3>
+<p><code>map_off_terrain_objects</code>, <code>tophat_transform</code>, <code>lidar_ground_point_filter</code></p>
+<h3 id="python-api-23"><a class="header" href="#python-api-23">Python API</a></h3>
+<pre><code class="language-python">def remove_off_terrain_objects(self, dem: Raster, filter_size: int = 11, slope_threshold: float = 15.0) -&gt; Raster:
+</code></pre>
+<hr />
+<h2 id="ridge-and-valley-vectors"><a class="header" href="#ridge-and-valley-vectors">Ridge And Valley Vectors</a></h2>
+<p><strong>Function name:</strong> <code>ridge_and_valley_vectors</code></p>
+<p>This function can be used to extract ridge and channel vectors from an input digital elevation model (DEM). The function works by first calculating elevation percentile (EP) from an input DEM using a neighbourhood size set by the user-specified filter_size parameter. Increasing the value of filter_size can result in more continuous mapped ridge and valley bottom networks. A thresholding operation is then applied to identify cells that have an EP less than the  user-specified ep_threshold (valley bottom regions) and a second thresholding operation maps regions where EP is  greater than 100 - ep_threshold (ridges). Each of these ridge and valley region maps are also multiplied by a slope  mask created by identify all cells with a slope greater than the user-specified slope_threshold value, which is set  to zero by default. This second thresholding can be helpful if the input DEM contains extensive flat areas, which  can be confused for valleys otherwise. The filter_size and ep_threshold parameters are somewhat dependent on one  another. Increasing the filter_size parameter generally requires also increasing the value of the ep_threshold. The  ep_threshold can take values between 5.0 and 50.0, where larger values will generally result in more extensive and  continuous mapped ridge and valley bottom networks. For many DEMs, a value on the higher end of the scale tends to  work best.</p>
+<p>After applying the thresholding operations, the function then applies specialized shape generalization, line thinning,  and vectorization alorithms to produce the final ridge and valley vectors. The user must also specify the value of the min_length parameter, which determines the minimum size, in grid cells, of a mapped line feature. The function outputs a tuple of two vector, the first being the ridge network and the second vector being the valley-bottom network.</p>
+<h3 id="code-example"><a class="header" href="#code-example">Code Example</a></h3>
+<p>`from whitebox_workflows import WbEnvironment</p>
+<h3 id="set-up-the-wbw-environment"><a class="header" href="#set-up-the-wbw-environment">Set up the WbW environment</a></h3>
+<p>license_id = 'my-license-id' # Note, this tool requires a license for WbW-Pro wbe = WbEnvironment(license_id) try:     wbe.verbose = True     wbe.working_directory = '/path/to/data' # Read the input DEM dem = wbe.read_raster('DEM.tif')  # Run the operation ridges, valleys = wbe.ridge_and_valley_vectors(dem, filter_size=21, ep_threshold=45.0, slope_threshold=1.0, min_length=25) wbe.write_vector(ridges, 'ridges_lines.shp') wbe.write_vector(valley, 'valley_lines.shp')  print('Done!') `</p>
+<p>except Exception as e:   print("Error: ", e) finally:     wbe.check_in_license(license_id)</p>
+<h3 id="see-also-21"><a class="header" href="#see-also-21">See Also:</a></h3>
+<p><code>extract_valleys</code></p>
+<h3 id="python-api-24"><a class="header" href="#python-api-24">Python API</a></h3>
+<pre><code class="language-python">def ridge_and_valley_vectors(self, dem: Raster, filter_size: int = 11, ep_threshold: float = 30.0, slope_threshold: float = 0.0, min_length: int = 20) -&gt; Tuple[Raster, Raster]:
+</code></pre>
+<hr />
+<h2 id="smooth-vegetation-residual"><a class="header" href="#smooth-vegetation-residual">Smooth Vegetation Residual</a></h2>
+<p><strong>Function name:</strong> <code>smooth_vegetation_residual</code></p>
+<p>PROExperimental</p>
+<p>Reduces canopy residual roughness by masking high local DEV responses at small scales and re-interpolating masked elevations.</p>
+<p>geomorphometry lidar smoothing dem legacy-port</p>
+<h3 id="parameters-4"><a class="header" href="#parameters-4">Parameters</a></h3>
+<p>NameDescriptionRequiredDefault
+<code>input</code>Input DEM raster path or typed raster object.Required<code>dem.tif</code>
+<code>max_scale</code>Maximum DEV half-window radius in cells (default 30).Optional<code>30</code>
+<code>dev_threshold</code>Minimum DEV magnitude used to flag roughness cells (default 1.0).Optional<code>1.0</code>
+<code>scale_threshold</code>Maximum scale considered roughness (default 5).Optional<code>5</code>
+<code>output</code>Optional output path. If omitted, result stays in memory.Optional—</p>
+<h3 id="examples-3"><a class="header" href="#examples-3">Examples</a></h3>
+<p><em>Suppress vegetation-residual roughness in a LiDAR DEM.</em>
+<code>wbe.smooth_vegetation_residual(dev_threshold=1.0, input='dem.tif', max_scale=30, output='smooth_vegetation_residual.tif', scale_threshold=5)</code></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="terrain-multiscale-signatures.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="terrain-workflow-products.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="terrain-multiscale-signatures.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="terrain-workflow-products.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

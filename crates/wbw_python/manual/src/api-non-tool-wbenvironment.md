@@ -23,11 +23,62 @@ utility namespaces. Tool wrappers are documented in
 - `describe_tool(tool_id, include_locked=False)`
 - `get_tool_metadata_json(tool_id)`
 - `get_tool_info_json(tool_id)`
+- `get_tool_help_html(tool_id)` — Retrieve the HTML help page for a tool (see below)
 - `search_tools(query, include_locked=False)`
 - `categories()`
 - `category(name)`
 - `domain_namespaces()`
 - `domain(name)`
+
+### Accessing Tool Help
+
+The `get_tool_help_html(tool_id)` function returns a complete HTML help page for a tool. This is useful for building custom GUIs, Jupyter notebook widgets, and documentation pipelines that need up-to-date tool descriptions without bundling help files separately.
+
+**Signature:**
+```python
+def get_tool_help_html(tool_id: str) -> str:
+    """Return the HTML help page for a tool as a string.
+    
+    Returns an empty string if help is not available for the tool.
+    Help content is pulled from the installed whitebox_workflows package
+    (whitebox_workflows/help/<tool_id>.html), ensuring it stays in sync
+    with the version of whitebox-workflows that was installed.
+    """
+```
+
+**Examples:**
+
+Display help in a Jupyter notebook:
+```python
+from IPython.display import HTML
+import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+html = wbe.get_tool_help_html('slope')
+HTML(html)
+```
+
+Retrieve help via the module-level function (for custom applications):
+```python
+import whitebox_workflows as wbw
+
+help_html = wbw.get_tool_help_html('d8_pointer')
+print(len(help_html), 'bytes of HTML')  # Check that help was found
+```
+
+Generate documentation pages for all tools:
+```python
+import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+for tool_id in wbe.list_tools():
+    html = wbe.get_tool_help_html(tool_id)
+    if html:
+        with open(f'{tool_id}_help.html', 'w') as f:
+            f.write(html)
+```
+
+**Availability:** Help HTML is always available for tools in the standard tool catalog. Tools added in future releases of whitebox-workflows will automatically appear with help, assuming the release includes HTML documentation for those tools.
 
 ## Data Readers
 

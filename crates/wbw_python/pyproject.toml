@@ -23,4 +23,6 @@ include = [
   "whitebox_workflows/**/*.pyi",
   "whitebox_workflows/py.typed",
   "whitebox_workflows/help/*.html",
+  "whitebox_workflows/descriptions/*.json",
+  "whitebox_workflows/tool_taxonomy.resolved.json",
 ]

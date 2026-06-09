@@ -1962,6 +1962,77 @@ fn get_runtime_capabilities_json() -> PyResult<String> {
         .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
 }
 
+/// Return the merged curated parameter descriptions JSON for all tools.
+///
+/// Descriptions are shipped with the `whitebox_workflows` package in
+/// `whitebox_workflows/descriptions/*.json`.  They provide human-readable
+/// labels, tooltips, and tool summaries that enrich the raw parameter names
+/// from tool manifests.  Returns an empty JSON object `{}` if unavailable.
+///
+/// The returned JSON is a `{tool_id: {description, parameters: {param_name:
+/// {label, tooltip}}}}` mapping, suitable for direct use in the QGIS plugin's
+/// DescriptionsProvider or any other frontend that needs UI-quality labels.
+#[pyfunction]
+fn get_all_descriptions_json(py: Python<'_>) -> PyResult<String> {
+    let result = py.import("whitebox_workflows").ok()
+        .and_then(|pkg| pkg.getattr("__file__").ok())
+        .and_then(|f| f.extract::<String>().ok())
+        .and_then(|init_path| {
+            let init = std::path::Path::new(&init_path);
+            let desc_dir = init.parent()?.join("descriptions");
+            if !desc_dir.is_dir() {
+                return None;
+            }
+            // Load and merge all JSON files — auto_generated baseline first,
+            // curated overrides second (alphabetical for determinism).
+            let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(&desc_dir).ok()?
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+                .collect();
+            files.sort_by(|a, b| {
+                let a_base = a.file_name().unwrap_or_default().to_string_lossy();
+                let b_base = b.file_name().unwrap_or_default().to_string_lossy();
+                // auto_generated_tier1.json loads first (baseline), others override
+                let a_order = if a_base.starts_with("auto_generated") { 0u8 } else { 1u8 };
+                let b_order = if b_base.starts_with("auto_generated") { 0u8 } else { 1u8 };
+                a_order.cmp(&b_order).then(a_base.cmp(&b_base))
+            });
+            let mut merged = serde_json::Map::new();
+            for path in files {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    if let Ok(serde_json::Value::Object(map)) = serde_json::from_str(&content) {
+                        merged.extend(map);
+                    }
+                }
+            }
+            serde_json::to_string(&serde_json::Value::Object(merged)).ok()
+        })
+        .unwrap_or_else(|| "{}".to_string());
+    Ok(result)
+}
+
+/// Return the tool taxonomy JSON shipped with the `whitebox_workflows` package.
+///
+/// The taxonomy maps each tool to its `(category, subcategory)` pair, driving
+/// the QGIS Processing Toolbox menu hierarchy and Python API namespace
+/// structure.  Returns an empty JSON object `{}` if unavailable.
+///
+/// The returned JSON has a `"mapping"` array of `{category, subcategory,
+/// tools: [...]}` objects, identical to `tool_taxonomy.resolved.json`.
+#[pyfunction]
+fn get_tool_taxonomy_json(py: Python<'_>) -> PyResult<String> {
+    let result = py.import("whitebox_workflows").ok()
+        .and_then(|pkg| pkg.getattr("__file__").ok())
+        .and_then(|f| f.extract::<String>().ok())
+        .and_then(|init_path| {
+            let init = std::path::Path::new(&init_path);
+            let taxonomy_file = init.parent()?.join("tool_taxonomy.resolved.json");
+            std::fs::read_to_string(taxonomy_file).ok()
+        })
+        .unwrap_or_else(|| "{}".to_string());
+    Ok(result)
+}
+
 #[pyfunction]
 fn list_tools() -> PyResult<Vec<String>> {
     let rt = PythonToolRuntime::new();
@@ -2806,6 +2877,8 @@ fn whitebox_workflows(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     m.add_function(wrap_pyfunction!(list_tool_catalog_json, m)?)?;
     m.add_function(wrap_pyfunction!(get_tool_metadata_json, m)?)?;
     m.add_function(wrap_pyfunction!(get_tool_help_html, m)?)?;
+    m.add_function(wrap_pyfunction!(get_all_descriptions_json, m)?)?;
+    m.add_function(wrap_pyfunction!(get_tool_taxonomy_json, m)?)?;
     m.add_function(wrap_pyfunction!(get_tool_info_json, m)?)?;
     m.add_function(wrap_pyfunction!(get_runtime_capabilities_json, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools, m)?)?;

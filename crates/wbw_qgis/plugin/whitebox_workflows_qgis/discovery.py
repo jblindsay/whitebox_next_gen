@@ -756,31 +756,10 @@ def _load_taxonomy_index() -> dict[str, tuple[str, str]]:
     if _TAXONOMY_INDEX is not None:
         return _TAXONOMY_INDEX
 
-    candidate_paths = []
-
-    # 1. Env var override
-    env_path = os.environ.get("WBW_TOOL_TAXONOMY_JSON")
-    if env_path:
-        candidate_paths.append(Path(env_path).expanduser())
-
-    # 2. Source tree location (prefer canonical wbw_python taxonomy during development)
-    here = Path(__file__).resolve().parent
-    for _ in range(8):
-        candidate = here / "crates/wbw_python/tool_taxonomy.resolved.json"
-        if candidate.exists():
-            candidate_paths.append(candidate)
-            break
-        here = here.parent
-
-    # 3. Adjacent to this file (bundled with the plugin)
-    candidate_paths.append(Path(__file__).parent / "tool_taxonomy.resolved.json")
-
-    idx: dict[str, tuple[str, str]] = {}
-    for path in candidate_paths:
+    def _parse_taxonomy_json(payload_str: str) -> dict[str, tuple[str, str]]:
+        idx: dict[str, tuple[str, str]] = {}
         try:
-            if not path.exists():
-                continue
-            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload = json.loads(payload_str)
             for entry in payload.get("mapping", []):
                 cat = str(entry.get("category", "")).strip()
                 sub = str(entry.get("subcategory", "")).strip()
@@ -788,12 +767,69 @@ def _load_taxonomy_index() -> dict[str, tuple[str, str]]:
                     tid = str(tool_id).strip()
                     if tid:
                         idx[tid] = (cat, sub)
-            break  # stop at first usable file
         except Exception:
-            continue
+            pass
+        return idx
 
-    _TAXONOMY_INDEX = idx
-    return idx
+    # 1. Env var override
+    env_path = os.environ.get("WBW_TOOL_TAXONOMY_JSON")
+    if env_path:
+        p = Path(env_path).expanduser()
+        if p.exists():
+            idx = _parse_taxonomy_json(p.read_text(encoding="utf-8"))
+            if idx:
+                _TAXONOMY_INDEX = idx
+                return idx
+
+    # 2. Installed whitebox_workflows package (always in sync with the backend)
+    try:
+        import whitebox_workflows as _wbw
+        get_fn = getattr(_wbw, "get_tool_taxonomy_json", None)
+        if callable(get_fn):
+            raw = get_fn()
+            if raw and raw.strip() not in ("{}", ""):
+                idx = _parse_taxonomy_json(raw)
+                if idx:
+                    _TAXONOMY_INDEX = idx
+                    return idx
+    except Exception:
+        pass
+    # Direct filesystem fallback (editable / dev install)
+    try:
+        import whitebox_workflows as _wbw
+        init_file = getattr(_wbw, "__file__", None)
+        if init_file:
+            taxonomy_file = Path(str(init_file)).parent / "tool_taxonomy.resolved.json"
+            if taxonomy_file.exists():
+                idx = _parse_taxonomy_json(taxonomy_file.read_text(encoding="utf-8"))
+                if idx:
+                    _TAXONOMY_INDEX = idx
+                    return idx
+    except Exception:
+        pass
+
+    # 3. Source tree location (development fallback)
+    here = Path(__file__).resolve().parent
+    for _ in range(8):
+        candidate = here / "crates/wbw_python/tool_taxonomy.resolved.json"
+        if candidate.exists():
+            idx = _parse_taxonomy_json(candidate.read_text(encoding="utf-8"))
+            if idx:
+                _TAXONOMY_INDEX = idx
+                return idx
+            break
+        here = here.parent
+
+    # 4. Adjacent to this file (plugin-bundled final fallback)
+    bundled = Path(__file__).parent / "tool_taxonomy.resolved.json"
+    if bundled.exists():
+        idx = _parse_taxonomy_json(bundled.read_text(encoding="utf-8"))
+        if idx:
+            _TAXONOMY_INDEX = idx
+            return idx
+
+    _TAXONOMY_INDEX = {}
+    return _TAXONOMY_INDEX
 
 
 def clear_taxonomy_cache() -> None:

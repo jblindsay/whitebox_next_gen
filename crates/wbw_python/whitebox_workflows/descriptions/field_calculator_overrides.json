@@ -1,0 +1,35 @@
+{
+  "field_calculator": {
+    "description": "Evaluates SQL-style and expression-style formulas per feature with optional conditional updates and preview payload support.",
+    "parameters": {
+      "input": {
+        "label": "Input vector layer.",
+        "tooltip": "Select a vector layer. Provider URIs are normalized to backend-friendly paths when possible."
+      },
+      "field": {
+        "label": "Target field name to create or update.",
+        "tooltip": "If the field does not exist it will be created. If it exists, enable overwrite to replace values."
+      },
+      "field_type": {
+        "label": "Target field type: float, integer, text. [optional]",
+        "tooltip": "Controls casting for created fields and computed values."
+      },
+      "expression": {
+        "label": "Expression or SQL UPDATE assignment evaluated per feature.",
+        "tooltip": "Supports CASE WHEN, simple CASE, CAST(... AS type), SQL operators, IS NULL / IS NOT NULL, and optional UPDATE ... SET ... WHERE wrappers."
+      },
+      "overwrite": {
+        "label": "Overwrite existing field values when target already exists. [optional]",
+        "tooltip": "Set to true to update values in an existing field."
+      },
+      "preview_rows": {
+        "label": "Optional preview row count (preview-only run when output omitted). [optional]",
+        "tooltip": "When > 0, returns preview rows and normalized expression details; output may be omitted for preview-only evaluation."
+      },
+      "output": {
+        "label": "Output vector path (optional when preview_rows > 0). [optional]",
+        "tooltip": "Provide an output path for final write. Omit for preview-only evaluation."
+      }
+    }
+  }
+}

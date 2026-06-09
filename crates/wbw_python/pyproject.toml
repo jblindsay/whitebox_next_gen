@@ -22,4 +22,5 @@ manifest-path = "Cargo.toml"
 include = [
   "whitebox_workflows/**/*.pyi",
   "whitebox_workflows/py.typed",
+  "whitebox_workflows/help/*.html",
 ]

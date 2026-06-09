@@ -1812,6 +1812,28 @@ impl RuntimeSession {
             .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
     }
 
+    /// Return the HTML help content for a tool, or an empty string if not available.
+    ///
+    /// Help files are shipped with the `whitebox_workflows` Python package in the
+    /// `whitebox_workflows/help/` directory.  This allows the QGIS plugin (and any
+    /// other frontend) to retrieve up-to-date help content from the installed backend
+    /// version rather than from static files bundled with the plugin itself.
+    fn get_tool_help_html(&self, py: Python<'_>, tool_id: &str) -> PyResult<String> {
+        // Locate the package's help/ directory via importlib.resources / __file__.
+        let help_html: String = py.import("whitebox_workflows").ok()
+            .and_then(|pkg| pkg.getattr("__file__").ok())
+            .and_then(|f| f.extract::<String>().ok())
+            .and_then(|init_path| {
+                // __file__ is whitebox_workflows/__init__.py — help/ is a sibling dir.
+                let init = std::path::Path::new(&init_path);
+                let help_dir = init.parent()?.join("help");
+                let html_file = help_dir.join(format!("{}.html", tool_id));
+                std::fs::read_to_string(html_file).ok()
+            })
+            .unwrap_or_default();
+        Ok(help_html)
+    }
+
     fn list_tools(&self) -> PyResult<Vec<String>> {
         extract_tool_ids(&self.runtime.list_tools_json())
     }
@@ -1903,6 +1925,26 @@ fn get_tool_metadata_json(tool_id: &str) -> PyResult<String> {
     let out = rt.get_tool_metadata_json(tool_id).map_err(map_tool_error)?;
     serde_json::to_string(&out)
         .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+/// Return the HTML help content for a tool, or an empty string if not available.
+///
+/// Help files are shipped with the `whitebox_workflows` Python package in the
+/// `whitebox_workflows/help/` directory.  This function resolves the package
+/// location via the module's `__file__` attribute so it works correctly
+/// regardless of how the package is installed (wheel, editable, conda, etc.).
+#[pyfunction]
+fn get_tool_help_html(py: Python<'_>, tool_id: &str) -> PyResult<String> {
+    let html = py.import("whitebox_workflows").ok()
+        .and_then(|pkg| pkg.getattr("__file__").ok())
+        .and_then(|f| f.extract::<String>().ok())
+        .and_then(|init_path| {
+            let init = std::path::Path::new(&init_path);
+            let html_file = init.parent()?.join("help").join(format!("{}.html", tool_id));
+            std::fs::read_to_string(html_file).ok()
+        })
+        .unwrap_or_default();
+    Ok(html)
 }
 
 #[pyfunction]
@@ -2763,6 +2805,7 @@ fn whitebox_workflows(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     m.add_function(wrap_pyfunction!(list_tools_json, m)?)?;
     m.add_function(wrap_pyfunction!(list_tool_catalog_json, m)?)?;
     m.add_function(wrap_pyfunction!(get_tool_metadata_json, m)?)?;
+    m.add_function(wrap_pyfunction!(get_tool_help_html, m)?)?;
     m.add_function(wrap_pyfunction!(get_tool_info_json, m)?)?;
     m.add_function(wrap_pyfunction!(get_runtime_capabilities_json, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools, m)?)?;

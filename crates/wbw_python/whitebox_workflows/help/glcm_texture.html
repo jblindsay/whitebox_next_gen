@@ -1,0 +1,29 @@
+<h2>Description</h2>
+<p>Computes general-purpose local texture metrics from a single-band raster using a gray-level co-occurrence matrix (GLCM) within a moving window. Output is written as a multiband raster so that large metric sets remain manageable in Python/R APIs and QGIS.</p>
+<p>Use <code>features</code> to choose which metrics are emitted. Supported feature names are <code>contrast</code>, <code>dissimilarity</code>, <code>homogeneity</code>, <code>asm</code>, <code>energy</code>, <code>entropy</code>, <code>mean</code>, <code>variance</code>, and <code>correlation</code>. Use <code>direction_aggregation</code> to combine directions (<code>mean</code>, <code>min</code>, <code>max</code>, <code>range</code>) or keep each direction as separate output bands (<code>separate</code>).</p>
+<p>Angles are specified in degrees using a comma-separated list from <code>0,45,90,135</code>. Increasing <code>window_size</code> and <code>levels</code> generally improves stability at higher computational cost.</p>
+
+<h2>Function Signature</h2>
+<p><code>def glcm_texture(self, input: Raster, window_size: int = 7, distance: int = 1, angles: str = "0,45,90,135", features: str = "contrast,homogeneity,energy,entropy", direction_aggregation: str = "mean", levels: int = 32, symmetric: bool = True) -&gt; Raster: ...</code></p>
+
+<h2>Example</h2>
+<pre><code>glcm = wbe.glcm_texture(
+    input=raster,
+    window_size=9,
+    distance=1,
+    angles="0,45,90,135",
+    features="contrast,homogeneity,entropy",
+    direction_aggregation="mean",
+    levels=32,
+    output="glcm_texture.tif",
+)</code></pre>
+
+<h2>See Also</h2>
+<p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#image_segmentation">image_segmentation</a>, <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#object_features_texture_glcm_basic">object_features_texture_glcm_basic</a></p>
+
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/index.html">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manuals/qgis/index.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/contribute.html">Support WbW</a>
+</div>

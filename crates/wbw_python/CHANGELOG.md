@@ -6,6 +6,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [2.0.6] - 2026-06-14
+
+### Fixed
+- Fixed `quantiles` raster classification tool failing catastrophically on rasters with extreme positive skewness (e.g., 80% of pixels in range 0–2000 with outliers at 66M+). The histogram-based quantile calculation used a fixed 10,000-bin count regardless of data distribution, resulting in coarse bin widths that collapsed all quantile boundaries into a single bin; all valid pixels were then assigned the highest class. The tool now uses an adaptive-bin histogram that scales bin count with valid cell count (up to 4M bins, capped at 32 MB), ensuring quantile boundaries resolve correctly for any data distribution.
+
 ## [2.0.5] - 2026-06-09
 
 ### Added

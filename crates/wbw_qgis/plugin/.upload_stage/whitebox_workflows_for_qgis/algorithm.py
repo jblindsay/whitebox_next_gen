@@ -46,12 +46,15 @@ try:
     # QGIS API compatibility: some versions expose a dedicated multiple-raster
     # parameter class, others use the generic multiple-layers parameter.
     try:
+        from qgis.core import QgsProcessingParameterMultipleLayers
+    except ImportError:
+        QgsProcessingParameterMultipleLayers = None
+    try:
         from qgis.core import QgsProcessingParameterMultipleRasterLayers
     except ImportError:
-        try:
-            from qgis.core import QgsProcessingParameterMultipleLayers
+        if QgsProcessingParameterMultipleLayers is not None:
             QgsProcessingParameterMultipleRasterLayers = QgsProcessingParameterMultipleLayers
-        except ImportError:
+        else:
             QgsProcessingParameterMultipleRasterLayers = None
 except ImportError:  # pragma: no cover
     class QSettings:  # type: ignore[override]
@@ -81,6 +84,7 @@ except ImportError:  # pragma: no cover
     QgsProcessingParameterFileDestination = _Dummy
     QgsProcessingParameterField = _Dummy
     QgsProcessingParameterMultipleRasterLayers = _Dummy
+    QgsProcessingParameterMultipleLayers = _Dummy
     QgsProcessingParameterNumber = _Dummy
     QgsProcessingParameterRasterLayer = _Dummy
     QgsProcessingParameterRasterDestination = _Dummy
@@ -165,7 +169,15 @@ def _looks_like_output(name: str, description: str) -> bool:
     # Prefer explicit output-like parameter names.
     if n in {"output", "out", "output_file", "output_path", "destination", "dst"}:
         return True
-    if n.startswith(("output_", "out_", "destination_")):
+    # Names like output_id_mode, output_type, output_encoding, output_format,
+    # output_units, output_method are semantic qualifiers, not file destinations.
+    _NON_FILE_SUFFIXES = (
+        "_mode", "_type", "_encoding", "_format", "_units",
+        "_method", "_style", "_scheme", "_class", "_kind",
+    )
+    if n.startswith(("output_", "out_", "destination_")) and not any(
+        n.endswith(sfx) for sfx in _NON_FILE_SUFFIXES
+    ):
         return True
 
     # Description-only hints must indicate persisted artifacts, not semantic "output units" text.
@@ -663,7 +675,9 @@ def _kind_from_io_schema(param: dict[str, Any]) -> str | None:
                 return "raster_layers_in" if cardinality == "multiple" else "raster_in"
             if dataset_kind == "vector":
                 return "vector_in"
-            if dataset_kind in {"lidar", "table", "json", "text", "file", "mixed"}:
+            if dataset_kind == "lidar":
+                return "lidar_files_in" if cardinality == "multiple" else "file_in"
+            if dataset_kind in {"table", "json", "text", "file", "mixed"}:
                 return "file_in"
             return None
 
@@ -2040,10 +2054,12 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                 vector_input_count += 1
             elif inferred_input_kind in ("raster_in", "raster_layers_in"):
                 raster_input_count += 1
-            elif inferred_input_kind == "file_in":
+            elif inferred_input_kind in ("file_in", "lidar_files_in"):
                 n = vp_name.lower()
                 d = vp_desc.lower()
-                if any(tok in (n + " " + d) for tok in ("lidar", "las", "laz", "zlidar", "copc", "e57", "ply")):
+                if inferred_input_kind == "lidar_files_in" or any(
+                    tok in (n + " " + d) for tok in ("lidar", "las", "laz", "zlidar", "copc", "e57", "ply")
+                ):
                     lidar_input_count += 1
 
         dominant_input_family = ""
@@ -2285,6 +2301,15 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     defaultValue=None,
                     optional=False,
                 )
+            elif kind == "lidar_files_in":
+                _lidar_file_type = getattr(QgsProcessing, "TypeFile", -1)
+                qgs_param = QgsProcessingParameterMultipleLayers(
+                    name,
+                    description,
+                    layerType=_lidar_file_type,
+                    defaultValue=None,
+                    optional=not required,
+                )
             elif kind == "file_in":
                 qgs_param = QgsProcessingParameterFile(
                     name,
@@ -2445,6 +2470,15 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                         defaultValue=None,
                         optional=False,
                     )
+                elif kind == "lidar_files_in":
+                    _lidar_file_type = getattr(QgsProcessing, "TypeFile", -1)
+                    qgs_param = QgsProcessingParameterMultipleLayers(
+                        name,
+                        description,
+                        layerType=_lidar_file_type,
+                        defaultValue=None,
+                        optional=not required,
+                    )
                 elif kind == "file_in":
                     qgs_param = QgsProcessingParameterFile(
                         name,
@@ -2543,6 +2577,39 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     return resolved
             except Exception:
                 pass
+
+        string_list_getter = getattr(self, "parameterAsStringList", None)
+        if callable(string_list_getter):
+            try:
+                resolved = _normalize_paths(string_list_getter(parameters, name, context))
+                if resolved:
+                    return resolved
+            except Exception:
+                pass
+
+        value = self.parameterAsString(parameters, name, context)
+        if value:
+            resolved = _normalize_paths(value)
+            if resolved:
+                return resolved
+
+        return _normalize_paths(parameters.get(name))
+
+    def _resolve_file_list_sources(self, parameters, name: str, context) -> list[str]:
+        """Resolve a multi-file parameter (e.g. lidar_files_in) to a list of paths."""
+
+        def _normalize_paths(values: Any) -> list[str]:
+            if values is None:
+                return []
+            if isinstance(values, str):
+                tokens = [p.strip() for p in re.split(r"[;\n]", values) if p.strip()]
+                return [t.strip("\"'") for t in tokens if t.strip("\"' ")]
+            if isinstance(values, (list, tuple)):
+                out: list[str] = []
+                for item in values:
+                    out.extend(_normalize_paths(item))
+                return out
+            return []
 
         string_list_getter = getattr(self, "parameterAsStringList", None)
         if callable(string_list_getter):
@@ -2660,6 +2727,14 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     ]
                 elif required:
                     raise QgsProcessingException(f"Missing required raster inputs: {name}")
+                else:
+                    continue
+            elif kind == "lidar_files_in":
+                paths = self._resolve_file_list_sources(parameters, name, context)
+                if paths:
+                    args[name] = paths
+                elif required:
+                    raise QgsProcessingException(f"Missing required LiDAR inputs: {name}")
                 else:
                     continue
             elif kind == "vector_in":

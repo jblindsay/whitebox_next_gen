@@ -4,6 +4,18 @@ This changelog tracks user-visible changes to the Whitebox Workflows QGIS plugin
 
 ## Unreleased
 
+## 2.1.2 - 2026-06-14
+
+### Fixed
+- Fixed Pro tools remaining [Locked] after a successful license activation. The activation flow now immediately queries the runtime for the effective tier and promotes the plugin's Tier setting to `pro` before performing the catalog refresh, so Pro tools unlock without any manual settings change. The same post-query logic applies to deactivation and license transfer, correctly resetting to `open` tier in those cases.
+- Fixed `quantiles` tool failing catastrophically on rasters with extreme positive skewness. The fixed-bin histogram approach produced bin widths so coarse that quantile boundaries fell within a single bin, causing all valid pixels to be assigned the highest class. The backend tool now uses an adaptive-bin histogram that scales with valid cell count, ensuring correct equal-count quantile classes on any data distribution. The fix is transparent to QGIS users—the tool will produce correct results on highly skewed data without any parameter changes.
+
+- Fixed `lidar_join` and `lidar_rooftop_analysis` only allowing a single LiDAR file to be selected in the QGIS tool dialog. The backend correctly marks the `inputs` parameter with `cardinality: multiple`, but the plugin's parameter type-inference ignored cardinality for LiDAR datasets. A new `lidar_files_in` parameter kind is now recognised; QGIS renders it as a multi-selection file list using `QgsProcessingParameterMultipleLayers` with `TypeFile`, allowing users to select any number of `.las`/`.laz` files in Finder/Explorer.
+- Fixed `merge_vectors` and `polygonize` only allowing a single vector layer to be selected. A new `vector_layers_in` parameter kind is now recognised for vector inputs with `cardinality: multiple`; QGIS renders it as a multi-layer selector using `QgsProcessingParameterMultipleLayers` with `TypeVectorAnyGeometry`.
+- Fixed `ascii_to_las` only allowing a single input file to be selected. The `inputs` parameter has `cardinality: multiple` on the `File` dataset kind and now maps to a new `files_in` kind, rendered as a multi-selection file list.
+- Enhanced help documentation for Individual Tree Segmentation tool with expanded algorithm description, key features overview (adaptive bandwidth, vegetation filtering, flexible output encoding, grid acceleration, tiling support), real-world use cases, and performance tuning guidance for speed vs. accuracy trade-offs.
+- Fixed QGIS plugin warning "Duplicate point_process_residuals for provider whitebox_workflows". The `PointProcessResidualsComparisonTool` in the backend had a mismatched manifest ID (`point_process_residuals` instead of `point_process_residuals_comparison`), causing it to collide with the original `PointProcessResidualsTool` during dynamic catalog registration. Manifest ID now correctly matches the tool's unique identifier.
+
 ## 2.1.0 - 2026-06-09
 
 ### Major Architecture Change

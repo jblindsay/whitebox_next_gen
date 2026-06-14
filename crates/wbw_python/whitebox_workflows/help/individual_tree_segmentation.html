@@ -1,6 +1,56 @@
 <!-- wbw-qgis:generated -->
 <p><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Stable</span></p>
-<p>Segment individual tree crowns from LiDAR using adaptive bandwidth and vegetation filtering.</p>
+<h2>Individual Tree Segmentation</h2>
+<p><strong>Segment individual tree crowns from LiDAR point clouds using mean-shift clustering 
+    with adaptive bandwidth estimation.</strong></p>
+<p>This tool uses a kernel-based mean-shift algorithm to identify and delineate individual tree 
+    crowns in airborne LiDAR data. Each tree is segmented as a 3D point cluster, with adaptive 
+    bandwidth (kernel smoothing radius) automatically estimated from local crown geometry. This 
+    approach is particularly effective for dense forests where trees overlap in 2D projection, as 
+    the algorithm operates in full 3D space.</p>
+
+<h3>Key Features</h3>
+<ul>
+  <li><strong>Adaptive Bandwidth Estimation:</strong> Automatically scales the search radius for 
+    each tree seed based on local point density and crown size, adapting to variable forest 
+    structure (e.g., understory vs. canopy trees).</li>
+  <li><strong>Vegetation Class Filtering:</strong> Optionally restricts segmentation to 
+    vegetation-classified points (ASPRS classes 3-5: low/medium/high vegetation), reducing noise 
+    from ground or structural outliers.</li>
+  <li><strong>Height-Based Filtering:</strong> Excludes points below a minimum height threshold 
+    (default 2.0 m) to focus on tree crowns above understory vegetation.</li>
+  <li><strong>Flexible Output Encoding:</strong> Encodes tree segment IDs in LiDAR RGB or 
+    classification fields, with support for multi-channel encoding (e.g., RGB+user_data for >16M 
+    unique trees).</li>
+  <li><strong>Grid-Accelerated Mode:</strong> Optional spatial binning for faster convergence 
+    on very large point clouds, with configurable refinement iterations.</li>
+  <li><strong>Tile-Based Processing:</strong> Supports memory-efficient processing of large 
+    datasets via optional tiling with configurable overlap.</li>
+</ul>
+
+<h3>Algorithm</h3>
+<p>The tool implements a mean-shift clustering workflow: (1) seeds are initiated at points above 
+    the height threshold, (2) each seed iteratively shifts toward the local density mode (3D 
+    Euclidean space, weighted by kernel), (3) converged modes are merged if they fall within a 
+    distance threshold, (4) points are assigned to their nearest converged mode, and (5) clusters 
+    below the minimum point count are rejected as noise. Parallel processing across seeds 
+    accelerates computation on multi-core systems.</p>
+
+<h3>Use Cases</h3>
+<ul>
+  <li>Forest inventory and tree counting in dense multi-story stands.</li>
+  <li>Canopy structure analysis for ecological or fire-risk modeling.</li>
+  <li>Individual tree height and crown diameter extraction (via downstream post-processing).</li>
+  <li>Change detection between multi-temporal LiDAR acquisitions.</li>
+</ul>
+
+<h3>Performance Tuning</h3>
+<ul>
+  <li><strong>For Speed:</strong> Enable <code>grid_acceleration</code> with larger <code>grid_cell_size</code> (e.g., 1.0), and reduce <code>max_iterations</code> or <code>adaptive_neighbors</code>.</li>
+  <li><strong>For Accuracy:</strong> Disable grid acceleration or increase <code>grid_refine_iterations</code>, reduce <code>bandwidth_min</code> for smaller trees, or lower <code>convergence_tol</code> for stricter convergence.</li>
+  <li><strong>For Large Files:</strong> Enable <code>tile_size</code> (e.g., 100 m × 100 m tiles with 5 m overlap) to cap per-tile memory and enable parallel tile processing.</li>
+</ul>
+
 <h2>Parameters</h2>
 <table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Name</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Required</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Default</th></tr></thead>
 <tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>input</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input LiDAR path or typed LiDAR object.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>—</td></tr>

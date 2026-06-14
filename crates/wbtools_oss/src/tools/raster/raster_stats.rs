@@ -6641,20 +6641,16 @@ impl Tool for QuantilesTool {
         let output_path = parse_optional_output_path(args, "output")?;
         let input = load_raster(&input_path, "input")?;
 
-        // Compute min/max in one parallel pass
-        let (min_val, max_val, num_valid) = (0..input.data.len())
+        // First pass: compute min, max, and valid cell count in parallel.
+        let (min_val, max_val, n_valid) = (0..input.data.len())
             .into_par_iter()
             .fold(
                 || (f64::INFINITY, f64::NEG_INFINITY, 0usize),
                 |(mut mn, mut mx, mut n), i| {
                     let z = input.data.get_f64(i);
                     if !input.is_nodata(z) {
-                        if z < mn {
-                            mn = z;
-                        }
-                        if z > mx {
-                            mx = z;
-                        }
+                        if z < mn { mn = z; }
+                        if z > mx { mx = z; }
                         n += 1;
                     }
                     (mn, mx, n)
@@ -6664,45 +6660,62 @@ impl Tool for QuantilesTool {
                 || (f64::INFINITY, f64::NEG_INFINITY, 0usize),
                 |a, b| (a.0.min(b.0), a.1.max(b.1), a.2 + b.2),
             );
-        if num_valid == 0 {
+
+        if n_valid == 0 {
             return Err(ToolError::Validation("input raster contains no valid cells".to_string()));
         }
 
-        // Build histogram with fixed number of bins (same approach as legacy)
-        const NUM_BINS: usize = 10_000;
+        // Adaptive bin count.
+        //
+        // The original fixed 10,000-bin approach fails for heavily skewed
+        // distributions: when the value range is several orders of magnitude
+        // larger than the spacing between quantile boundaries (e.g., a raster
+        // with values mostly in [0, 2000] but extreme outliers at 66,000,000),
+        // the bin width spans all quantile boundaries and every pixel is
+        // assigned the highest class.
+        //
+        // Fix: scale num_bins with n_valid, capped at a ~32 MB budget.
+        // At 32 MB (4 M u64 bins) the bin width for even extreme ranges is
+        // typically fine enough to distinguish all quantile boundaries.
+        // For small rasters we cap at n_valid so bins never exceed data points.
+        const HIST_BUDGET_BYTES: usize = 32 * 1024 * 1024; // 32 MB
+        const MIN_BINS: usize = 10_000;
+        let max_bins = HIST_BUDGET_BYTES / std::mem::size_of::<u64>();
+        let num_bins = max_bins.min(n_valid).max(MIN_BINS);
+
         let value_range = (max_val - min_val).max(f64::EPSILON);
-        let bin_size = value_range / NUM_BINS as f64;
+        let bin_size = value_range / num_bins as f64;
+
+        // Second pass: build histogram in parallel using thread-local accumulators.
         let histo = (0..input.data.len())
             .into_par_iter()
             .fold(
-                || vec![0u64; NUM_BINS],
-                |mut local_histo, i| {
+                || vec![0u64; num_bins],
+                |mut local, i| {
                     let z = input.data.get_f64(i);
                     if !input.is_nodata(z) {
                         let b = ((z - min_val) / bin_size).floor() as usize;
-                        let b = b.min(NUM_BINS - 1);
-                        local_histo[b] += 1;
+                        local[b.min(num_bins - 1)] += 1;
                     }
-                    local_histo
+                    local
                 },
             )
             .reduce(
-                || vec![0u64; NUM_BINS],
+                || vec![0u64; num_bins],
                 |mut a, b| {
-                    for (i, v) in b.into_iter().enumerate() {
-                        a[i] += v;
+                    for (x, y) in a.iter_mut().zip(b.iter()) {
+                        *x += y;
                     }
                     a
                 },
             );
 
-        // Cumulative histogram → quantile class per bin
+        // Cumulative histogram → quantile class per bin (1-based).
         let mut cumulative = 0u64;
-        let mut bin_class = vec![0u8; NUM_BINS];
-        for b in 0..NUM_BINS {
+        let mut bin_class = vec![0u8; num_bins];
+        for b in 0..num_bins {
             cumulative += histo[b];
-            // quantile class 1..=num_quantiles
-            let klass = ((cumulative as f64 / num_valid as f64) * num_quantiles as f64).ceil() as usize;
+            let klass = ((cumulative as f64 / n_valid as f64) * num_quantiles as f64).ceil() as usize;
             bin_class[b] = klass.clamp(1, num_quantiles) as u8;
         }
 
@@ -6728,8 +6741,7 @@ impl Tool for QuantilesTool {
                     input.nodata
                 } else {
                     let b = ((z - min_val) / bin_size).floor() as usize;
-                    let b = b.min(NUM_BINS - 1);
-                    bin_class[b] as f64
+                    bin_class[b.min(num_bins - 1)] as f64
                 }
             })
             .collect();

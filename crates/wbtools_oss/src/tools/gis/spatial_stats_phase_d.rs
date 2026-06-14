@@ -433,8 +433,8 @@ impl Tool for PointProcessResidualsComparisonTool {
         defaults.insert("output".to_string(), json!("residuals.csv"));
 
         ToolManifest {
-            id: "point_process_residuals".to_string(),
-            display_name: "Point Process Residuals".to_string(),
+            id: "point_process_residuals_comparison".to_string(),
+            display_name: "Point Process Residuals Comparison".to_string(),
             summary: "Compute residual diagnostics for model adequacy checking.".to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,

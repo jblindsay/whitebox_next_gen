@@ -6,10 +6,15 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [2.0.6] - 2026-06-14
+
 ### Changed
 - Added epoch-aware reprojection guidance and advanced argument examples to the
   reprojection manual (`manual/src/reprojection-and-crs.md`) for raster,
   vector, and LiDAR workflows.
+
+### Fixed
+- Fixed `quantiles` tool producing incorrect results (all pixels assigned highest class) on rasters with extreme positive skewness. The backend histogram-based calculation used fixed bin counts that resulted in coarse quantile boundaries, collapsing all quantile thresholds into a single bin on highly skewed data. The tool now uses an adaptive-bin histogram that scales with valid cell count (up to 4M bins, 32 MB cap), correctly resolving quantile boundaries for any distribution.
 
 ## [2.0.5] - 2026-05-30
 

@@ -640,7 +640,7 @@ def _is_probably_python_executable(path_text: str | None) -> bool:
 
 def _discover_embedded_qgis_python(path_text: str | None) -> str | None:
     raw = str(path_text or "").strip()
-    if os.name != "nt" or not raw:
+    if not raw:
         return None
 
     try:
@@ -651,28 +651,56 @@ def _discover_embedded_qgis_python(path_text: str | None) -> str | None:
     if not exe_path.exists():
         return None
 
-    # Typical QGIS launcher layout:
-    # C:\Program Files\QGIS <ver>\bin\qgis-bin.exe -> ..\apps\Python<xy>\python.exe
-    parent = exe_path.parent
-    if parent.name.lower() != "bin":
+    if os.name == "nt":
+        # Windows: C:\Program Files\QGIS <ver>\bin\qgis-bin.exe
+        #       -> ..\apps\Python<xy>\python.exe
+        parent = exe_path.parent
+        if parent.name.lower() != "bin":
+            return None
+
+        install_root = parent.parent
+        apps_dir = install_root / "apps"
+        if not apps_dir.exists() or not apps_dir.is_dir():
+            return None
+
+        try:
+            python_dirs = sorted(
+                child for child in apps_dir.iterdir() if child.is_dir() and child.name.lower().startswith("python")
+            )
+        except Exception:
+            return None
+
+        for python_dir in python_dirs:
+            embedded = python_dir / "python.exe"
+            if embedded.exists() and os.access(embedded, os.X_OK):
+                return str(embedded)
+
         return None
 
-    install_root = parent.parent
-    apps_dir = install_root / "apps"
-    if not apps_dir.exists() or not apps_dir.is_dir():
-        return None
-
+    # macOS: QGIS.app/Contents/MacOS/QGIS
+    #     -> QGIS.app/Contents/MacOS/python3  (some builds)
+    #     -> QGIS.app/Contents/Frameworks/Python.framework/.../python3
     try:
-        python_dirs = sorted(
-            child for child in apps_dir.iterdir() if child.is_dir() and child.name.lower().startswith("python")
-        )
-    except Exception:
-        return None
+        macos_dir = exe_path.parent  # .../QGIS.app/Contents/MacOS/
+        # Candidate 1: python3 / python alongside the QGIS binary
+        for name in ("python3", "python"):
+            candidate = macos_dir / name
+            if candidate.exists() and os.access(candidate, os.X_OK):
+                return str(candidate)
 
-    for python_dir in python_dirs:
-        embedded = python_dir / "python.exe"
-        if embedded.exists() and os.access(embedded, os.X_OK):
-            return str(embedded)
+        # Candidate 2: Python.framework inside Contents/Frameworks
+        frameworks_dir = macos_dir.parent / "Frameworks"
+        if frameworks_dir.is_dir():
+            fw = frameworks_dir / "Python.framework" / "Versions"
+            if fw.is_dir():
+                versions = sorted(fw.iterdir(), reverse=True)
+                for ver in versions:
+                    for name in ("bin/python3", "bin/python"):
+                        candidate = ver / name
+                        if candidate.exists() and os.access(candidate, os.X_OK):
+                            return str(candidate)
+    except Exception:
+        pass
 
     return None
 
@@ -964,6 +992,17 @@ def _effective_python_for_backend_ops() -> str | None:
 
     In qgis mode, use the current in-process interpreter executable.
     In auto/local mode, use the selected external interpreter.
+
+    On macOS (and some Linux builds) sys.executable inside QGIS is the QGIS
+    binary, not Python.  We try several discovery paths in order:
+      1. Rewrite Windows launcher paths to the real python.exe (Windows only).
+      2. Discover an embedded Python alongside the QGIS binary (Windows + macOS).
+      3. Accept sys.executable if it looks like Python directly.
+      4. Fall back to the in-process sentinel (sys.executable as-is) when
+         whitebox_workflows is importable in the current process — the caller
+         _get_installed_whitebox_workflows_version_for_interpreter has a fast
+         in-process path that never spawns a subprocess, so a non-Python
+         sys.executable is harmless in that code path.
     """
     mode, _local_python = get_runtime_preferences()
     if mode == "qgis":
@@ -981,6 +1020,18 @@ def _effective_python_for_backend_ops() -> str | None:
 
             if _is_probably_python_executable(current):
                 return current
+
+            # sys.executable is the QGIS binary (common on macOS / some Linux
+            # builds).  If whitebox_workflows is already importable in-process,
+            # return current as a sentinel — callers that only need version
+            # metadata will use the fast in-process importlib path and never
+            # actually spawn sys.executable as a subprocess.
+            try:
+                import importlib
+                importlib.import_module("whitebox_workflows")
+                return current
+            except ImportError:
+                pass
 
             return None
         except Exception:
@@ -1300,9 +1351,45 @@ def invoke_license_function(
     """
     external_python = _discover_external_python()
     if not external_python:
-        raise RuntimeBootstrapError(
-            "No external Python interpreter was found for license operations."
-        )
+        # No external Python configured (standard QGIS-mode installation).
+        # Call the license functions in-process via the already-loaded
+        # whitebox_workflows module rather than spawning a subprocess.
+        try:
+            wbw = load_whitebox_workflows()
+        except Exception as exc:
+            raise RuntimeBootstrapError(
+                f"whitebox_workflows is not available for in-process license operations: {exc}"
+            )
+        try:
+            if function_name == "activate_license":
+                if not all([key, firstname, lastname, email]):
+                    raise RuntimeBootstrapError(
+                        "activate_license requires: key, firstname, lastname, email"
+                    )
+                result = wbw.activate_license(
+                    key=str(key),
+                    firstname=str(firstname),
+                    lastname=str(lastname),
+                    email=str(email),
+                    agree_to_license_terms=True,
+                    provider_url=provider_url or None,
+                    include_pro=True,
+                )
+                return str(result)
+            elif function_name == "transfer_license":
+                result = wbw.transfer_license()
+                return str(result)
+            elif function_name == "deactivate_license":
+                result = wbw.deactivate_license(from_transfer=bool(from_transfer))
+                return str(result)
+            else:
+                raise RuntimeBootstrapError(f"Unknown license function: {function_name}")
+        except RuntimeBootstrapError:
+            raise
+        except Exception as exc:
+            raise RuntimeBootstrapError(
+                f"License operation '{function_name}' failed in-process: {exc}"
+            )
 
     if function_name == "activate_license":
         if not all([key, firstname, lastname, email]):

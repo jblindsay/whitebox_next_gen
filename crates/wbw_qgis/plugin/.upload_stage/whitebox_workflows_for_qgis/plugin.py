@@ -258,6 +258,7 @@ class WhiteboxWorkflowsPlugin:
 
         self._load_recent_tools()
         self._load_favorite_tools()
+        self._load_runtime_preferences()
         self._load_backend_preferences()
         self._load_quick_open_preference()
         self._load_panel_ui_state()
@@ -386,22 +387,65 @@ class WhiteboxWorkflowsPlugin:
                 provider_url=provider_url,
             )
             self._notify_info(str(message))
+            # After activation, query the runtime to discover the effective tier
+            # and promote settings immediately so the catalog refresh uses Pro.
+            self._apply_effective_tier_after_license_change()
             self._refresh_catalog(silent=True)
         except Exception as exc:
             self._notify_warning(f"License activation failed: {exc}")
 
+    def _apply_effective_tier_after_license_change(self):
+        """Query the runtime for the current effective tier and update saved settings.
+
+        Called after any license state change (activation, deactivation, transfer)
+        so that the subsequent catalog refresh uses the correct tier immediately
+        rather than requiring the user to manually change settings.
+        """
+        try:
+            payload = gather_runtime_diagnostics(include_pro=True, tier="pro")
+            capabilities = payload.get("capabilities", {}) if isinstance(payload, dict) else {}
+            effective_tier = str(capabilities.get("effective_tier", "")).strip().lower()
+            if payload.get("status") == "ok" and effective_tier in {"pro", "enterprise"}:
+                self.provider.include_pro = True
+                self.provider.tier = effective_tier
+            else:
+                self.provider.include_pro = False
+                self.provider.tier = "open"
+        except Exception:
+            self.provider.include_pro = False
+            self.provider.tier = "open"
+        self._save_runtime_preferences()
+
     def _deactivate_license(self, *_args):
         from .bootstrap import invoke_license_function
+
+        # Confirm this destructive operation
+        if not self._confirm(
+            "Deactivate License",
+            "This will permanently remove your license from this machine.\n\n"
+            "Are you sure you want to proceed?",
+        ):
+            return
 
         try:
             message = invoke_license_function("deactivate_license", from_transfer=False)
             self._notify_info(str(message))
+            self._apply_effective_tier_after_license_change()
             self._refresh_catalog(silent=True)
         except Exception as exc:
             self._notify_warning(f"License deactivation failed: {exc}")
 
     def _transfer_license(self, *_args):
         from .bootstrap import invoke_license_function
+
+        # Confirm this destructive operation
+        if not self._confirm(
+            "Transfer License",
+            "This will deactivate your license on this machine and free the activation slot.\n\n"
+            "After transfer, you can activate the same license on another machine.\n\n"
+            "Are you sure you want to proceed?",
+        ):
+            return
 
         try:
             payload_raw = invoke_license_function("transfer_license")
@@ -412,14 +456,32 @@ class WhiteboxWorkflowsPlugin:
                 except Exception:
                     payload = {"message": payload_raw}
 
-            message = str(payload.get("message", "License transferred.")) if isinstance(payload, dict) else str(payload)
+            license_id = ""
             if isinstance(payload, dict):
+                license_id = str(payload.get("floating_license_id", "")).strip()
                 try:
                     QApplication.clipboard().setText(json.dumps(payload, indent=2))
                 except Exception:
                     pass
-            self._notify_info(message)
-            self._refresh_catalog(silent=True)
+
+            if license_id:
+                message = (
+                    f"License deactivated on this machine.\n\n"
+                    f"Your activation key:\n{license_id}\n\n"
+                    f"To activate on another machine:\n"
+                    f"1. Go to that machine\n"
+                    f"2. Open QGIS\n"
+                    f"3. Plugins → Whitebox Workflows → Activate License\n"
+                    f"4. Enter the key above, your name, and email\n\n"
+                    f"(The full payload has been copied to your clipboard for reference.)"
+                )
+            else:
+                message = str(payload.get("message", "License transferred.")) if isinstance(payload, dict) else str(payload)
+
+            # Show as persistent info dialog instead of fleeting notification
+            show_info_dialog(self.iface, "Whitebox Workflows License Transfer", message)
+            # Reset provider to open tier and persist so next catalog refresh is correct
+            self._apply_effective_tier_after_license_change()
         except Exception as exc:
             self._notify_warning(f"License transfer failed: {exc}")
 
@@ -1381,7 +1443,9 @@ class WhiteboxWorkflowsPlugin:
         """Return a single-line exec() command safe to paste into the QGIS Python Console.
 
         Installs whitebox-workflows via pip then reloads the plugin in-place,
-        so the user never needs to restart QGIS.
+        so the user never needs to restart QGIS.  Pip is bootstrapped via
+        ensurepip first, which handles OSGeo4W installations where pip is not
+        included in the bundled Python environment by default.
         """
         import os
         if os.name == "nt":
@@ -1391,6 +1455,11 @@ class WhiteboxWorkflowsPlugin:
 
         inner = (
             "import runpy,sys\\n"
+            "try:\\n"
+            "    import pip\\n"
+            "except ImportError:\\n"
+            "    import ensurepip\\n"
+            "    ensurepip.bootstrap(upgrade=True)\\n"
             f"sys.argv={pip_args}\\n"
             "try:\\n"
             "    runpy.run_module('pip',run_name='__main__',alter_sys=True)\\n"
@@ -1412,7 +1481,11 @@ class WhiteboxWorkflowsPlugin:
 
         if os.name == "nt":
             console_path = "Plugins  ▸  Python Console"
-            alt_note = "Alternatively, open the OSGeo4W Shell and run:\n  python -m pip install whitebox-workflows"
+            alt_note = (
+                "Alternatively, open the OSGeo4W Shell and run:\n"
+                "  python -m ensurepip\n"
+                "  python -m pip install whitebox-workflows"
+            )
         else:
             console_path = "Plugins  ▸  Python Console"
             alt_note = ""
@@ -1611,18 +1684,50 @@ class WhiteboxWorkflowsPlugin:
         )
         text = f"{text}\n\n{update_policy}"
 
+        # Use a scrollable QDialog rather than QMessageBox.information — large
+        # text in QMessageBox renders blank on some macOS Qt builds.
         try:
-            if show_info_dialog(self.iface, "Whitebox Workflows Diagnostics", text):
-                return
+            from qgis.PyQt.QtWidgets import (
+                QDialog, QVBoxLayout, QHBoxLayout,
+                QPlainTextEdit, QPushButton,
+            )
+            from qgis.PyQt.QtGui import QFont
+
+            parent = None
+            try:
+                parent = self.iface.mainWindow()
+            except Exception:
+                pass
+
+            dlg = QDialog(parent)
+            dlg.setWindowTitle("Whitebox Workflows — Runtime Diagnostics")
+            dlg.setMinimumSize(640, 480)
+            layout = QVBoxLayout(dlg)
+            layout.setContentsMargins(12, 12, 12, 12)
+            layout.setSpacing(8)
+
+            text_edit = QPlainTextEdit(dlg)
+            text_edit.setReadOnly(True)
+            text_edit.setPlainText(text)
+            mono = QFont("Courier New", 10)
+            mono.setStyleHint(QFont.Monospace if hasattr(QFont, "Monospace") else QFont.StyleHint.Monospace)
+            text_edit.setFont(mono)
+            layout.addWidget(text_edit)
+
+            btn_row = QHBoxLayout()
+            btn_row.addStretch()
+            close_btn = QPushButton("Close")
+            close_btn.setDefault(True)
+            close_btn.clicked.connect(dlg.accept)
+            btn_row.addWidget(close_btn)
+            layout.addLayout(btn_row)
+
+            dlg.exec() if hasattr(dlg, "exec") and callable(dlg.exec) else dlg.exec_()
+            return
         except Exception:
             pass
 
-        try:
-            if show_info_dialog(None, "Whitebox Workflows Diagnostics", text):
-                return
-        except Exception:
-            pass
-
+        # Last-resort fallback
         push_host_message(
             self.iface,
             "Whitebox Workflows",

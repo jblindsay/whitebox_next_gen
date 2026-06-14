@@ -40,6 +40,38 @@ def get_bundled_help_path(tool_id: str) -> str | None:
     return path if os.path.isfile(path) else None
 
 
+def get_backend_help_html(tool_id: str) -> str:
+    """Return help HTML from the installed whitebox_workflows package.
+
+    The WbW-Py package ships a `whitebox_workflows/help/` directory containing
+    one HTML file per tool.  This function reads from there, which means help
+    content automatically reflects the installed backend version without
+    requiring a plugin update.  Returns an empty string if unavailable.
+    """
+    try:
+        import whitebox_workflows as _wbw
+        get_help = getattr(_wbw, "get_tool_help_html", None)
+        if callable(get_help):
+            result = get_help(tool_id)
+            if result and len(str(result).strip()) > 20:
+                return str(result)
+    except Exception:
+        pass
+    # Fallback: locate help/ directory directly via package __file__
+    try:
+        import whitebox_workflows as _wbw
+        init_file = getattr(_wbw, "__file__", None)
+        if init_file:
+            help_dir = os.path.join(os.path.dirname(str(init_file)), "help")
+            html_path = os.path.join(help_dir, f"{tool_id}.html")
+            if os.path.isfile(html_path):
+                with open(html_path, encoding="utf-8") as fh:
+                    return fh.read()
+    except Exception:
+        pass
+    return ""
+
+
 # ---------------------------------------------------------------------------
 # Cache directory
 # ---------------------------------------------------------------------------
@@ -450,7 +482,7 @@ def generate_help_files(
         if not tool_id:
             continue
 
-        # Prefer bundled file — never regenerate it
+        # Prefer bundled file (plugin's help_static/) — never regenerate it
         bundled = get_bundled_help_path(tool_id)
         if bundled is not None:
             result[tool_id] = bundled
@@ -463,6 +495,15 @@ def generate_help_files(
         result[tool_id] = out_path
 
         if not force and os.path.exists(out_path):
+            continue
+
+        # Try backend package help/ directory before generating from docstring/manifest.
+        # This means tools added in newer WbW-Py versions appear with correct help
+        # even when the plugin hasn't been updated.
+        backend_html = get_backend_help_html(tool_id)
+        if backend_html:
+            with open(out_path, "w", encoding="utf-8") as fh:
+                fh.write(backend_html)
             continue
 
         if tool_id in docstrings:
@@ -487,13 +528,20 @@ def get_help_html(tool_id: str, catalog: list[dict] | None = None) -> str:
     Lookup order: bundled static file → user cache → generate from manifest.
     Requires WbW-Py to be importable for the generate-from-manifest fallback.
     """
-    # 1. Bundled static file
+    # 1. Bundled static file (plugin's help_static/)
     bundled = get_bundled_help_path(tool_id)
     if bundled is not None:
         with open(bundled, encoding="utf-8") as fh:
             return fh.read()
 
-    # 2. User cache
+    # 2. Backend package help/ directory (whitebox_workflows/help/)
+    #    Preferred over the cache for tools not in help_static/ — ensures
+    #    newly added tools use the backend's own help without plugin update.
+    backend_html = get_backend_help_html(tool_id)
+    if backend_html:
+        return backend_html
+
+    # 3. User cache
     cache_dir = get_help_cache_dir()
     cached_path = os.path.join(cache_dir, f"{tool_id}.html")
 

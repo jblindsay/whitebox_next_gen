@@ -4,6 +4,22 @@ This changelog tracks user-visible changes to the Whitebox Workflows QGIS plugin
 
 ## Unreleased
 
+## 2.1.3 - 2026-06-14
+
+### Fixed
+- Fixed classifier tools showing a file-picker text field for the class label field parameter instead of a dropdown selector. Affected tools include `knn_classification`, `logistic_regression`, `random_forest_classification`, `fuzzy_knn_classification`, `nnd_classification`, `min_dist_classification`, and `parallelepiped_classification`. The parameter schema for `class_field` (and similar attribute field parameters) was incorrectly typed as a LiDAR file input, causing the QGIS plugin to render a file picker. Additionally, the parameter type-inference pre-pass was using only heuristic inference rather than explicit schema kinds, causing `training_data` vectors to be misclassified. Both issues are now resolved: schema kinds take precedence over heuristics, and attribute field parameters are correctly promoted to `QgsProcessingParameterField` dropdowns. Users can now select from available fields in the training layer without manual text entry.
+- Fixed `obia_pipeline_basic` and `classify_objects_random_forest`, `classify_objects_svm`, and `classify_objects_ensemble_pro` OBIA tools incorrectly treating `training` and `class_field` parameters as LiDAR inputs. These tools now correctly render `training` as a CSV/Table file picker and `class_field` as a field name text input.
+- Added curated parameter descriptions for `random_forest_classification_fit` and `random_forest_regression_fit` tools in the QGIS parameter metadata, providing users with clear guidance on band ordering, scaling options, and model usage.
+
+### Enhanced
+- **Baseline Matching tool** (`baseline_matching_analysis_pro`) is now a full 6-covariate Mahalanobis-distance model with SEMDB Table A.3 compliance:
+  - **New covariate: slope** — computed from elevation via Horn's 8-neighbour algorithm (degrees).
+  - **New covariate: mean pre-period NDVI** — extracted from multi-band NDVI stack (active matching feature, previously used only for diagnostics).
+  - **Improved road distance** — now uses segment-based rasterization instead of vertex-only distance, correctly measuring distance to road interiors.
+  - **Tenure field-based matching** — `tenure_field` parameter accepts a vector field name for exact-match constraints (replaces feature-identity matching).
+  - **SEMDB-spec absolute-unit callipers** — replaced standard-deviation multipliers with absolute units (e.g., `calliper_elevation_m=200`, `calliper_slope_deg=10`, `calliper_soc_pct=10`, `calliper_ndvi_pct=10`, `calliper_road_distance_km=1`), matching published SEMDB guidelines. Callipers remain optional; when omitted, all donors eligible across full range.
+  - **Covariate table updated** — documentation now reflects all six covariates with default callipers and interpretation guidance for practitioners.
+
 ## 2.1.2 - 2026-06-14
 
 ### Fixed

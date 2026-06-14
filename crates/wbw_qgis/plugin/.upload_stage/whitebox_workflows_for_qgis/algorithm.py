@@ -674,11 +674,13 @@ def _kind_from_io_schema(param: dict[str, Any]) -> str | None:
             if dataset_kind == "raster":
                 return "raster_layers_in" if cardinality == "multiple" else "raster_in"
             if dataset_kind == "vector":
-                return "vector_in"
+                return "vector_layers_in" if cardinality == "multiple" else "vector_in"
             if dataset_kind == "lidar":
                 return "lidar_files_in" if cardinality == "multiple" else "file_in"
-            if dataset_kind in {"table", "json", "text", "file", "mixed"}:
+            if dataset_kind in {"table", "json", "text", "mixed"}:
                 return "file_in"
+            if dataset_kind == "file":
+                return "files_in" if cardinality == "multiple" else "file_in"
             return None
 
         if schema_kind == "output":
@@ -2049,15 +2051,24 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             if vp_default is None and "default" in vp:
                 vp_default = vp.get("default")
             inferred_input_kind = _infer_kind(vp_name, vp_desc, vp_default)
-            if inferred_input_kind == "vector_in":
+            # Prefer explicit schema kind over heuristic inference for deciding
+            # which params are vector inputs (schema is authoritative; inference
+            # can misclassify params whose descriptions contain words like "path").
+            schema_input_kind = _kind_from_io_schema(vp)
+            effective_kind = schema_input_kind if schema_input_kind in (
+                "vector_in", "vector_layers_in", "raster_in", "raster_layers_in"
+            ) else inferred_input_kind
+            if effective_kind == "vector_in":
                 vector_param_names.append(vp_name)
                 vector_input_count += 1
-            elif inferred_input_kind in ("raster_in", "raster_layers_in"):
+            elif effective_kind == "vector_layers_in":
+                vector_input_count += 1
+            elif effective_kind in ("raster_in", "raster_layers_in"):
                 raster_input_count += 1
-            elif inferred_input_kind in ("file_in", "lidar_files_in"):
+            elif inferred_input_kind in ("file_in", "lidar_files_in", "files_in"):
                 n = vp_name.lower()
                 d = vp_desc.lower()
-                if inferred_input_kind == "lidar_files_in" or any(
+                if inferred_input_kind in ("lidar_files_in", "files_in") or any(
                     tok in (n + " " + d) for tok in ("lidar", "las", "laz", "zlidar", "copc", "e57", "ply")
                 ):
                     lidar_input_count += 1
@@ -2223,6 +2234,15 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                         defaultValue=None,
                         optional=not required,
                     )
+            elif kind == "vector_layers_in":
+                _vec_file_type = getattr(QgsProcessing, "TypeVectorAnyGeometry", 0)
+                qgs_param = QgsProcessingParameterMultipleLayers(
+                    name,
+                    description,
+                    layerType=_vec_file_type,
+                    defaultValue=None,
+                    optional=not required,
+                )
             elif kind == "vector_in":
                 qgs_param = QgsProcessingParameterVectorLayer(
                     name,
@@ -2310,6 +2330,15 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     defaultValue=None,
                     optional=not required,
                 )
+            elif kind == "files_in":
+                _generic_file_type = getattr(QgsProcessing, "TypeFile", -1)
+                qgs_param = QgsProcessingParameterMultipleLayers(
+                    name,
+                    description,
+                    layerType=_generic_file_type,
+                    defaultValue=None,
+                    optional=not required,
+                )
             elif kind == "file_in":
                 qgs_param = QgsProcessingParameterFile(
                     name,
@@ -2392,6 +2421,15 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                             defaultValue=None,
                             optional=not required,
                         )
+                elif kind == "vector_layers_in":
+                    _vec_file_type = getattr(QgsProcessing, "TypeVectorAnyGeometry", 0)
+                    qgs_param = QgsProcessingParameterMultipleLayers(
+                        name,
+                        description,
+                        layerType=_vec_file_type,
+                        defaultValue=None,
+                        optional=not required,
+                    )
                 elif kind == "vector_in":
                     qgs_param = QgsProcessingParameterVectorLayer(
                         name,
@@ -2484,6 +2522,15 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                         name,
                         description,
                         behavior=QgsProcessingParameterFile.File,
+                        defaultValue=None,
+                        optional=not required,
+                    )
+                elif kind == "files_in":
+                    _generic_file_type = getattr(QgsProcessing, "TypeFile", -1)
+                    qgs_param = QgsProcessingParameterMultipleLayers(
+                        name,
+                        description,
+                        layerType=_generic_file_type,
                         defaultValue=None,
                         optional=not required,
                     )
@@ -2628,6 +2675,61 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
 
         return _normalize_paths(parameters.get(name))
 
+    def _resolve_vector_layer_sources(self, parameters, name: str, context) -> list[str]:
+        """Resolve a multi-vector input to a list of normalized file paths."""
+
+        def _layer_sources(layers: Any) -> list[str]:
+            if not isinstance(layers, (list, tuple)):
+                return []
+            out: list[str] = []
+            for lyr in layers:
+                if lyr is None:
+                    continue
+                src_getter = getattr(lyr, "source", None)
+                src = src_getter() if callable(src_getter) else ""
+                if isinstance(src, str) and src.strip():
+                    out.append(_normalize_vector_input_source(src))
+            return out
+
+        def _normalize_paths(values: Any) -> list[str]:
+            if values is None:
+                return []
+            if isinstance(values, str):
+                tokens = [p.strip() for p in re.split(r"[;\n]", values) if p.strip()]
+                return [_normalize_vector_input_source(t.strip("\"'")) for t in tokens if t.strip("\"' ")]
+            if isinstance(values, (list, tuple)):
+                out: list[str] = []
+                for item in values:
+                    out.extend(_normalize_paths(item))
+                return out
+            return []
+
+        layer_list_getter = getattr(self, "parameterAsLayerList", None)
+        if callable(layer_list_getter):
+            try:
+                resolved = _layer_sources(layer_list_getter(parameters, name, context))
+                if resolved:
+                    return resolved
+            except Exception:
+                pass
+
+        string_list_getter = getattr(self, "parameterAsStringList", None)
+        if callable(string_list_getter):
+            try:
+                resolved = _normalize_paths(string_list_getter(parameters, name, context))
+                if resolved:
+                    return resolved
+            except Exception:
+                pass
+
+        value = self.parameterAsString(parameters, name, context)
+        if value:
+            resolved = _normalize_paths(value)
+            if resolved:
+                return resolved
+
+        return _normalize_paths(parameters.get(name))
+
     def processAlgorithm(self, parameters, context, feedback):
         if bool(self._manifest.get("locked", False)):
             reason = self._manifest.get("locked_reason", "license_tier_insufficient")
@@ -2735,6 +2837,22 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     args[name] = paths
                 elif required:
                     raise QgsProcessingException(f"Missing required LiDAR inputs: {name}")
+                else:
+                    continue
+            elif kind == "files_in":
+                paths = self._resolve_file_list_sources(parameters, name, context)
+                if paths:
+                    args[name] = paths
+                elif required:
+                    raise QgsProcessingException(f"Missing required file inputs: {name}")
+                else:
+                    continue
+            elif kind == "vector_layers_in":
+                paths = self._resolve_vector_layer_sources(parameters, name, context)
+                if paths:
+                    args[name] = paths
+                elif required:
+                    raise QgsProcessingException(f"Missing required vector inputs: {name}")
                 else:
                     continue
             elif kind == "vector_in":

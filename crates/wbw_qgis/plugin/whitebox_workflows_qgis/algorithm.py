@@ -2051,12 +2051,19 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             if vp_default is None and "default" in vp:
                 vp_default = vp.get("default")
             inferred_input_kind = _infer_kind(vp_name, vp_desc, vp_default)
-            if inferred_input_kind == "vector_in":
+            # Prefer explicit schema kind over heuristic inference for deciding
+            # which params are vector inputs (schema is authoritative; inference
+            # can misclassify params whose descriptions contain words like "path").
+            schema_input_kind = _kind_from_io_schema(vp)
+            effective_kind = schema_input_kind if schema_input_kind in (
+                "vector_in", "vector_layers_in", "raster_in", "raster_layers_in"
+            ) else inferred_input_kind
+            if effective_kind == "vector_in":
                 vector_param_names.append(vp_name)
                 vector_input_count += 1
-            elif inferred_input_kind == "vector_layers_in":
+            elif effective_kind == "vector_layers_in":
                 vector_input_count += 1
-            elif inferred_input_kind in ("raster_in", "raster_layers_in"):
+            elif effective_kind in ("raster_in", "raster_layers_in"):
                 raster_input_count += 1
             elif inferred_input_kind in ("file_in", "lidar_files_in", "files_in"):
                 n = vp_name.lower()

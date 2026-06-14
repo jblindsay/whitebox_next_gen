@@ -1,4 +1,56 @@
 {
+  "random_forest_classification_fit": {
+    "description": "Fits a Random Forest classification model from raster feature bands and a vector training layer. Returns serialized model bytes for use with random_forest_classification_predict.",
+    "parameters": {
+      "inputs": {
+        "label": "Input feature rasters (single-band list). Band order must match what is used at prediction time."
+      },
+      "training_data": {
+        "label": "Training vector layer (points or polygons) with class labels."
+      },
+      "class_field": {
+        "label": "Class label field in training attributes. Must contain categorical class IDs or names."
+      },
+      "scaling": {
+        "label": "Feature scaling {none, normalize, standardize} (default none)."
+      },
+      "n_trees": {
+        "label": "Number of trees (default 200). More trees improve stability."
+      },
+      "min_samples_leaf": {
+        "label": "Minimum samples per leaf node (default 1)."
+      },
+      "min_samples_split": {
+        "label": "Minimum samples required to split an internal node (default 2)."
+      }
+    }
+  },
+  "random_forest_regression_fit": {
+    "description": "Fits a Random Forest regression model from raster feature bands and a vector training layer. Returns serialized model bytes for use with random_forest_regression_predict.",
+    "parameters": {
+      "inputs": {
+        "label": "Input feature rasters (single-band list). Band order must match what is used at prediction time."
+      },
+      "training_data": {
+        "label": "Training vector layer (points or polygons) with numeric target values."
+      },
+      "field": {
+        "label": "Numeric target field in training attributes."
+      },
+      "scaling": {
+        "label": "Feature scaling {none, normalize, standardize} (default none)."
+      },
+      "n_trees": {
+        "label": "Number of trees (default 200)."
+      },
+      "min_samples_leaf": {
+        "label": "Minimum samples per leaf node (default 1)."
+      },
+      "min_samples_split": {
+        "label": "Minimum samples required to split an internal node (default 2)."
+      }
+    }
+  },
   "random_forest_classification": {
     "description": "Supervised Random Forest classification for multisource raster features using point/polygon training data.",
     "parameters": {

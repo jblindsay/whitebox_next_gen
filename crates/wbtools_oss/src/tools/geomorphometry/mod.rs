@@ -613,7 +613,7 @@ pub fn geomorphometry_tool_param_schemas(
 				"input",
 				ToolParamSchema::input_vector(ToolVectorGeometry::Point),
 			),
-			("field_name", ToolParamSchema::string()),
+			("field_name", ToolParamSchema::field("input", None)),
 			("use_z_values", ToolParamSchema::bool()),
 			("max_triangle_edge_length", ToolParamSchema::scalar_float()),
 			("interval", ToolParamSchema::scalar_float()),

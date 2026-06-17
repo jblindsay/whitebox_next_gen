@@ -99,13 +99,13 @@ pub fn raster_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolP
                 ])),
                 "attribute_histogram" => Some(param_schema_map(&[
                         ("input", ToolParamSchema::input_vector_any()),
-                        ("field", ToolParamSchema::string()),
+                        ("field", ToolParamSchema::field("input", None)),
                         ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
                 ])),
                 "attribute_scattergram" => Some(param_schema_map(&[
                         ("input", ToolParamSchema::input_vector_any()),
-                        ("fieldx", ToolParamSchema::string()),
-                        ("fieldy", ToolParamSchema::string()),
+                        ("fieldx", ToolParamSchema::field("input", None)),
+                        ("fieldy", ToolParamSchema::field("input", None)),
                         ("trendline", ToolParamSchema::bool()),
                         ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
                 ])),
@@ -150,7 +150,7 @@ pub fn raster_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolP
                 ])),
                 "list_unique_values" => Some(param_schema_map(&[
                         ("input", ToolParamSchema::input_vector_any()),
-                        ("field", ToolParamSchema::string()),
+                        ("field", ToolParamSchema::field("input", None)),
                         ("output", ToolParamSchema::output(wbcore::ToolDatasetSchema::File)),
                 ])),
                 "root_mean_square_error" => Some(param_schema_map(&[
@@ -238,7 +238,7 @@ pub fn raster_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolP
                 "trend_surface_vector_points" => Some(param_schema_map(&[
                         ("input", ToolParamSchema::input_vector_any()),
                         ("cell_size", ToolParamSchema::scalar_float()),
-                        ("field_name", ToolParamSchema::string()),
+                        ("field_name", ToolParamSchema::field("input", None)),
                         ("polynomial_order", ToolParamSchema::scalar_integer()),
                         ("output", ToolParamSchema::output_raster()),
                 ])),

@@ -437,7 +437,7 @@ pub fn remote_sensing_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<Strin
 		"polygons_to_segments" => Some(param_schema_map(&[
 			("input", ToolParamSchema::input_vector_any()),
 			("base", ToolParamSchema::input_raster()),
-			("field", ToolParamSchema::string()),
+			("field", ToolParamSchema::field("input", None)),
 			("output", ToolParamSchema::output_raster()),
 		])),
 		"segments_to_polygons" => Some(param_schema_map(&[

@@ -172,7 +172,7 @@ pub fn data_tools_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolPa
         ])),
         "singlepart_to_multipart" => Some(param_schema_map(&[
             ("input", ToolParamSchema::input_vector_any()),
-            ("field", ToolParamSchema::string()),
+            ("field", ToolParamSchema::field("input", None)),
             ("output", ToolParamSchema::output_vector_any()),
         ])),
         "reinitialize_attribute_table" => Some(param_schema_map(&[

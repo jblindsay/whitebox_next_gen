@@ -285,7 +285,7 @@ pub fn gis_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolPara
             ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Polygon)),
             ("overlay", ToolParamSchema::input_vector(ToolVectorGeometry::Polygon)),
             ("clip", ToolParamSchema::input_vector(ToolVectorGeometry::Polygon)),
-            ("dissolve_field", ToolParamSchema::string()),
+            ("dissolve_field", ToolParamSchema::field("input", None)),
             ("snap_tolerance", ToolParamSchema::scalar_float()),
             (
                 "output",
@@ -301,7 +301,7 @@ pub fn gis_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolPara
         ])),
         "global_morans_i" => Some(param_schema_map(&[
             ("input", ToolParamSchema::input_vector_any()),
-            ("field", ToolParamSchema::string()),
+            ("field", ToolParamSchema::field("input", None)),
             (
                 "weights_mode",
                 ToolParamSchema::enum_values(&["queen", "rook", "k_nearest", "distance_band"]),
@@ -323,7 +323,7 @@ pub fn gis_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolPara
         ])),
         "local_morans_i_lisa" => Some(param_schema_map(&[
             ("input", ToolParamSchema::input_vector_any()),
-            ("field", ToolParamSchema::string()),
+            ("field", ToolParamSchema::field("input", None)),
             (
                 "weights_mode",
                 ToolParamSchema::enum_values(&["queen", "rook", "k_nearest", "distance_band"]),
@@ -349,7 +349,7 @@ pub fn gis_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolPara
         ])),
         "getis_ord_gi_star" => Some(param_schema_map(&[
             ("input", ToolParamSchema::input_vector_any()),
-            ("field", ToolParamSchema::string()),
+            ("field", ToolParamSchema::field("input", None)),
             (
                 "weights_mode",
                 ToolParamSchema::enum_values(&["queen", "rook", "k_nearest", "distance_band"]),
@@ -462,7 +462,7 @@ pub fn gis_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolPara
         ])),
         "field_calculator" => Some(param_schema_map(&[
             ("input", ToolParamSchema::input_vector_any()),
-            ("field", ToolParamSchema::string()),
+            ("field", ToolParamSchema::field("input", None)),
             ("field_type", ToolParamSchema::enum_values(&["float", "integer", "text"])),
             ("expression", ToolParamSchema::string()),
             ("overwrite", ToolParamSchema::bool()),
@@ -725,7 +725,7 @@ pub fn gis_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolPara
         ])),
         "delete_field" => Some(param_schema_map(&[
             ("input", ToolParamSchema::input_vector_any()),
-            ("fields", ToolParamSchema::string()),
+            ("fields", ToolParamSchema::field("input", None)),
             ("output", ToolParamSchema::output_vector_any()),
         ])),
         "add_geometry_attributes" => Some(param_schema_map(&[
@@ -1351,7 +1351,7 @@ pub fn gis_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolPara
         ])),
         "heat_map" => Some(param_schema_map(&[
             ("points", ToolParamSchema::input_vector(ToolVectorGeometry::Point)),
-            ("field_name", ToolParamSchema::string()),
+            ("field_name", ToolParamSchema::field("points", None)),
             ("bandwidth", ToolParamSchema::scalar_float()),
             ("cell_size", ToolParamSchema::scalar_float()),
             ("base_raster", ToolParamSchema::input_raster()),
@@ -1596,7 +1596,7 @@ pub fn gis_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolPara
         ])),
         "rename_field" => Some(param_schema_map(&[
             ("input", ToolParamSchema::input_vector_any()),
-            ("field", ToolParamSchema::string()),
+            ("field", ToolParamSchema::field("input", None)),
             ("new_field", ToolParamSchema::string()),
             ("output", ToolParamSchema::output_vector_any()),
         ])),
@@ -1833,8 +1833,8 @@ pub fn gis_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolPara
         ])),
         "vector_summary_statistics" => Some(param_schema_map(&[
             ("input", ToolParamSchema::input_vector_any()),
-            ("group_field", ToolParamSchema::string()),
-            ("value_field", ToolParamSchema::string()),
+            ("group_field", ToolParamSchema::field("input", None)),
+            ("value_field", ToolParamSchema::field("input", None)),
             (
                 "output",
                 ToolParamSchema::output(wbcore::ToolDatasetSchema::Table),

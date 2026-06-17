@@ -154,6 +154,7 @@ pub enum ToolParamSchema {
     Bool,
     String,
     Field(ToolFieldSchema),
+    FieldDefinition,
 }
 
 impl ToolParamSchema {
@@ -243,6 +244,10 @@ impl ToolParamSchema {
         })
     }
 
+    pub fn field_definition() -> Self {
+        Self::FieldDefinition
+    }
+
     pub fn enum_values(options: &[&str]) -> Self {
         Self::Enum(ToolEnumSchema {
             options: options
@@ -259,7 +264,7 @@ impl ToolParamSchema {
         match self {
             Self::Input(_) => Some(ToolIoRole::Input),
             Self::Output(_) => Some(ToolIoRole::Output),
-            Self::Scalar { .. } | Self::Enum(_) | Self::Bool | Self::String | Self::Field(_) => None,
+            Self::Scalar { .. } | Self::Enum(_) | Self::Bool | Self::String | Self::Field(_) | Self::FieldDefinition => None,
         }
     }
 
@@ -268,7 +273,7 @@ impl ToolParamSchema {
             Self::Input(schema) => schema.dataset.coarse_data_kind(),
             Self::Output(schema) => schema.dataset.coarse_data_kind(),
             Self::Scalar { .. } => ToolDataKind::Number,
-            Self::Enum(_) | Self::String | Self::Field(_) => ToolDataKind::String,
+            Self::Enum(_) | Self::String | Self::Field(_) | Self::FieldDefinition => ToolDataKind::String,
             Self::Bool => ToolDataKind::Bool,
         }
     }

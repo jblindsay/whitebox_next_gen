@@ -715,7 +715,7 @@ pub fn gis_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolPara
         ])),
         "add_field" => Some(param_schema_map(&[
             ("input", ToolParamSchema::input_vector_any()),
-            ("field", ToolParamSchema::string()),
+            ("field", ToolParamSchema::field_definition()),
             (
                 "field_type",
                 ToolParamSchema::enum_values(&["integer", "float", "double", "text", "bool"]),
@@ -1597,7 +1597,7 @@ pub fn gis_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolPara
         "rename_field" => Some(param_schema_map(&[
             ("input", ToolParamSchema::input_vector_any()),
             ("field", ToolParamSchema::field("input", None)),
-            ("new_field", ToolParamSchema::string()),
+            ("new_field", ToolParamSchema::field_definition()),
             ("output", ToolParamSchema::output_vector_any()),
         ])),
         "route_calibrate" => Some(param_schema_map(&[

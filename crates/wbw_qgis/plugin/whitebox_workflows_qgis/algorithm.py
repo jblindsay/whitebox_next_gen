@@ -2092,34 +2092,43 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                 default_value = p.get("default")
             schema_kind = _kind_from_io_schema(p)
             inferred_kind = _infer_kind(name, description, default_value)
+            # Trust backend schema as the authoritative source of truth.
+            # Backend now declares field parameters explicitly via ToolParamSchema::field(),
+            # so we should not override field types with heuristics.
             kind = schema_kind or inferred_kind
-
-            # Runtime schema may sometimes label unresolved params as generic
-            # string/file types. Prefer stronger inferred kinds (numeric, layer,
-            # and path-based) so selectors do not regress into plain strings.
-            if schema_kind in {"string", "file_in"} and inferred_kind in {
-                "int",
-                "double",
-                "bool",
-                "raster_in",
-                "raster_layers_in",
-                "vector_in",
-                "file_in",
-                "raster_out",
-                "vector_out",
-                "lidar_out",
-                "file_out",
-            }:
-                kind = inferred_kind
-
-            # If schema leaves an output destination generic, allow stronger
-            # inferred layer-output kinds to drive destination widget type.
-            if schema_kind == "file_out" and inferred_kind in {"raster_out", "vector_out", "lidar_out"}:
-                kind = inferred_kind
             field_parent = None
-            if kind == "string" and vector_param_names and _looks_like_attribute_field(name, description):
-                kind = "field"
-                field_parent = _pick_field_parent(name, description, vector_param_names)
+
+            if kind == "field":
+                # Backend schema explicitly declares this is a field parameter.
+                # Extract the parent parameter name from the schema.
+                field_parent = None
+                if isinstance(p.get("schema"), dict):
+                    field_parent = p.get("schema", {}).get("parent")
+            
+            # Only apply schema overrides if backend schema is ambiguous (not a field).
+            if kind != "field":
+                # Runtime schema may sometimes label unresolved params as generic
+                # string/file types. Prefer stronger inferred kinds (numeric, layer,
+                # and path-based) so selectors do not regress into plain strings.
+                if schema_kind in {"string", "file_in"} and inferred_kind in {
+                    "int",
+                    "double",
+                    "bool",
+                    "raster_in",
+                    "raster_layers_in",
+                    "vector_in",
+                    "file_in",
+                    "raster_out",
+                    "vector_out",
+                    "lidar_out",
+                    "file_out",
+                }:
+                    kind = inferred_kind
+
+                # If schema leaves an output destination generic, allow stronger
+                # inferred layer-output kinds to drive destination widget type.
+                if schema_kind == "file_out" and inferred_kind in {"raster_out", "vector_out", "lidar_out"}:
+                    kind = inferred_kind
             enum_options = _extract_schema_enum_options(p)
             if len(enum_options) < 2:
                 enum_options = _extract_enum_options(name, description, default_value)

@@ -140,7 +140,7 @@ pub struct ToolEnumSchema {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolFieldSchema {
-    pub parent: String,
+    pub parents: Vec<String>,
     pub geometry: Option<ToolVectorGeometry>,
 }
 
@@ -239,7 +239,14 @@ impl ToolParamSchema {
 
     pub fn field(parent: &str, geometry: Option<ToolVectorGeometry>) -> Self {
         Self::Field(ToolFieldSchema {
-            parent: parent.to_string(),
+            parents: vec![parent.to_string()],
+            geometry,
+        })
+    }
+
+    pub fn fields(parents: &[&str], geometry: Option<ToolVectorGeometry>) -> Self {
+        Self::Field(ToolFieldSchema {
+            parents: parents.iter().map(|p| p.to_string()).collect(),
             geometry,
         })
     }

@@ -416,6 +416,8 @@ pub fn gis_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolPara
             ("input", ToolParamSchema::input_vector_any()),
             ("near", ToolParamSchema::input_vector_any()),
             ("max_distance", ToolParamSchema::scalar_float()),
+            ("input_priority_field", ToolParamSchema::fields(&["input"], None)),
+            ("near_priority_field", ToolParamSchema::fields(&["near"], None)),
             ("output", ToolParamSchema::output_vector_any()),
         ])),
         "select_by_location" => Some(param_schema_map(&[
@@ -458,6 +460,8 @@ pub fn gis_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolPara
                 ToolParamSchema::enum_values(&["first", "last", "count", "sum", "mean", "min", "max"]),
             ),
             ("prefix", ToolParamSchema::string()),
+            ("target_group_field", ToolParamSchema::fields(&["target"], None)),
+            ("join_attribute_field", ToolParamSchema::fields(&["join"], None)),
             ("output", ToolParamSchema::output_vector_any()),
         ])),
         "field_calculator" => Some(param_schema_map(&[
@@ -483,6 +487,8 @@ pub fn gis_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, ToolPara
         "line_polygon_clip" => Some(param_schema_map(&[
             ("input", ToolParamSchema::input_vector(ToolVectorGeometry::Line)),
             ("clip", ToolParamSchema::input_vector(ToolVectorGeometry::Polygon)),
+            ("input_preserve_field", ToolParamSchema::fields(&["input"], None)),
+            ("clip_zone_field", ToolParamSchema::fields(&["clip"], None)),
             (
                 "output",
                 ToolParamSchema::output(wbcore::ToolDatasetSchema::Vector {

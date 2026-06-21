@@ -12,6 +12,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Fixed
 - Fixed `longest_flowpath` tool output type schema exposed through R bindings. The tool now correctly identifies its output as vector (via `output_vector_any()` schema) instead of raster. R-side metadata consumers and Shiny applications will correctly render output parameter as vector layer sink.
+- Fixed `polygons_to_lines` output through R bindings. The tool now produces properly closed line strings from polygon rings (appends first coordinate if not already closed). R users and Shiny applications will receive complete, closed polylines.
 
 ## [2.0.6] - 2026-06-14
 

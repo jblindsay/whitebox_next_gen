@@ -20,6 +20,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Changed
 ### Fixed
 - Fixed `longest_flowpath` tool metadata schema incorrectly specifying output as raster instead of vector. The tool was grouped with flowpath-length tools (which produce rasters) in the schema registry, causing QGIS plugin to render it as a raster output parameter. Extracted into separate schema entry with correct specification: `basins` as input raster, `output` as `output_vector_any()`. QGIS will now correctly display output parameter as vector layer sink once published binary is updated.
+- Fixed `polygons_to_lines` tool producing open polylines with missing closing segments. Ring internal representation intentionally omits the closing duplicate vertex for efficiency. The tool was cloning ring coordinates directly into output line strings, losing the closing segment. Added `close_ring()` step that appends the first coordinate to each ring if not already closed, with guard against double-closing rings from formats that include closing vertex on read. Applies to both `Polygon` and `MultiPolygon` inputs (resolves issue #19).
 
 ## [0.1.2] - 2026-06-14
 

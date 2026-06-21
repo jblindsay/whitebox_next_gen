@@ -12,6 +12,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Fixed
 - Fixed `longest_flowpath` tool output type metadata schema. The tool now correctly exposes `output_vector_any()` schema type (instead of raster) through Python bindings. QGIS and downstream metadata consumers will correctly identify the output as a vector layer.
+- Fixed `polygons_to_lines` output through Python bindings. The tool now correctly produces closed polygon rings (appends closing vertex if needed). Python and downstream consumers will receive properly closed line strings.
 
 ## [2.0.6] - 2026-06-14
 

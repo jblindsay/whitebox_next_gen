@@ -205,10 +205,16 @@ pub fn hydrology_tool_param_schemas(tool_id: &str) -> Option<BTreeMap<String, To
 			("output", ToolParamSchema::output_raster()),
 		])),
 		"downslope_flowpath_length" | "max_upslope_flowpath_length"
-		| "average_upslope_flowpath_length" | "average_flowpath_slope" | "max_upslope_value"
-		| "longest_flowpath" => Some(param_schema_map(&[
+		| "average_upslope_flowpath_length" | "average_flowpath_slope" | "max_upslope_value" => {
+			Some(param_schema_map(&[
+				("dem", ToolParamSchema::input_raster()),
+				("output", ToolParamSchema::output_raster()),
+			]))
+		}
+		"longest_flowpath" => Some(param_schema_map(&[
 			("dem", ToolParamSchema::input_raster()),
-			("output", ToolParamSchema::output_raster()),
+			("basins", ToolParamSchema::input_raster()),
+			("output", ToolParamSchema::output_vector_any()),
 		])),
 		"elevation_above_stream" | "elevation_above_stream_euclidean" => {
 			Some(param_schema_map(&[

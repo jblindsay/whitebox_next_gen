@@ -5,6 +5,15 @@ All notable changes to the `wbspatialstats` project will be documented in this f
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Added explicit field parameter schemas to spatial autocorrelation and kriging tools for QGIS field dropdown widget support:
+  - **Spatial Autocorrelation**: `morans_i`, `local_morans_i`, `getis_ord_gi_star`, `nearest_neighbour_index` — field parameter with parent reference to input layer.
+  - **Kriging Interpolation**: `ordinary_kriging`, `local_kriging`, `simple_kriging`, `universal_kriging`, `space_time_kriging` — field parameter (z_field) with parent reference to points layer.
+  - **CoKriging**: `ordinary_cokriging` — primary_field and covariate_field parameters with parent references to points layer.
+- Field schemas enable downstream front-ends (QGIS, R, Python) to automatically render field parameters as dropdown selectors with parent layer resolution.
+
 ## [0.1.0] - 2026-06-04
 
 Initial release of `wbspatialstats` as a unified spatial statistics library for Whitebox Geospatial.

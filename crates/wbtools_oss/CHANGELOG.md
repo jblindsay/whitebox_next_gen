@@ -7,8 +7,19 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Added explicit field parameter schemas across 40+ GIS tools for QGIS field dropdown widget support:
+  - **Interpolation Tools**: `idw_interpolation`, `modified_shepard_interpolation`, `natural_neighbour_interpolation` — field_name parameter with parent reference to points layer.
+  - **Spatial Statistics**: `morans_i`, `local_morans_i`, `bivariable_correlation` — field parameter with parent reference to input layer.
+  - **Vector Analysis**: `buffer_vector`, `explode_features`, `near`, `select_by_location`, `spatial_join` — field parameters (dissolve_field, search_field, etc.) with parent references.
+  - **Linear Referencing**: `route_calibrate`, `locate_along_route`, `locate_point_on_route` — route_id_field and measure_field parameters with parent references to route/event layers.
+  - **Network Analysis**: `network_routes_from_od`, `network_accessibility_metrics` — node_cost_field parameter with parent reference to node_cost_points layer.
+  - **Classification**: `training_sample_filter`, `knn_classification` — class_field parameter with parent reference to training_data layer.
+  - **Field Operations**: `add_field`, `delete_field`, `rename_field` — field parameters with appropriate parent vector layer references.
+- Field schemas enable QGIS front-end to render field parameters as dropdown selectors (instead of text input) with automatic parent layer resolution.
+
 ### Changed
 ### Fixed
+- Fixed `longest_flowpath` tool metadata schema incorrectly specifying output as raster instead of vector. The tool was grouped with flowpath-length tools (which produce rasters) in the schema registry, causing QGIS plugin to render it as a raster output parameter. Extracted into separate schema entry with correct specification: `basins` as input raster, `output` as `output_vector_any()`. QGIS will now correctly display output parameter as vector layer sink once published binary is updated.
 
 ## [0.1.2] - 2026-06-14
 

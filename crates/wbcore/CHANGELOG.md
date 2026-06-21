@@ -8,7 +8,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Added
 - Added canonical typed tool-parameter schema model types in `wbcore` (input/output/dataset/cardinality/scalar/vector-geometry/field/enum).
-- Added ergonomic schema builder helpers (`ToolParamSchema::input_raster`, `input_vector`, `output_raster`, scalar and enum helpers) to reduce tool-authoring boilerplate.
+- Added `ToolFieldSchema` with parent layer reference and optional vector geometry constraints for field-parameter type-safety.
+- Added ergonomic schema builder helpers (`ToolParamSchema::input_raster`, `input_vector`, `output_raster`, `field(parent, geometry)`, scalar and enum helpers) to reduce tool-authoring boilerplate.
 - Added `manifest_with_param_schema_json(...)` for schema-aware metadata emission with compatibility fields.
 
 ### Changed

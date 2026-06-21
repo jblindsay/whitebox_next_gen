@@ -6,6 +6,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- Field parameter schemas are now exposed through Python bindings via `list_tool_catalog_json_with_options(...)` and `get_tool_metadata_json(...)`. Downstream consumers (QGIS plugin, Python scripts, Jupyter notebooks) can introspect field parameters and their parent layer references for dynamic UI rendering or validation.
+- Schema JSON includes `kind: "field"` and `parent: <layer_name>` for all 40+ tools with field parameter support, enabling dropdown widgets and validation.
+
+### Fixed
+- Fixed `longest_flowpath` tool output type metadata schema. The tool now correctly exposes `output_vector_any()` schema type (instead of raster) through Python bindings. QGIS and downstream metadata consumers will correctly identify the output as a vector layer.
+
 ## [2.0.6] - 2026-06-14
 
 ### Fixed

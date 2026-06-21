@@ -6,6 +6,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- Field parameter schemas are now exposed through R bindings via `list_tools_json(...)` and `get_tool_metadata_json(...)` helper functions. R users and downstream consumers (Shiny apps, R scripts) can introspect field parameters and their parent layer references for dynamic validation and metadata enrichment.
+- Schema JSON includes `kind: "field"` and `parent: <layer_name>` for all 40+ tools with field parameter support (interpolation, spatial stats, vector ops, linear referencing, network analysis, classification).
+
+### Fixed
+- Fixed `longest_flowpath` tool output type schema exposed through R bindings. The tool now correctly identifies its output as vector (via `output_vector_any()` schema) instead of raster. R-side metadata consumers and Shiny applications will correctly render output parameter as vector layer sink.
+
 ## [2.0.6] - 2026-06-14
 
 ### Changed

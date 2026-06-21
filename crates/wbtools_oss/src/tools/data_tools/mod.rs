@@ -3805,20 +3805,32 @@ impl Tool for PolygonsToLinesTool {
             .features
             .par_iter()
             .map(|feature| {
+                // Rings are stored without the closing duplicate vertex.
+                // Close each ring by appending the first coord if not already closed.
+                let close_ring = |coords: &[wbvector::Coord]| -> Vec<wbvector::Coord> {
+                    let mut line = coords.to_vec();
+                    if let (Some(first), Some(last)) = (line.first().cloned(), line.last().cloned()) {
+                        if first != last {
+                            line.push(first);
+                        }
+                    }
+                    line
+                };
+
                 let geom = match &feature.geometry {
                     Some(Geometry::Polygon { exterior, interiors }) => {
-                        let mut lines = vec![exterior.0.clone()];
+                        let mut lines = vec![close_ring(&exterior.0)];
                         for ring in interiors {
-                            lines.push(ring.0.clone());
+                            lines.push(close_ring(&ring.0));
                         }
                         Some(Geometry::multi_line_string(lines))
                     }
                     Some(Geometry::MultiPolygon(polys)) => {
                         let mut lines = Vec::new();
                         for (exterior, interiors) in polys {
-                            lines.push(exterior.0.clone());
+                            lines.push(close_ring(&exterior.0));
                             for ring in interiors {
-                                lines.push(ring.0.clone());
+                                lines.push(close_ring(&ring.0));
                             }
                         }
                         Some(Geometry::multi_line_string(lines))

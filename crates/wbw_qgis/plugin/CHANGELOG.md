@@ -4,6 +4,9 @@ This changelog tracks user-visible changes to the Whitebox Workflows QGIS plugin
 
 ## Unreleased
 
+### Fixed
+- Fixed backend update failures on Windows with `PermissionError: [WinError 5]` when users click "Update Backend" to upgrade the whitebox-workflows package. On Windows, pip cannot replace the `.pyd` file while it is loaded in QGIS's Python process. The plugin now unloads the module from `sys.modules` and invalidates importlib caches **before** pip runs, releasing the file lock and allowing pip to safely replace the binary. This resolves the issue where updates fail and tools disappear until QGIS is restarted. ([#23](https://github.com/jblindsay/whitebox_next_gen/issues/23))
+
 ## 2.1.3 - 2026-06-14
 
 ### Fixed

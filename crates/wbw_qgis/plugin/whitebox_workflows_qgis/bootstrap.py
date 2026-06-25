@@ -1096,6 +1096,29 @@ def get_installed_whitebox_workflows_version() -> str:
     return _get_installed_whitebox_workflows_version_for_interpreter(interpreter)
 
 
+def _unload_whitebox_workflows_module() -> None:
+    """Unload whitebox_workflows from sys.modules and invalidate import caches.
+    
+    This is critical for Windows pip upgrades: if whitebox_workflows.pyd is locked
+    in QGIS's Python process, pip cannot replace it with the new version, causing
+    PermissionError: [WinError 5]. Clearing the module and invalidating caches
+    releases the lock and forces a fresh import after pip completes.
+    
+    See: https://github.com/jblindsay/whitebox_next_gen/issues/23
+    """
+    import sys
+    import importlib
+    
+    # Remove whitebox_workflows and all submodules from sys.modules
+    modules_to_remove = [key for key in sys.modules.keys() 
+                         if key == "whitebox_workflows" or key.startswith("whitebox_workflows.")]
+    for key in modules_to_remove:
+        del sys.modules[key]
+    
+    # Invalidate importlib caches so it rescans directories for the module
+    importlib.invalidate_caches()
+
+
 def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec: str = "") -> dict:
     """Install or upgrade whitebox-workflows using pip in-process.
 
@@ -1127,6 +1150,11 @@ def install_or_upgrade_whitebox_workflows(*, upgrade: bool = False, version_spec
         raise RuntimeBootstrapError(
             f"{error_msg['title']}\n\n{error_msg['details']}"
         ) from exc
+
+    # CRITICAL on Windows: unload the module BEFORE pip runs to release the .pyd file lock.
+    # If whitebox_workflows.pyd is already loaded in QGIS's Python process, pip cannot
+    # replace it during install, causing PermissionError: [WinError 5] on Windows.
+    _unload_whitebox_workflows_module()
 
     import io  # noqa: F401 — imported for future use if pip output capture is needed
     exit_code = 1

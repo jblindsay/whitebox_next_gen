@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **CoKriging**: `ordinary_cokriging` — primary_field and covariate_field parameters with parent references to points layer.
 - Field schemas enable downstream front-ends (QGIS, R, Python) to automatically render field parameters as dropdown selectors with parent layer resolution.
 
+### Fixed
+- **Critical**: Fixed catastrophic memory issue in `EmpiricalVariogramBuilder::compute_lag_histogram()` that caused out-of-memory crashes on large point datasets (e.g., 13M+ points).
+  - Changed algorithm from storing all O(n²) pairwise differences in memory to binning on-the-fly into lag maps.
+  - Memory footprint reduced from O(n²) pairs (1.35 TB for 13M points) to O(num_lags) bins (~50-100 MB).
+  - Maintains mathematically identical statistical output.
+  - Resolves issue where Estimate Variogram tool would exhaust system RAM on realistic geospatial datasets.
+  - Consistent with existing memory-efficient patterns in directional and cross-variogram implementations.
+
 ## [0.1.0] - 2026-06-04
 
 Initial release of `wbspatialstats` as a unified spatial statistics library for Whitebox Geospatial.

@@ -167,9 +167,9 @@ impl EmpiricalVariogramBuilder {
         lag_tol: f64,
     ) -> HashMap<u32, (f64, usize)> {
         let n = valid.len();
-        let mut pairs = Vec::new();
+        let mut lag_map: HashMap<u32, Vec<f64>> = HashMap::new();
 
-        // Collect all pairwise distances/differences
+        // Bin pairwise distances/differences on-the-fly to avoid storing all pairs in memory
         for i in 0..n {
             for j in (i + 1)..n {
                 let (_, (x1, y1), z1) = valid[i];
@@ -178,16 +178,9 @@ impl EmpiricalVariogramBuilder {
                 let dist = ((x2 - x1).powi(2) + (y2 - y1).powi(2)).sqrt();
                 let diff = (z2 - z1).powi(2) / 2.0; // 0.5 * (z2-z1)^2
 
-                pairs.push((dist, diff));
+                let lag_idx = ((dist - lag_tol).max(0.0) / lag_dist).round() as u32;
+                lag_map.entry(lag_idx).or_insert_with(Vec::new).push(diff);
             }
-        }
-
-        // Bin into lag groups (use rayon if > 1000 pairs)
-        let mut lag_map: HashMap<u32, Vec<f64>> = HashMap::new();
-
-        for (dist, diff) in pairs {
-            let lag_idx = ((dist - lag_tol).max(0.0) / lag_dist).round() as u32;
-            lag_map.entry(lag_idx).or_insert_with(Vec::new).push(diff);
         }
 
         // Aggregate each lag: mean semivariance and pair count

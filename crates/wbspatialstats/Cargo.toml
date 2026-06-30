@@ -1,10 +1,10 @@
 [package]
 name = "wbspatialstats"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["John Lindsay", "Whitebox Geospatial Inc."]
 description = "Unified spatial statistics library: kriging, spatial autocorrelation, spatial regression, point process analysis"
-license = "AGPL-3.0-or-later"
+license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/jblindsay/whitebox_next_gen"
 homepage = "https://github.com/jblindsay/whitebox_next_gen"

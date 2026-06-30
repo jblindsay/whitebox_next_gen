@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-30
+
 ### Added
 - Added canonical typed tool-parameter schema model types in `wbcore` (input/output/dataset/cardinality/scalar/vector-geometry/field/enum).
 - Added `ToolFieldSchema` with parent layer reference and optional vector geometry constraints for field-parameter type-safety.
@@ -15,5 +17,5 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Changed
 - Kept `manifest_with_io_schema_json(...)` backward-compatible by routing through the new schema-aware serializer with an empty schema map.
 
-### Fixed
-- None yet.
+### Testing
+- Schema model types and builders enable 40+ tools across wbtools_oss and wbspatialstats to define field parameter metadata for QGIS dropdown integration.

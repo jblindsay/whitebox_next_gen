@@ -1,8 +1,9 @@
 [package]
 name = "wbw_python"
-version = "2.0.6"
+version = "2.0.7"
 edition = "2021"
 authors = ["John Lindsay, Whitebox Geospatial Inc."]
+license = "MIT OR Apache-2.0"
 publish = false
 
 [lib]

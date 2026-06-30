@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-30
+
 ### Added
 - Added explicit field parameter schemas to spatial autocorrelation and kriging tools for QGIS field dropdown widget support:
   - **Spatial Autocorrelation**: `morans_i`, `local_morans_i`, `getis_ord_gi_star`, `nearest_neighbour_index` — field parameter with parent reference to input layer.

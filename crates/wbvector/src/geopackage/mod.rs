@@ -358,7 +358,7 @@ fn write_layer(db: &mut Db, layer: &Layer) -> Result<()> {
         .collect();
 
     // CREATE TABLE for this layer
-    let mut col_defs = format!("  fid INTEGER PRIMARY KEY,\n  {geom_col} BLOB");
+    let mut col_defs = format!("  fid INTEGER PRIMARY KEY,\n  \"{geom_col}\" BLOB");
     for (_idx, fd) in &schema_fields {
         let sql_type = match fd.field_type {
             FieldType::Integer  => "INTEGER",
@@ -367,9 +367,9 @@ fn write_layer(db: &mut Db, layer: &Layer) -> Result<()> {
             FieldType::Blob     => "BLOB",
             _                   => "TEXT",
         };
-        col_defs.push_str(&format!(",\n  {} {}", fd.name, sql_type));
+        col_defs.push_str(&format!(",\n  \"{}\" {}", fd.name, sql_type));
     }
-    let create_sql = format!("CREATE TABLE {table} (\n{col_defs}\n)");
+    let create_sql = format!("CREATE TABLE \"{table}\" (\n{col_defs}\n)");
     db.create_table(&create_sql)?;
 
     // Register in gpkg_geometry_columns
@@ -688,4 +688,48 @@ mod tests {
             areas_nonzero
         );
     }
+
+    #[test]
+    fn columns_with_special_characters_are_quoted() {
+        // Test for bug fix: columns with dots and other special characters
+        // must be properly quoted in SQL CREATE TABLE statements
+        let mut layer = Layer::new("test_special_cols")
+            .with_geom_type(GeometryType::Point)
+            .with_epsg(4326);
+        
+        // Add fields with special characters (like dist.m from meuse.csv)
+        layer.add_field(FieldDef::new("dist.m", FieldType::Float));
+        layer.add_field(FieldDef::new("name-en", FieldType::Text));
+        layer.add_field(FieldDef::new("normal_field", FieldType::Integer));
+        
+        layer.add_feature(
+            Some(Geometry::point(0.0, 0.0)),
+            &[
+                ("dist.m", 42.5f64.into()),
+                ("name-en", "test".into()),
+                ("normal_field", 123i64.into()),
+            ],
+        ).unwrap();
+        
+        // Write to GeoPackage
+        let bytes = layers_to_db(&[&layer]).unwrap().to_bytes();
+        
+        // Read back and verify
+        let db = Db::from_bytes(bytes).unwrap();
+        let rows = db.select_all("test_special_cols").unwrap();
+        assert!(!rows.is_empty(), "expected rows in test_special_cols table");
+        
+        // Verify layer can be reconstructed
+        let roundtrip = extract_layer(&db, "test_special_cols").unwrap();
+        assert_eq!(roundtrip.schema.fields().len(), 3);
+        assert_eq!(roundtrip.features.len(), 1);
+        
+        // Verify column names are preserved (not double-quoted)
+        let field_names: Vec<&str> = roundtrip.schema.fields().iter()
+            .map(|f| f.name.as_str())
+            .collect();
+        assert!(field_names.contains(&"dist.m"), "expected dist.m column");
+        assert!(field_names.contains(&"name-en"), "expected name-en column");
+    }
 }
+

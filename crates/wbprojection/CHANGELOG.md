@@ -4,12 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning while in pre-1.0 development.
 
+## [Unreleased]
+
 ## [0.3.1] - 2026-06-30
 
 ### Fixed
 - `epsg_from_srs_reference()` now correctly extracts the EPSG code from all common authority reference formats, including OGC WKT names containing `(EPSG:NNNNN)`, OGC URNs (`urn:ogc:def:crs:EPSG::NNNNN`), and OGC URL forms (`http://.../EPSG/0/NNNNN`). Previously it collected all digit sequences in the string and returned the last one, which caused it to return wrong codes for WKT strings whose name embedded the EPSG code followed by ellipsoid or other parameters with larger digit sequences. This bug affected CRS metadata retrieval in vector I/O operations for GeoPackage and other embedded-CRS formats.
-
-## [Unreleased]
 
 ## [0.3.0] - 2026-06-02
 

@@ -185,8 +185,10 @@ impl Db {
         p1[40..44].copy_from_slice(&1u32.to_be_bytes()); // schema cookie
         p1[44..48].copy_from_slice(&4u32.to_be_bytes()); // schema format 4
         p1[56..60].copy_from_slice(&1u32.to_be_bytes()); // text encoding UTF-8
-        // GeoPackage application_id = 0x47503130 ("GP10")
-        p1[68..72].copy_from_slice(&0x4750_3130u32.to_be_bytes());
+        // GeoPackage application_id = 0x47504B47 ("GPKG") — required by OGC spec and GDAL
+        p1[68..72].copy_from_slice(&0x4750_4B47u32.to_be_bytes());
+        // GeoPackage user_version = 0x000027D8 (10200) — encodes GPKG version 1.2.0
+        p1[60..64].copy_from_slice(&0x0000_27D8u32.to_be_bytes());
         // sqlite_master is a leaf b-tree at page 1
         p1[100] = 0x0D; // leaf table
         p1[101..103].copy_from_slice(&0u16.to_be_bytes()); // freeblock = none

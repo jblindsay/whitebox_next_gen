@@ -37,6 +37,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Fixed
 - GeoPackage writer now properly quotes table and column names in SQL CREATE TABLE statements, enabling support for columns with special characters (e.g., "dist.m" from CSV imports). Fixes crash when writing GeoPackages with field names containing dots, hyphens, or other non-alphanumeric characters.
+- GeoPackage writer now writes the correct SQLite `application_id` (`0x47504B47` = "GPKG") and `user_version` (`0x000027D8` = GPKG 1.2.0) in the file header. Previously `0x47503130` ("GP10") was written, causing GDAL and QGIS to refuse to open the file as a GeoPackage.
 - `Schema` now supports replacing an existing field definition by name, allowing tools to upsert Float metadata over stale Integer fields instead of silently ignoring duplicate names.
 - Add Geometry Attributes now overwrites existing geometry-measure fields in place, preserving floating-point precision on reruns so AREA/LENGTH/PERIM values do not collapse to integer zeros.
 - Shapefile polygon parsing now preserves exteriors even when rings use uniform CCW winding, preventing valid polygons from being decoded as empty geometries on real-world datasets.

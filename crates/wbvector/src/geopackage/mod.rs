@@ -731,5 +731,27 @@ mod tests {
         assert!(field_names.contains(&"dist.m"), "expected dist.m column");
         assert!(field_names.contains(&"name-en"), "expected name-en column");
     }
-}
 
+    #[test]
+    fn gpkg_sqlite_header_has_correct_application_id_and_version() {
+        // GDAL and QGIS require the SQLite header to contain the official GPKG
+        // application_id (0x47504B47 = "GPKG") at offset 68, and the GPKG 1.2
+        // user_version (0x000027D8 = 10200) at offset 60. Without these, the
+        // file is treated as an unknown SQLite database and refused by GDAL.
+        let layer = point_layer();
+        let bytes = layers_to_db(&[&layer]).unwrap().to_bytes();
+        assert!(bytes.len() >= 72, "GeoPackage bytes too short to contain header");
+        
+        let app_id = u32::from_be_bytes(bytes[68..72].try_into().unwrap());
+        assert_eq!(
+            app_id, 0x47504B47,
+            "SQLite application_id must be 0x47504B47 (\"GPKG\") for GDAL/QGIS compatibility, got 0x{app_id:08X}"
+        );
+        
+        let user_version = u32::from_be_bytes(bytes[60..64].try_into().unwrap());
+        assert_eq!(
+            user_version, 0x000027D8,
+            "SQLite user_version must be 0x000027D8 (10200 = GPKG 1.2.0), got 0x{user_version:08X}"
+        );
+    }
+}

@@ -1287,23 +1287,27 @@ fn write_raster_with_controls_for_env(
 
 fn read_prj_sidecar(path: &Path) -> PyResult<Option<String>> {
     let prj = prj_sidecar_path(path);
-    if !prj.exists() {
-        return Ok(None);
+    if prj.exists() {
+        let text = std::fs::read_to_string(&prj).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "failed to read CRS sidecar '{}': {e}",
+                prj.display()
+            ))
+        })?;
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            return Ok(Some(trimmed.to_string()));
+        }
     }
 
-    let text = std::fs::read_to_string(&prj).map_err(|e| {
-        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-            "failed to read CRS sidecar '{}': {e}",
-            prj.display()
-        ))
-    })?;
-
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(trimmed.to_string()))
+    // For GeoPackage files, fall back to reading the embedded CRS from the file
+    if path.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("gpkg")).unwrap_or(false) {
+        if let Ok(layer) = wbvector::read(path) {
+            return Ok(layer.crs_wkt().map(|w| w.to_owned()));
+        }
     }
+
+    Ok(None)
 }
 
 fn write_prj_sidecar(path: &Path, wkt: &str) -> PyResult<()> {

@@ -456,6 +456,10 @@
         "local_morans_i_lisa",
         "nearest_neighbour_index",
         "quadrat_count_test",
+        "estimate_variogram",
+        "fit_variogram",
+        "directional_variogram",
+        "kriging_cross_validation",
         "spatial_lag_regression",
         "spatial_error_regression",
         "geographically_weighted_regression",
@@ -732,6 +736,7 @@
         "simple_kriging",
         "universal_kriging",
         "spacetime_kriging",
+        "ordinary_cokriging",
         "spatial_lag_regression_raster",
         "spatial_error_regression_raster",
         "geographically_weighted_regression_raster",
@@ -1587,6 +1592,10 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
+    "directional_variogram": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "dissolve": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -1708,6 +1717,10 @@
       "source_crate": "wbtools_oss"
     },
     "erase_polygon_from_raster": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "estimate_variogram": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
@@ -1896,6 +1909,10 @@
       "source_crate": "wbtools_oss"
     },
     "find_ridges": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "fit_variogram": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
@@ -2288,6 +2305,10 @@
       "source_crate": "wbtools_oss"
     },
     "knn_regression": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "kriging_cross_validation": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
@@ -3048,6 +3069,10 @@
       "source_crate": "unknown"
     },
     "openness": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "ordinary_cokriging": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },

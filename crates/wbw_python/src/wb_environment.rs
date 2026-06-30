@@ -1300,8 +1300,19 @@ fn read_prj_sidecar(path: &Path) -> PyResult<Option<String>> {
         }
     }
 
-    // For GeoPackage files, fall back to reading the embedded CRS from the file
-    if path.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("gpkg")).unwrap_or(false) {
+    // Shapefile is the only format that uses a .prj sidecar — all other
+    // formats embed CRS in the file itself (GeoPackage, FlatGeobuf, GML,
+    // GeoParquet, MapInfo) or have an implicit fixed CRS (KML/KMZ/GPX/OSM =
+    // always WGS84). GeoJSON and TopoJSON store no CRS metadata per RFC 7946
+    // but are defined as WGS84. Read the embedded CRS via wbvector for any
+    // non-Shapefile format.
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+    if ext != "shp" {
+        // GeoJSON and TopoJSON carry no CRS metadata field on read but are
+        // defined as WGS84 (EPSG:4326) by RFC 7946 / TopoJSON spec.
+        if matches!(ext.as_str(), "geojson" | "topojson") {
+            return Ok(to_ogc_wkt(4326).ok());
+        }
         if let Ok(layer) = wbvector::read(path) {
             return Ok(layer.crs_wkt().map(|w| w.to_owned()));
         }

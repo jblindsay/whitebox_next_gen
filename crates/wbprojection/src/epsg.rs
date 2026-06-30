@@ -1272,26 +1272,38 @@ pub fn epsg_from_srs_reference(s: &str) -> Option<u32> {
         return None;
     }
 
-    let mut last_digits: Option<u32> = None;
-    let mut start: Option<usize> = None;
-    for (idx, ch) in upper.char_indices() {
-        if ch.is_ascii_digit() {
-            if start.is_none() {
-                start = Some(idx);
-            }
-        } else if let Some(sidx) = start.take() {
-            if let Ok(code) = upper[sidx..idx].parse::<u32>() {
-                last_digits = Some(code);
-            }
-        }
-    }
-    if let Some(sidx) = start {
-        if let Ok(code) = upper[sidx..].parse::<u32>() {
-            last_digits = Some(code);
-        }
-    }
+    // Parse the EPSG code from all common authority reference forms:
+    //   EPSG:28992                                  → 28992
+    //   EPSG::32633          (OGC URN double colon) → 32633
+    //   AUTHORITY["EPSG","4326"]                    → 4326
+    //   "Amersfoort / RD New (EPSG:28992)"          → 28992
+    //   urn:ogc:def:crs:EPSG::32633                 → 32633
+    //   http://.../crs/EPSG/0/4326                  → 4326 (skip version segment "0")
+    let pos = upper.find("EPSG")? + 4;
+    // Strip separator characters that follow the "EPSG" token
+    let rest = upper[pos..].trim_start_matches(|c: char| {
+        c == ':' || c == ',' || c == '"' || c == '\'' || c == '[' || c == '(' || c == ' ' || c == '/'
+    });
 
-    last_digits
+    // For URL form ".../EPSG/0/4326", after stripping leading separators we
+    // may land on a version token (e.g. "0") followed by "/" and the real code.
+    // Skip a short all-digit token (≤ 2 digits) when it is followed by "/".
+    let rest = if let Some(slash) = rest.find('/') {
+        let token = &rest[..slash];
+        if !token.is_empty() && token.len() <= 2 && token.chars().all(|c| c.is_ascii_digit()) {
+            rest[slash + 1..].trim_start_matches('/')
+        } else {
+            rest
+        }
+    } else {
+        rest
+    };
+
+    let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+    if digits.is_empty() {
+        return None;
+    }
+    digits.parse::<u32>().ok()
 }
 
 /// Return a preferred coordinate operation code for a source/target EPSG pair,
